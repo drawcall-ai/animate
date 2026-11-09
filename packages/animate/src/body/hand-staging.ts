@@ -49,7 +49,7 @@ export function paceAt(speed: number | undefined, calm: Pace): Pace {
 type Handwork = NonReuseableTimeline<Frame>;
 
 /** Species-specific hand staging for the shared verbs. */
-export interface Handling {
+export interface HandStaging {
   /** each named hand takes hold of `thing` by its grip, the body walking up for them if it must and may; a loose thing with a mass is lifted clear */
   take(request: Request, thing: Thing, grips: readonly { hand: string; grip: string }[], options: HandOptions): Handwork;
   /** the hands holding `thing` bring it through `points` (each a sub-step at a time; the last sets its turn), in to `end` (an empty) by its approach, and keep it there */

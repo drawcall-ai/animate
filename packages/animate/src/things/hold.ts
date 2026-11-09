@@ -1,9 +1,9 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import type { Pose } from '../kernel/pose';
+import type { BonePose } from '../kernel/bone-pose';
 import { MovingFrame } from '../kernel/moving-frame';
 import { follow } from '../kernel/follow';
-import { resolve, written } from './resolve';
+import { placedFor, writtenFor } from './placed';
 import { anchors, movers, type Hold, type Holder } from './holder';
 import { Thing } from './thing';
 import type { Placement } from '../kernel/goal';
@@ -81,13 +81,13 @@ export function supported(thing: Thing): boolean {
 
 /**
  * `thing` attached under `parent` where it is as the scene has them, moved by no body. A body re-parenting it mid-update (`reader`) takes
- * it where it was as the scene stood when the body last wrote it: what the app moves read as the body last read it (`written`), not as
+ * it where it was as the scene stood when the body last wrote it: what the app moves read as the body last read it (`writtenFor`), not as
  * the app has moved it since — the parent, a bone, still stands as the body last wrote it, so read as moved on, the thing would be
  * taken off the palm by as much, the grasp keeping it so.
  */
 export function attach(thing: Thing, parent: Object3D, reader?: Holder): void {
   const object = thing.object, mover = movers.get(object);
-  const world = reader && written(reader, object, _world);
+  const world = reader && writtenFor(reader, object, _world);
   mover?.leave(object);
   parent.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, false);
@@ -99,7 +99,7 @@ export function attach(thing: Thing, parent: Object3D, reader?: Holder): void {
 
 /** `object` written relative to `parent` to be at `position`, turned `quaternion` (world), as `reader` finds `parent` */
 function placeUnder(reader: Holder, object: Object3D, parent: Object3D, position: Readonly<Vector3>, quaternion: Readonly<Quaternion>): void {
-  const frame = resolve(reader, parent, _frame), back = _back.copy(frame.quaternion).invert();
+  const frame = placedFor(reader, parent, _frame), back = _back.copy(frame.quaternion).invert();
   object.position.copy(position).sub(frame.position).applyQuaternion(back).divideScalar(_scale.setFromMatrixScale(parent.matrixWorld).x);
   object.quaternion.copy(back).multiply(quaternion);
 }
@@ -121,7 +121,7 @@ export function take(self: Holder, thing: Thing): void {
   self.showPrev();
   attach(thing, self.boneNode(hands.length === 1 ? self.hands[hands[0]] : 0), self);
   if (hands.length === 1) return;
-  const at = resolve(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
+  const at = placedFor(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
   const movingFrame = new MovingFrame(at.position, at.quaternion);
   // (standing there as of the sub-step before: `move` moves it on in this one)
   movingFrame.place(self.frame.time - self.frame.dt, at.position, at.quaternion);
@@ -226,7 +226,7 @@ function bearers(self: Holder, thing: Thing): number[] {
 }
 
 /** what `self` bears loaded onto its bones in `pose`, each thing's at its centre of mass */
-function load(self: Holder, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): void {
+function load(self: Holder, pose: BonePose, borne: ReadonlyMap<Thing, Bearing>): void {
   const mass = new Map<number, number>(), moment = new Map<number, Vector3>();
   for (const [thing, bearing] of borne) {
     const placed = self.track(thing.object).at(self.frame.time).current;

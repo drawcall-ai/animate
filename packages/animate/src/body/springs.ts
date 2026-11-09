@@ -15,7 +15,7 @@ export class Springs {
   /** each root given a `hang`, and that turn: set again every step, after the body has written its pose over it */
   private readonly hangs: [Object3D, Quaternion][] = [];
 
-  constructor(species: AnySpecies, binding: Binding, private readonly trunk: Capsules | null) {
+  constructor(species: AnySpecies, binding: Binding, private readonly trunk: TrunkCapsules | null) {
     const children = new Map<string, string[]>();
     for (const bone of species.bones) {
       if (bone.parent === undefined) continue;
@@ -46,7 +46,7 @@ export class Springs {
         const name = names[i];
         if (owned.has(name)) throw new Error(`springs: "${name}" belongs to overlapping spring roots`);
         // (swung, a bone the body poses would leave what it holds, looks with or stands on where the pose put it)
-        if (posed.has(name)) throw new Error(`springs: "${name}" is posed by the body (a person's skeleton or fingers, its neck, hands, legs or carriage); spring only bones nothing else turns`);
+        if (posed.has(name)) throw new Error(`springs: "${name}" is posed by the body (a person's skeleton or fingers, its neck, hands, legs or trunk); spring only bones nothing else turns`);
         owned.add(name);
         const below = children.get(name) ?? [];
         names.push(...below);
@@ -110,7 +110,7 @@ class Link {
     return nearestBetween(this.anchor, this.tip, a, b, _onLink, _onAxis) > radius;
   }
 
-  step(dt: number, trunk: Capsules | null): void {
+  step(dt: number, trunk: TrunkCapsules | null): void {
     const node = this.node;
     node.updateWorldMatrix(true, false);
     const origin = _origin.setFromMatrixPosition(node.matrixWorld);
@@ -141,7 +141,7 @@ class Link {
 }
 
 /** the names of the bones the body poses: a person's whole skeleton and fingers; else the gaze's neck and head, each hand's chain, the
- * legs' joints and what their carriage turns */
+ * legs' joints and what their trunk motion turns */
 function posedBones(species: AnySpecies): Set<string> {
   const skeleton = species.skeleton, name = (i: number) => skeleton.bones[i].name;
   // (a person's fingers are not in its skeleton: they are closed after it is posed)
@@ -154,8 +154,8 @@ function posedBones(species: AnySpecies): Set<string> {
   }
   for (const chain of species.hands?.values() ?? []) add(skeleton.chain(chain));
   for (const leg of species.legs?.chains ?? []) add([...leg.joints.map((joint) => joint.bone), ...leg.toes ? [leg.toes.bone] : []]);
-  const carriage = species.legs?.carriage;
-  if (carriage) for (const bone of [carriage.spine, carriage.pelvis, carriage.neck, carriage.head, carriage.tail]) if (bone) posed.add(bone);
+  const trunk = species.legs?.trunk;
+  if (trunk) for (const bone of [trunk.spine, trunk.pelvis, trunk.neck, trunk.head, trunk.tail]) if (bone) posed.add(bone);
   return posed;
 }
 
@@ -163,7 +163,7 @@ function posedBones(species: AnySpecies): Set<string> {
 export type Capsule = readonly [Vector3, Vector3];
 
 /** what a body's springs keep out of (a person's trunk) */
-export interface Capsules {
+export interface TrunkCapsules {
   /** capsules' axes, as `place` last put them */
   readonly capsules: readonly Capsule[];
   /** their radius (m, world), as `place` last put it */

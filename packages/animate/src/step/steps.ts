@@ -1,7 +1,7 @@
 // A stepper's state and the shapes its parts share: the root it is given, the legs it moves, the sub-step's timing and body.
 import { Quaternion, Vector3, type Object3D } from 'three';
 import { type Frame } from '../kernel/frame';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { lerp, minimumJerk, wrapAngle } from '../kernel/math';
 import { hullOf, past, type Spot } from './support';
 import { type Gait } from '../species/gait';
@@ -59,7 +59,7 @@ export interface Steering {
  * A species' stepping, in metres of its default body (× `scale`) and seconds: each leg's place in the cycle (`offsets`, 0 … 1: a leg
  * follows the one just before it); the feet's `toeOut` (rad, × side); the `cadence` (cycles a second at a pace, m/s, a share of it
  * sideways, 0 … 1, and the body's time, s); `duty` walking, side-stepping, running (`run`: between these speeds); the most `travel` of a stance; the landing's
- * `lead`; half the feet's spread (`width.stand` already scaled; `width.sway`: how far toward a walker's landing foot, past the midline, its
+ * `landAhead`; half the feet's spread (`width.stand` already scaled; `width.sway`: how far toward a walker's landing foot, past the midline, its
  * extrapolated centre of mass is carried — a wider stride's, its pelvis swaying over it); the pelvis' `bob` and `drop`; the swing's
  * `lift` (a runner's ∝ u^`arc` (1 − u)³); the heel `strike`; the
  * most a planted foot rolls (`pitch`, rad) and the ankle bends (`dorsiflexion`); the `crouch`; the leg's `reach` (× length, a swinging
@@ -68,7 +68,7 @@ export interface Steering {
 export interface Stepping {
   scale: number; offsets: readonly number[]; toeOut: number; cadence: (speed: number, sideways: number, time: number) => number;
   duty: { walk: number; side: number; run: number }; run: readonly [number, number]; travel: { forward: number; run: number; back: number; side: number };
-  lead: { share: number; side: number; most: number; run: number }; width: { stand: number; walk: number; run: number; narrowest: number; sway?: number };
+  landAhead: { share: number; side: number; most: number; run: number }; width: { stand: number; walk: number; run: number; narrowest: number; sway?: number };
   bob: number; drop: { walk: number; side: number; run: number }; lift: { walk: number; run: number; jump: number }; arc: number;
   strike: { walk: number; run: number; ahead: number }; pitch: { heel: number; ball: number }; dorsiflexion: number;
   crouch: { depth: number; wider: number; ahead: number; travel: number; lift: number }; reach: number; swingReach: number; clearance: number;
@@ -114,7 +114,7 @@ export interface Feet {
   rotation(yaw: number, pitch: number, out: Quaternion): Quaternion;
   /** the points of its sole (its heel and toes) with its ankle at `ankle`, the foot and toes turned so (world) */
   soles(i: number, ankle: Readonly<Vector3>, foot: Quaternion, toes: Quaternion): Vector3[];
-  lean(i: number, pose: ReadonlyPose, yaw: number): number;
+  lean(i: number, pose: ReadonlyBonePose, yaw: number): number;
   /** the corners of the sole standing flat with its ankle at `anchor`, heading `yaw`, on the floor */
   print(i: number, anchor: Readonly<Vector3>, yaw: number): Spot[];
   /** a foot that pivots on the floor (a hoof, a paw): its ankle `anchor` standing flat turned from heading `from` to `to` about where it
@@ -173,7 +173,7 @@ export interface Reading extends Physics {
 export interface Timing {
   /** the speed the cadence steps for (m/s), and how much of the root's motion is sideways (−1 … 1, + to the left) */
   pacing: number; across: number;
-  C: number; duty: number; Ts: number; Tsw: number; most: number; lead: number;
+  C: number; duty: number; Ts: number; Tsw: number; most: number; landAhead: number;
 }
 
 /** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), the ground under it, how
@@ -275,7 +275,7 @@ export const remaining = (w: Swing) => (1 - w.u) * w.T;
 /** `x` wrapped into a cycle (0 … 1) */
 export const mod = (x: number) => ((x % 1) + 1) % 1;
 /** how far `x` (rad) is past 0, easing in from `BEND`/2 before it (C¹: the heel starts lifting at rest) */
-export const easedPast = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
+export const overbend = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
 /** a planted foot's roll off its strike (rad): flat after `ROLL` */
 export const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 export const [_v, _w, _a, _b, _c, _x, _n, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot, _centre, _over] = Array.from({ length: 18 }, () => new Vector3());

@@ -1,10 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Inertial } from '../kernel/inertia';
 import type { Gait } from './gait';
-import type { CarriedBones, Striding } from '../creature/carriage';
+import type { TrunkBones, Striding } from '../creature/trunk-motion';
 import type { LegChain } from './leg-chain';
 import type { Frame } from '../kernel/frame';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { Skeleton, type BoneDef, type Limit, type SkeletonBone } from '../kernel/skeleton';
 import type { Proportions } from '../person/anatomy/proportions';
 import type { Stride } from '../person/anatomy/humanoid';
@@ -18,7 +18,7 @@ export interface Gazer {
   /** the bone the eyes ride on: the head */
   head: number;
   /** the point the eyes look from (world), into `out` */
-  eyes(pose: ReadonlyPose, out: Vector3): Vector3;
+  eyes(pose: ReadonlyBonePose, out: Vector3): Vector3;
   /** how far the eyes turn in the head comfortably (rad): what a head short of its target leaves them */
   range: { down: number; up: number; side: number };
   /** Comfortable cervical flexion (rad); unbounded for a chain without a posture preference. */
@@ -53,8 +53,8 @@ export interface Species<Bone extends string = string, Hand extends string = str
   readonly legs?: {
     readonly chains: readonly LegChain[];
     readonly gait: Gait;
-    readonly carriage?: CarriedBones;
-    readonly posture?: (start: ReadonlyPose, gait: Gait, seed?: number) => SpeciesPosture;
+    readonly trunk?: TrunkBones;
+    readonly posture?: (start: ReadonlyBonePose, gait: Gait, seed?: number) => SpeciesPosture;
   };
   /** how its trunk takes its root's acceleration (none: it does not lean) */
   readonly inertia?: Inertial;
@@ -84,7 +84,7 @@ export interface Attention {
 
 /** What a body's legs are asked by the scene and its quiet life: a seed, how still it holds itself, a tether, a startle. */
 export interface Temperament extends Attention {
-  /** fixes its variation: sway, breathing, weight shifts, glances (a creature without a carriage or posture of its own has none) */
+  /** fixes its variation: sway, breathing, weight shifts, glances (a creature without a trunk motion or posture of its own has none) */
   seed?: number;
   /**
    * how still a person holds itself (0 at ease, the default … 1: at attention, aiming), or that at the body's time (s) — a soldier at
@@ -134,7 +134,7 @@ export interface LegRole<Name extends string> extends Omit<LegChain<Name, Vec3>,
  * What each of a species' bones does, by name: the `root` it moves from (default the skeleton's), its `legs` (fore-left, fore-right,
  * hind-left, hind-right for four), the `gaze` (a neck chain from its base to the head, one bone or more: the head's turn shared over them,
  * each within its limit, what a limit cuts off going on up; and the eyes, on the head; a rigid head is a one-bone neck), its `hands` (a chain
- * each, from its first joint to the hand or jaw), and the `carriage` its gait carries over its legs (four legs only), which gives it its
+ * each, from its first joint to the hand or jaw), and the `trunk` bones its gait moves over its legs (four legs only), which gives it its
  * quiet life: without one it stands still but for its `inertia` lean, so a story gives it life with `pose` and `lookAt`.
  */
 export interface Roles<Name extends string, Hand extends string> {
@@ -142,7 +142,7 @@ export interface Roles<Name extends string, Hand extends string> {
   legs?: readonly LegRole<Name>[];
   gaze?: { neck?: readonly Name[]; eyes: { bone: Name; at: Vec3 }; range: Gazer['range']; pitch?: number };
   hands?: Readonly<Record<Hand, readonly Name[]>>;
-  carriage?: CarriedBones;
+  trunk?: TrunkBones;
 }
 
 /**
@@ -206,8 +206,8 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
   const built = new Skeleton(bones, { limits, chains });
   const gaze = roles.gaze, eyes = gaze && { bone: built.index(gaze.eyes.bone), at: new Vector3(...gaze.eyes.at) };
   if (roles.legs && !tuning.gait) throw new Error('species: legs need a gait');
-  if (roles.carriage && roles.legs?.length !== 4) {
-    throw new Error(`species: a carriage rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has ${roles.legs?.length ?? 0}`);
+  if (roles.trunk && roles.legs?.length !== 4) {
+    throw new Error(`species: trunk motion rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has ${roles.legs?.length ?? 0}`);
   }
   const hands = new Map<Hand, string>();
   for (const hand in roles.hands) hands.set(hand, hand);
@@ -232,7 +232,7 @@ export function build<Hand extends string>(skeleton: readonly SkeletonBone[], ro
         rocker: leg.rocker ?? [[0, 0], [1, 0]],
       })),
       gait: tuning.gait,
-      carriage: roles.carriage,
+      trunk: roles.trunk,
     },
     inertia: tuning.inertia,
     springs: tuning.springs,

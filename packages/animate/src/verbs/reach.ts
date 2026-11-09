@@ -2,7 +2,7 @@ import { selfOf, type Body, type ByHand } from '../body';
 import type { AnySpecies } from '../species/define';
 import { finder, handTarget, type Target } from '../things/target';
 import { verb, type Verb } from './story';
-import type { HandOptions } from '../body/handling';
+import type { HandOptions } from '../body/hand-staging';
 
 /**
  * Reaches each hand named to its target (an `Object3D` turns a person's hand toward its turn as far as the wrist goes, a creature's exactly; `track` holds a person's hand exactly so), taking nothing: from where it stands if
@@ -21,6 +21,6 @@ export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Ta
   if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`reach: a speed of ${options.speed}`);
   return verb(body, 'reach', (request) => function* () {
     const self = selfOf(body);
-    yield* self.handling.reach(request, named.map(({ hand, target }) => ({ hand, target: finder(self, target) })), options);
+    yield* self.handStaging.reach(request, named.map(({ hand, target }) => ({ hand, target: finder(self, target) })), options);
   }, { until: options.until });
 }

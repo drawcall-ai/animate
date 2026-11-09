@@ -44,7 +44,7 @@ type Stand =
 interface PlacedBounds { bounds: Box3; position: Vector3; quaternion: Quaternion }
 
 /** A walk to where a person stands, and when it has arrived there. */
-export type WalkUp = Extract<ReturnType<typeof footing>, { walk: Walk }>;
+export type ReachWalk = Extract<ReturnType<typeof footing>, { walk: Walk }>;
 
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Person, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
@@ -206,9 +206,9 @@ export function footing(person: Person, to: Stand, step = true) {
 }
 
 /** a person's walk to where it stands (borrowed legs) until it has arrived, or stalled: its stall, if so; what it moves arriving `after` s later */
-export function* walkingUp(request: Request, plan: WalkUp, after?: number) {
+export function* walkingToReach(request: Request, plan: ReachWalk, after?: number) {
   const { walk, arrived } = plan;
-  yield* during(request, 'go', 'borrowed', (f) => {
+  yield* during(request, 'legs', 'borrowed', (f) => {
     const go = walk.step(f);
     if (after !== undefined) request.eta = walk.eta + after;
     return go;

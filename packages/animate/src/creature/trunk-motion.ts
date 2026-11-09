@@ -2,18 +2,18 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { Life, type Rhythm } from '../kernel/life';
 import { clamp, GRAVITY, yawOf } from '../kernel/math';
-import { Pose, type ReadonlyPose } from '../kernel/pose';
+import { BonePose, type ReadonlyBonePose } from '../kernel/bone-pose';
 import { irregular } from '../kernel/random';
-import { offsetAt, strideAt, type Carriage, type Gait } from '../species/gait';
+import { offsetAt, strideAt, type TrunkMotion, type Gait } from '../species/gait';
 import type { LegChain } from '../species/leg-chain';
 
 /**
- * What of a species' skeleton its gait carries (`Species.legs.carriage`), by bone name — the legs ordered fore-left, fore-right,
+ * What of a species' skeleton its gait carries (`Species.legs.trunk`), by bone name — the legs ordered fore-left, fore-right,
  * hind-left, hind-right; the trunk is the root — and its quiet life: rhythms named `head` (the neck turns to glance about), `weight`
  * (the spine rolls the weight over) and `tail` (each change swishes the tail `swish.cycles` times, `swish.period` s each, by
  * `swish.amplitude` rad, standing), each acted on only where it is given; other rhythms are its posture's own.
  */
-export interface CarriedBones {
+export interface TrunkBones {
   spine?: string;
   pelvis?: string;
   neck?: string;
@@ -23,7 +23,7 @@ export interface CarriedBones {
   swish?: { amplitude: number; period: number; cycles: number };
 }
 
-/** What a species' own posture adds to the carriage (`write`), each in the bone's terms; `weight` scales the weight roll. */
+/** What a species' own posture adds to the trunk motion (`write`), each in the bone's terms; `weight` scales the weight roll. */
 interface Extras {
   lift?: number;
   weight?: number;
@@ -35,8 +35,8 @@ interface Extras {
 }
 
 /**
- * The legs a carriage rides on, as it reads them: each leg's phase through its stride (0 at landing, in cycles), the root's height the
- * legs hold this sub-step if they set it (the carriage's rise and fall then only ever let it down from there), and a resting foot's tip.
+ * The legs a trunk motion rides on, as it reads them: each leg's phase through its stride (0 at landing, in cycles), the root's height the
+ * legs hold this sub-step if they set it (its rise and fall then only ever let it down from there), and a resting foot's tip.
  */
 export interface Striding {
   readonly legs: readonly { readonly phase: number }[];
@@ -53,15 +53,15 @@ export interface Striding {
 }
 
 /**
- * A body's carriage over its legs `chains` (`Species.legs.carriage`; the gait's `body`), from its standing pose `start`, a sub-step at a
+ * A body's trunk motion over its legs `chains` (`Species.legs.trunk`; the gait's `trunk`), from its standing pose `start`, a sub-step at a
  * time: `step` reads the stride, then `write` poses the trunk, head and tail before the legs step; `moving` is 0 standing … 1 at least at
  * the gait's slowest pace, eased, and `speed` the ground speed (m/s) as `step` read it.
  */
-export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones: CarriedBones, gait: Gait, seed: number) {
+export function trunkMotion(start: ReadonlyBonePose, chains: readonly LegChain[], bones: TrunkBones, gait: Gait, seed: number) {
   const s = start.skeleton, index = (name?: string) => name === undefined ? undefined : s.index(name);
   const [spine, pelvis, neck, head, tail] = [bones.spine, bones.pelvis, bones.neck, bones.head, bones.tail].map(index);
   const life = new Life(seed, bones.life ?? []), names = new Set((bones.life ?? []).map(([name]) => name));
-  const height = start.position(0).y, rest = new Pose(s), along = (bone: number) => rest.position(bone).z - rest.position(0).z;
+  const height = start.position(0).y, rest = new BonePose(s), along = (bone: number) => rest.position(bone).z - rest.position(0).z;
   // (the withers over the fore legs' tops, the croup at the pelvis or over the hind legs' tops)
   const withersAt = along(chains[0].joints[0].bone), span = withersAt - along(pelvis ?? chains[2].joints[0].bone);
   const across = Math.max(...chains.map((chain) => Math.abs(rest.position(chain.joints[0].bone).x - rest.position(0).x)));
@@ -74,7 +74,7 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
   const levers = chains.map((chain) => along(chain.joints[0].bone) - comAt), riding: Riding = { rise: new Float64Array(RIDE_SAMPLES), pitch: new Float64Array(RIDE_SAMPLES), low: 0 };
   const swing = { angle: 0, rate: 0 }, turning = { rate: 0, ahead: 0 }, lean = { pitch: 0, roll: 0 };
   let moving = 0, speed = 0, phase = 0, clock = 0, hind = 0, swish = Infinity, base: number | undefined, planted: number | undefined, bent = 0, headYaw = 0;
-  const body = (): Carriage => typeof gait.body === 'function' ? gait.body(speed, speed * speed / (GRAVITY * gait.height)) : gait.body ?? STILL;
+  const body = (): TrunkMotion => typeof gait.trunk === 'function' ? gait.trunk(speed, speed * speed / (GRAVITY * gait.height)) : gait.trunk ?? STILL;
   return {
     get moving() { return moving; },
     get speed() { return speed; },
@@ -132,13 +132,13 @@ export function carriage(start: ReadonlyPose, chains: readonly LegChain[], bones
       if (pelvis !== undefined) f.current.setLocal(pelvis, turn(0, b.yaw * DEG * sway * m + curl, b.roll * DEG * sway * m + (extras.pelvisRoll ?? 0)));
       if (neck !== undefined && head !== undefined && neckBase && poll) {
         // Tuned (rad): a glance turns the neck .18 at most, toward ±.55 at a rate of 4/s; it leads into a turn, toward where the body will
-        // face (`LEAD`), and takes the bend's front half; the head on it a share of the lead (`HEAD_LEAD`) as quickly.
-        const led = clamp(turning.ahead, -LEAD, LEAD), follow = 1 - Math.exp(-4 * f.dt);
+        // face (`TURN_LEAD`), and takes the bend's front half; the head on it a share of the lead (`HEAD_LEAD`) as quickly.
+        const led = clamp(turning.ahead, -TURN_LEAD, TURN_LEAD), follow = 1 - Math.exp(-4 * f.dt);
         const wanted = (extras.neckYaw ?? 0.18 * glance * (1 - m)) + led + bent / 2;
         // (its yaw as the last pose left it, read off its side axis: a reach can pitch the neck past straight down, where an Euler yaw
         // flips half a turn and the neck with it)
         const previous = yawOf(f.prev.local(neck)), yaw = previous + (clamp(wanted, -0.55, 0.55) - previous) * follow;
-        // (the head's own turn on the neck followed as the carriage last had it: not as a reach left it)
+        // (the head's own turn on the neck followed as the trunk motion last had it: not as a reach left it)
         headYaw += ((extras.headYaw ?? 0) + HEAD_LEAD * led - headYaw) * follow;
         const base = f.current.position(neck).y;
         // (the poll kept at its standing height, rising with the withers and the stride as the gait has it, and with a lean's withers)
@@ -169,9 +169,9 @@ const MOST_BEND = 0.5, BENDING = 6;
  * The most the neck leads into a turn (rad): a person's head anticipates the way by up to ~25° (snippet: Imai et al. 2001, Exp Brain Res
  * 136:1); taken for any body's (no measure of a four-legged one's was found). Tuned: the head turns on it a share of that.
  */
-const LEAD = 0.45, HEAD_LEAD = 0.3;
+const TURN_LEAD = 0.45, HEAD_LEAD = 0.3;
 /** the most the croup would rise over a stride, pitched as the gait has it with the withers let down (m) */
-function riseOver(b: Carriage, m: number, span: number): number {
+function riseOver(b: TrunkMotion, m: number, span: number): number {
   let most = 0;
   for (let k = 0; k < RISE_SAMPLES; k++) {
     const x = 2 * Math.PI * k / RISE_SAMPLES, w = (c: number) => wave(b.once ?? 0, x, c), withers = b.withers * w(0) * m - Math.abs(b.withers) * m;
@@ -180,7 +180,7 @@ function riseOver(b: Carriage, m: number, span: number): number {
   }
   return most;
 }
-/** the carriage's wave at `x` (rad) shifted by `c` (rad): twice a stride, or `once` (share) once */
+/** the trunk's wave at `x` (rad) shifted by `c` (rad): twice a stride, or `once` (share) once */
 const wave = (once: number, x: number, c: number) => (1 - once) * Math.cos(2 * x - c) + once * Math.cos(x - c);
 /** Tuned: the share of the croup's most rise over a stride the root is let down by all along */
 const HOLD = 0.6;
@@ -236,6 +236,6 @@ function ridden(of: Float64Array, u: number): number {
   const x = (((u * RIDE_SAMPLES - 0.5) % RIDE_SAMPLES) + RIDE_SAMPLES) % RIDE_SAMPLES, k = Math.floor(x), t = x - k;
   return of[k] + (of[(k + 1) % RIDE_SAMPLES] - of[k]) * t;
 }
-const STILL: Carriage = { withers: 0, croup: [0, 0], spine: 0, spinePhase: 0, roll: 0, yaw: 0, headPitch: 0, headRise: 0, headWithers: 0 };
+const STILL: TrunkMotion = { withers: 0, croup: [0, 0], spine: 0, spinePhase: 0, roll: 0, yaw: 0, headPitch: 0, headRise: 0, headWithers: 0 };
 const turn = (x = 0, y = 0, z = 0) => _t.setFromEuler(_e2.set(x, y, z, 'YXZ'));
 const _t = new Quaternion(), _v = new Vector3(), _e = new Euler(), _e2 = new Euler();

@@ -2,7 +2,7 @@ import { Euler, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Body, grab, horse, humanoid, lookAt, walkTo } from '../src/index';
 import { powerGait, species } from '../src/species';
-import { Pose } from '../src/kernel/pose';
+import { BonePose } from '../src/kernel/bone-pose';
 import { proportionsFor } from '../src/person/anatomy/proportions';
 import { massFor } from '../src/person/anatomy/skeleton';
 import { play, run } from './bodies';
@@ -36,7 +36,7 @@ describe('a humanoid', () => {
 
 describe('a horse', () => {
   it('stands with its forelegs bearing about 57% of its weight, its numbers sized to its skeleton', () => {
-    const mare = horse(HORSE), pose = new Pose(mare.skeleton);
+    const mare = horse(HORSE), pose = new BonePose(mare.skeleton);
     const com = pose.com(new Vector3()), [fore, hind] = [mare.skeleton.index('leftForeHoof'), mare.skeleton.index('leftHindHoof')].map((bone) => pose.position(bone).z);
     expect((com.z - hind) / (fore - hind)).toBeGreaterThan(0.52);
     expect((com.z - hind) / (fore - hind)).toBeLessThan(0.62);
@@ -102,9 +102,9 @@ describe('a species of your own', () => {
     expect(() => new Body(stiff)).toThrow("standing drop 0.260 m, including the gait's lowering; no pose its joint ranges allow sets leftFoot's sole flat there; straight, the chain is 0.267 m");
   });
 
-  it('throws on a carriage its legs do not fit: it rides on four', () => {
-    expect(() => species(BIRD, { legs: [leg('left'), leg('right')], carriage: { spine: 'body' } }, { gait, masses }))
-      .toThrow('species: a carriage rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has 2');
+  it('throws on a trunk motion its legs do not fit: it rides on four', () => {
+    expect(() => species(BIRD, { legs: [leg('left'), leg('right')], trunk: { spine: 'body' } }, { gait, masses }))
+      .toThrow('species: trunk motion rides on four legs (fore-left, fore-right, hind-left, hind-right); this one has 2');
   });
 
   it('takes a thing in one of its hands at a time', () => {

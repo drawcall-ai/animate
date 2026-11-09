@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import type { Placement } from '../../kernel/goal';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { END } from '../../body/handling';
+import { END } from '../../body/hand-staging';
 import { MovingFrame } from '../../kernel/moving-frame';
 import { REACHED, type Live, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
@@ -172,7 +172,7 @@ export const closeOn = (at: Placement, position: Vector3, quaternion?: Quaternio
 const cm = (m: number) => (100 * m).toFixed(1);
 
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
-export function holdAlong(person: Person, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
+export function holdAlong(person: Person, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, idles = false) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
     ? [{ side: sideOf(hand), hold, tip: (hold.arm ??= new LimbMover(`${hand}Arm`)) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
@@ -194,7 +194,7 @@ export function holdAlong(person: Person, request: Request, thing: Thing, guide:
   };
   return parallel<Frame>('race', ...hands.map((hand) => {
     const move = step(hand);
-    if (keep) hand.hold.keep = move;
+    if (idles) hand.hold.idle = move;
     return during(request, `hand.${hand.side}`, 'asked', move, until);
   }));
 }

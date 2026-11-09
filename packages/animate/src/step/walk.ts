@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import { STROLL, type Go, type Stance } from './go';
+import { STROLL, type LegGoal, type Stance } from './leg-goal';
 import type { Miss, Request } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
@@ -48,7 +48,7 @@ interface Route {
   plant?: boolean;
   /** points to pass on the way first */
   via?: readonly ((f: Frame) => Readonly<Vector3>)[];
-  /** a few steps back or aside, asked to face as the body faces, it keeps its facing (`Go.backs`) */
+  /** a few steps back or aside, asked to face as the body faces, it keeps its facing (`LegGoal.backs`) */
   backs?: boolean;
 }
 
@@ -67,7 +67,7 @@ export class Walk {
   unturned = Infinity;
   /** what stopped it, once it has stalled */
   stall: Miss | null = null;
-  private readonly go: Go = { to: new Vector3(), speed: STROLL.speed, accel: STROLL.accel };
+  private readonly go: LegGoal = { to: new Vector3(), speed: STROLL.speed, accel: STROLL.accel };
 
   private readonly end = new Vector3();
   private start: Vector3 | null = null;
@@ -89,7 +89,7 @@ export class Walk {
   }
 
   /** where it asks the legs to take the body this sub-step (none: a goal that is no point) */
-  step(f: Frame): Go | undefined {
+  step(f: Frame): LegGoal | undefined {
     const { self, way, go } = this, yaw = this.where(f);
     this.peak = Math.max(this.peak, self.locomotion.velocity.length());
     if (!this.stall) this.watch(f, yaw);
@@ -226,7 +226,7 @@ function closing(self: Self, after: number | null): number {
  * setting off), plus slowing to a stop, or the turn left at `turning` rad/s, whichever is longer (the trajectory a motion-matching query
  * predicts, here from the walk's own goal)
  */
-function etaOf(self: Self, body: Readonly<Vector3>, go: Go, yaw: number | null, turning: number): number {
+function etaOf(self: Self, body: Readonly<Vector3>, go: LegGoal, yaw: number | null, turning: number): number {
   const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * self.scale;
   const v = Math.min(go.speed, Math.max(self.locomotion.velocity.length(), SETTING_OFF));
   const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;
@@ -264,6 +264,6 @@ const _v = new Vector3();
 
 /** what a walk of `request`'s stalled of: a newer verb taking the legs is why it got no nearer, whatever it looked like from here */
 export function stallOf(self: Pick<Self, 'owner'>, request: Request, stall: Miss): Miss {
-  const over = self.owner('go')?.request;
+  const over = self.owner('legs')?.request;
   return over && over !== request ? { ...stall, why: `${over.label} took the legs from it` } : stall;
 }

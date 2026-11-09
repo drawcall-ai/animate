@@ -1,11 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { horse } from '../../src/index';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import { HORSE } from '../../skills/animate/references/horse';
 import { FLAT } from '../../src/step/floor';
 
 it('samples shared leg reach tables independently of query order and earlier bodies', async () => {
-  const species = horse(HORSE), rest = new Pose(species.skeleton), chains = species.legs?.chains;
+  const species = horse(HORSE), rest = new BonePose(species.skeleton), chains = species.legs?.chains;
   if (!chains) throw new Error('horse needs legs');
   const queries = [-0.2, -0.1, 0, 0.1, 0.2].flatMap((out) =>
     [-0.5, -0.2, 0, 0.2, 0.5].flatMap((ahead) => [0, -0.2, -0.4].map((pitch) => [out, ahead, pitch] as const)));

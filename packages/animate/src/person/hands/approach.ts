@@ -11,7 +11,7 @@ import { fixes, gripAt, holdOn, type HandPlan } from './plan';
 import { padOff, pressingIn, runOf, TOUCH, touching } from './press';
 import { reaching } from './arms';
 import { INDEX, type Side } from '../anatomy/bones';
-import type { Pace } from '../../body/handling';
+import type { Pace } from '../../body/hand-staging';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { ARM } from './arm-clearance';
 import { following, lateWatch, LEADING, reachTime } from './reach';

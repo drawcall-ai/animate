@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { ReadonlyPose } from './pose';
+import type { ReadonlyBonePose } from './bone-pose';
 import type { Frame } from './frame';
 
 /** A goal as it is, or as it is at each sub-step (`T` is never itself a function). */
@@ -47,7 +47,7 @@ export const REACHING = 4;
 export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05, close: 0.015 };
 
 /** a point moving with bone `bone` of a body (`offset` from it, turned by `turn`), its velocity read off where it was a sub-step before */
-export function movingPoint(person: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Goal, turn: () => Quaternion) {
+export function movingPoint(person: { readonly pose: ReadonlyBonePose; readonly scale: number }, bone: number, offset: () => Goal, turn: () => Quaternion) {
   let last: { time: number; position: Vector3 } | null = null;
   const velocity = new Vector3();
   return (f: Frame) => {

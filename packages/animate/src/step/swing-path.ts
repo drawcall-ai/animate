@@ -52,9 +52,9 @@ export function swingOver(steps: Steps, input: StepInput, leg: Leg, w: Swing, la
  */
 function swingPathOf(steps: Steps, input: StepInput, leg: Leg, w: Swing, land: Readonly<Vector3>): { across: number; up: number; pass: number; held: boolean; raise: number } {
   const { floor, feet, st } = steps, level = leg.anchor.y - feet.ankleHeight, climb = level - w.level;
-  const lead = Math.min(STAIR.share * w.T, Math.abs(climb) / STAIR.speed);
+  const sooner = Math.min(STAIR.share * w.T, Math.abs(climb) / STAIR.speed);
   // A landing can still move; the early axis needs a remaining horizon, never a deadline already passed.
-  const early = Math.max(SHORTEST, w.rest * (1 - lead / w.T));
+  const early = Math.max(SHORTEST, w.rest * (1 - sooner / w.T));
   const across = climb < 0 && !input.physical ? early : w.rest, up = climb > 0 ? early : w.rest;
   // (the sole read as it turns on its way, not as it will land: a foot turning about on a tread sweeps its toes over the riser behind
   // its landing's print — read at the landing's yaw, the toes went into it and the swing was lifted out of it in one sub-step, 14 cm)

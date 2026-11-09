@@ -1,7 +1,7 @@
 import { attempt, carry, grab, release, throwAt, type Body } from '@drawcall/animate';
 import { parallel } from '@pmndrs/timeline';
 import { BoxGeometry, Mesh, MeshStandardMaterial, Object3D, Vector3 } from 'three';
-import type { Grenades } from '.';
+import type { Grenades } from './index';
 import { GrenadeModel } from './model';
 
 const QUICK = { speed: 2, step: false };

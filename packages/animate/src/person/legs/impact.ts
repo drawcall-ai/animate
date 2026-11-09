@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import { exp } from '../../kernel/rotation';
 import { INDEX } from '../anatomy/bones';
 
@@ -13,7 +13,7 @@ export class Impact {
   private readonly angle = new Vector3();
   private readonly velocity = new Vector3();
 
-  apply(pose: ReadonlyPose, impulse: Readonly<Vector3>, point: Readonly<Vector3>): void {
+  apply(pose: ReadonlyBonePose, impulse: Readonly<Vector3>, point: Readonly<Vector3>): void {
     if (![...impulse.toArray(), ...point.toArray()].every(Number.isFinite)) throw new Error('applyImpulse: impulse and point must be finite');
     if (impulse.lengthSq() === 0) return;
     const back = pose.rotation(0).clone().invert(), hips = pose.position(0);

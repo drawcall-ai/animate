@@ -21,7 +21,7 @@ export interface Stance {
  * Where the legs are asked to take the body, by the one request that has them: the point on the floor, its velocity, how fast the body
  * may go (m/s, m/s²), the facing to turn to (at most `rate` rad/s) and how to stand.
  */
-export interface Go {
+export interface LegGoal {
   to: Vector3;
   velocity?: Vector3;
   speed: number;

@@ -1,7 +1,7 @@
 import { GRAVITY } from '../kernel/math';
 
 /**
- * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
+ * How a gait carries a four-legged body (`Gait.trunk`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
  * and the wave w(c) = (1 − once) · cos(2x − c) + once · cos(x − c) — twice a stride (a walk's, a trot's: a bounce on each diagonal) or
  * once (a gallop's: `once` 1) — the withers rise `withers · w(0)` (m) and the croup `croup[0] · w(croup[1])`, the trunk pitching between
  * them; the spine pitches `spine · w(spinePhase)` (°, + its hind end up: extending); the head pitches `headPitch` (°) and rises
@@ -12,7 +12,7 @@ import { GRAVITY } from '../kernel/math';
  * pelvis the back (none: it does not). Running, the trunk rides its legs' push by `bounce` (share, on top of the wave): its centre of
  * mass and pitch go as each stance's push and the flights' fall carry them (`Riding`).
  */
-export interface Carriage {
+export interface TrunkMotion {
   bend?: number;
   withers: number;
   croup: readonly [number, number];
@@ -46,8 +46,8 @@ export interface Gait {
   /** running (a gallop), the body let down on its legs by `drop` of their length — eased in from Froude number `froude[0]` to `froude[1]` —
    * its stances reaching as far fore and aft as the legs reach so */
   readonly run?: { froude: readonly [number, number]; drop: number };
-  /** how the gait carries a four-legged body (`Carriage`), if it does: as it is, or as it changes with the pace (`carriages`) */
-  readonly body?: Carriage | ((speed: number, froude: number) => Carriage);
+  /** how the gait carries a four-legged body (`TrunkMotion`), if it does: as it is, or as it changes with the pace (`trunkMotions`) */
+  readonly trunk?: TrunkMotion | ((speed: number, froude: number) => TrunkMotion);
 }
 
 /** leg `leg`'s stride at `speed` (m/s; its slowest below `gait.slowest`): its cadence (1/s) and duty factor */

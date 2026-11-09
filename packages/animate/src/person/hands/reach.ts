@@ -7,12 +7,12 @@ import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { closeTo, lateReach, Progress, REACH, reached, unmet } from '../../kernel/limb';
 import { during, type Request } from '../../kernel/requests';
-import { PointVelocity } from '../../kernel/tracked';
+import { PointVelocity } from '../../kernel/follow';
 import { CALM, HOLD, reaching } from './arms';
-import { armReaches, footing, walkingUp } from './standing-spot';
+import { armReaches, footing, walkingToReach } from './standing-spot';
 import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
-import { paceAt, type HandOptions } from '../../body/handling';
+import { paceAt, type HandOptions } from '../../body/hand-staging';
 import { BODY_RADIUS } from './load-clearance';
 import type { Person } from '../person';
 
@@ -97,17 +97,17 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
       const inReach = targets.every(({ side }, i) => armReaches(person, planned[i], side, true));
       const held = targets.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
       const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
-      const walkUp = plan !== 'there' && 'walk' in plan ? plan : null;
+      const reachWalk = plan !== 'there' && 'walk' in plan ? plan : null;
       let stalled = plan !== 'there' && 'nowhere' in plan ? plan.nowhere : null, arrived = false;
       const setsOff = (f: Frame) => {
-        if (Number.isNaN(setOff) && (plan === 'there' || (walkUp && walkUp.walk.eta <= NEAR))) setOff = f.time;
+        if (Number.isNaN(setOff) && (plan === 'there' || (reachWalk && reachWalk.walk.eta <= NEAR))) setOff = f.time;
         return !Number.isNaN(setOff);
       };
       if (!stalled) yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
         yield* parallel<Frame>('all', action<Frame>({ until: setsOff }), function* () {
-          if (!walkUp) return;
+          if (!reachWalk) return;
           yield* parallel<Frame>('race', function* () {
-            stalled = yield* walkingUp(request, walkUp, Math.max(0, lasts - NEAR));
+            stalled = yield* walkingToReach(request, reachWalk, Math.max(0, lasts - NEAR));
           }, action<Frame>({ until: moved }));
         });
         if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = close || there(f)) });

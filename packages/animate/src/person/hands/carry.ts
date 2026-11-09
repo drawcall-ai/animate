@@ -8,13 +8,13 @@ import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
 import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
 import type { Thing } from '../../things/thing';
-import { paceAt, type HandOptions } from '../../body/handling';
+import { paceAt, type HandOptions } from '../../body/hand-staging';
 import type { CarryPath } from '../../things/carry-path';
 import { floorUnder } from '../legs/height';
 import { SIDES, sideOf } from '../anatomy/bones';
 import { ARM_REACH, PROTRACTION } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
-import { footing, walkingUp, type WalkUp } from './standing-spot';
+import { footing, walkingToReach, type ReachWalk } from './standing-spot';
 import { guidesFor, CARRYING, type Guides } from './guide';
 import { closeOn, holdAlong, travel } from './travel';
 import { regripping, type Regripping } from './grasp';
@@ -42,7 +42,7 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   const held = sides.map((side) => {
     const hold = person.holding[side];
     if (!hold) throw new Error(`carry: the ${side} hand let go`);
-    hold.keep = undefined;
+    hold.idle = undefined;
     // (stood to as by its grip empties, as a grab is: a palm's way back from each turns with the hand on the way there)
     return { side, hold, at: thing.grip(hold.grip).at.position };
   });
@@ -73,7 +73,7 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
-function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: WalkUp, guides: Guides, resting: boolean, grasp: Regripping) {
+function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: ReachWalk, guides: Guides, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
   const movingFrame = person.track(thing.object);
   const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
@@ -99,7 +99,7 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
       yield* action<Frame>({ until: () => lifted || movingFrame.current.position.y >= from + rise * APPROACH_RISE });
       // (setting off, the eyes leave where it was for where it goes: held on the empty spot, they would swing across behind the body)
       lifted = true;
-      const stall = yield* walkingUp(request, plan);
+      const stall = yield* walkingToReach(request, plan);
       if (stall) request.fail(stall);
       approached = true;
     }, function* () {

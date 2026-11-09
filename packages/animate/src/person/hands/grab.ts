@@ -8,7 +8,7 @@ import type { Walk } from '../../step/walk';
 import { during, type Request } from '../../kernel/requests';
 import { placeArm, reaching } from './arms';
 import { clearArm } from './hang';
-import type { Pace } from '../../body/handling';
+import type { Pace } from '../../body/hand-staging';
 import { INDEX } from '../anatomy/bones';
 import { ARM_REACH } from './shoulder';
 import { pathAhead } from '../look/around';
@@ -17,7 +17,7 @@ import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { approach } from './approach';
 import { emptyAt, gripAt, holdOn, type HandPlan } from './plan';
 import { ARM } from './arm-clearance';
-import { flat, footing, walkingUp } from './standing-spot';
+import { flat, footing, walkingToReach } from './standing-spot';
 import type { Person } from '../person';
 
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
@@ -92,7 +92,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
     if (plan === 'there') return;
     // (the hands on the grips, it stands: a walk it has not yet ended — the legs another's — is not walked on, away from what they hold)
     yield* parallel<Frame>('race', action<Frame>({ until: () => held }), function* () {
-      const stall = yield* walkingUp(request, plan, REACHED_AFTER);
+      const stall = yield* walkingToReach(request, plan, REACHED_AFTER);
       if (stall) request.fail(stall);
     });
     stood = true;

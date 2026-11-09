@@ -41,9 +41,9 @@ export interface Turn { pelvis: number; thorax: number; roll: number }
  * phase).
  */
 export function strideTurn(ahead: number, legs: number, walk: number, run: number, held: boolean, out: Turn): Turn {
-  const lead = MOST * Math.tanh(ahead / legs / MOST) * walk;
-  out.pelvis = -lerp(GAIN.pelvis.walk, -GAIN.pelvis.run * (held ? HELD.pelvis : 1), run) * lead;
-  out.thorax = lerp(GAIN.thorax.walk, GAIN.thorax.run * (held ? HELD.thorax : 1), run) * lead;
+  const scissor = MOST * Math.tanh(ahead / legs / MOST) * walk;
+  out.pelvis = -lerp(GAIN.pelvis.walk, -GAIN.pelvis.run * (held ? HELD.pelvis : 1), run) * scissor;
+  out.thorax = lerp(GAIN.thorax.walk, GAIN.thorax.run * (held ? HELD.thorax : 1), run) * scissor;
   out.roll = -lerp(ROLL.walk, ROLL.run, run) * out.thorax;
   return out;
 }

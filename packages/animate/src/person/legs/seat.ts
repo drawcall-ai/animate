@@ -1,6 +1,6 @@
 // A person's weight on a seat: its feet planted where they stand, its hips carried off them onto the surface and back.
 import { MathUtils, Vector3 } from 'three';
-import type { Go } from '../../step/go';
+import type { LegGoal } from '../../step/leg-goal';
 import type { Miss } from '../../kernel/requests';
 import { forwardOf, minimumJerk } from '../../kernel/math';
 import { OVER_ANKLES, standingFeet } from '../anatomy/stance';
@@ -53,7 +53,7 @@ export class Seat {
   constructor(private readonly person: Person, readonly seating: Seating) {}
 
   /** a sub-step on: this seat, or none once it has stood */
-  step(dt: number, asked: Go | null): Seat | null {
+  step(dt: number, asked: LegGoal | null): Seat | null {
     this.rising ||= !!asked;
     this.time = MathUtils.clamp(this.time + (this.rising ? -dt : dt) * this.person.tempo / this.seating.seconds, 0, 1);
     if (this.rising && this.time === 0) return (this.person.seat = null);

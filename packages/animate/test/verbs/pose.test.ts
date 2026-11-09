@@ -166,7 +166,7 @@ describe('pose', () => {
     expect(() => pose(body, { arms: { left: { elbow: Number.NaN } } })).toThrow(/left elbow NaN/);
   });
 
-  it('leans a creature without a carriage into its acceleration, as its inertia has it', () => {
+  it('leans a creature without a trunk motion into its acceleration, as its inertia has it', () => {
     // (its root driven from standing up to 0.3 m/s over a second; a twin without inertia stands up straight)
     const drive = (t: number) => ({ position: new Vector3(0, 0, t < 1 ? 0.15 * t * t : 0.15 + 0.3 * (t - 1)), yaw: 0 });
     const kind = droid(), leaning = new Body(kind, { dev: true, drive }), upright = new Body({ ...kind, inertia: undefined }, { dev: true, drive });

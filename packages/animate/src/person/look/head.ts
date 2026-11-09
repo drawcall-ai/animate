@@ -1,13 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Goal, Motion } from '../../kernel/goal';
 import { limited } from '../../kernel/limits';
-import type { Pose } from '../../kernel/pose';
-import { TrackedPoint, TrackedRotation } from '../../kernel/tracked';
+import type { BonePose } from '../../kernel/bone-pose';
+import { PointFollower, RotationFollower } from '../../kernel/follow';
 import { bowAhead, lowering, LOWER } from '../legs/walk-pose';
 import { INDEX } from '../anatomy/bones';
 import type { Frame, Behaviour } from '../../kernel/frame';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
-import type { Go } from '../../step/go';
+import type { LegGoal } from '../../step/leg-goal';
 import type { Person } from '../person';
 
 /** a person as a led head sees it: its proportions, how it walks and stands, and what its parts ask of its stance */
@@ -39,10 +39,10 @@ const SPOT_RATE = 10;
 const UNDER = { speed: 1.0, accel: 1.2 };
 
 /** Follow tracked eye-midpoint position and orientation (default: level, facing with the pelvis). Run `under` before `look`, and both before the hands, which depend on the posed chest. */
-export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Frame) => Go; look: Behaviour } {
-  const at = new TrackedPoint();
-  const turned = new TrackedRotation();
-  const joints = SPINE.map(() => new TrackedRotation());
+export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Frame) => LegGoal; look: Behaviour } {
+  const at = new PointFollower();
+  const turned = new RotationFollower();
+  const joints = SPINE.map(() => new RotationFollower());
   const head = { position: new Vector3(), quaternion: new Quaternion() };
   const under = bringingUnder(person);
   /** the head's goal this sub-step, as the eyes are followed there */
@@ -73,9 +73,9 @@ export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Fra
 }
 
 /** Recruit turning beyond TURN and lowering beneath the tracked eyes; feed the moving support point forward to walking. */
-function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => Go {
+function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => LegGoal {
   const face = { yaw: NaN };
-  const go: Go & { velocity: Vector3 } = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER, face };
+  const go: LegGoal & { velocity: Vector3 } = { to: new Vector3(NaN), velocity: new Vector3(), ...UNDER, face };
   /** turning after the head; how long it has been turned past TURN (s); the eyes' last height */
   let turning = false, turnedFor = 0, height = NaN;
   return (f, eyes, yaw) => {
@@ -110,7 +110,7 @@ function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => G
 const SPINE = [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head];
 
 /** With `eyes` in the head frame and `at`/`q` in world coordinates, share the target turn over SPINE, then alternate head-position and head-orientation solves within joint limits. */
-function place(pose: Pose, eyes: Vector3, at: Vector3, q: Quaternion) {
+function place(pose: BonePose, eyes: Vector3, at: Vector3, q: Quaternion) {
   const [spine, chest, neck, head] = SPINE;
   const rel = _rel.copy(pose.rotation(0)).invert().multiply(q);
   SPINE.forEach((bone, k) => pose.setLocal(bone, limited(pose.skeleton, bone, _share.identity().slerp(rel, SHARE[k]))));
@@ -125,7 +125,7 @@ function place(pose: Pose, eyes: Vector3, at: Vector3, q: Quaternion) {
 }
 
 /** `bone` turned (in the world, by `share` of the turn) so the head's origin points at `to` from it */
-function swing(pose: Pose, bone: number, to: Vector3, share: number) {
+function swing(pose: BonePose, bone: number, to: Vector3, share: number) {
   const base = pose.position(bone);
   const from = _from.subVectors(pose.position(INDEX.head), base);
   const toward = _to.subVectors(to, base);

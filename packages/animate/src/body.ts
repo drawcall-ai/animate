@@ -1,7 +1,7 @@
 import { Quaternion, Vector3, type Group, type Object3D } from 'three';
 import { sameThree } from './kernel/math';
 import { INDEX } from './person/anatomy/bones';
-import type { ReadonlyPose } from './kernel/pose';
+import type { ReadonlyBonePose } from './kernel/bone-pose';
 import type { LogEntry } from './kernel/dev';
 import type { AnySpecies, Species } from './species/define';
 import { Person } from './person/person';
@@ -30,7 +30,7 @@ export interface Owner {
 /** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
  * the eyes (`head`) and each hand. */
 export interface Owners {
-  go?: Owner;
+  legs?: Owner;
   look?: Owner;
   trunk?: Owner;
   head?: Owner;
@@ -49,7 +49,7 @@ export interface Foot {
 
 /**
  * A body of a species: a person (`humanoid(skeleton)`) or a creature (`horse(skeleton)`, `dog(skeleton)`, `species(…)`). Asked nothing,
- * it lives: a person, or a creature with a carriage or a posture of its own, stands, breathes and looks about; any other creature stands
+ * it lives: a person, or a creature with a trunk motion or a posture of its own, stands, breathes and looks about; any other creature stands
  * still but for its lean into its acceleration (`inertia`). Add `object` to your scene and call `update(seconds)` every frame; your stories move it
  * with the verbs (`walkTo`, `grab`, …), run on your own timeline runner.
  */
@@ -95,7 +95,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    * Set it before each `update`; the node's own rotation is written to match as the update ends. With no hand on what hangs from it, it
    * simply turns as asked. */
   orient(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    selfOf(this).orient.set(node, rotation);
+    selfOf(this).turnedNodes.set(node, rotation);
   }
 
   /**
@@ -168,7 +168,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
       const held = owner(`hand.${hand}`);
       return held ? [[hand, held]] : [];
     });
-    return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), head: owner('head'), hands: Object.fromEntries(hands) };
+    return { legs: owner('legs'), look: owner('look'), trunk: owner('trunk'), head: owner('head'), hands: Object.fromEntries(hands) };
   }
 
   /** what `dev: true` found (empty with it off), one row per check, place and running verbs: sub-step motion checks and misuse noted, not failures, which throw (`Missed`) */
@@ -181,7 +181,7 @@ const selves = new WeakMap<Body, Self>();
 const UP = new Vector3(0, 1, 0);
 
 /** `body`'s last final pose: bone rotations and positions by index, its centre of mass, what its bones carry, as the body updating now reads it */
-export function poseOf(body: Body): ReadonlyPose {
+export function poseOf(body: Body): ReadonlyBonePose {
   const self = selfOf(body);
   return reader && reader !== self ? self.poseFor(reader) : self.pose;
 }

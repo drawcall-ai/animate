@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { GRAVITY } from '../kernel/math';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 
 /**
  * The extrapolated centre of mass (recalled: Hof et al. 2005, x + v / ω₀ with ω₀ = √(g / l)) of a body whose centre of mass is at
@@ -11,7 +11,7 @@ export function xcomOf(com: Readonly<Vector3>, velocity: Readonly<Vector3>, leng
 }
 
 /** `xcomOf` read off a body's last two final poses, `dt` (s) apart */
-export function xcomOfPoses(prev: ReadonlyPose, prev2: ReadonlyPose, dt: number, length: number, out: Vector3): Vector3 {
+export function xcomOfPoses(prev: ReadonlyBonePose, prev2: ReadonlyBonePose, dt: number, length: number, out: Vector3): Vector3 {
   const com = prev.com(_com);
   return xcomOf(com, prev2.com(_velocity).sub(com).multiplyScalar(-1 / dt), length, out);
 }

@@ -1,13 +1,13 @@
 // The body over its feet: the gait's oscillations.
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
-import type { ReadonlyPose } from '../../kernel/pose';
-import type { Quiet } from './quiet';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
+import type { QuietStance } from './quiet-stance';
 import { TRUNK_PITCH } from '../anatomy/ranges';
 import { INDEX } from '../anatomy/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../anatomy/proportions';
-import type { Stance } from '../../step/go';
+import type { Stance } from '../../step/leg-goal';
 import type { Stride } from '../anatomy/humanoid';
 import { strideTurn, type Turn } from './turn';
 import { Inertia, type Inertial } from '../../kernel/inertia';
@@ -71,7 +71,7 @@ export const entrain = (phase: number, goal: number, rate: number, dt: number) =
 export interface TrunkPose { chest: Quaternion; pelvisYaw: number; thoraxYaw: number }
 
 /** The body upright over its legs: the root and the posture state the legs and `Posture` share. */
-export interface Upright {
+export interface WalkPoseState {
   p: Proportions; root: Vector3;
   /** how it strides: its `width` sways and lists the pelvis further, its `bob` bobs it further */
   stride: Stride;
@@ -117,25 +117,25 @@ export class WalkPose {
     this.inertia = inertia ? new Inertia(inertia) : null;
   }
 
-  /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist`, `lean`
+  /** the pelvis's goal into `state.pelvis` / `state.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist`, `lean`
    * (rad, sideways: + its left side up) and the pelvis's turn off the facing (`hips`) as balance has them */
-  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: TrunkPose, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
-    const { lower, bow, twist, lean: bent, hips = 0 } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
+  carry(f: Pick<Frame, 'prev' | 'dt'>, state: WalkPoseState, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: TrunkPose, life: Pick<QuietStance, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
+    const { lower, bow, twist, lean: bent, hips = 0 } = asks, { onto } = life, { p: proportions, walk, run } = state, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;
-    const fwd = forwardOf(upright.yaw, _f), left = leftOf(upright.yaw, _l);
+    const fwd = forwardOf(state.yaw, _f), left = leftOf(state.yaw, _l);
 
     // the pelvis and the thorax turned with the stride, the thorax rolling with its turn
     const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
-    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, proportions.legs, walk, run, upright.held, this.turn);
+    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, proportions.legs, walk, run, state.held, this.turn);
     const { bob, nod: nodPhase, compression: comp, phase: stride } = cycle;
-    const wide = upright.stride.width ?? 1;
+    const wide = state.stride.width ?? 1;
     let roll = -LIST * wide * Math.sin(stride) * (1 - run) * walk;
     // (over the stance foot at its mid-stance: walking a quarter stride on from the other's lift, as a walk has it; running, its stance
     // short, half the swing on — π(1 − stance share))
     const side = -lerp(SWAY, RUN_SWAY, run) * wide * H * Math.sin(stride + run * (Math.PI / 2 - Math.PI * (1 - cycle.stance))) * walk;
     // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
-    const walkLift = -(0.001 + BOB * (upright.stride.bob ?? 1) * (1 - bob)) * L * walk;
+    const walkLift = -(0.001 + BOB * (state.stride.bob ?? 1) * (1 - bob)) * L * walk;
     this.comp += (comp - this.comp) * Math.min(1, 40 * dt);
     const lift = lerp(walkLift, -(0.025 + 0.03 * this.comp) * L, run);
     const nod = lerp(NOD.walk * (nodPhase - 0.2), NOD.run * (this.comp * this.comp - 0.35), run) * walk;
@@ -143,19 +143,19 @@ export class WalkPose {
 
     // the pelvis where it puts the centre of mass over the root (its ground point, swayed, shifted
     // back under a nod), as high as the legs reach, and as low as asked
-    const pelvis = upright.pelvis.copy(upright.root).add(upright.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
+    const pelvis = state.pelvis.copy(state.root).add(state.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
     this.quiet.copy(left).multiplyScalar(life.drift.x * proportions.scale).addScaledVector(fwd, life.drift.z * proportions.scale);
     const weight = _v.set(0, 0, 0);
-    if (onto && !upright.moving) {
-      weight.addVectors(upright.feet[0].anchor, upright.feet[1].anchor).multiplyScalar(0.5);
-      weight.subVectors(upright.feet[onto === 'left' ? 0 : 1].anchor, weight).multiplyScalar(SHIFT.share);
+    if (onto && !state.moving) {
+      weight.addVectors(state.feet[0].anchor, state.feet[1].anchor).multiplyScalar(0.5);
+      weight.subVectors(state.feet[onto === 'left' ? 0 : 1].anchor, weight).multiplyScalar(SHIFT.share);
     }
     this.weight.lerp(weight, 1 - Math.exp(-dt));
     // (and off a foot for it to lift, standing — an anticipatory shift, quicker — onto the others: the centre of mass carried toward where
     // it goes, from wherever it stands — a reach's lean, a stance aside — not by a set share, till the foot lifts; then held where it is
     // through the swing: recalled, gait initiation moves it only a few cm toward the stance foot; carried on, it swung the body about the
     // stance foot, and the feet landed by a body swung aside, re-stepping)
-    const unloading = upright.unloading, goal = _g.copy(this.unloaded.at);
+    const unloading = state.unloading, goal = _g.copy(this.unloaded.at);
     if (!unloading) goal.set(0, 0, 0);
     else if (!unloading.lifted) goal.add(_s.subVectors(unloading.onto, f.prev.com(_s)).setY(0));
     followShift(this.unloaded, goal, UNLOAD, dt);
@@ -165,22 +165,22 @@ export class WalkPose {
     const shifted = this.shifted.dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
     this.shiftRoll = SHIFT.roll * shifted;
     roll += this.shiftRoll;
-    const onward = MathUtils.smoothstep(Math.max(0, upright.velocity.dot(fwd)), 0, 1);
+    const onward = MathUtils.smoothstep(Math.max(0, state.velocity.dot(fwd)), 0, 1);
     const pace = follow(this.leans[0], this.leans[1], lerp(LEAN.walk * walk, LEAN.run, run) * onward, LEANING, dt);
     [this.leans[0], this.leans[1]] = [this.leans[1], pace];
     // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
     const forward = pace * (1 - MathUtils.smoothstep(bow, 0, BOWED)) * (1 - MathUtils.smoothstep(lower, 0, LOWERED * H));
     // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
     const tilt = 0.5 * nod + pelvisTilt(proportions, lower, bow) + TILT * run;
-    quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade + hips, tilt, roll, upright.pelvisRotation);
-    pelvis.y = proportions.hipHeight - upright.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
+    quatYXZ(state.yaw + pelvisYaw + state.stance.blade + hips, tilt, roll, state.pelvisRotation);
+    pelvis.y = proportions.hipHeight - state.stance.crouch - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
 
     // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
     // nodding, bowing and bent sideways
-    this.inertia?.step(upright.velocity, upright.yaw, dt);
+    this.inertia?.step(state.velocity, state.yaw, dt);
     const lean = this.inertia ?? { pitch: 0, roll: 0 };
     const pitch = forward + nod + bow - loadLean(f.prev, proportions, fwd) + life.breath + lean.pitch;
-    quatYXZ(upright.yaw + thoraxYaw + upright.stance.blade, pitch, thoraxRoll + lean.roll + bent, out.chest);
+    quatYXZ(state.yaw + thoraxYaw + state.stance.blade, pitch, thoraxRoll + lean.roll + bent, out.chest);
     out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
     [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
   }
@@ -262,7 +262,7 @@ export const bowLever = (proportions: Proportions, height: number) => 0.8 * (hei
 export const MOST_BOW = 60 * Math.PI / 180;
 
 /** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
-function loadLean(pose: ReadonlyPose, proportions: Proportions, forward: Readonly<Vector3>): number {
+function loadLean(pose: ReadonlyBonePose, proportions: Proportions, forward: Readonly<Vector3>): number {
   const hips = pose.position(0);
   let moment = 0, mass = 0;
   pose.skeleton.bones.forEach((bone, i) => {

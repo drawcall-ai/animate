@@ -7,7 +7,7 @@ import { follow, followRotation } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
 import { limited } from '../kernel/limits';
 import { angleOf, spinOf } from '../kernel/rotation';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import type { Skeleton } from '../kernel/skeleton';
 import type { Gazer } from '../species/define';
 import { EYES, EYES_MOST, EyePitch } from './eyes';
@@ -232,7 +232,7 @@ const BELL = 1.5;
 
 /** how much of the eyes' range (1: all of it) the head, turned toward `goal` (world) from `parent`'s turn shared over the neck's
  * `bones` each within its limit, leaves them to look at `point` (world) */
-function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, point: Readonly<Vector3>): number {
+function strain(gazer: Gazer, pose: ReadonlyBonePose, bones: readonly number[], parent: Readonly<Quaternion>, goal: Quaternion, point: Readonly<Vector3>): number {
   const last = bones[bones.length - 1];
   const offset = gazer.eyes(pose, _eyeOffset).sub(pose.position(last)).applyQuaternion(_rel.copy(pose.rotation(last)).invert());
   // (the head's turn down the neck, the eyes' origin carried from the chain's base to the head's under it)

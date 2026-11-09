@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import { solveChain } from '../../src/kernel/chain';
 import { pastLimit, clampRotation } from '../../src/kernel/limits';
 import { CHAINS } from '../../src/person/anatomy/skeleton';
@@ -47,7 +47,7 @@ describe('a person', () => {
   /** random poses of `chain` within its ranges, the elbow or knee a hinge bent `bent(degrees)` and twisted: where the tip is and how it is turned, and where the middle joint is */
   function* limbPoses(chain: 'leftArm' | 'rightLeg', bent: (degrees: number) => boolean, n: number) {
     const skeleton = humanoid(PERSON).skeleton;
-    const relaxed = new Pose(skeleton);
+    const relaxed = new BonePose(skeleton);
     for (const { bone, rotation } of relaxedPose()) relaxed.setLocal(bone, rotation);
     const rand = rng(3);
     const [first, middle, tip] = CHAINS[chain].map((b) => skeleton.index(b));
@@ -59,7 +59,7 @@ describe('a person', () => {
     // the elbow bends about y (its swing's first component), the knee about x (its second); both twist about their bone
     const [hinge, range, along] = chain === 'leftArm' ? [new Vector3(0, 1, 0), limit(middle).swing[0], new Vector3(1, 0, 0)] : [new Vector3(1, 0, 0), limit(middle).swing[1], new Vector3(0, 1, 0)];
     for (let k = 0; k < n; k++) {
-      const truth = new Pose(skeleton).copy(relaxed);
+      const truth = new BonePose(skeleton).copy(relaxed);
       for (const b of [first, tip]) {
         const q = turnUpTo(rand, Math.PI);
         clampRotation(q, limit(b));
@@ -76,7 +76,7 @@ describe('a person', () => {
   it('solves a limb onto any pose within its ranges (bent 10° or more), its tip turned as that pose turns it', () => {
     for (const chain of ['leftArm', 'rightLeg'] as const) {
       for (const { skeleton, relaxed, tip, goal, middle } of limbPoses(chain, (d) => d >= 10, 300)) {
-        const pose = new Pose(skeleton).copy(relaxed);
+        const pose = new BonePose(skeleton).copy(relaxed);
         solveChain({ current: pose }, chain, { tip: goal, pole: middle });
         expect(pose.position(tip).distanceTo(goal.position), chain).toBeLessThan(1e-6);
         expect(pose.rotation(tip).angleTo(goal.quaternion), chain).toBeLessThan(Math.PI / 180);
@@ -89,7 +89,7 @@ describe('a person', () => {
     let missed = 0;
     for (const { skeleton, relaxed, tip, goal, middle } of limbPoses('leftArm', (d) => d < 10, 300)) {
       for (const pole of [middle, undefined]) {
-        const pose = new Pose(skeleton).copy(relaxed);
+        const pose = new BonePose(skeleton).copy(relaxed);
         solveChain({ current: pose }, 'leftArm', { tip: goal, pole });
         expect(pose.position(tip).distanceTo(goal.position)).toBeLessThan(1e-3);
         const off = pose.rotation(tip).angleTo(goal.quaternion);

@@ -4,7 +4,7 @@
 import { irregular, seeded, seedOf } from '../../kernel/random';
 
 /** One person's own way of walking and standing: multipliers on the defaults (1: as tuned), and how long it waits to set off (s). */
-export interface Individual {
+export interface Variation {
   /** its preferred cadence at a pace: its strides that much longer or shorter */
   cadence: number;
   /** its cadence a stride at a time `time` s on: `cadence`, varying by `STRIDES` about it */
@@ -24,7 +24,7 @@ export interface Individual {
  * quiet sway's `SPREAD.sway` (Winter 1995: quiet stance's few millimetres, from person to person). Tuned: up to `SPREAD.delay` s later
  * setting off, within a gait's initiation (recalled: ~0.3–0.6 s of anticipatory shift before the first toe-off).
  */
-export function individualOf(seed: number): Individual {
+export function variationOf(seed: number): Variation {
   const random = seeded(seedOf('individual', seed));
   // (about normal: three uniforms summed, held within two standard deviations)
   const normal = () => Math.max(-2, Math.min(2, (random() + random() + random() - 1.5) * 2));
@@ -38,8 +38,8 @@ export function individualOf(seed: number): Individual {
   };
 }
 
-/** the default person, as tuned: no individual difference */
-export const TUNED: Individual = { cadence: 1, cadenceAt: () => 1, arms: 1, sway: 1, delay: 0 };
+/** the default person, as tuned: no variation */
+export const UNVARIED: Variation = { cadence: 1, cadenceAt: () => 1, arms: 1, sway: 1, delay: 0 };
 
 const SPREAD = { cadence: 0.02, arms: 0.05, sway: 0.1, delay: 0 };
 const STRIDES = 0.01;

@@ -6,7 +6,7 @@ import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
 import { letGo } from '../body/let-go';
-import type { HandOptions } from '../body/handling';
+import type { HandOptions } from '../body/hand-staging';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
@@ -40,7 +40,7 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
     if (on && on !== self) checkShared(on, held, named);
     for (const { grip } of named) checkGrip(self, held, held.grip(grip).node);
     request.there = () => named.every(({ hand, grip }) => self.holding[hand]?.thing === held && self.holding[hand]?.grip === grip);
-    yield* self.handling.take(request, held, named, options);
+    yield* self.handStaging.take(request, held, named, options);
   }, { until: options.until });
 }
 

@@ -1,7 +1,7 @@
 import { Group, Vector3 } from 'three';
 import { dog, grab, walkTo } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-import { DOG } from '../skeletons';
+import { DOG } from '../skeletons/index';
 import { ball } from '../things';
 
 

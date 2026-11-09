@@ -176,7 +176,7 @@ A bare body and a skinned body use the same skeleton. Only skinning a mesh needs
 
 For hair, tails and other swinging chains, spread the species and add `springs: { braid: { stiffness: 18, damping: 0.55, hang: [-2.2, 0, 0] as const } }`, keyed by an existing root bone; one setting covers the hierarchy below it. Skin hair standing clear of the body and give its root the `hang` turn it falls from. A person's springs keep out of its own head and trunk; nothing else collides.
 
-For a custom creature, start from [lion-species.ts](references/lion-species.ts); `@drawcall/animate/species` has what its definition needs. Every leg must be able to lift and place its foot. A creature without a `carriage` has no idle life, so give it life from the story. A creature's hand is its mouth (`jaw`), named in `grab` and `reach`; a person's hand keys are `left` and `right`. Check a new gait by counting the frames each foot of `body.feet` spends unplanted.
+For a custom creature, start from [lion-species.ts](references/lion-species.ts); `@drawcall/animate/species` has what its definition needs. Every leg must be able to lift and place its foot. A creature without a `trunk` has no idle life, so give it life from the story. A creature's hand is its mouth (`jaw`), named in `grab` and `reach`; a person's hand keys are `left` and `right`. Check a new gait by counting the frames each foot of `body.feet` spends unplanted.
 
 ## Players and crowds
 

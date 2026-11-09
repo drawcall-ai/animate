@@ -1,8 +1,8 @@
 import type { SkeletonBone } from '@drawcall/rig';
 import { powerGait, species } from '../../src/species';
 
-// A two-strut droid with no carriage (an astromech's barrel on its axle, a dome that turns on it): a creature of the library's custom
-// species without the four-legged carriage's idle life. Each strut has a hidden knee bent forward at rest, for the spare reach a leg needs.
+// A two-strut droid with no trunk motion (an astromech's barrel on its axle, a dome that turns on it): a creature of the library's custom
+// species without the four-legged trunk motion's idle life. Each strut has a hidden knee bent forward at rest, for the spare reach a leg needs.
 export const DROID = [
   { name: 'axle', position: [0, 0.66, 0] },
   { name: 'barrel', parent: 'axle', position: [0, 0.62, 0] },

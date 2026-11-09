@@ -2,7 +2,7 @@ import { Vector3, type Group, type Object3D } from 'three';
 import type { ReusableTimeline } from '@pmndrs/timeline';
 import type { SkeletonBone } from '@drawcall/rig';
 import { Body, humanoid, type BodyOptions, type Species } from '@drawcall/animate';
-import { PERSON, scaled, type PersonSkeleton } from './skeletons';
+import { PERSON, scaled, type PersonSkeleton } from './skeletons/index';
 
 export const FIXED_DT = 1 / 60;
 

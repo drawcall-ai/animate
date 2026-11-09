@@ -1,9 +1,9 @@
 import { Group, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import { walkTo } from '@drawcall/animate';
-import { carriages, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate/species';
+import { trunkMotions, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate/species';
 import type { Scenario } from '../scenario';
-import { LION } from '../skeletons';
+import { LION } from '../skeletons/index';
 import { ball } from '../things';
 
 type LionBone = (typeof LION)[number]['name'];
@@ -60,13 +60,13 @@ export const LION_SPECIES = species(LION, {
     heel: [0, -0.06, -0.04],
     toe: [0, -0.06, 0.08],
   })),
-  carriage: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
+  trunk: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
     life: [['tail', { every: [3, 7], rate: 1, pick: swing }]] },
 }, {
   gait: {
     ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT], [2, TROT], [3, GALLOP]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
     run: { froude: [1, 3], drop: 0.15 },
-    body: carriages([[0.3, WALKING], [0.6, TROTTING], [2, TROTTING], [3, GALLOPING]]),
+    trunk: trunkMotions([[0.3, WALKING], [0.6, TROTTING], [2, TROTTING], [3, GALLOPING]]),
   },
   masses: MASSES,
   limits: LIMITS,

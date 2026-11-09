@@ -2,7 +2,7 @@
 // following its stride cycle (the carpus folding, the hock flexing) as a soft reference.
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { angleAt, type JointCycle } from '../species/cycle';
 import { offsetAt, strideAt, type Gait } from '../species/gait';
 import type { LegChain } from '../species/leg-chain';
@@ -22,7 +22,7 @@ const yawPitch = (yaw: number, pitch: number, out: Quaternion) => out.setFromEul
  * side and the leg across its girdle (the nearest on the other side), its home under it, the leg's length as it stands; planted, a foot rolls
  * about its heel or toe; its print is the sole between them.
  */
-export function feetOf(chains: readonly LegChain[], rest: ReadonlyPose, depths: readonly ((out: number, ahead: number, pitch?: number) => number)[]): Feet {
+export function feetOf(chains: readonly LegChain[], rest: ReadonlyBonePose, depths: readonly ((out: number, ahead: number, pitch?: number) => number)[]): Feet {
   const root = rest.position(0), turn = _q.copy(rest.rotation(0)).invert();
   const local = (bone: number) => rest.position(bone).clone().sub(root).applyQuaternion(turn);
   const legs = chains.map((chain) => {
@@ -99,7 +99,7 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
 /**
  * A four-legged species' stepping, from its gait and feet: the gait's offsets, cadence and duty; a stance travelling at most
  * `SPANNING` of how far its legs reach fore and aft let down on them as the gait has it (`drop`) — running (the gait's `run`), let down
- * further and reaching as far as they reach so; feet landing a little ahead (`LEAD` of the stance), as wide apart as they stand; a swing lifting
+ * further and reaching as far as they reach so; feet landing a little ahead (`LANDS_AHEAD` of the stance), as wide apart as they stand; a swing lifting
  * `LIFT` × the gait's clearance at its height; the legs reaching `REACH` of their length; a foot landing turned from the body no
  * further than `twist` (rad: as far as its legs stand turned, `ChainLeg.turn`), the body turning on over a planted one
  * as its foot pivots; behind, rolling over its toe as far as `ball` (rad, − toes down: its rocker's breakover) as the leg needs. No heel
@@ -116,7 +116,7 @@ export function steppingOf(gait: Gait, feet: Feet, twist: number, ball: number):
   return {
     scale, offsets: gait.contacts.map((_, i) => offsetAt(gait, 0, i)), toeOut: 0, cadence: (speed) => strideAt(gait, speed, 0).frequency, duty: { walk: 0.6, side: 0.6, run: 0.6 },
     run: run ? [speedAt(run.froude[0]), speedAt(run.froude[1])] : [NEVER, 2 * NEVER], travel: { forward: travel, run: run ? travelAt(drop) : travel, back: travel / 2, side: travel / 3 },
-    lead: { share: LEAD, side: LEAD, most: length, run: length }, width: { stand: width, walk: width, run: width, narrowest: width },
+    landAhead: { share: LANDS_AHEAD, side: LANDS_AHEAD, most: length, run: length }, width: { stand: width, walk: width, run: width, narrowest: width },
     bob: 0, drop: { walk: lowered, side: lowered, run: drop }, lift: { walk: LIFT * clearance, run: LIFT * clearance, jump: LIFT * clearance }, arc: ARC,
     strike: { walk: 0, run: 0, ahead: 1 }, pitch: { heel: 0, ball }, dorsiflexion: Math.PI,
     crouch: { depth: 0, wider: 0, ahead: 0, travel: 0, lift: 0 }, reach: REACH, swingReach: SWING_REACH, clearance, gait, twist,
@@ -124,7 +124,7 @@ export function steppingOf(gait: Gait, feet: Feet, twist: number, ball: number):
 }
 
 /** Tuned: a foot lands this share of a stance ahead; a swing lifts this × the clearance; a leg reaches this share of its length */
-const LEAD = 0.55, LIFT = 2.5, REACH = 0.99;
+const LANDS_AHEAD = 0.55, LIFT = 2.5, REACH = 0.99;
 /** Tuned: a stance travels at most this share of how far its legs reach fore and aft, walking: the rest is the landing's spare */
 const SPANNING = 0.65;
 /** Tuned: a planted foot strays across at most this share of how far its leg reaches either way at its standing height */
@@ -194,7 +194,7 @@ export class ChainLeg {
   private readonly sign: number; private readonly length: number;
 
   /** `floor`: what its foot stands on */
-  constructor(private readonly chain: LegChain, private readonly start: ReadonlyPose, private readonly floor: Floor) {
+  constructor(private readonly chain: LegChain, private readonly start: ReadonlyBonePose, private readonly floor: Floor) {
     const top = chain.joints[0].bone, terminal = chain.joints[chain.joints.length - 1].bone;
     this.sign = start.position(terminal).x - start.position(0).x >= 0 ? 1 : -1;
     this.length = start.position(top).distanceTo(start.position(terminal));

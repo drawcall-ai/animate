@@ -95,7 +95,7 @@ export class FingerState {
   }
 
   /** `side`'s free hand keeps the shape it has this update, as a pose asked it (a fingertip drawing back off its button) */
-  keep(side: 'left' | 'right'): void {
+  holdShape(side: 'left' | 'right'): void {
     this.hands[side].posing = structuredClone(this.hands[side].shape);
   }
 

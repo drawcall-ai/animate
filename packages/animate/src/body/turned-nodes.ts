@@ -3,8 +3,8 @@ import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { within } from '../kernel/scene';
-import { resolve } from '../things/resolve';
-import { orienters } from '../things/holder';
+import { placedFor } from '../things/placed';
+import { turners } from '../things/holder';
 import type { Self } from './self';
 
 /** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight — the elbow still
@@ -18,7 +18,7 @@ const COMING = { far: 0.15, near: 0.03 };
  * the shoulder of each hand holding what hangs from it, or taking hold of it, as far as brings its grip within the arm's reach — a flick
  * faster than the trunk follows waits for the trunk rather than tearing the hands off — and written into the node as the update ends.
  */
-export class Orient {
+export class TurnedNodes {
   private readonly asked = new Map<Object3D, Quaternion>();
   /** each node as it is turned this sub-step */
   readonly turned = new Map<Object3D, Quaternion>();
@@ -27,17 +27,17 @@ export class Orient {
 
   /** keeps `node` turned to `rotation` in the world, its position following its parent (none: lets it go) */
   set(node: Object3D, rotation: Readonly<Quaternion> | null): void {
-    const by = orienters.get(node);
+    const by = turners.get(node);
     if (by && by !== this) throw new Error(`orient: another body keeps "${node.name}" turned`);
     if (!rotation) {
-      orienters.delete(node);
+      turners.delete(node);
       this.asked.delete(node);
       this.turned.delete(node);
       return;
     }
     this.asked.set(node, (this.asked.get(node) ?? new Quaternion()).copy(rotation));
     if (!this.turned.has(node)) this.turned.set(node, rotation.clone());
-    orienters.set(node, this);
+    turners.set(node, this);
   }
 
   /** each node turned as asked, brought within reach of the hands on it, this sub-step */
@@ -58,14 +58,14 @@ export class Orient {
   private reached(f: Frame, node: Object3D, turned: Quaternion): Quaternion {
     const self = this.self, was = _kept.copy(this.turned.get(node) ?? turned);
     this.turned.get(node)?.copy(turned);
-    const pivot = resolve(self, node, _pivot).position;
+    const pivot = placedFor(self, node, _pivot).position;
     // (twice round the hands: the turn that brings one hand's grip within its reach moves every other grip on the node)
     for (let pass = 0; pass < 2; pass++) for (const [hand, chain] of self.species.hands ?? []) {
       const grip = this.gripOf(hand);
       if (!grip || !within(grip.thing, node)) continue;
       const bones = self.skeleton.chain(chain), shoulder = f.current.position(bones[0]);
       const reach = HOLDABLE * bones.slice(1).reduce((sum, bone) => sum + self.skeleton.bones[bone].offset.length(), 0);
-      const placed = resolve(self, grip.thing, _placed);
+      const placed = placedFor(self, grip.thing, _placed);
       const out = _out.copy(grip.goal.position).applyQuaternion(placed.quaternion).add(placed.position).sub(pivot), toward = _toward.subVectors(shoulder, pivot);
       const far = out.length(), near = toward.length();
       if (out.distanceTo(toward) <= reach || far < 1e-6 || near < 1e-6) continue;
@@ -87,13 +87,13 @@ export class Orient {
    * it, hold their grips with their arms clear of the body (`Self.holds`), if they hold them so there: else, held off its grip, a hand
    * would pass through what it held, or its arm through the trunk */
   private held(f: Frame, node: Object3D, turned: Quaternion): void {
-    const self = this.self, rest = node.parent && resolve(self, node.parent, _rest).quaternion;
+    const self = this.self, rest = node.parent && placedFor(self, node.parent, _rest).quaternion;
     const holds = (rotation: Quaternion) => {
       this.turned.get(node)?.copy(rotation);
       return Object.keys(self.holding).every((hand) => {
         const grip = this.gripOf(hand);
         if (!grip || !within(grip.thing, node)) return true;
-        const { thing, goal } = grip, placed = resolve(self, thing, _placed);
+        const { thing, goal } = grip, placed = placedFor(self, thing, _placed);
         const position = _wrist.copy(goal.position).applyQuaternion(placed.quaternion).add(placed.position);
         return self.holds(f, hand, { position, quaternion: goal.quaternion && _grip.copy(placed.quaternion).multiply(goal.quaternion) });
       });

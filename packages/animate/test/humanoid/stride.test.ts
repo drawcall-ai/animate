@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Body, humanoid, walkTo, type Stride } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { insides, play } from '../bodies';
-import { individualOf } from '../../src/person/legs/individual';
+import { variationOf } from '../../src/person/legs/variation';
 
 // A person's cadence is dynamically similar to its legs' length, and its stride can be styled.
 
@@ -54,7 +54,7 @@ function walked(bodies: readonly Body[], speed: number, from = 3, to = 15): Gait
  */
 const target = (speed: number, legs: number) => 60 * (1.75 + 0.3 * speed / Math.sqrt(legs)) / Math.sqrt(legs);
 
-/** the life seed the people here are made with: their individual cadence is `individualOf(SEED)`'s */
+/** the life seed the people here are made with: their variation cadence is `variationOf(SEED)`'s */
 const SEED = 7;
 
 /** a person `height` m tall (the default person scaled, its legs × height / 1.75), `x` m to the side, striding as `stride` has it */
@@ -82,7 +82,7 @@ describe('a person\'s cadence', () => {
 
   it.each([[1.75, 0.6], [1.75, 1.3], [1.55, 0.9], [2.1, 0.9], [2.1, 1.4]])('keeps the dynamically similar cadence: %s m tall at %s m/s', (height, speed) => {
     const body = sized(height), [gait] = walked([body], speed);
-    expect(gait.cadence / (target(speed, height / 1.75) * individualOf(SEED).cadence)).toBeCloseTo(1, 1);
+    expect(gait.cadence / (target(speed, height / 1.75) * variationOf(SEED).cadence)).toBeCloseTo(1, 1);
     expect(body.log).toEqual([]);
   });
 });
@@ -114,13 +114,13 @@ describe('a person\'s stride', () => {
 
 
 describe('people of one build', () => {
-  // (each its own: its individuality seeded by where it was made, as its idle life is, unless a life seed is given)
+  // (each its own: its variation seeded by where it was made, as its idle life is, unless a life seed is given)
   // (two given their own life seeds, 3 and 11, whose cadences are 4.8% apart at the spreads first given: placed anywhere, two may be
   // all but alike — at a 2% spread, a quarter of pairs within 1%; their cadences differ as their individualities do)
   it('walk side by side out of step: their cadences differ as they are, and their touchdowns drift across each other', () => {
     const person = (x: number, seed: number) => new Body(humanoid(PERSON), { dev: true, at: new Vector3(x, 0, 0), life: { seed } });
     const bodies = [person(0.7, 3), person(-0.7, 11)];
-    const [a, b] = walked(bodies, 1.2), own = individualOf(11).cadence / individualOf(3).cadence;
+    const [a, b] = walked(bodies, 1.2), own = variationOf(11).cadence / variationOf(3).cadence;
     expect(Math.abs(own - 1)).toBeGreaterThan(0.01);
     // (as much as half again or as little as half their own difference: their strides vary by `STRIDES` one to the next, and a balance
     // quickens a step as it needs)

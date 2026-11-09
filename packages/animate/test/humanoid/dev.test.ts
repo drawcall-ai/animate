@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { lookAt } from '../../src/index';
 import { selfOf } from '../../src/body';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import { INDEX } from '../../src/person/anatomy/bones';
 import { claim, dt, insides, person, play, run } from '../bodies';
 import { poseOf } from '../../src/index';
@@ -37,7 +37,7 @@ it('checks sustained joint speed even when acceleration is below its ceiling', (
 
 it('checks standing CoM against the soles once the final pose is still', () => {
   const body = person({ dev: true }), h = insides(body);
-  const pose = new Pose(h.skeleton).copy(poseOf(body));
+  const pose = new BonePose(h.skeleton).copy(poseOf(body));
   // (the hips' segment's mass shifted 3 m aside, the standing pose and its soles as they were)
   h.skeleton.bones[INDEX.hips].com.x = 3;
   claim(body, 'trunk', (f) => {

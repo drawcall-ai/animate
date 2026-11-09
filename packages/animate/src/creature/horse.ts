@@ -4,12 +4,12 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '../kernel/skeleton';
 import type { Frame } from '../kernel/frame';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { clamp, minimumJerk, yawOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
 import { swing } from '../kernel/life';
 import type { Gait } from '../species/gait';
-import { carriage, type CarriedBones, type Striding } from './carriage';
+import { trunkMotion, type TrunkBones, type Striding } from './trunk-motion';
 import type { JointCycle } from '../species/cycle';
 import type { LegChain } from '../species/leg-chain';
 import { powerGait, stanceOf } from '../species/schedule';
@@ -75,7 +75,7 @@ export function horse<const S extends readonly SkeletonBone[]>(skeleton: S & Hav
     hands: { jaw: ['neck', 'head', 'jaw'] },
     legs,
     gaze: { eyes: { bone: 'head', at: EYES.clone().multiplyScalar(size).toArray() }, range: EYE_RANGE },
-    carriage: HORSE_CARRIAGE,
+    trunk: HORSE_TRUNK,
   }, {
     gait: gaitAt(reference, size),
     masses: Object.fromEntries(Object.entries(masses).map(([name, mass]) => [name, mass * size ** 3])),
@@ -186,7 +186,7 @@ const HORSE_WALK: Gait = {
   // Dunbar ranges read via summary; landmark/hip phase derived after solving. Derived: the croup's rise × 1.1 since the pelvis
   // moved 9 cm back: the trunk pitching ~6° over a back that much longer (read: Dunbar et al. 2008, withers 7 ± 1 cm, head 12–15 cm, its
   // pitch ~9°; Faber et al. 2000, the back flexing ~7° twice a stride at 1.6 m/s — the test's bounds).
-  body: { withers: 0.035, croup: [0.055, 1.52], spine: 2.5, spinePhase: 0.3, roll: 4, yaw: 2.5, headPitch: 4.5, headRise: 0.0675, headWithers: 0 },
+  trunk: { withers: 0.035, croup: [0.055, 1.52], spine: 2.5, spinePhase: 0.3, roll: 4, yaw: 2.5, headPitch: 4.5, headRise: 0.0675, headWithers: 0 },
   // Tuned from the read 28% fore-cannon crossing, allowing for the coffin's forward offset.
   contacts: walk.contacts.map((contact, i) => ({
     ...contact,
@@ -199,7 +199,7 @@ const HORSE_TROT: Gait = {
   ...powerGait({ height: 1.2, slowest: 0.8, offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: stanceOf(0.3, 3.7, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] }),
   // Read via summary: Dunbar's 1° trunk ROM is the low end of 2±1°; read or read via summary: back 4–6°, roll 9.5°. Derived: the croup with the withers
   // but for 0.5° of trunk pitch over the 1.14 m between withers and croup.
-  body: { withers: -0.045, croup: [-0.035, 0], spine: 3, spinePhase: 0, roll: 4.75, yaw: 2.5, headPitch: 2.5, headRise: 0, headWithers: 1 },
+  trunk: { withers: -0.045, croup: [-0.035, 0], spine: 3, spinePhase: 0, roll: 4.75, yaw: 2.5, headPitch: 2.5, headRise: 0, headWithers: 1 },
 };
 
 // Read: Back et al. 1995 fore/hind abstracts describe TROT at 4 m/s, not walk. Recalled: Back et al. 1996 comparison: walk stance has less
@@ -248,7 +248,7 @@ const BREAKOVER: LegChain['rocker'] = [[0, 0], [0.75, 0], [0.9, -25], [1, -25]];
  * What the horse's gait carries, and its quiet life (recalled): ears flick every 2–6 s, the tail swishes every 5–20 s, the head turns every
  * 10–30 s and the weight shifts every 20–60 s (tuned: the first at 2–6 s); each goal crosses neutral so every change shows (derived).
  */
-const HORSE_CARRIAGE: CarriedBones = { spine: 'back', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.7, period: 1.2, cycles: 1 }, life: [
+const HORSE_TRUNK: TrunkBones = { spine: 'back', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.7, period: 1.2, cycles: 1 }, life: [
   ['leftEar', { every: [2, 6], rate: 8, pick: swing }], ['rightEar', { every: [2, 6], rate: 8, pick: swing }],
   ['tail', { every: [5, 20], rate: 1, pick: swing }], ['head', { every: [10, 30], rate: 1, pick: swing }],
   ['weight', { every: [20, 60], first: [2, 6], rate: 1, pick: swing }],
@@ -257,9 +257,9 @@ const HORSE_CARRIAGE: CarriedBones = { spine: 'back', pelvis: 'pelvis', neck: 'n
 const turn = (x = 0, y = 0, z = 0, out = _q) => out.setFromEuler(_e.set(x, y, z, 'YXZ'));
 
 /** The horse's posture, written before its legs step (its contact phase read via summary, its idle and tail timing recalled). */
-function horseMotion(start: ReadonlyPose, gait: Gait, legs: readonly LegChain[], bones: { head: number; neck: number; ears: number[] }, halter: Vector3,
+function horseMotion(start: ReadonlyBonePose, gait: Gait, legs: readonly LegChain[], bones: { head: number; neck: number; ears: number[] }, halter: Vector3,
   seed = seedOf(start.position(0).x, start.position(0).z)) {
-  const carried = carriage(start, legs, HORSE_CARRIAGE, gait, seed), idle = carried.life, rand = idle.rand;
+  const trunk = trunkMotion(start, legs, HORSE_TRUNK, gait, seed), idle = trunk.life, rand = idle.rand;
   const { head: headBone, neck: neckBone, ears } = bones;
   const rest = { quiet: 0, value: 0, side: 0, at: 60 + 120 * rand(), pitches: [0, 0, 0, 0] };
   const reaction = new Vector3(), tied = { position: new Vector3(), length: 0 };
@@ -275,9 +275,9 @@ function horseMotion(start: ReadonlyPose, gait: Gait, legs: readonly LegChain[],
         const stretch = f.prev.point(headBone, halter, _point).distanceTo(tied.position);
         if (stretch > tied.length + 1e-4) f.dev?.append(f.time - f.dt, { check: 'horse tether (m)', value: stretch, limit: tied.length, where: 'halter' });
       }
-      carried.step(f, striding);
-      const m = carried.moving;
-      rest.quiet = carried.speed < 0.01 ? rest.quiet + f.dt : 0;
+      trunk.step(f, striding);
+      const m = trunk.moving;
+      rest.quiet = trunk.speed < 0.01 ? rest.quiet + f.dt : 0;
       if (rest.quiet >= rest.at) { rest.side = rest.side ? -rest.side : (rand() < 0.5 ? 1 : -1); rest.at = rest.quiet + 60 + 240 * rand(); }
       rest.value += ((rest.quiet >= 60 ? rest.side : 0) * (1 - m) - rest.value) * (1 - Math.exp(-f.dt));
       rest.pitches[2] = -25 * Math.max(0, rest.value); rest.pitches[3] = 25 * Math.min(0, rest.value);
@@ -293,7 +293,7 @@ function horseMotion(start: ReadonlyPose, gait: Gait, legs: readonly LegChain[],
       const away = look ? -Math.sign(_look.x) * 0.5 * Math.max(0, Math.min(1, (0.8 - distance) / 0.3)) : 0;
       // Tuned gains (rad): neck .35/head .2 sum to 31.5° look-back (derived); ears −.3, pelvis .025, tail .2.
       // Derived: hip-axis roll within the skeleton's range shifts the croup up to 2.5 cm; rests take over.
-      carried.write(f, {
+      trunk.write(f, {
         lift: -0.04 * Math.abs(rest.value), weight: 1 - Math.abs(rest.value),
         pelvisRoll: (-0.12 * rest.value + 0.025 * toward * response) * (1 - m),
         neckYaw: away || (0.3 * attended * (1 - m) + 0.18 * idle.value('head') * (1 - m) + 0.35 * toward * response),

@@ -1,5 +1,5 @@
 import type { Dev } from './dev';
-import type { Pose, ReadonlyPose } from './pose';
+import type { BonePose, ReadonlyBonePose } from './bone-pose';
 
 /** the sub-step (s): fixed, so that what is read off the pose history (velocities) does not depend on the frame rate */
 export const SUBSTEP = 1 / 60;
@@ -14,9 +14,9 @@ export interface Frame {
   dt: number;
   /** the time `current` is posed for (s); the body starts at 0 */
   time: number;
-  prev2: ReadonlyPose;
-  prev: ReadonlyPose;
-  current: Pose;
+  prev2: ReadonlyBonePose;
+  prev: ReadonlyBonePose;
+  current: BonePose;
   readonly dev?: Dev;
 }
 

@@ -1,9 +1,9 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import { Pose, type ReadonlyPose } from '../kernel/pose';
+import { BonePose, type ReadonlyBonePose } from '../kernel/bone-pose';
 import { gazeAsks } from './hands/shoulder';
-import { personHands } from './hands/handling';
-import type { Handling } from '../body/handling';
+import { personHands } from './hands/staging';
+import type { HandStaging } from '../body/hand-staging';
 import { looking } from '../look/gaze';
 import type { AnySpecies, Gazer } from '../species/define';
 import type { MovingFrame } from '../kernel/moving-frame';
@@ -14,7 +14,7 @@ import { forwardOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from '../body/self';
 import type { Binding } from '../body/binding';
-import { resolve } from '../things/resolve';
+import { placedFor } from '../things/placed';
 import type { Hold } from '../things/holder';
 import { bear, bodyOf, carryAlong, checkParents, inHand, move } from '../things/hold';
 import type { Thing } from '../things/thing';
@@ -62,16 +62,16 @@ export class Person extends Self {
   readonly armPose: Record<Side, Required<ArmPosture>> = { left: still(), right: still() };
   readonly drawingBack: Record<Side, number> = { left: -Infinity, right: -Infinity };
   /** a pose to try an arm on (`holds`) */
-  private readonly scratch = new Pose(this.skeleton);
+  private readonly scratch = new BonePose(this.skeleton);
   /** poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
-  readonly trials = { brought: new Pose(this.skeleton), trial: new Pose(this.skeleton) };
+  readonly trials = { brought: new BonePose(this.skeleton), trial: new BonePose(this.skeleton) };
   /** where each arm hangs from as a frame its hand is carried in (`shoulderOf`): made when first read */
   shoulders: Record<Side, MovingFrame> | null = null;
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;
     if (!proportions || !species.gaze) throw new Error('a person is made of a humanoid species');
-    super(species, options, binding, (skeleton, floor) => relaxed(proportions, new Pose(skeleton), floor, options.at ?? new Vector3(), options.face ?? 0), trunkOf(proportions, binding));
+    super(species, options, binding, (skeleton, floor) => relaxed(proportions, new BonePose(skeleton), floor, options.at ?? new Vector3(), options.face ?? 0), trunkOf(proportions, binding));
     this.proportions = proportions;
     this.stride = species.stride ?? {};
   }
@@ -88,12 +88,12 @@ export class Person extends Self {
   }
 
   /** a person's hands: both at once, the right leading */
-  protected handle(): Handling {
+  protected stageHands(): HandStaging {
     return personHands(this);
   }
 
   /** before the head aims at `point`: the body bows and lowers to see low down */
-  gazeAsks(pose: ReadonlyPose, point: Readonly<Vector3>): void {
+  gazeAsks(pose: ReadonlyBonePose, point: Readonly<Vector3>): void {
     gazeAsks(this, pose, point);
   }
 
@@ -123,10 +123,10 @@ export class Person extends Self {
       // (unseeded, glances vary with where the body was made, as its balance does: a crowd does not look aside in step)
       gaze: looking(this, lookAround(this, seed ?? seedOf('gaze', this.proportions.height, this.pose.position(0).x, this.pose.position(0).z))),
       hands: hanging(this),
-      keep: (f, hand) => {
+      idleHold: (f, hand) => {
         const side = sideOf(hand), hold = this.holding[side];
         if (!hold) return;
-        if (hold.keep) return hold.keep(f);
+        if (hold.idle) return hold.idle(f);
         const thing = hold.thing;
         // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
         // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
@@ -179,7 +179,7 @@ const LEFT_BEHIND = 0.15;
 /** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
  * it after the hands): its goal on the grip (a palm short of the turn its placement asks is put where the turn would have it) */
 function gripGap(person: Person, f: Frame, side: Side, hold: Hold): number {
-  const at = resolve(person, hold.thing.object, _placed), goal = hold.goal.position;
+  const at = placedFor(person, hold.thing.object, _placed), goal = hold.goal.position;
   return f.current.position(person.hands[side]).distanceTo(_grip.copy(goal).applyQuaternion(at.quaternion).add(at.position));
 }
 
@@ -214,7 +214,7 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
 }
 
 /** Start relaxed on `floor` at `at` (its x and z), facing `yaw`, with flat feet each on the floor under it and the pelvis within standing reach. */
-function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3, yaw: number): Pose {
+function relaxed(proportions: Proportions, pose: BonePose, floor: Floor, at: Vector3, yaw: number): BonePose {
   for (const { bone, rotation } of relaxedPose()) pose.setLocal(bone, rotation);
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw));
   const standing = floor(at.x, at.z) + proportions.hipHeight;

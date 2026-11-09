@@ -48,7 +48,7 @@ function catcherOf(steps: Steps, input: StepInput): Leg | undefined {
 export function keepTime(steps: Steps, input: StepInput, cues: Cues) {
   const gait = steps.st.gait;
   if (!gait) return;
-  const { legs } = steps, { pacing, dt, C, duty, Ts, Tsw, lead, moving, pressed } = input;
+  const { legs } = steps, { pacing, dt, C, duty, Ts, Tsw, landAhead, moving, pressed } = input;
   steps.footfalls = legs.map((leg) => {
     const at = steps.footfalls[leg.i], to = offsetAt(gait, pacing, leg.i), off = to - at - Math.round(to - at);
     return mod(at + clamp(off, -SHIFT * dt / C, SHIFT * dt / C));
@@ -60,7 +60,7 @@ export function keepTime(steps: Steps, input: StepInput, cues: Cues) {
   // (setting off from standing, the gait's cycle starts with the foot furthest behind where it would land: it steps first; a root its
   // legs hold back is setting off too — its feet step in their turn to make way for it, else it waits on feet that wait on it)
   const underway = moving > 0 || pressed !== 0 || input.r.wanted !== undefined;
-  if (underway && !steps.going && legs.every((leg) => !leg.swing)) [steps.clock, steps.since] = [steps.lifts[firstStep(steps, input, lead).i], 0];
+  if (underway && !steps.going && legs.every((leg) => !leg.swing)) [steps.clock, steps.since] = [steps.lifts[firstStep(steps, input, landAhead).i], 0];
   steps.going = underway || legs.some((leg) => leg.swing);
   if (!underway && !legs.some((leg) => leg.swing || wants(steps, input, cues, leg))) return;
   // (a foot whose turn passes while it is held down still owes its step: it takes it as soon as it may, not a cycle on)
@@ -85,7 +85,7 @@ export function liftFeet(steps: Steps, input: StepInput, cues: Cues) {
   const was = steps.unloading;
   steps.unloading = null;
   // (the one the weight goes off first, so another due does not turn the shift back while it goes)
-  const order = furthestOf(steps, input, input.lead).sort((a, b) => Number(b.i === was) - Number(a.i === was));
+  const order = furthestOf(steps, input, input.landAhead).sort((a, b) => Number(b.i === was) - Number(a.i === was));
   for (const leg of order) {
     const other = steps.legs[steps.pair[leg.i]];
     if (ready(steps, input, cues, leg, other, was === leg.i)) liftLeg(steps, input, leg, { capture: leg === cues.catcher, unloaded: was === leg.i });
@@ -152,7 +152,7 @@ function isUrgent(steps: Steps, input: StepInput, cues: Cues, leg: Leg, other: L
   const ahead = aheadOf(steps, input, leg) < 0;
   const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (!!r.forecast && leg.planted < SETTLING * input.C));
   if (!down && legReach(steps, input, leg) < nominal(steps, input) + Math.max(0, vy) * RISING - THRESHOLDS.short * s
-    && offHome(steps, input, leg, input.lead) > THRESHOLDS.still * s) return true;
+    && offHome(steps, input, leg, input.landAhead) > THRESHOLDS.still * s) return true;
   if (leg.landed) return false;
   if (leg === cues.catcher) return true;
   // (strayed from its hip as the body stands, not as its weight is shifted over the feet: the far foot is not in under a body leaning its
@@ -213,7 +213,7 @@ function followerYields(steps: Steps, input: StepInput, leg: Leg, other: Leg): b
 
 /** whether `other` will be further from its home than `leg` a swing on, by more than a step */
 function behind(steps: Steps, input: StepInput, other: Leg, leg: Leg): boolean {
-  const then = input.lead + input.Tsw;
+  const then = input.landAhead + input.Tsw;
   return offHome(steps, input, other, then) > offHome(steps, input, leg, then) + THRESHOLDS.distance * steps.st.scale;
 }
 
@@ -223,10 +223,10 @@ function behind(steps: Steps, input: StepInput, other: Leg, leg: Leg): boolean {
  * further behind than its stance takes it from where it lands
  */
 export function wants(steps: Steps, input: StepInput, cues: Cues, leg: Leg): boolean {
-  const s = steps.st.scale, { r, v, spin, held, lead, most, Ts, crouch: k } = input;
+  const s = steps.st.scale, { r, v, spin, held, landAhead, most, Ts, crouch: k } = input;
   if (r.still && !staggered(steps, input, leg)) return false;
   if (steps.clocked && !stood(input, leg)) return false;
-  const off = offHome(steps, input, leg, lead);
+  const off = offHome(steps, input, leg, landAhead);
   if (steps.clocked) {
     const far = off > (v > 0 || spin !== 0 ? THRESHOLDS.distance : THRESHOLDS.still) * s;
     return (due(steps, input, leg) && (held || far || turnedOff(steps, input, cues, leg))) || off > (1 + BEHIND) * most;

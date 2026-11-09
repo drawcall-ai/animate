@@ -15,7 +15,7 @@ type DogBone = 'trunk' | 'pelvis' | 'neck' | 'head' | 'jaw' | 'tail' | `${'left'
  * riding on the trot; it looks about with its neck, takes things in its jaw (its one hand, `jaw`) and wags its tail in bursts standing.
  * Its numbers are a Labrador's of 0.45 m to the trunk, made dynamically similar to the skeleton's size.
  *
- * The trot's carriage: a trotting dog bounces twice a stride, once per diagonal pair, its withers and croup together (derived from the
+ * The trot's trunk motion: a trotting dog bounces twice a stride, once per diagonal pair, its withers and croup together (derived from the
  * read step frequency 4.31 Hz and peak upward acceleration 10.44 m/s² of a 17.6 kg dog, Cavagna et al. 2010, PMC2817108 Table 1: ±1.4 cm
  * as a sinusoid; ±1.2 cm here at a slower trot); the pelvis rolls under 3° each way in a Whippet and more in a Malinois, and hardly yaws
  * (0–5°) [read: Fischer et al. 2018, Sci Rep 8:16982]; the head dips with each fore stance, as the withers do [recalled: the head nod
@@ -54,10 +54,10 @@ export function dog<const S extends readonly SkeletonBone[]>(skeleton: S & Havin
     gaze: { neck: ['neck', 'head'], eyes: { bone: 'head', at: [0, -0.02 * size, 0.1 * size] }, range: { down: 0.5, up: 0.4, side: 0.6 } },
     hands: { jaw: ['neck', 'head', 'jaw'] },
     legs,
-    carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
+    trunk: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
       life: [['tail', { every: [2, 5], rate: 1, pick: swing }]] },
   }, {
-    gait: gaitAt({ ...powerGait({ height: 0.49, slowest: 0.3, offsets: TROT, stride: 2.15, stance: 0.93, clearance: [0.025, 0.025, 0.02, 0.02] }), drop: 0.1, body: TROTTING }, size),
+    gait: gaitAt({ ...powerGait({ height: 0.49, slowest: 0.3, offsets: TROT, stride: 2.15, stance: 0.93, clearance: [0.025, 0.025, 0.02, 0.02] }), drop: 0.1, trunk: TROTTING }, size),
     masses: Object.fromEntries(Object.entries(masses).map(([name, mass]) => [name, mass * size ** 3])),
     limits,
     inertia: { ahead: 0.4, back: 0.3, roll: 0.9, most: 0.3, frequency: 1.15 / Math.sqrt(size), damping: 0.65 },

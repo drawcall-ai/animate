@@ -1,6 +1,6 @@
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { Binding } from '../body/binding';
-import type { Capsule, Capsules } from '../body/springs';
+import type { Capsule, TrunkCapsules } from '../body/springs';
 import { INDEX } from './anatomy/bones';
 import type { Proportions } from './anatomy/proportions';
 import { BODY_RADIUS } from './hands/load-clearance';
@@ -10,7 +10,7 @@ import { BODY_RADIUS } from './hands/load-clearance';
  * as wide as the hip joints stand below the neck, two more beside it (a trunk is wider than it is deep: in a round one alone, a braid
  * slid round inside the flank and out at the side of the waist after a hard stop)
  */
-export function trunkOf(proportions: Proportions, binding: Binding): Capsules {
+export function trunkOf(proportions: Proportions, binding: Binding): TrunkCapsules {
   const points = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()] as const;
   const [atHips, atNeck, skull, leftHips, leftNeck, rightHips, rightNeck] = points;
   const { hips, neck, head, leftUpperLeg: leftHip, rightUpperLeg: rightHip }: Record<string, Object3D> = binding.bones;

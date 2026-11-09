@@ -23,7 +23,7 @@ it('a grab waiting on the walk starts before the walk ends, without taking the l
       at.held = h.frame.time;
     });
   }, [body], 10, () => {
-    if (Number.isNaN(at.walked) && body.owners.go) legs.add(body.owners.go.verb);
+    if (Number.isNaN(at.walked) && body.owners.legs) legs.add(body.owners.legs.verb);
     return !Number.isNaN(at.held) && !Number.isNaN(at.walked);
   });
   expect(at.started).toBeLessThan(at.walked);

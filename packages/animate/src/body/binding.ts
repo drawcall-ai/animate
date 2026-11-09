@@ -1,7 +1,7 @@
 import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { SkeletonBone } from '../kernel/skeleton';
 import type { AnySpecies } from '../species/define';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import type { Floor } from '../step/floor';
 
 /**
@@ -73,7 +73,7 @@ export class Binding<Name extends string = string> {
   }
 
   /** `object` placed where the body stands — on `floor` under its root — facing, and each moving bone posed from `pose` */
-  write(pose: ReadonlyPose, floor: Floor): void {
+  write(pose: ReadonlyBonePose, floor: Floor): void {
     const root = pose.position(0), object = this.object;
     object.position.set(root.x, floor(root.x, root.z), root.z);
     object.quaternion.setFromAxisAngle(UP, pose.facing);

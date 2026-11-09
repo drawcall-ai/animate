@@ -4,7 +4,7 @@ import type { Goal, Placement } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
 import { digitsOf } from '../../fingers/placement';
 import { handsOn, inHand } from '../../things/hold';
-import { resolve } from '../../things/resolve';
+import { placedFor } from '../../things/placed';
 import type { Hold, Regrip } from '../../things/holder';
 import type { Thing } from '../../things/thing';
 import { sideOf, type Side } from '../anatomy/bones';
@@ -12,7 +12,7 @@ import { broughtTurn, elbowPole } from './arms';
 import { holdsClear } from './arm-clearance';
 import { solveChain } from '../../kernel/chain';
 import { coordinates, coordinatesOf } from '../../kernel/limits';
-import type { Pose, ReadonlyPose } from '../../kernel/pose';
+import type { BonePose, ReadonlyBonePose } from '../../kernel/bone-pose';
 import { fixes } from './plan';
 import type { Person } from '../person';
 
@@ -55,8 +55,8 @@ const SEAT = 0.1;
 
 /** hand `side`'s node in `thing`'s frame as the body was last posed (into `out`) */
 function heldNow(person: Person, side: Side, thing: Thing, out: InHand): InHand {
-  const hand = resolve(person, person.boneNode(person.hands[side]), out);
-  const at = resolve(person, thing.object, _placed), back = _back.copy(at.quaternion).invert();
+  const hand = placedFor(person, person.boneNode(person.hands[side]), out);
+  const at = placedFor(person, thing.object, _placed), back = _back.copy(at.quaternion).invert();
   hand.position.sub(at.position).applyQuaternion(back);
   hand.quaternion.premultiply(back);
   return hand;
@@ -110,7 +110,7 @@ function planGrasp(person: Person, side: Side, thing: Thing, hold: Hold, end: Re
   const strain = (hand: Readonly<Quaternion>) => strainAt(person, posed, trial, side, at, hand);
   // (settling, the thing held turned off its end: the arm as it stands does not hold this grasp there, whatever an arm brought there
   // afresh would, so waiting longer would not bring it there)
-  const off = settling && resolve(person, thing.object, _placed).quaternion.angleTo(end.quaternion) > TURNED_OFF;
+  const off = settling && placedFor(person, thing.object, _placed).quaternion.angleTo(end.quaternion) > TURNED_OFF;
   const kept = Math.max(strain(_kept.copy(end.quaternion).multiply(turn)), off ? UNHELD : 0);
   if (kept <= STRAINED) return true;
   // (the hand as the arm brings it there, turned about the palm round the vertical, the body's left and its own length, the least first)
@@ -168,7 +168,7 @@ export function regripping(person: Person, thing: Thing, end: (f: Frame) => Goal
   const plan = (f: Frame, settling = false) => {
     if (!hold) return false;
     const at = end(f);
-    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? resolve(person, thing.object, _placed).quaternion }, settling);
+    return planGrasp(person, sideOf(hand), thing, hold, { position: at.position, quaternion: at.quaternion ?? placedFor(person, thing.object, _placed).quaternion }, settling);
   };
   let kept = true;
   return {
@@ -230,7 +230,7 @@ function palmIn(person: Person, side: Side, held: Readonly<InHand>, out: Vector3
  * and its hand short of the turn where a range stops it; `UNHELD` more if it cannot hold it so — no elbow keeps the arm out of the trunk,
  * or the hand is short of the turn by more than `SHORT`. 0: comfortably.
  */
-function strainAt(person: Person, pose: ReadonlyPose, scratch: Pose, side: Side, at: Readonly<Vector3>, turn: Readonly<Quaternion>): number {
+function strainAt(person: Person, pose: ReadonlyBonePose, scratch: BonePose, side: Side, at: Readonly<Vector3>, turn: Readonly<Quaternion>): number {
   const proportions = person.proportions, skeleton = scratch.skeleton, bones = skeleton.chain(`${side}Arm`), hand = bones[bones.length - 1];
   for (const bone of bones) scratch.setLocal(bone, pose.local(bone));
   const wrist = _held.copy(palmOn(person, side)).applyQuaternion(turn).negate().add(at), pole = elbowPole(scratch, proportions, side, wrist, _pole);

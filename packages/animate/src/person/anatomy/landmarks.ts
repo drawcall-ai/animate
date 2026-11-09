@@ -1,4 +1,4 @@
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import { Vector3 } from 'three';
 import { INDEX, type Side } from './bones';
 import type { Proportions } from './proportions';
@@ -15,7 +15,7 @@ export function palmOf(proportions: Proportions, side: Side): Vector3 {
 }
 
 /** The three support points of one sole, in world space: its heel (foot bone) and big and small toe tips (toes bone), the right mirroring the left's x. */
-export function solePoints(proportions: Proportions, pose: ReadonlyPose, side: Side): Vector3[] {
+export function solePoints(proportions: Proportions, pose: ReadonlyBonePose, side: Side): Vector3[] {
   const { heel, bigToe, smallToe } = proportions.sole, foot = INDEX[`${side}Foot`], toes = INDEX[`${side}Toes`];
   const points: [number, Vector3][] = [[foot, heel], [toes, bigToe], [toes, smallToe]];
   return points.map(([bone, at]) => {

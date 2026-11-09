@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { runTimeline } from '@pmndrs/timeline';
 import { Body, humanoid, lookAt } from '@drawcall/animate';
-import { OUTLIER, PERSON, SOLDIER } from '../src/skeletons';
+import { OUTLIER, PERSON, SOLDIER } from '../src/skeletons/index';
 import { FIXED_DT } from '../src/scenario';
 import { headShift, SHIFT_BOUNDS } from './gaze';
 import { poseOf } from '@drawcall/animate';

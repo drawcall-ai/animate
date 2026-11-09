@@ -1,20 +1,20 @@
 import { TimelineRunner, action, type ReusableTimeline, type TimelineClock, type UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from './frame';
-import type { Go } from '../step/go';
+import type { LegGoal } from '../step/leg-goal';
 
 /** `asked` serves the verb directly; `borrowed` recruits supporting parts. Both override holding and idle behaviour. */
 export type Tier = 'borrowed' | 'asked';
 
-/** A body part a request takes: the legs (`go`, with the facing), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
+/** A body part a request takes: the legs (`legs`, with the facing), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
  * the eyes (`head`), a hand by name, the pose of a free hand's arm (`arm.` its hand) and its fingers' shape (`fingers.` its hand). */
-export type Channel = 'go' | 'look' | 'trunk' | 'head' | `hand.${string}` | `arm.${string}` | `fingers.${string}`;
+export type Channel = 'legs' | 'look' | 'trunk' | 'head' | `hand.${string}` | `arm.${string}` | `fingers.${string}`;
 
 /** A claimed part poses the body; a leg claim returns its requested motion. */
 export interface Claim {
   readonly request: Request;
   readonly channel: Channel;
   readonly tier: Tier;
-  step(f: Frame): Go | void;
+  step(f: Frame): LegGoal | void;
 }
 
 /** what a request's verb stages, sub-step by sub-step: a timeline over the body's frames that claims body parts as it goes */
@@ -106,7 +106,7 @@ export class Request {
   }
 
   /** `channel` taken at `tier` while the returned function has not been called: `step` runs every sub-step with the body part's others */
-  claim(channel: Channel, tier: Tier, step: (f: Frame) => Go | void): () => void {
+  claim(channel: Channel, tier: Tier, step: (f: Frame) => LegGoal | void): () => void {
     const claim: Claim = { request: this, channel, tier, step };
     this.claims.add(claim);
     this.body.claim(claim);
@@ -134,7 +134,7 @@ export class Request {
 }
 
 /** `channel` claimed at `tier`, `step` run every sub-step, until `until`: an action of a request's staging */
-export function during(request: Request, channel: Channel, tier: Tier, step: (f: Frame) => Go | void, until?: UntilCondition<Frame>) {
+export function during(request: Request, channel: Channel, tier: Tier, step: (f: Frame) => LegGoal | void, until?: UntilCondition<Frame>) {
   return action<Frame>({ init: () => request.claim(channel, tier, step), until });
 }
 
@@ -143,5 +143,5 @@ export function during(request: Request, channel: Channel, tier: Tier, step: (f:
 export function rank(a: Claim, b: Claim): number {
   if (a.tier !== b.tier) return a.tier === 'borrowed' ? -1 : 1;
   const newer = a.request.order - b.request.order;
-  return a.channel === 'go' && a.tier === 'borrowed' ? -newer : newer;
+  return a.channel === 'legs' && a.tier === 'borrowed' ? -newer : newer;
 }

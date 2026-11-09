@@ -1,7 +1,7 @@
 import { clamp } from './math';
 import { MathUtils, Quaternion } from 'three';
 import type { Limit, Skeleton } from './skeleton';
-import type { ReadonlyPose } from './pose';
+import type { ReadonlyBonePose } from './bone-pose';
 import type { Dev } from './dev';
 
 /**
@@ -106,7 +106,7 @@ const TWIST_FADE = 0.75 * Math.PI;
 const _c = coordinates(), _abc = [0, 0, 0], _beyond = new Quaternion(), _checked = new Quaternion();
 
 /** Range checks read the completed pose, including writes after a solve. Half a degree allows numerical settling. */
-export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {
+export function checkLimits(pose: ReadonlyBonePose, dev: Dev, time: number): void {
   pose.skeleton.limits.forEach((limit, bone) => {
     if (!limit) return;
     const value = pastLimit(_checked.copy(pose.local(bone)), limit) * 180 / Math.PI;

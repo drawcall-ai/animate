@@ -1,6 +1,6 @@
 import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
 import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../legs/walk-pose';
 import { INDEX, type Side } from '../anatomy/bones';
@@ -32,7 +32,7 @@ const elevationFor = (proportions: Proportions, side: Side, height: number) => {
  * `held` m off its goal (reaching across it) turns it as far as brings the shoulder that far forward, up to the thoracolumbar spine's
  * active rotation (45°, AAOS; recalled). */
 const TWIST = { start: 0.75, share: 0.6, most: Math.PI / 9, held: Math.PI / 4 };
-export function twistToward(person: Person, pose: ReadonlyPose, point: Readonly<Vector3>, share = 1, held = 0, carried = false) {
+export function twistToward(person: Person, pose: ReadonlyBonePose, point: Readonly<Vector3>, share = 1, held = 0, carried = false) {
   const station = pose.com(_station);
   const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - person.locomotion.facing);
   const distance = Math.hypot(point.x - station.x, point.z - station.z);
@@ -107,7 +107,7 @@ export function bringShoulder(person: Person, f: Frame, side: Side, hand: Readon
 }
 
 /** Downward gaze recruits the same bow solver once neck and eye declination run out. */
-export function gazeAsks(person: Person, pose: ReadonlyPose, point: Readonly<Vector3>) {
+export function gazeAsks(person: Person, pose: ReadonlyBonePose, point: Readonly<Vector3>) {
   twistToward(person, pose, point);
   const proportions = person.proportions;
   const hips = pose.position(0);

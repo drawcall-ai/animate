@@ -2,13 +2,13 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { timedPath, still, type Waypoint } from '../../src/kernel/timed-path';
 import { SUBSTEP, type Frame } from '../../src/kernel/frame';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import { leg } from './rigs';
 
 
 /** a frame at each sub-step from 1/60 s on, for what reads only its time */
 function frames(): (time: number) => Frame {
-  const pose = new Pose(leg());
+  const pose = new BonePose(leg());
   return (time) => ({ dt: SUBSTEP, time, prev2: pose, prev: pose, current: pose });
 }
 

@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { leftOf } from '../../kernel/math';
 import type { Proportions } from './proportions';
-import type { Stance } from '../../step/go';
+import type { Stance } from '../../step/leg-goal';
 
 /** feet about hip-width apart, turned out a little (heels 0.10–0.15 of the height apart, 0–12°) */
 export const defaultStance = (proportions: Proportions): Stance => ({ width: 0.065 * proportions.height, stagger: 0, crouch: 0, blade: 0, toeOut: 0.12 });

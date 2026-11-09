@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
-import type { Carriage, Gait } from './gait';
+import type { TrunkMotion, Gait } from './gait';
 import type { LegChain } from './leg-chain';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { Skeleton } from '../kernel/skeleton';
 import type { Species } from './define';
 import { STIFFNESS, type Spring } from './spring';
@@ -45,8 +45,8 @@ function springsAt<Bone extends string>(springs: Species<Bone>['springs'], size:
 }
 
 /** `eyes` reading each pose with points given in a bone's frame `size` times as far from it (a view made once a pose: a body's poses last) */
-function stretchedEyes(eyes: (pose: ReadonlyPose, out: Vector3) => Vector3, size: number): (pose: ReadonlyPose, out: Vector3) => Vector3 {
-  const at = new Vector3(), views = new WeakMap<ReadonlyPose, ReadonlyPose>();
+function stretchedEyes(eyes: (pose: ReadonlyBonePose, out: Vector3) => Vector3, size: number): (pose: ReadonlyBonePose, out: Vector3) => Vector3 {
+  const at = new Vector3(), views = new WeakMap<ReadonlyBonePose, ReadonlyBonePose>();
   return (pose, out) => {
     let view = views.get(pose);
     if (!view) {
@@ -92,9 +92,9 @@ export function gaitAt(gait: Gait, size: number): Gait {
       offset: offsetAt(c.offset),
       duty: (v: number, fr: number) => c.duty(at(v), fr),
     })),
-    body: typeof gait.body === 'function' ? ((body) => (v: number, fr: number) => carriage(body(at(v), fr), size))(gait.body) : gait.body && carriage(gait.body, size),
+    trunk: typeof gait.trunk === 'function' ? ((body) => (v: number, fr: number) => trunkAt(body(at(v), fr), size))(gait.trunk) : gait.trunk && trunkAt(gait.trunk, size),
   };
 }
 
-/** a carriage at `size`: its rises and falls as long, its angles as they are */
-const carriage = (b: Carriage, size: number): Carriage => ({ ...b, withers: b.withers * size, croup: [b.croup[0] * size, b.croup[1]], headRise: b.headRise * size });
+/** a trunk motion at `size`: its rises and falls as long, its angles as they are */
+const trunkAt = (b: TrunkMotion, size: number): TrunkMotion => ({ ...b, withers: b.withers * size, croup: [b.croup[0] * size, b.croup[1]], headRise: b.headRise * size });

@@ -4,7 +4,7 @@ import type { Frame } from '../kernel/frame';
 import type { Holder } from './holder';
 import type { Goal } from '../kernel/goal';
 import { bodyOf, boneOf } from './hold';
-import { resolve } from './resolve';
+import { placedFor } from './placed';
 import { MovingFrame } from '../kernel/moving-frame';
 
 /**
@@ -44,7 +44,7 @@ export function finder(self: Holder, target: Target): (f: Frame) => Found {
   // (a function's object as it leaves it each sub-step, not eased across the update as the app moving it once an update would be)
   let made: MovingFrame | null = null;
   const fresh = (at: Object3D, time: number) => {
-    resolve(self, at, placed, true);
+    placedFor(self, at, placed, true);
     if (made) made.move(time, placed.position, placed.quaternion);
     else (made = new MovingFrame(placed.position, placed.quaternion)).place(time, placed.position, placed.quaternion);
     return made;

@@ -1,5 +1,5 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
-import { Pose } from '../kernel/pose';
+import { BonePose } from '../kernel/bone-pose';
 import { Skeleton, type SkinVolume } from '../kernel/skeleton';
 import type { AnySpecies } from '../species/define';
 import type { Floor } from '../step/floor';
@@ -33,8 +33,8 @@ function volumeMass(species: AnySpecies, report: SkinVolume, warn: Warn): number
 }
 
 /** the skeleton's rest pose standing on `floor` at `at` (its x and z) facing `face` */
-export function restPose(skeleton: Skeleton, floor: Floor, at?: Vector3, face = 0): Pose {
-  const pose = new Pose(skeleton), root = pose.position(0), x = at?.x ?? root.x, z = at?.z ?? root.z;
+export function restPose(skeleton: Skeleton, floor: Floor, at?: Vector3, face = 0): BonePose {
+  const pose = new BonePose(skeleton), root = pose.position(0), x = at?.x ?? root.x, z = at?.z ?? root.z;
   pose.setRoot(new Vector3(x, root.y + floor(x, z), z));
   pose.setLocal(0, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), face).multiply(pose.local(0)));
   pose.facing = face;

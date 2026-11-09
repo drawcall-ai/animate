@@ -1,14 +1,14 @@
 // A person's leg, as the legs read it.
 import { Quaternion, Vector3 } from 'three';
 import { forwardOf, wrapAngle } from '../../kernel/math';
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import { INDEX, type Side } from '../anatomy/bones';
 
 /** a leg's chain */
 export const legOf = (side: Side) => (side === 'left' ? 'leftLeg' : 'rightLeg');
 
 /** the shank's forward tilt over a foot heading `yaw` as `pose` has the leg (rad, + the knee ahead of the ankle) */
-export function shankTilt(pose: ReadonlyPose, side: Side, yaw: number): number {
+export function shankTilt(pose: ReadonlyBonePose, side: Side, yaw: number): number {
   const shin = _v.subVectors(pose.position(INDEX[`${side}LowerLeg`]), pose.position(INDEX[`${side}Foot`]));
   return Math.atan2(shin.x * Math.sin(yaw) + shin.z * Math.cos(yaw), shin.y);
 }

@@ -7,7 +7,7 @@ import { selfOf } from '../../src/body';
 import type { Frame } from '../../src/kernel/frame';
 import { strideAt } from '../../src/species/gait';
 import { quintic } from '../../src/kernel/math';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import { INDEX } from '../../src/person/anatomy/bones';
 import { claim, person, scene } from '../bodies';
 import { HORSE } from '../../skills/animate/references/horse';
@@ -121,7 +121,7 @@ it('follows a moving goal with supported contacts and a root that turns toward i
 // croup 136 cm in Icelandic horses (read: Acta Vet Scand 2025, PMC12180175) — and its face sloping 45–75° below horizontal, between a
 // nasal plane held extended (~51°) and neutral (~72°) (read: Go et al. 2014, BMC Vet Res 10:118))
 it('stands with its neck rising to a poll above its withers, its croup a little below them and its face sloping down', () => {
-  const pose = new Pose(SKELETON), withers = pose.position(LEGS[0].scapula ?? 0).y, deg = 180 / Math.PI;
+  const pose = new BonePose(SKELETON), withers = pose.position(LEGS[0].scapula ?? 0).y, deg = 180 / Math.PI;
   const neck = pose.position(HEAD).clone().sub(pose.position(NECK)), face = new Vector3(0, -0.37, 0.3);
   expect(Math.atan2(neck.y, neck.z) * deg).toBeGreaterThan(30);
   expect(Math.atan2(neck.y, neck.z) * deg).toBeLessThan(50);
@@ -134,7 +134,7 @@ it('stands with its neck rising to a poll above its withers, its croup a little 
 });
 
 it('back flexion pivots about the hips without translating their attachments', () => {
-  const pose = new Pose(SKELETON);
+  const pose = new BonePose(SKELETON);
   const hips = LEGS.slice(2).map(leg => pose.position(leg.upper).clone());
   const croup = pose.position(PELVIS).clone();
   pose.setLocal(SPINE, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 5 * Math.PI / 180));

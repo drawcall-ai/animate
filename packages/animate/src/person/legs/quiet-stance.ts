@@ -1,4 +1,4 @@
-import type { Go } from '../../step/go';
+import type { LegGoal } from '../../step/leg-goal';
 import type { Asks } from '../../kernel/asks';
 import { MathUtils, Vector3 } from 'three';
 import { lerp } from '../../kernel/math';
@@ -25,7 +25,7 @@ const STEADY = 0.3;
 const TEMPO = 0.25;
 
 /** Quiet stance goals, owned by balance rather than added to a finished pose. */
-export class Quiet {
+export class QuietStance {
   readonly drift = new Vector3();
   breath = 0;
   private time = 0; private amount = 0; private quietTime = 0;
@@ -45,7 +45,7 @@ export class Quiet {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(go: Go | null, asks: Asks, person: Person): boolean {
+  quiet(go: LegGoal | null, asks: Asks, person: Person): boolean {
     return !go && !person.locomotion.moving && !person.holding.left && !person.holding.right && asks.lower === 0 && asks.bow === 0 && asks.steady === 0;
   }
 

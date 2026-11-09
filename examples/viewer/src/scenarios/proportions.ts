@@ -2,7 +2,7 @@ import { Group, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { reach, walkTo } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-import { OUTLIER, PERSON, SOLDIER } from '../skeletons';
+import { OUTLIER, PERSON, SOLDIER } from '../skeletons/index';
 import { ball } from '../things';
 
 /** where the three walk from (x), and how far ahead and how high the ball each touches is */

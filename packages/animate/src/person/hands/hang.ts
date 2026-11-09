@@ -1,7 +1,7 @@
 import { MathUtils, Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import type { Frame, Behaviour } from '../../kernel/frame';
 import { limited } from '../../kernel/limits';
-import { TrackedRotation } from '../../kernel/tracked';
+import { RotationFollower } from '../../kernel/follow';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import type { Thing } from '../../things/thing';
 import { boneOf } from '../../things/hold';
@@ -16,7 +16,7 @@ import type { Person } from '../person';
 
 /** how far through a step the arm's swing leads it, walking and running (the arm furthest forward with the other thigh), the forearm
  * behind it (share of a step; CMU mocap) */
-const LEAD = { walk: 0.2, run: -0.12, forearm: -0.14 };
+const ARM_PHASE = { walk: 0.2, run: -0.12, forearm: -0.14 };
 /** a relaxed arm hangs out from the side (rad; 5–12°, Collins 2009) */
 const ABDUCTION = (8 * Math.PI) / 180;
 /**
@@ -58,7 +58,7 @@ const OVERRUN = Math.PI / 2;
 
 /** Free arms follow their own histories back into stride swing, posed over it as asked (`armPose`, cleared); holding hands keep their grips. */
 export function hanging(person: Person): Behaviour {
-  const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
+  const goals = new Map<number, RotationFollower>(), seen = { left: new ArmClear(), right: new ArmClear() };
   /** whether each arm was another's (a hand verb's, or holding) the sub-step before: taken back, it is carried on no faster than it swings */
   const taken = { left: true, right: true };
   let phase = person.locomotion.phase;
@@ -70,7 +70,7 @@ export function hanging(person: Person): Behaviour {
     const locomotion = person.locomotion;
     // Recalled pendulum floor: at least 0.25 s between arm reversals, including entrainment.
     phase += clamp(wrapAngle(locomotion.phase - phase), 0, 4 * Math.PI * f.dt);
-    const lead = lerp(LEAD.walk, LEAD.run, locomotion.run);
+    const armPhase = lerp(ARM_PHASE.walk, ARM_PHASE.run, locomotion.run);
     const proportions = person.proportions;
     // (running, the arms hang and swing from the shoulders as the stride turns the thorax off the pelvis — not as an asked twist or
     // a turn's lead turns the chest; walking, that turn is small and the arms keep to the pelvis's facing)
@@ -86,8 +86,8 @@ export function hanging(person: Person): Behaviour {
       const sign = s === 0 ? 1 : -1;
       // (the left arm in front as the left foot lifts, the right behind; growing in as the walk does)
       const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) * locomotion.arms + 0.02) * locomotion.walk;
-      const a = swing(lead);
-      const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
+      const a = swing(armPhase);
+      const walked = 0.25 + (0.18 + 0.5 * swing(armPhase + ARM_PHASE.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(armPhase + ARM_PHASE.forearm);
       const flex = lerp(walked, ran, locomotion.run) * (1 - MathUtils.smoothstep(a, 0.6, 1.6)) + elbow;
       // the arm hanging from the shoulder — plumb, but as far back as the bow carries it (held in as the other hand works) — out as far
       // as keeps the hand clear of the thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or
@@ -142,9 +142,9 @@ export function clearArm(person: Person, f: Frame, side: Side, at: Vector3, yaw 
 }
 
 /** joint `bone` turned on from its history toward `goal` (its own motion followed), as briskly as a free arm swings (`SWING`) */
-export function followJoint(f: Frame, joints: Map<number, TrackedRotation>, bone: number, goal: Quaternion, handed = false) {
+export function followJoint(f: Frame, joints: Map<number, RotationFollower>, bone: number, goal: Quaternion, handed = false) {
   let joint = joints.get(bone);
-  if (!joint) joints.set(bone, (joint = new TrackedRotation()));
+  if (!joint) joints.set(bone, (joint = new RotationFollower()));
   // (`handed`: just taken back from what had the arm, carried on no faster than its brakes stop within `OVERRUN` — whatever the verb was
   // doing: let go of at a throw's whip speed, it flew on up past the shoulder before they caught it)
   const prev = f.prev.local(bone), prev2 = _p2.copy(f.prev2.local(bone)), turned = prev2.angleTo(prev), most = Math.sqrt(2 * SWING.accel * OVERRUN) * f.dt;

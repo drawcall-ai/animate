@@ -1,6 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
-import type { FollowOptions, Placement } from './goal';
-import { exp, log } from './rotation';
+import type { FollowOptions, Motion, Placement } from './goal';
+import { exp, log, spinOf } from './rotation';
 
 /**
  * The next value of something moving toward `target` from its history (`prev2`, `prev`) over `dt`, as fast as `options` allow: it
@@ -109,3 +109,47 @@ function vector(v: number | Vector3, out: Vector3): Vector3 {
 const ZERO = new Vector3();
 const [_u, _p, _g, _v, _a, _d] = Array.from({ length: 6 }, () => new Vector3());
 const [_q, _r, _p2, _p3] = Array.from({ length: 4 }, () => new Quaternion());
+
+/** How a moving goal is followed: `Motion`'s acceleration and speed. */
+type GoalPace = Pick<Motion, 'accel' | 'speed'>;
+
+/** Follow finite-difference goal velocity without lag; brake jumps and treat the first sample as stationary. One sampler per goal. */
+export class PointFollower {
+  private readonly sample = new PointVelocity();
+
+  /** `jumpAbove`: a goal moving faster than this (m/s; default the pace's speed) jumped: it is braked to as at rest, not followed in its motion */
+  follow(prev2: Readonly<Vector3>, prev: Readonly<Vector3>, goal: Readonly<Vector3>, pace: GoalPace, dt: number, out: Vector3, jumpAbove = pace.speed): Vector3 {
+    return follow(prev2, prev, goal, { ...pace, velocity: this.sample.read(goal, dt, jumpAbove) }, dt, out);
+  }
+}
+
+/** Finite-difference target velocity; first samples and jumps are stationary goals. */
+export class PointVelocity {
+  private last: Vector3 | null = null;
+  private readonly velocity = new Vector3();
+
+  read(goal: Readonly<Vector3>, dt: number, speed = Infinity): Vector3 {
+    const last = (this.last ??= goal.clone());
+    this.velocity.subVectors(goal, last).divideScalar(dt);
+    if (!Number.isFinite(dt) || this.velocity.length() > speed) this.velocity.set(0, 0, 0);
+    last.copy(goal);
+    return this.velocity;
+  }
+}
+
+/** `PointFollower` for a rotation (in whatever frame its quaternions are in). */
+export class RotationFollower {
+  private last: Quaternion | null = null;
+
+  /** `jumpAbove`: a goal turning faster than this (rad/s; default the pace's speed) jumped: it is braked to as at rest, not followed */
+  follow(prev2: Readonly<Quaternion>, prev: Readonly<Quaternion>, goal: Readonly<Quaternion>, pace: GoalPace, dt: number, out: Quaternion,
+    jumpAbove = pace.speed ?? Infinity): Quaternion {
+    const last = (this.last ??= goal.clone());
+    const velocity = spinOf(last, goal, dt, _spin);
+    if (velocity.length() > jumpAbove) velocity.set(0, 0, 0);
+    last.copy(goal);
+    return followRotation(prev2, prev, goal, { ...pace, velocity }, dt, out);
+  }
+}
+
+const _spin = new Vector3();

@@ -3,12 +3,11 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './frame';
 import type { MovingFrame } from './moving-frame';
 import { solveChain } from './chain';
-import { follow, followRotation } from './follow';
+import { follow, followRotation, RotationFollower } from './follow';
 import { limited } from './limits';
 import { exp, log } from './rotation';
 import { REACHED, type Motion, type Trail, type Placement, type Goal } from './goal';
-import type { ReadonlyPose } from './pose';
-import { TrackedRotation } from './tracked';
+import type { ReadonlyBonePose } from './bone-pose';
 import { forwardOf, leftOf } from './math';
 
 /** How a chain's tip goes to its target. */
@@ -22,7 +21,7 @@ interface TipOptions extends Motion {
   letOut?: boolean;
   /** a two-segment chain that cannot fit its goal on the pole's side keeps the swivel and middle-bone twist it has, unless another fit
    * is clearly better (a hand holding something: the arm as it holds it, not chosen afresh as the goal moves on) */
-  keep?: boolean;
+  keepFit?: boolean;
   /** Follow a contact from the actual pose, without extrapolating the IK goals back into its moving frame. */
   contact?: boolean;
   /** after each solve, and again once its joints are braked (`braked`: where they have left the tip): puts the chain out of what it may
@@ -33,7 +32,7 @@ interface TipOptions extends Motion {
 /** Follow a tip path, solve the chain, then brake its joints within limits. Projection and joint lag preserve intended velocity; another layer moving the tip restarts from the actual pose.
  * Keep one LimbMover per behaviour: it owns the joint goals and path history. */
 export class LimbMover {
-  private readonly joints = new Map<number, TrackedRotation>();
+  private readonly joints = new Map<number, RotationFollower>();
   /** each joint contact or clearance moved after its brakes in its last call, and its step then as the brakes are to read it (a rotation vector, its
    * parent's frame) */
   private readonly nudged = new Map<number, Vector3>();
@@ -43,7 +42,7 @@ export class LimbMover {
     placedTurn: new Quaternion(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
   /** the chain's joints as its last solve left them, before the brakes */
   private solved: Quaternion[] = [];
-  /** whether its last call turned the tip along an intended turn it runs on (`moved.turned`): its fit kept (`keep`), or its turn only
+  /** whether its last call turned the tip along an intended turn it runs on (`moved.turned`): its fit kept (`keepFit`), or its turn only
    * preferred — resumed only by a call that runs one on too */
   private resumes = false;
   /** how far out from the chain's base it let the tip go last (m) */
@@ -77,7 +76,7 @@ export class LimbMover {
     let quaternion: Quaternion | undefined;
     if (target.quaternion) {
       if (turnAccel === undefined) throw new Error(`chain "${chain}": a target rotation needs a turnAccel`);
-      // (a fit kept (`keep`) turns on along its intended turn, as the tip's position path does, while the tip is turned as it was left:
+      // (a fit kept (`keepFit`) turns on along its intended turn, as the tip's position path does, while the tip is turned as it was left:
       // read back from the tip as the limits and brakes left it, a hand held short of its turn was asked only a sub-step's turn on from
       // there each time, never enough for the fit to give way (`HELD`, chain.ts) to one that turns it there — a bucket by its handle set
       // down stuck 2.3 rad short, turned half round — and one braked behind its turn was asked on at the pace the brakes left it: the
@@ -87,7 +86,7 @@ export class LimbMover {
       // back from a hand its wrist holds short, the hand's motion along the wrist's range ran the ask round its turn at 5 rad/s, never
       // nearer — a hand at a rifle's foregrip spun on, 157° off its turn. 1 − |dot|, not `angleTo`, for "as it was left": acos loses
       // the precision near zero, ~1e-8 rad.)
-      const resumed = own && this.resumes && (options.keep === true || target.preferred === true) && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
+      const resumed = own && this.resumes && (options.keepFit === true || target.preferred === true) && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
       const before = resumed ? moved.turnedBefore : f.prev2.rotation(tip), last = resumed ? moved.turned : f.prev.rotation(tip);
       quaternion = followRotation(before, last, target.quaternion, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
       moved.turnedBefore.copy(last);
@@ -113,11 +112,11 @@ export class LimbMover {
     // off it as the other hand's carry ended. Unless what it may not pass through held the arm off it after its brakes (`nudged`): then the fit is the
     // arm's as it was left — the last solve's, kept on the trunk's far side, was braked toward and pushed back out each sub-step, a ball
     // regripped in the hand left 70° off its turn for good)
-    if (own && options.keep && this.solved.length === bones.length && !this.nudged.size) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));
+    if (own && options.keepFit && this.solved.length === bones.length && !this.nudged.size) bones.forEach((b, k) => f.current.setLocal(b, this.solved[k]));
     // (a turn only preferred is the tip's own, as far as its last joint turns it: the bend is not swivelled off the pole's plane for it)
-    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keep: options.keep, poleFirst: target.preferred });
+    solveChain(f, chain, { tip: { position, quaternion }, pole: options.pole, keepFit: options.keepFit, poleFirst: target.preferred });
     this.solved = bones.map((b, k) => (this.solved[k] ?? new Quaternion()).copy(f.current.local(b)));
-    this.resumes = (options.keep === true || target.preferred === true) && quaternion !== undefined;
+    this.resumes = (options.keepFit === true || target.preferred === true) && quaternion !== undefined;
     options.clear?.(f, { position, quaternion }, false);
     if (turnAccel !== undefined) {
       const nudged = continued ? this.nudged : null;
@@ -126,7 +125,7 @@ export class LimbMover {
         // (a corrected joint continues its braked velocity from where contact or clearance put it)
         const step = nudged?.get(b);
         const before = step ? exp(-step.x, -step.y, -step.z, _before).multiply(f.prev.local(b)) : f.prev2.local(b);
-        const joint = this.joints.get(b) ?? new TrackedRotation();
+        const joint = this.joints.get(b) ?? new RotationFollower();
         this.joints.set(b, joint);
         const q = options.contact
           ? followRotation(before, f.prev.local(b), f.current.local(b), pace, f.dt, _joint)
@@ -160,7 +159,7 @@ export class LimbMover {
   }
 }
 
-type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
+type TipPose = Pick<ReadonlyBonePose, 'position' | 'rotation'>;
 
 /** Judge the last final pose against the target one sub-step ago: moving frame history or velocity extrapolation, within REACHED distance, angle and relative `speed`
  * (a verb cut short by `until`, on its goal as that comes, needs none: `Infinity`); a turn only preferred, within REACHED angle or no longer turning (`TURNING`). */
@@ -205,7 +204,7 @@ export function closeTo(f: Frame, tip: number, target: Goal, on?: MovingFrame): 
 }
 
 /** The unmet turn, in radians, as the last final pose has it. */
-function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: MovingFrame): number {
+function angleOff(f: { prev: Pick<ReadonlyBonePose, 'rotation'>; time: number }, tip: number, target: Goal, on?: MovingFrame): number {
   if (!target.quaternion) return 0;
   const placed = on?.at(f.time);
   // (in the frame the target is given in)

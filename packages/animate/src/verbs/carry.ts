@@ -6,7 +6,7 @@ import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import { finder, type Target } from '../things/target';
 import { verb, type Verb } from './story';
-import type { HandOptions } from '../body/handling';
+import type { HandOptions } from '../body/hand-staging';
 
 /**
  * Carries `thing`, which the body holds, to `target` — or through each of a list of targets, one smooth way: off whatever it is in first
@@ -45,6 +45,6 @@ export function carry(body: Body, thing: Object3D, target: Target | readonly Tar
     });
     // (the last target's object, given as one or by a function as it starts: its approach, and whether it rides on the body)
     const last = targets[targets.length - 1], end = typeof last === 'function' ? last(self.time) : last;
-    yield* self.handling.bring(request, carried, points, end instanceof Object3D ? end : null, options);
+    yield* self.handStaging.bring(request, carried, points, end instanceof Object3D ? end : null, options);
   }, { until: options.until });
 }

@@ -29,7 +29,7 @@ it.each([
     miss = yield* attempt(reach(body, { jaw: target }));
     distance = worldOf(body.bones.jaw).distanceTo(target);
   }, [body], 10, () => {
-    walked ||= body.owners.go !== undefined;
+    walked ||= body.owners.legs !== undefined;
     return miss !== undefined;
   });
   expect(miss === null).toBe(met);
@@ -115,7 +115,7 @@ it('does not borrow a driven creature’s legs for an unreachable point', () => 
   const pet = new Body(dog(DOG), { dev: true, drive: () => ({ position: new Vector3(), yaw: 0 }) });
   let miss: Missed | null | undefined, walked = false;
   play(function* () { miss = yield* attempt(reach(pet, { jaw: new Vector3(0, .5, 2) })); }, [pet], 10, () => {
-    walked ||= pet.owners.go !== undefined;
+    walked ||= pet.owners.legs !== undefined;
     return miss !== undefined;
   });
   expect(miss).toBeInstanceOf(Missed);

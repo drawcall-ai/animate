@@ -5,7 +5,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { wrapAngle, yawOf } from '../kernel/math';
 import { pastLimit, clampRotation } from '../kernel/limits';
-import type { Pose } from '../kernel/pose';
+import type { BonePose } from '../kernel/bone-pose';
 import type { Limit, Skeleton } from '../kernel/skeleton';
 import type { LegChain } from '../species/leg-chain';
 
@@ -101,7 +101,7 @@ export class Solver {
    * The joints posed for `target` this tick, off `pose`'s posed parents, written into it: on from the coordinates as last posed (a miss
    * retried from the references if to `retry`, kept if that does better; a leg that must not jump does not). Returns the terminal's miss (m).
    */
-  solve(pose: Pose, target: LegTarget, retry: boolean): number {
+  solve(pose: BonePose, target: LegTarget, retry: boolean): number {
     this.prior.set(this.q);
     this.baseTurn.copy(pose.rotation(pose.skeleton.bones[this.bones[0]].parent));
     this.basePosition.copy(pose.position(this.bones[0]));
@@ -317,7 +317,7 @@ export class Solver {
   }
 
   /** the coordinates as the bones' locals */
-  private write(pose: Pose) {
+  private write(pose: BonePose) {
     let j = 0;
     for (let k = 0; k < this.bones.length; k++) {
       const local = _l.identity();

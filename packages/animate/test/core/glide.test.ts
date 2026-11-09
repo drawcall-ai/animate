@@ -4,7 +4,7 @@ import { Glide } from '../../src/kernel/glide';
 
 const dt = 1 / 60;
 
-/** each step's speed of a glide of `seconds` from rest at the origin to `goal(k)` (moving at `going`) */
+/** each step's speed of a glide of `seconds` from rest at the origin to `goal(k)` (moving at `legGoal`) */
 function glided(seconds: number, goal: (k: number) => Vector3, going = new Vector3(), steps = Math.round(seconds / dt) + 30) {
   const glide = new Glide(seconds);
   const out = { position: new Vector3(), velocity: new Vector3() };

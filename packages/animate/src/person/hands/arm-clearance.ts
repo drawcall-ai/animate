@@ -5,7 +5,7 @@ import type { Dev } from '../../kernel/dev';
 import { clampRotation } from '../../kernel/limits';
 import { REACH } from '../../kernel/limb';
 import { bisect, nearestBetween } from '../../kernel/math';
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import type { Proportions } from '../anatomy/proportions';
 
@@ -66,7 +66,7 @@ export class ArmClear {
   private readonly seen = Array.from({ length: 7 }, () => new Vector3());
 
   /** whether arm `side` of `pose` is still clear of `clear` as it was last seen (`saw`) */
-  holds(pose: ReadonlyPose, proportions: Proportions, side: Side, clear: number): boolean {
+  holds(pose: ReadonlyBonePose, proportions: Proportions, side: Side, clear: number): boolean {
     if (this.margin <= 0 || clear !== this.clear) return false;
     const points = pointsOf(pose, proportions, side);
     let arm = 0, trunk = 0;
@@ -79,14 +79,14 @@ export class ArmClear {
   }
 
   /** arm `side` of `pose` seen `margin` (m) clear of `clear`, how deep it may be */
-  saw(pose: ReadonlyPose, proportions: Proportions, side: Side, clear: number, margin: number): void {
+  saw(pose: ReadonlyBonePose, proportions: Proportions, side: Side, clear: number, margin: number): void {
     [this.clear, this.margin] = [clear, margin];
     pointsOf(pose, proportions, side).forEach((point, k) => this.seen[k].copy(point));
   }
 }
 
 /** an arm's shoulder, elbow, wrist and hand's end, and the trunk's hips, chest and neck, as `armDepth` reads them */
-function pointsOf(pose: ReadonlyPose, proportions: Proportions, side: Side): readonly Readonly<Vector3>[] {
+function pointsOf(pose: ReadonlyBonePose, proportions: Proportions, side: Side): readonly Readonly<Vector3>[] {
   const elbow = pose.position(INDEX[`${side}LowerArm`]), wrist = pose.position(INDEX[`${side}Hand`]);
   _points[0] = pose.position(INDEX[`${side}UpperArm`]);
   _points[1] = elbow;
@@ -170,7 +170,7 @@ export function keepArmOut(f: Frame, proportions: Proportions, side: Side, tip: 
 }
 
 /** whether arm `side`, as `pose` has it, keeps clear of the trunk as a solve keeps it */
-export function armClear(pose: ReadonlyPose, proportions: Proportions, side: Side): boolean {
+export function armClear(pose: ReadonlyBonePose, proportions: Proportions, side: Side): boolean {
   const clear = -AIR * proportions.height, shoulder = pose.position(INDEX[`${side}UpperArm`]);
   return armDepth(pose, proportions, side, Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth), clear) <= clear;
 }
@@ -191,7 +191,7 @@ function leastPush(fits: (push: number) => boolean, least: number, step: number,
  * whether some elbow of arm `side`, about the shoulder–wrist line from `near` round, holds its wrist at `wrist` clear of the trunk as
  * `pose` stands it, the hand on from it along `along` (world, unit; none: along the forearm, an unbent wrist): the elbow into `pole`
  */
-function holds(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, near: Readonly<Vector3>, along?: Readonly<Vector3>, pole?: Vector3): boolean {
+function holds(pose: ReadonlyBonePose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, near: Readonly<Vector3>, along?: Readonly<Vector3>, pole?: Vector3): boolean {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), clear = -AIR * proportions.height, length = ARM.length * proportions.height;
   const upper = Math.max(clear, deepest(pose, proportions, shoulder, shoulder, ARM.upper).depth);
   return swivels(proportions, shoulder, wrist, near, SWIVEL.steps, (elbow, end) => {
@@ -204,7 +204,7 @@ function holds(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: 
 }
 
 /** whether arm `side` can hold its wrist at `wrist`, the hand on toward `palm` (world), clear of the trunk as `pose` stands it (`holds`) */
-export function holdsClear(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, palm: Readonly<Vector3>, near: Readonly<Vector3>): boolean {
+export function holdsClear(pose: ReadonlyBonePose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>, palm: Readonly<Vector3>, near: Readonly<Vector3>): boolean {
   return holds(pose, proportions, side, wrist, near, _along.subVectors(palm, wrist).normalize());
 }
 
@@ -212,7 +212,7 @@ export function holdsClear(pose: ReadonlyPose, proportions: Proportions, side: S
  * `along` (world, unit: a hand turned on the wrist) or else the forearm. Cross-body reaches stay in front; return forward push (m), or -1
  * without changing an infeasible goal.
  */
-export function clearWrist(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3, along?: Readonly<Vector3>): number {
+export function clearWrist(pose: ReadonlyBonePose, proportions: Proportions, side: Side, wrist: Vector3, near: Readonly<Vector3>, pole: Vector3, along?: Readonly<Vector3>): number {
   const forward = _forward.set(0, 0, 1).applyQuaternion(pose.rotation(INDEX.chest));
   const fits = (push: number) => holds(pose, proportions, side, _pushed.copy(wrist).addScaledVector(forward, push), near, along, pole);
   const pushed = leastPush(fits, ahead(pose, proportions, side, wrist), AIR * proportions.height, PUSH * proportions.armLength, 12, 1e-4);
@@ -244,7 +244,7 @@ function swivels(proportions: Proportions, shoulder: Readonly<Vector3>, wrist: R
 }
 
 /** Stage world-space cross-body or rearward goals in `out`, in front until the trunk turns. A hand on backswing first comes forward on its own side; return null when a direct reach is clear. */
-export function waitingFor(pose: ReadonlyPose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, goal: Readonly<Vector3>, near: Readonly<Vector3>, out: Vector3): Vector3 | null {
+export function waitingFor(pose: ReadonlyBonePose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, goal: Readonly<Vector3>, near: Readonly<Vector3>, out: Vector3): Vector3 | null {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), turn = pose.rotation(INDEX.chest);
   const front = _wFront.set(0, 0, 1).applyQuaternion(turn), inside = _wIn.set(side === 'left' ? -1 : 1, 0, 0).applyQuaternion(turn);
   const before = _d.subVectors(goal, shoulder).dot(front), inward = _d.subVectors(goal, shoulder).dot(inside);
@@ -264,7 +264,7 @@ export function waitingFor(pose: ReadonlyPose, proportions: Proportions, side: S
 }
 
 /** how far ahead (the chest's) a wrist at `wrist` must go at least to be as far ahead of arm `side`'s shoulder as `BACK` keeps it (m) */
-function ahead(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>): number {
+function ahead(pose: ReadonlyBonePose, proportions: Proportions, side: Side, wrist: Readonly<Vector3>): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]), turn = pose.rotation(INDEX.chest);
   // (none on its own side of the midline — behind its own hip is a hand's to reach; across it, level with the shoulder at the midline,
   // further ahead the further across)
@@ -275,7 +275,7 @@ function ahead(pose: ReadonlyPose, proportions: Proportions, side: Side, wrist: 
 }
 
 /** how far arm `side`'s upper arm, forearm and hand are in the trunk at their deepest (`deepest`), the upper arm's against `upper` */
-function armDepth(pose: ReadonlyPose, proportions: Proportions, side: Side, upper: number, clear: number): number {
+function armDepth(pose: ReadonlyBonePose, proportions: Proportions, side: Side, upper: number, clear: number): number {
   const shoulder = pose.position(INDEX[`${side}UpperArm`]);
   const elbow = pose.position(INDEX[`${side}LowerArm`]);
   const wrist = pose.position(INDEX[`${side}Hand`]);
@@ -285,7 +285,7 @@ function armDepth(pose: ReadonlyPose, proportions: Proportions, side: Side, uppe
 }
 
 /** how far an arm part from `a` to `b`, `radius` round (× height), is in the trunk at its deepest (m; negative: clear of it by so much), and in which capsule */
-function deepest(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): { depth: number; capsule: string } {
+function deepest(pose: ReadonlyBonePose, proportions: Proportions, a: Readonly<Vector3>, b: Readonly<Vector3>, radius: number): { depth: number; capsule: string } {
   let depth = -Infinity, capsule = '';
   for (const [from, to, r] of TRUNK) {
     const d = (radius + r) * proportions.height - nearestBetween(a, b, pose.position(INDEX[from]), pose.position(INDEX[to]), _sp, _sq);
@@ -295,7 +295,7 @@ function deepest(pose: ReadonlyPose, proportions: Proportions, a: Readonly<Vecto
 }
 
 /** Dev check on a final pose: neither arm's upper arm, forearm or hand more than `DEPTH` into the trunk. */
-export function checkArms(pose: ReadonlyPose, proportions: Proportions, time: number, dev: Dev): void {
+export function checkArms(pose: ReadonlyBonePose, proportions: Proportions, time: number, dev: Dev): void {
   for (const side of SIDES) {
     const shoulder = pose.position(INDEX[`${side}UpperArm`]), elbow = pose.position(INDEX[`${side}LowerArm`]), wrist = pose.position(INDEX[`${side}Hand`]);
     const tip = _tip.subVectors(wrist, elbow).setLength(ARM.length * proportions.height).add(wrist);

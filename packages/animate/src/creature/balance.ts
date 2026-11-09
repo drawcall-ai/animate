@@ -2,8 +2,8 @@ import { Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, leftOf, nearestBetween, wrapAngle } from '../kernel/math';
 import type { Frame, Behaviour } from '../kernel/frame';
 import { Asks } from '../kernel/asks';
-import { Pose } from '../kernel/pose';
-import { carriage, type Striding } from './carriage';
+import { BonePose } from '../kernel/bone-pose';
+import { trunkMotion, type Striding } from './trunk-motion';
 import { seedOf } from '../kernel/random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
 import { offTheWay, Planner, stanceYaw } from '../step/planner';
@@ -15,16 +15,16 @@ import { Inertia } from '../kernel/inertia';
 import type { Self } from '../body/self';
 
 /**
- * A creature's balance, a sub-step at a time: its species' legs carry it where the request that has its legs asks (`going`) — the planner takes its root
+ * A creature's balance, a sub-step at a time: its species' legs carry it where the request that has its legs asks (`legGoal`) — the planner takes its root
  * there as a player's input would (turning on the spot to a goal off its way, walking on as far as the legs keep up) — or where its app
- * drives it; the stepper keeps its feet under it, its posture or carriage rides on the stride, and each leg is posed down to its foot.
+ * drives it; the stepper keeps its feet under it, its posture or trunk motion rides on the stride, and each leg is posed down to its foot.
  * Asked nothing, it stands. It keeps `locomotion` for walks and `arriving`.
  */
 export function creature(body: Self): Behaviour {
   const kind = body.species.legs;
   if (!kind) throw new Error('creature: the species has no legs');
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);
-  const skeleton = body.pose.skeleton, rest = new Pose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest, body.floor));
+  const skeleton = body.pose.skeleton, rest = new BonePose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest, body.floor));
   const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
   const turn = Math.min(...posers.map((poser) => poser.turn)), ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);
@@ -52,7 +52,7 @@ export function creature(body: Self): Behaviour {
   const turning = Math.PI * strideAt(gait, gait.slowest, 0).frequency / HALF_TURN;
   const start = body.pose.position(0), seed = body.life.seed ?? seedOf(start.x, start.z);
   const posture = kind.posture?.(body.pose, gait, seed), asks = new Asks();
-  const carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seed) : null;
+  const trunk = !posture && kind.trunk ? trunkMotion(body.pose, kind.chains, kind.trunk, gait, seed) : null;
   const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
   let going = false, followed: Vector3 | null = null;
   let lowering: Eased = [0, 0], bowing: Eased = [0, 0], twisting: Eased = [0, 0], leaning: Eased = [0, 0];
@@ -76,7 +76,7 @@ export function creature(body: Self): Behaviour {
   let facing = body.yaw;
   return (f) => {
     body.asks.pass(asks);
-    const locomotion = body.locomotion, asked0 = asks.going, face = asked0?.face;
+    const locomotion = body.locomotion, asked0 = asks.legGoal, face = asked0?.face;
     // (a goal nowhere — not a finite point — it does not go for: it stands)
     const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
     const go = finite ? asked0 : null;
@@ -118,12 +118,12 @@ export function creature(body: Self): Behaviour {
     legs.height = f.current.position(0).y;
     [legs.stride.cycle, legs.stride.stance, legs.held] = [stepper.cycle, stepper.Ts, stepper.held];
     posture?.prepare(f, legs, attention, asks.look);
-    if (carried) { carried.step(f, legs); carried.write(f); }
+    if (trunk) { trunk.step(f, legs); trunk.write(f); }
     // (let down, bowed, turned and bent sideways as its tasks and its story's posture ask — the body lower on its legs, its front tipped
     // down about its hind girdle or its croup down about its fore girdle (arched: settling onto its haunches, as a lean back does), its
-    // trunk turned and rolled about its legs' tops' middle — and, with no carriage to lean it, leaning into its root's acceleration so:
+    // trunk turned and rolled about its legs' tops' middle — and, with no trunk motion to lean it, leaning into its root's acceleration so:
     // eased there and back, as far as `STOOPING` and `POSED` let it)
-    const posed = asks.posture, own = !carried && !posture ? inertia : null;
+    const posed = asks.posture, own = !trunk && !posture ? inertia : null;
     const tasked = Math.max(0, Math.min(asks.bow, asks.bowLimit)), bow = tasked + clamp(posed.bow + (own?.pitch ?? 0), -POSED.bow, POSED.bow);
     lowering = ease(lowering, clamp(asks.lower + posed.lower, 0, STOOPING.lowest * feet.length), f.dt);
     bowing = ease(bowing, clamp(bow, -POSED.bow, Math.max(tasked, STOOPING.bow)), f.dt);
@@ -167,7 +167,7 @@ export function creature(body: Self): Behaviour {
 /**
  * How far ahead (s) the head leads into the turn the root makes: a person's eyes set off ~0.4 s before the step that turns, the head
  * 50–130 ms after them, the trunk and pelvis later (read: Lamontagne et al. 2020, Front Neurol, PMC7739666, 90° walking turns); the head
- * leads the body's yaw by ~0.2 s (snippet: a review of walking-turn prediction); with the neck's ~0.25 s follow (`carriage`), its aim this
+ * leads the body's yaw by ~0.2 s (snippet: a review of walking-turn prediction); with the neck's ~0.25 s follow (`trunkMotion`), its aim this
  * far ahead leaves it ~0.2 s before the body
  */
 const LOOKING = 0.45;
@@ -180,7 +180,7 @@ const HALF_TURN = 2.25;
 const CLEARANCE = 0.06;
 /** Tuned (1/s): how fast a followed goal on the move is drawn to where it is */
 const FOLLOWING = 3;
-/** Tuned (1/s): how fast the phase the carriage rides on is drawn to the feet's */
+/** Tuned (1/s): how fast the phase the trunk motion rides on is drawn to the feet's */
 const LOCKING = 6;
 const UP = new Vector3(0, 1, 0);
 /** Tuned: the most a creature lets its body down (× its legs' length) and bows its front (rad), as a task asks */

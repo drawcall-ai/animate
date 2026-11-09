@@ -2,7 +2,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three';
 import { wrapAngle } from './math';
 import type { Goal } from './goal';
 import { coordinates, coordinatesOf, limited } from './limits';
-import type { Pose } from './pose';
+import type { BonePose } from './bone-pose';
 import type { Limit, Skeleton } from './skeleton';
 
 /** Where a chain is asked to go (world). */
@@ -24,7 +24,7 @@ interface ChainGoal {
    * better (`HELD`), and moving on from it continuously, swivelled round the line to its tip no further a solve than `SWIVELLING`,
    * wherever the best fit or the pole has gone: a limb carried on from one sub-step to the next; default false: the best fit wherever it
    * is (a solve from nowhere in particular) */
-  keep?: boolean;
+  keepFit?: boolean;
 }
 
 /** the generic solver's sweeps at most; it stops sooner once a sweep brings the tip no closer than this (m) */
@@ -39,7 +39,7 @@ const LONGEST = 16;
 
 /** Solve within joint limits, blending writes by `weight`. Two-segment limbs use a hinge solve and the minimum swivel worth its
  * limit improvement (SWIVEL); pure hinges can miss goals requiring simultaneous side play and twist. Other chains use cyclic coordinate descent. */
-export function solveChain(frame: { current: Pose }, chain: string, goal: ChainGoal, weight = 1): void {
+export function solveChain(frame: { current: BonePose }, chain: string, goal: ChainGoal, weight = 1): void {
   const { position, quaternion } = goal.tip;
   const finite = finiteXYZ(position) && (!quaternion || (finiteXYZ(quaternion) && Number.isFinite(quaternion.w)))
     && (!goal.pole || finiteXYZ(goal.pole)) && Number.isFinite(goal.twist ?? 0);
@@ -51,7 +51,7 @@ export function solveChain(frame: { current: Pose }, chain: string, goal: ChainG
   const parent = skeleton.bones[bones[0]].parent;
   const c: Solving = { skeleton, bones, base: parent >= 0 ? _base.copy(pose.rotation(parent)) : _base.identity(), start: _start.copy(pose.position(bones[0])), local: _local };
   bones.forEach((b, k) => _local[k].copy(pose.local(b)));
-  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true, goal.poleFirst ?? false, goal.keep ?? false);
+  if (bones.length === 3) limb(c, position, goal.pole, quaternion, goal.twist, goal.swivel ?? true, goal.poleFirst ?? false, goal.keepFit ?? false);
   else {
     if (goal.twist !== undefined) throw new Error(`chain "${chain}": a preferred twist applies only to a two-segment chain`);
     if (goal.pole) throw new Error(`chain "${chain}" has ${bones.length - 1} segments: a pole bends only a two-segment chain`);

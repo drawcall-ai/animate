@@ -56,18 +56,18 @@ describe('requests', () => {
 
   it("only the request that has a part moves it; the legs' others keep their count, unheard", () => {
     const body = person(), h = insides(body);
-    const runs = { trunk: [0, 0], go: [0, 0] };
+    const runs = { trunk: [0, 0], legs: [0, 0] };
     const borrowed = claim(body, 'trunk', () => void runs.trunk[0]++, 'borrowed');
     const asked = claim(body, 'trunk', () => void runs.trunk[1]++);
-    claim(body, 'go', () => void runs.go[0]++, 'borrowed');
-    claim(body, 'go', () => {
-      runs.go[1]++;
+    claim(body, 'legs', () => void runs.legs[0]++, 'borrowed');
+    claim(body, 'legs', () => {
+      runs.legs[1]++;
       return { to: new Vector3(0, 0, 1), speed: 1, accel: 1 };
     });
     run(body, 0.5);
     expect(runs.trunk).toEqual([0, 30]);
-    expect(runs.go).toEqual([30, 30]);
-    expect(h.asks.going?.to.z).toBe(1);
+    expect(runs.legs).toEqual([30, 30]);
+    expect(h.asks.legGoal?.to.z).toBe(1);
     asked();
     run(body, 0.5);
     expect(runs.trunk).toEqual([30, 30]);
@@ -84,7 +84,7 @@ describe('requests', () => {
         yield* reach(body, { left: new Vector3(-1.5, 1.2, -3) });
       });
     }, [body], 3, () => {
-      const go = body.owners.go;
+      const go = body.owners.legs;
       if (go) legs.add(`${go.verb} ${go.tier}`);
     });
     expect([...legs]).toEqual(['grab borrowed']);
@@ -97,7 +97,7 @@ describe('requests', () => {
     let legs = false;
     play(function* () {
       yield* grab(body, load, { right: 'right' }, { until: 2 });
-    }, [body], 2, () => void (legs ||= body.owners.go !== undefined));
+    }, [body], 2, () => void (legs ||= body.owners.legs !== undefined));
     expect(legs).toBe(false);
   });
 

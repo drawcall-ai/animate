@@ -4,7 +4,7 @@ import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import type { LimbMover } from '../kernel/limb';
 import type { MovingFrame } from '../kernel/moving-frame';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import type { Request } from '../kernel/requests';
 import type { Thing } from './thing';
 
@@ -16,7 +16,7 @@ export interface Hold {
   goal: Goal;
   placement?: HandPlacement;
   point?: HandPoint;
-  keep?: (f: Frame) => void;
+  idle?: (f: Frame) => void;
   /** the request that took hold: what misses if the hand closes off its grip */
   by?: Request;
   /** its regrip, a person's, once one has begun */
@@ -48,7 +48,7 @@ export interface Holder {
   readonly updates: number;
   readonly share: number;
   readonly frames: WeakMap<Object3D, Interpolated>;
-  poseFor(reader: Holder): ReadonlyPose;
+  poseFor(reader: Holder): ReadonlyBonePose;
   movedFor(reader: Holder, node: Object3D): Placement | null;
   /** a moving bone's rest frame in the scene (`turn⁻¹ · rest`), and its scale */
   restOf(bone: number): Readonly<Quaternion>;
@@ -77,7 +77,7 @@ export const anchors = new WeakMap<Object3D, { body: Holder; bone: number }>();
 export const movers = new WeakMap<Object3D, Holder>();
 
 /** the body that keeps each node turned to a world rotation (`Body.orient`), its position following its parent: the rotation, by node */
-export const orienters = new WeakMap<Object3D, { readonly turned: ReadonlyMap<Object3D, Quaternion> }>();
+export const turners = new WeakMap<Object3D, { readonly turned: ReadonlyMap<Object3D, Quaternion> }>();
 
 /** a node's matrix from one update to the next, the update it was last read in, and its parent frame (null for world) */
 export interface Interpolated {

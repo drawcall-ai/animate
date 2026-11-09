@@ -4,7 +4,7 @@ import type { Miss } from '../kernel/requests';
 import { spinOf } from '../kernel/rotation';
 import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
 import type { Thing } from '../things/thing';
-import { END } from './handling';
+import { END } from './hand-staging';
 import type { Self } from './self';
 
 /** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — as near as a carry there leaves it at rest (`END`,
@@ -26,18 +26,18 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
   if (onto && onto.children.some((child) => child !== object && child.userData.mass !== undefined)) throw new Error(`release: "${onto.name}" holds another thing already, so "${object.name}" cannot go onto it`);
   // (a fingertip draws back off its button the way it came in)
   const away = Object.fromEntries(hands.flatMap((hand) => {
-    const hold = self.holding[hand], way = hold && self.handling.away(hold, placed);
+    const hold = self.holding[hand], way = hold && self.handStaging.away(hold, placed);
     return way ? [[hand, way]] : [];
   }));
   const carried = carriedBy(self, thing);
   for (const hand of hands) grasp(self, hand, null);
   self.leave(object);
-  if (backOut) self.handling.backOut(hands, away);
+  if (backOut) self.handStaging.backOut(hands, away);
   const holder = [...thing.holders].find((other): other is Self => other !== self);
   if (onto) {
     const miss = put(self, thing, onto, placed.position);
     // (a hand kept on it holds it where it rests now, no longer as the carry that brought it keeps it in the hand)
-    for (const hand of handsOn(self, thing)) delete self.holding[hand]?.keep;
+    for (const hand of handsOn(self, thing)) delete self.holding[hand]?.idle;
     return { motion, miss };
   }
   // (a hand of its own still on it: that hand carries it alone, if it was carried — what stayed where it is as the hands held it, a rifle worn on its mount, a fixed rail, stays there)

@@ -21,12 +21,12 @@ export function* tracking(person: Person, request: Request, tracked: Tracked) {
   const branches = [];
   if (tracked.head) {
     const head = heading(person, finder(person, tracked.head));
-    branches.push(during(request, 'go', 'asked', head.under), during(request, 'look', 'asked', head.look));
+    branches.push(during(request, 'legs', 'asked', head.under), during(request, 'look', 'asked', head.look));
   }
   for (const side of ['left', 'right'] as const satisfies readonly Side[]) {
     const target = tracked[side];
     if (!target) continue;
-    const find = finder(person, target), keep = reaching(person, side, find, { ...HOLD, bodyFollows: false });
+    const find = finder(person, target), reachOn = reaching(person, side, find, { ...HOLD, bodyFollows: false });
     // (a hand `OFF.distance` off where its target was a sub-step before, the target past the arm held out straight from the shoulder, for
     // long enough of the last few seconds (`OFF`), is said once on the console: an aimer has no end to miss at; a hand lagging a target in
     // reach is not said)
@@ -40,7 +40,7 @@ export function* tracking(person: Person, request: Request, tracked: Tracked) {
         short = short * Math.exp(-f.dt / OFF.window) + (beyond && gap > OFF.distance * person.scale ? f.dt : 0);
         if (short >= SHORT) person.warn(`tracked ${side}`, `a tracked ${side} hand falls short of a target out of reach: the shoulder ${from.toFixed(2)} m from it, the arm ${person.proportions.armLength.toFixed(2)} m (species.person.armLength)`);
       }
-      keep(f);
+      reachOn(f);
       (last ??= new Vector3()).copy(find(f).position);
     }));
   }

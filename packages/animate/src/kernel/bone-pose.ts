@@ -3,12 +3,12 @@ import { yawOf } from './math';
 import type { Skeleton } from './skeleton';
 
 /** A pose to read: by bone index, the transforms of `Pose`. */
-export type ReadonlyPose = Readonly<Pick<Pose, 'skeleton' | 'facing' | 'local' | 'position' | 'rotation' | 'point' | 'com' | 'load'>>;
+export type ReadonlyBonePose = Readonly<Pick<BonePose, 'skeleton' | 'facing' | 'local' | 'position' | 'rotation' | 'point' | 'com' | 'load'>>;
 
 /** Root world position and parent-relative bone rotations (the root rotation is world-relative), with lazy forward kinematics. Weighted writes
  * blend from the current pose, so repeated blends depend on the sub-step.
  */
-export class Pose {
+export class BonePose {
   private readonly root = new Vector3();
   private readonly locals: Quaternion[];
   private readonly positions: Vector3[];
@@ -94,7 +94,7 @@ export class Pose {
     this.stale = 0;
   }
 
-  copy(from: ReadonlyPose): this {
+  copy(from: ReadonlyBonePose): this {
     if (from.skeleton !== this.skeleton) throw new Error('cannot copy a pose of another skeleton');
     this.root.copy(from.position(0));
     this.facing = from.facing;

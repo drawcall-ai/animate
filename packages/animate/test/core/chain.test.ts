@@ -1,19 +1,19 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import type { Skeleton } from '../../src/kernel/skeleton';
 import { solveChain } from '../../src/kernel/chain';
 import { pastLimit } from '../../src/kernel/limits';
 import { hinge, horseLeg, leg, turn } from './rigs';
 
 const solve = (skeleton: Skeleton, ...args: Parameters<typeof solveChain> extends [unknown, unknown, ...infer R] ? R : never) => {
-  const pose = new Pose(skeleton);
+  const pose = new BonePose(skeleton);
   solveChain({ current: pose }, 'leg', ...args);
   return pose;
 };
 
 /** how far each bone of the chain is beyond its limit (rad) */
-const excess = (pose: Pose) => pose.skeleton.limits.map((l) => (l ? pastLimit(pose.local(l.bone), l) : 0));
+const excess = (pose: BonePose) => pose.skeleton.limits.map((l) => (l ? pastLimit(pose.local(l.bone), l) : 0));
 
 describe('solveChain', () => {
   it('puts a limb’s tip on a reachable goal exactly, turned as asked, the knee toward the pole', () => {
@@ -38,7 +38,7 @@ describe('solveChain', () => {
     skeleton.bones[3].offset.set(0, -.4, .5);
     const target = new Vector3(.1, -.1, .2);
     for (const rotation of [turn(1, 0, 0, 0), turn(1, 1, 1, .6), turn(0, 1, 0, .6)]) {
-      const pose = new Pose(skeleton);
+      const pose = new BonePose(skeleton);
       pose.setLocal(2, rotation);
       solveChain({ current: pose }, 'leg', { tip: { position: target } });
       expect(pose.position(3).distanceTo(target)).toBeLessThan(1e-9);
@@ -52,7 +52,7 @@ describe('solveChain', () => {
 
   it.each([1, -1])('keeps the bend plane when a limb extends through full reach from bend direction %s', (direction) => {
     const skeleton = leg([hinge(2, -2.7, 2.7)]);
-    const pose = new Pose(skeleton);
+    const pose = new BonePose(skeleton);
     pose.setLocal(2, turn(1, 0, 0, direction * 0.2));
     const pole = new Vector3(0.1, 1, 1);
     const target = new Vector3(0.1, 0.15 + 1e-6, 0);
@@ -71,7 +71,7 @@ describe('solveChain', () => {
     thigh.swing[0] = [0, 0];
     thigh.twist = [0, 0];
     const knee = hinge(2, -5 * Math.PI / 180, 155 * Math.PI / 180);
-    const pose = new Pose(leg([thigh, knee]));
+    const pose = new BonePose(leg([thigh, knee]));
     const pole = new Vector3(0.1, 1, 1), target = new Vector3(0.1, 0.8, -1e-6);
     solveChain({ current: pose }, 'leg', { tip: { position: target }, pole, swivel: false });
     const before = pose.local(2).clone(), ankle = pose.position(3).clone();
@@ -107,7 +107,7 @@ describe('solveChain', () => {
   it('solves a longer chain (a horse’s hind leg) within its limits, onto a goal it can reach', () => {
     const skeleton = horseLeg();
     // a goal the leg reaches within its hinges: where it puts the hoof bent so
-    const bent = new Pose(skeleton);
+    const bent = new BonePose(skeleton);
     [-0.5, 1.1, -1.2, 0.8].forEach((a, k) => bent.setLocal(k + 1, turn(1, 0, 0, a)));
     const goal = bent.position(5).clone();
     const pose = solve(skeleton, { tip: { position: goal, quaternion: bent.rotation(5) } });

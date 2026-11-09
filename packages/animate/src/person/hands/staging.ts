@@ -1,6 +1,6 @@
 import { action } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import { paceAt, type Handling } from '../../body/handling';
+import { paceAt, type HandStaging } from '../../body/hand-staging';
 import { CALM } from './arms';
 import { bodyOf } from '../../things/hold';
 import { sideOf } from '../anatomy/bones';
@@ -17,7 +17,7 @@ import type { Person } from '../person';
 const CLOSING = 0.2;
 
 /** A person's hand staging; the right hand leads coordinated reaches. */
-export function personHands(person: Person): Handling {
+export function personHands(person: Person): HandStaging {
   return {
     take: function* (request, thing, grips, options) {
       const loose = thing.massive && !bodyOf(thing.object);

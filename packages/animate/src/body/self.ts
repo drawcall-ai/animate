@@ -1,5 +1,5 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
-import { Pose, type ReadonlyPose } from '../kernel/pose';
+import { BonePose, type ReadonlyBonePose } from '../kernel/bone-pose';
 import { SUBSTEP, type Frame, type Behaviour } from '../kernel/frame';
 import { Dev, OFF_FLOOR, type LogEntry } from '../kernel/dev';
 import { Skeleton, type SkinVolume } from '../kernel/skeleton';
@@ -7,7 +7,7 @@ import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
 import { Asks } from '../kernel/asks';
 import { HeadOffset } from '../look/offset';
-import type { Go } from '../step/go';
+import type { LegGoal } from '../step/leg-goal';
 import { createLocomotion, type Locomotion } from '../step/locomotion';
 import type { Root } from '../step/root';
 import type { Stepper } from '../step/stepper';
@@ -16,18 +16,18 @@ import { MovingFrame } from '../kernel/moving-frame';
 import { yawOf } from '../kernel/math';
 import { Binding } from './binding';
 import { PlatformFrame } from './platform';
-import { resolve } from '../things/resolve';
+import { placedFor } from '../things/placed';
 import { anchors, movers, type Hold, type Holder, type Interpolated } from '../things/holder';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
 import { heldMass, wornOf, type Bearing } from '../things/hold';
-import type { Handling } from './handling';
+import type { HandStaging } from './hand-staging';
 import { FLAT, type Floor } from '../step/floor';
 import { FingerState } from '../fingers/state';
-import { Orient } from './orient';
+import { TurnedNodes } from './turned-nodes';
 import { checkShear, massed, restPose } from './setup';
-import { Springs, type Capsules } from './springs';
+import { Springs, type TrunkCapsules } from './springs';
 import type { Person } from '../person/person';
 
 /** How a body is made. */
@@ -78,8 +78,8 @@ export abstract class Self implements Holder {
   readonly frame: Frame;
   readonly log: readonly LogEntry[];
   /** the last final pose and the one before, as they were when its last update began: what others read while it is ahead of them */
-  private readonly before: [ReadonlyPose, ReadonlyPose];
-  private readonly poses: Pose[];
+  private readonly before: [ReadonlyBonePose, ReadonlyBonePose];
+  private readonly poses: BonePose[];
   updates = 0;
   share = 0;
   readonly frames = new WeakMap<Object3D, Interpolated>();
@@ -108,7 +108,7 @@ export abstract class Self implements Holder {
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
   readonly carried = new Map<Object3D, MovingFrame>();
   /** the nodes on it its app keeps turned in the world (`Body.orient`) */
-  readonly orient = new Orient(this);
+  readonly turnedNodes = new TurnedNodes(this);
   readonly requests: Request[] = [];
   /** the body's time when a story last filed a mover with it (s; −∞: never) */
   lastMover = -Infinity;
@@ -127,7 +127,7 @@ export abstract class Self implements Holder {
   readonly fingers: FingerState | null;
   private readonly springs: Springs | null;
 
-  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose, trunk?: Capsules) {
+  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => BonePose, trunk?: TrunkCapsules) {
     const dev = options.dev ? new Dev() : undefined;
     this.log = dev?.log ?? EMPTY;
     this.skeleton = massed(species, options.mass, (check, message) => this.warn(check, message));
@@ -151,7 +151,7 @@ export abstract class Self implements Holder {
     this.arms = Object.keys(this.hands).map((hand) => `arm.${hand}` as const);
     this.holding = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
     this.coming = Object.fromEntries(Object.keys(this.hands).map((hand) => [hand, null]));
-    this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
+    this.poses = Array.from({ length: 5 }, () => new BonePose(this.skeleton).copy(pose));
     this.platform = new PlatformFrame(this.skeleton);
     this.before = [this.poses[3], this.poses[4]];
     this.frame = { dev, dt: SUBSTEP, time: 0, prev2: this.poses[0], prev: this.poses[1], current: this.poses[2] };
@@ -170,14 +170,14 @@ export abstract class Self implements Holder {
   readonly borne = new Map<Thing, Bearing>();
 
   /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
-  gazeAsks?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
+  gazeAsks?(pose: ReadonlyBonePose, point: Readonly<Vector3>): void;
 
   /** what its hands do for the verbs (made when first asked, once all it is has been made) */
-  get handling(): Handling {
-    return (this.handled ??= this.handle());
+  get handStaging(): HandStaging {
+    return (this.staged ??= this.stageHands());
   }
 
-  private handled: Handling | null = null;
+  private staged: HandStaging | null = null;
 
   /** it as a person, for what only a person does */
   get person(): Person {
@@ -188,7 +188,7 @@ export abstract class Self implements Holder {
   abstract holds(f: Frame, hand: string, wrist: Goal): boolean;
 
   /** what its hands do for the verbs */
-  protected abstract handle(): Handling;
+  protected abstract stageHands(): HandStaging;
 
   /** its behaviours: made once all it is has been made */
   protected abstract behave(): Behaviours;
@@ -207,7 +207,7 @@ export abstract class Self implements Holder {
   }
 
   /** the last final pose */
-  get pose(): ReadonlyPose {
+  get pose(): ReadonlyBonePose {
     return this.frame.prev;
   }
 
@@ -222,13 +222,13 @@ export abstract class Self implements Holder {
   }
 
   /** Self reads the pose being written (the last final pose between sub-steps); a body ahead of another reader exposes its update-start pose. */
-  poseFor(reader: Holder): ReadonlyPose {
+  poseFor(reader: Holder): ReadonlyBonePose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
     return this.updates > reader.updates ? this.before[0] : this.frame.prev;
   }
 
   /** its final poses as `reader` reads them (`poseFor`): the last and the one before */
-  posesFor(reader: Holder): readonly [ReadonlyPose, ReadonlyPose] {
+  posesFor(reader: Holder): readonly [ReadonlyBonePose, ReadonlyBonePose] {
     return this.updates > reader.updates ? [this.before[0], this.before[1]] : [this.frame.prev, this.frame.prev2];
   }
 
@@ -276,13 +276,13 @@ export abstract class Self implements Holder {
     }
     let movingFrame = this.tracked.get(node);
     if (!movingFrame) {
-      const at = resolve(this, node, { position: new Vector3(), quaternion: new Quaternion() });
+      const at = placedFor(this, node, { position: new Vector3(), quaternion: new Quaternion() });
       this.tracked.set(node, (movingFrame = new MovingFrame(at.position, at.quaternion)));
       movingFrame.place(f.time, at.position, at.quaternion);
       return movingFrame;
     }
     if (!movingFrame.moved(f.time)) {
-      const at = resolve(this, node, _local);
+      const at = placedFor(this, node, _local);
       movingFrame.move(f.time, at.position, at.quaternion);
     }
     return movingFrame;
@@ -348,11 +348,11 @@ export abstract class Self implements Holder {
   }
 
   /** Losing leg claims still tick for progress tracking; only the owner's result drives the body. */
-  private run(channel: Channel, f: Frame): Go | void {
+  private run(channel: Channel, f: Frame): LegGoal | void {
     const claims = this.claims.get(channel);
     if (!claims?.length) return;
     const owner = claims[claims.length - 1];
-    if (channel === 'go') for (const claim of claims.slice(0, -1)) claim.step(f);
+    if (channel === 'legs') for (const claim of claims.slice(0, -1)) claim.step(f);
     return owner.step(f);
   }
 
@@ -381,7 +381,7 @@ export abstract class Self implements Holder {
         if (this.springs) {
           this.springs.restore();
           this.binding.write(this.pose, this.floor);
-          this.orient.write();
+          this.turnedNodes.write();
           this.springs.step(SUBSTEP);
         }
       }
@@ -391,7 +391,7 @@ export abstract class Self implements Holder {
     // (one too short for a sub-step finished nothing: readers and what was kept for this pose stay as they are)
     if (steps > 0) this.updates++;
     this.binding.write(this.pose, this.floor);
-    this.orient.write();
+    this.turnedNodes.write();
     this.fingers?.update(seconds);
     this.springs?.write();
   }
@@ -463,7 +463,7 @@ export abstract class Self implements Holder {
     if (this.life.steady !== undefined) this.asks.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
-    this.orient.step(f);
+    this.turnedNodes.step(f);
     for (const request of [...this.requests]) {
       request.stage(f);
       if (!request.owned) continue;
@@ -478,7 +478,7 @@ export abstract class Self implements Holder {
         f.dev.append(f.time, { check: `request not renewed for ${STALE} s: its story stopped stepping (s)`, value: f.time - request.renewed, limit: STALE, where: request.label });
       }
     }
-    this.asks.going = this.run('go', f) ?? null;
+    this.asks.legGoal = this.run('legs', f) ?? null;
     behaviours.gaze?.(f);
     this.run('look', f);
     this.run('head', f);
@@ -489,7 +489,7 @@ export abstract class Self implements Holder {
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
       if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);
-      else if (this.holding[hand]) behaviours.keep?.(f, hand);
+      else if (this.holding[hand]) behaviours.idleHold?.(f, hand);
     }
     if (this.fingers) this.meetContacts(this.fingers, f);
     behaviours.things?.(f);
@@ -501,12 +501,12 @@ export abstract class Self implements Holder {
   }
 }
 
-/** a body's behaviours, in the order they run each sub-step: balance, the eyes when nothing asks, the free hands, a holding hand's keep, what it moves */
+/** a body's behaviours, in the order they run each sub-step: balance, the eyes when nothing asks, the free hands, a holding hand's idle, what it moves */
 export interface Behaviours {
   balance?: Behaviour;
   gaze?: Behaviour;
   hands?: Behaviour;
-  keep?: (f: Frame, hand: string) => void;
+  idleHold?: (f: Frame, hand: string) => void;
   things?: Behaviour;
 }
 

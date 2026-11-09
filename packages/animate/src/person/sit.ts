@@ -22,7 +22,7 @@ export function* sitting(person: Person, request: Request, seat: Target, face: n
   if ('why' in place) return request.fail(place);
   const via = roundSeat(com, at, place.stand, yaw, CLEARING * person.scale);
   const walk = new Walk(person, { to: () => place.stand, face: () => yaw, via: via.map((point) => () => point), speed, backs: true });
-  yield* during(request, 'go', 'asked', (f) => {
+  yield* during(request, 'legs', 'asked', (f) => {
     const go = walk.step(f);
     request.eta = walk.ends + place.seconds;
     return go;

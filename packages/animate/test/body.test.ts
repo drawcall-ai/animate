@@ -5,7 +5,7 @@ import { Body, dog, horse, humanoid } from '../src/index';
 import { BONES, INDEX } from '../src/person/anatomy/bones';
 import { claim, dt, insides, person, run } from './bodies';
 import { rng } from './random';
-import { resolve } from '../src/things/resolve';
+import { placedFor } from '../src/things/placed';
 import { PERSON } from '../skills/animate/references/person';
 import { HORSE } from '../skills/animate/references/horse';
 import { DOG } from '../skills/animate/references/dog';
@@ -34,7 +34,7 @@ describe('a body', () => {
     mount.matrixWorldAutoUpdate = target.matrixAutoUpdate = false;
     target.matrix.makeTranslation(0.1, 0, 0);
     claim(body, 'trunk', (f) => f.current.setLocal(INDEX.chest, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time)));
-    claim(body, 'hand.right', () => { samples.push(resolve(insides(body), target, { position: new Vector3(), quaternion: new Quaternion() }).position.toArray()); });
+    claim(body, 'hand.right', () => { samples.push(placedFor(insides(body), target, { position: new Vector3(), quaternion: new Quaternion() }).position.toArray()); });
     body.update(dt);
     mount.matrixWorld.makeTranslation(2, 1, 3);
     body.update(2 * dt);

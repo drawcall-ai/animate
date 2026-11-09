@@ -1,15 +1,14 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Frame, Behaviour } from '../../kernel/frame';
 import { MovingFrame } from '../../kernel/moving-frame';
-import { followRotation, toLocal } from '../../kernel/follow';
+import { followRotation, RotationFollower, toLocal } from '../../kernel/follow';
 import { Glide } from '../../kernel/glide';
 import { type Live, type Motion, type Goal } from '../../kernel/goal';
 import { limited } from '../../kernel/limits';
 import { LimbMover } from '../../kernel/limb';
 import { solveChain } from '../../kernel/chain';
-import { TrackedRotation } from '../../kernel/tracked';
 import { INDEX, type Side } from '../anatomy/bones';
-import { Pose, type ReadonlyPose } from '../../kernel/pose';
+import { BonePose, type ReadonlyBonePose } from '../../kernel/bone-pose';
 import type { Thing } from '../../things/thing';
 import { boneOf, onBody } from '../../things/hold';
 import { bringShoulder, liftFor, twistToward } from './shoulder';
@@ -59,7 +58,7 @@ export function reaching(person: Person, side: Side, target: Live<Goal>, options
   let glide: Glide | null = null, waited = 0, waiting = options.after ?? 0;
   // (waiting, the arm's joints kept as they were when it began: the hand neither dropped to its hang nor taken up by the arm's solve)
   let kept: [number, Quaternion][] | null = null;
-  const joints = new Map<number, TrackedRotation>();
+  const joints = new Map<number, RotationFollower>();
   let start: { elbow: Vector3; clavicle: Quaternion; off: number } | null = null;
   // (the hand turned on from how it set off as far as it has come toward its goal (`at`, the world's), in the frame of `on`: tied to the
   // hand's way, its turn arrives with it however fast it goes, rather than trailing it at its own pace)
@@ -191,7 +190,7 @@ export function handStep(person: Person, f: Frame, side: Side, target: Goal, opt
     // (a hand carrying what hangs from it keeps the arm's fit as it holds it, unless another is clearly better, and swivels on from it
     // continuously: two fits about as good would otherwise take turns as the goal moves on, swinging the elbow and what is in the hand; a
     // hand on a thing something else moves is put back on it after its brakes, `contact`)
-    keep: Boolean(person.holding[side]) && !contact,
+    keepFit: Boolean(person.holding[side]) && !contact,
     letOut: toward !== undefined || contact,
     clear: (frame, tip, braked) => {
       held = Math.max(held, keepArmOut(frame, proportions, side, tip, braked ? NUDGED : SOLVED(proportions)));
@@ -249,7 +248,7 @@ function shrug(f: Frame, proportions: Proportions, side: Side, hand: Readonly<Ve
 }
 
 /** Blend elbow poles in the chest frame and return `out` in world coordinates. Overhead, prefer outward: a forward pole makes a nearly straight arm swivel. */
-export function elbowPole(pose: ReadonlyPose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
+export function elbowPole(pose: ReadonlyBonePose, proportions: Proportions, side: Side, hand: Readonly<Vector3>, out: Vector3): Vector3 {
   const sign = side === 'left' ? 1 : -1;
   const shoulder = pose.position(INDEX[`${side}UpperArm`]);
   const chest = _c.copy(pose.rotation(INDEX.chest));
@@ -271,7 +270,7 @@ export function elbowPole(pose: ReadonlyPose, proportions: Proportions, side: Si
  * How the arm brings hand `side` to have its palm at `at` (world): the hand bone's turn (world, into `out`) with the arm posed onto it
  * from `pose` on `scratch` — its elbow bent the way a reach there bends it, the forearm and the wrist unturned, as a hanging arm's are
  */
-export function broughtTurn(person: Person, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
+export function broughtTurn(person: Person, pose: ReadonlyBonePose, side: Side, at: Readonly<Vector3>, scratch: BonePose, out: Quaternion): Quaternion {
   scratch.copy(pose);
   const proportions = person.proportions, hand = INDEX[`${side}Hand`], palm = palmOf(proportions, side), wrist = _wrist;
   // (the wrist a palm back from `at` along the hand as the last pass turned it: two more passes bring it within a millimetre)

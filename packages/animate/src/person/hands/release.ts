@@ -55,7 +55,7 @@ export function* backingOut(person: Person, request: Request, hands: readonly { 
   yield* parallel<Frame>('all', ...hands.map(({ side, away }, k) => {
     const step = reaching(person, side, (f) => off(f)[k], { bodyFollows: false, ...(away && { seconds: BACK.seconds / person.tempo, straight: true }) });
     return during(request, `hand.${side}`, 'borrowed', (f: Frame) => {
-      if (away && f.time < drawn) person.fingers?.keep(side);
+      if (away && f.time < drawn) person.fingers?.holdShape(side);
       return step(f);
     }, (f) => done(f) || person.holding[side] !== null || (!away && person.owner(`arm.${side}`) !== undefined));
   }));

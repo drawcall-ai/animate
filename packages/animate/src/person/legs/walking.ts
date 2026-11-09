@@ -3,12 +3,12 @@ import type { Behaviour } from '../../kernel/frame';
 import { offTheWay, Planner, stanceYaw } from '../../step/planner';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
 import { INDEX } from '../anatomy/bones';
-import type { Stance } from '../../step/go';
+import type { Stance } from '../../step/leg-goal';
 import type { Stepper } from '../../step/stepper';
 import { hullOf, past } from '../../step/support';
 import { footprint } from './foot';
-import { checkSupport, drivenBy, feetBehind, seedFor } from './balance';
-import { individualOf } from './individual';
+import { checkSupport, balancing, feetBehind, seedFor } from './balance';
+import { variationOf } from './variation';
 import { personGait, personStepping } from './stepping';
 import { OVER_ANKLES } from '../anatomy/stance';
 import type { Person } from '../person';
@@ -16,13 +16,13 @@ import type { Person } from '../person';
 /**
  * A person standing and walking where asked on the core legs: the root — the body's centre of mass over the floor — goes where the
  * planner takes it where its legs are asked to go (facing as asked, or the way it goes) as a player's input would drive it, and the stepper keeps
- * the legs under it and carries the body over it as it would a player's (`drivenBy`), catching the extrapolated centre of mass with a
+ * the legs under it and carries the body over it as it would a player's (`balancing`), catching the extrapolated centre of mass with a
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
  */
 export function walking(person: Person, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
   const proportions = person.proportions, s = proportions.scale, toeOut = personStepping(proportions, true, person.stride).toeOut;
-  const individual = individualOf(seedFor(person, options.seed));
+  const variation = variationOf(seedFor(person, options.seed));
   // (asked off, it sets off its own moment later: since when it was asked, s)
   let asked = NaN;
   const stop = new Vector3(), velocity = new Vector3();
@@ -39,9 +39,9 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     for (let k = 0; k < 12; k++) [lo, hi] = past(hull, at((lo + hi) / 2)) <= -LEAN.inside * s ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
     return at(lo);
   };
-  return drivenBy(person, (f, go, asks, stepper) => {
+  return balancing(person, (f, go, asks, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
-    if (f.dev) checkSupport(person, f, f.dev, asks.going);
+    if (f.dev) checkSupport(person, f, f.dev, asks.legGoal);
     const dt = f.dt, asking = go?.face;
     if (!planner) {
       planner = new Planner(f.prev.com(new Vector3()), person.yaw, personGait(proportions), proportions.hipHalfWidth);
@@ -71,7 +71,7 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     const off = (still ?? root).distanceTo(stop) > START.distance * s || velocity.length() > START.speed || unturned > START.faced;
     if (moving || !off) asked = NaN;
     else if (Number.isNaN(asked)) asked = f.time;
-    if (!moving && off && f.time - asked >= individual.delay) [moving, starting, still, leaning] = [true, true, null, false];
+    if (!moving && off && f.time - asked >= variation.delay) [moving, starting, still, leaning] = [true, true, null, false];
     // (waiting its moment to set off, it stands as it is: it turns and goes as it sets off)
     const waiting = !moving && !Number.isNaN(asked), face = waiting ? undefined : asking;
     if (stepper.legs.some((leg) => leg.landed)) starting = false;
@@ -121,7 +121,7 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     const stopped = root.distanceTo(stop) < STOP.distance * s && planned.velocity.length() < STOP.speed;
     if (stopped && velocity.length() < STOP.goalSpeed && unturned < STOP.yaw) moving = false;
     return { ...planned, centre: true, underway: moving, arriving: moving && !!go && go.settles !== false && velocity.length() < STOP.goalSpeed };
-  }, { ...options, individual });
+  }, { ...options, variation });
 }
 
 /**

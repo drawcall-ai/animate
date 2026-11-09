@@ -9,7 +9,7 @@ import { cases } from '../../../packages/animate/test/open';
 import { play } from '../../../packages/animate/test/bodies';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
-import { HORSE, PERSON } from '../src/skeletons';
+import { HORSE, PERSON } from '../src/skeletons/index';
 import { legsHorse, scripted, type Route } from '../src/scenarios/legs';
 import { poseOf } from '@drawcall/animate';
 

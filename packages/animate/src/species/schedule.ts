@@ -1,5 +1,5 @@
 import { GRAVITY } from '../kernel/math';
-import type { Carriage, Gait } from './gait';
+import type { TrunkMotion, Gait } from './gait';
 
 /**
  * A gait from a few numbers, dynamically similar across sizes (recalled: Alexander & Jayes 1983, stride
@@ -46,10 +46,10 @@ export function footfalls(stops: Stops<readonly number[]>): ((speed: number, fro
 }
 
 /**
- * A gait's carriage as it changes with the Froude number (a trot's into a gallop's): `stops` of [Froude number, carriage], rising,
- * each of its numbers linearly between neighbouring stops, held past the ends — for a gait's `body`
+ * A gait's trunk motion as it changes with the Froude number (a trot's into a gallop's): `stops` of [Froude number, trunk motion], rising,
+ * each of its numbers linearly between neighbouring stops, held past the ends — for a gait's `trunk`
  */
-export function carriages(stops: Stops<Carriage>): (speed: number, froude: number) => Carriage {
+export function trunkMotions(stops: Stops<TrunkMotion>): (speed: number, froude: number) => TrunkMotion {
   checked(stops);
   return (_speed, froude) => {
     const [a, b, t] = between(stops, froude), mix = (p: number, q: number) => p + (q - p) * t;

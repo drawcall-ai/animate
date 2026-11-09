@@ -5,7 +5,7 @@ import { DOG } from '../../skills/animate/references/dog';
 import { INDEX, SIDES, type Side } from '../../src/person/anatomy/bones';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { TROOPER } from '../skeletons/trooper';
-import { Quiet } from '../../src/person/legs/quiet';
+import { QuietStance } from '../../src/person/legs/quiet-stance';
 import { insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 
@@ -90,7 +90,7 @@ it('slows its walk under a load, counting a load held in both hands once', () =>
       yield* grab(body, load, both ? { left: 'left', right: 'right' } : { right: 'right' });
       yield* walkTo(body, new Vector3(0, 0, 3), { until: 0.3 });
     }, [body], 4, () => {
-      if (h.asks.going && body.owners.go?.verb === 'walkTo') speed = h.asks.going.speed;
+      if (h.asks.legGoal && body.owners.legs?.verb === 'walkTo') speed = h.asks.legGoal.speed;
     });
     expect(body.log).toEqual([]);
     return speed;
@@ -122,7 +122,7 @@ it('keeps its sway and breathing after a loaded walk, without spontaneous weight
 
 it('seeds the side of its first weight shift and alternates the later ones, after activity too', () => {
   for (const seed of [0, 1, 42]) {
-    const life = new Quiet(seed);
+    const life = new QuietStance(seed);
     const shifts: Side[] = [];
     let previous: Side | null = null;
     for (let step = 0; step < 6000; step++) {

@@ -1,7 +1,7 @@
 import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import { seeded } from '../../kernel/random';
-import type { ReadonlyPose } from '../../kernel/pose';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 
 import { forwardOf, lerp } from '../../kernel/math';
 import { steadiness } from '../../species/define';
@@ -47,7 +47,7 @@ export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3
 }
 
 /** The walking gaze's path point, shared by a long approach and the idle gaze. */
-export function pathAhead(person: Walking, pose: ReadonlyPose, out: Vector3): Vector3 {
+export function pathAhead(person: Walking, pose: ReadonlyBonePose, out: Vector3): Vector3 {
   out.copy(pose.com(_com)).addScaledVector(forwardOf(person.locomotion.facingAhead ?? person.locomotion.facing, _v), AHEAD.walk.distance);
   return onFloor(person, out, AHEAD.walk.height * person.proportions.height);
 }

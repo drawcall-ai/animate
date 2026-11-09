@@ -3,18 +3,18 @@ import { MathUtils, Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, softplus, wrapAngle, yawOf } from '../kernel/math';
 import { hullOf, outside } from './support';
 import { runs } from './steps';
-import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, THRESHOLDS, TURN, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, easedPast, remaining, type FootPose, type Leg, type StepInput, type Steps, type Swing } from './steps';
+import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, THRESHOLDS, TURN, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, overbend, remaining, type FootPose, type Leg, type StepInput, type Steps, type Swing } from './steps';
 import { foldLength, hipOf, home, homeOf, lengthOf, velocityAhead, shankLean, staysOn, travelOf, widthAt, xcomAhead } from './leg-reach';
 import { FLAT, foothold, LEVEL } from './floor';
 import { arcOf, stepping, swingOver, RISE } from './swing-path';
 
 /** Where a foot lands `remaining` s on, the way it faces then, and how far across the other foot it would have landed (m). */
 export function landing(steps: Steps, input: StepInput, leg: Leg, remaining: number): [Vector3, number, number] {
-  const { st, feet, legs, pair, yaws } = steps, toeOut = st.toeOut, { r, v, lead, wanted, spin, Ts, sitting } = input;
+  const { st, feet, legs, pair, yaws } = steps, toeOut = st.toeOut, { r, v, landAhead, wanted, spin, Ts, sitting } = input;
   // (where the root will be and face as it lands, foreseen: as it says, or running on as it turns)
   // (a gait's foot lands as the root goes now, not as its forecast hopes: the legs of a long body hold it back more than a person's)
-  const forecast = steps.clocked ? undefined : r.forecast, then = forecast?.(remaining + lead);
-  const ahead = then ? wanted + wrapAngle(then.yaw - wanted) : wanted + spin * (remaining + lead);
+  const forecast = steps.clocked ? undefined : r.forecast, then = forecast?.(remaining + landAhead);
+  const ahead = then ? wanted + wrapAngle(then.yaw - wanted) : wanted + spin * (remaining + landAhead);
   // turned toward the root's facing, as far past the other foot as the pelvis turns from it: as it stands, or as it will stand by then,
   // pivoting after the pelvis (`Steps.pivots`) — aimed from where it stood, a quick turn's landing fell behind and the foot stepped again
   const other = legs[pair[leg.i]], body = steps.pivoting && !other.swing ? pivoted(steps, other, ahead, remaining) : other.yaw - other.sign * toeOut;
@@ -34,15 +34,15 @@ export function landing(steps: Steps, input: StepInput, leg: Leg, remaining: num
   // move off any moment, keeps the margin of a foot further on. None on a way back against the root's going: a forecast turning back
   // by a hair as the root overshoots its stop, carried on so, put a closing step 5 cm the other way)
   const chord = then ? _c.subVectors(then.position, r.position).setY(0) : null, along = chord?.length() ?? 0;
-  const on = chord && chord.dot(r.velocity) < 0 ? 0 : v * (remaining + lead);
+  const on = chord && chord.dot(r.velocity) < 0 ? 0 : v * (remaining + landAhead);
   const far = Math.max(along, r.arriving ? Math.min(on, along + speed * Math.sqrt(feet.length / GRAVITY)) : on);
   const past = chord && chord.lengthSq() > 1e-12 ? _n.copy(chord).multiplyScalar(far / chord.length() - 1) : null;
   const forward = forwardOf(turned, _f);
   const to = chord && past
     ? new Vector3().copy(r.position).add(chord).addScaledVector(forward, Math.max(0, past.dot(forward)))
-    : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + lead);
+    : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + landAhead);
   to.addScaledVector(side, leg.sign * widthAt(steps, input, speed)).addScaledVector(forward, sitting + homeOf(steps, leg));
-  if (forecast && then) bend(steps, forecast, remaining + lead, then.position, to);
+  if (forecast && then) bend(steps, forecast, remaining + landAhead, then.position, to);
   steady(steps, input, leg, remaining, to, turned, side, speed);
   const yaw = heading + leg.sign * toeOut, across = uncross(steps, input, leg, to, side);
   const w = leg.swing, balance = steps.floor === FLAT ? undefined : balanced(steps, input, leg, remaining, yaw), { contact } = input;
@@ -248,7 +248,7 @@ function touchdown(steps: Steps, input: StepInput, leg: Leg, w: Swing, rel: NonN
   const { foot, toes } = feet.legs[leg.i];
   // Touchdown stays on the current support; the next stride's lead may already be beyond a small platform.
   leg.yaw = input.yaw + leg.sign * st.toeOut;
-  home(steps, input, leg, input.lead, leg.anchor);
+  home(steps, input, leg, input.landAhead, leg.anchor);
   foothold(steps.floor, feet, leg.i, leg.anchor, leg.yaw, undefined, contact.y, true);
   if (Math.abs(leg.anchor.y - feet.ankleHeight - contact.y) > LEVEL) supportFoot(steps, input, leg, contact);
   // The controller's contact ends the fall, not the foot's path. Continue from its last
@@ -331,11 +331,11 @@ export function swingPose(steps: Steps, input: StepInput, leg: Leg, w: Swing, fl
   const topY = f.prev.position(top).y, falling = Math.min(0, topY - f.prev2.position(top).y) / dt;
   const hipLands = _hipAt.copy(hipOf(steps, input, leg)).addScaledVector(r.velocity, w.rest).setY(topY + falling * w.rest);
   const leans = shankLean(steps, hipLands, feet.ankle(leg.i, leg.anchor, leg.yaw, w.strike, _a), leg.yaw);
-  const strike = w.strike - easedPast(leans + w.strike - st.dorsiflexion) * minimumJerk((u - 0.5) / 0.5);
+  const strike = w.strike - overbend(leans + w.strike - st.dorsiflexion) * minimumJerk((u - 0.5) / 0.5);
   const land = feet.ankle(leg.i, leg.anchor, leg.yaw, strike, new Vector3());
   if (airborne) for (const axis of ['x', 'z'] as const) {
     const rising = input.flight && vy > 0;
-    const goal = land[axis] - pelvis[axis] - r.velocity[axis] * (air + (rising ? input.lead : 0));
+    const goal = land[axis] - pelvis[axis] - r.velocity[axis] * (air + (rising ? input.landAhead : 0));
     [w.x[axis], w.v[axis], w.a[axis]] = quintic(w.x[axis], w.v[axis], w.a[axis], goal, rising ? 0 : -r.velocity[axis], w.rest, dt);
   }
   else swingOver(steps, input, leg, w, land, ceiling(), dt);
@@ -350,7 +350,7 @@ export function swingPose(steps: Steps, input: StepInput, leg: Leg, w: Swing, fl
     leg.pitch = Math.min(leg.pitch, lerp(leg.pitch, Math.max(st.pitch.ball, -st.push - lean), pushed));
   }
   // (its own shank's lean bends the ankle early in the swing; landing, the strike already stands as it will)
-  leg.pitch -= easedPast(lean + leg.pitch - st.dorsiflexion) * (1 - minimumJerk((u - 0.6) / 0.4));
+  leg.pitch -= overbend(lean + leg.pitch - st.dorsiflexion) * (1 - minimumJerk((u - 0.6) / 0.4));
   if (st.plantarflexion !== undefined) leg.pitch = Math.max(leg.pitch, -st.plantarflexion - lean);
   const foot = feet.rotation(yawNow, leg.pitch, new Quaternion());
   // (the toes relax off the floor into line, and landing toes first come down flat)

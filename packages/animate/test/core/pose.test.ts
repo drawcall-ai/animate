@@ -1,12 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { Pose } from '../../src/kernel/pose';
+import { BonePose } from '../../src/kernel/bone-pose';
 import { solveChain } from '../../src/kernel/chain';
 import { leg, turn } from './rigs';
 
 describe('Pose', () => {
   it('derives world transforms by forward kinematics, again after a write', () => {
-    const pose = new Pose(leg());
+    const pose = new BonePose(leg());
     expect(pose.position(3).toArray()).toEqual([0.1, 1 - 0.45 - 0.4, 0]);
     pose.setRoot(new Vector3(1, 2, 3));
     pose.setLocal(0, turn(0, 1, 0, Math.PI / 2));
@@ -19,7 +19,7 @@ describe('Pose', () => {
   });
 
   it('blends a weighted write from what is there, a solved chain\'s too', () => {
-    const pose = new Pose(leg());
+    const pose = new BonePose(leg());
     const bent = turn(1, 0, 0, 1);
     pose.setLocal(2, bent, 0.25);
     expect(pose.local(2).angleTo(turn(1, 0, 0, 0.25))).toBeLessThan(1e-7);
@@ -27,11 +27,11 @@ describe('Pose', () => {
     expect(pose.position(0).y).toBeCloseTo(0.5, 12);
     expect(() => pose.setLocal(2, new Quaternion(), 1.5)).toThrow(/weight/);
     const solved = (weight?: number) => {
-      const chain = new Pose(leg());
+      const chain = new BonePose(leg());
       solveChain({ current: chain }, 'leg', { tip: { position: new Vector3(0.3, 0.35, 0.25) } }, weight);
       return chain;
     };
-    const full = solved(), half = solved(0.5), rest = new Pose(leg());
+    const full = solved(), half = solved(0.5), rest = new BonePose(leg());
     for (const b of [1, 2]) expect(half.local(b).angleTo(rest.local(b).clone().slerp(full.local(b), 0.5))).toBeLessThan(1e-7);
   });
 });

@@ -4,7 +4,7 @@
 // landing where the home will be.
 import { MathUtils, Matrix4, Vector3 } from 'three';
 import { SUBSTEP, type Frame } from '../kernel/frame';
-import { STROLL } from './go';
+import { STROLL } from './leg-goal';
 import { follow } from '../kernel/follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, wrapAngle } from '../kernel/math';
 import { hullOf, outside, xcomOf } from './support';
@@ -167,10 +167,10 @@ export class Stepper extends Steps {
     const spin = clamp(wrapAngle(r.yaw - this.rootYaw) / dt, -SPIN, SPIN);
     // (the way round the root goes as it turns on ahead of the body — not as it turns back toward it — kept till the body has come within a
     // quarter turn of it)
-    const lead = turnTo(yaws[1], r.yaw, this.way);
+    const rootAhead = turnTo(yaws[1], r.yaw, this.way);
     if (Math.abs(spin) > SPUN) {
-      if (Math.sign(spin) === Math.sign(lead)) this.way = Math.sign(spin);
-    } else if (Math.abs(lead) < Math.PI / 2) this.way = 0;
+      if (Math.sign(spin) === Math.sign(rootAhead)) this.way = Math.sign(spin);
+    } else if (Math.abs(rootAhead) < Math.PI / 2) this.way = 0;
     const wanted = yaws[1] + turnTo(yaws[1], r.yaw, this.way);
     // (a gait's feet step for the turn the body would make, held back by them: else it waits on feet that wait on it; pivoting feet for the
     // turn the pelvis makes, up to `PACED` — as quick as it turns, they pivot no further than they step round; for the root's, a flick's
@@ -223,8 +223,8 @@ export class Stepper extends Steps {
       Ts = Math.max(root.dt, C * terrain - Tsw);
       C = Ts + Tsw;
     }
-    const lead = Math.min(lerp(st.lead.share, st.lead.side, Math.abs(across)) * Ts, (lerp(st.lead.most, st.lead.run, run) * s) / Math.max(v, 1e-6));
-    return { pacing, across, C, duty: terrain < 1 ? Ts / C : duty, Ts, Tsw, most, lead };
+    const landAhead = Math.min(lerp(st.landAhead.share, st.landAhead.side, Math.abs(across)) * Ts, (lerp(st.landAhead.most, st.landAhead.run, run) * s) / Math.max(v, 1e-6));
+    return { pacing, across, C, duty: terrain < 1 ? Ts / C : duty, Ts, Tsw, most, landAhead };
   }
 
   /** The pelvis' facing: the root's, within reach of the feet's (as they stand or will land). */

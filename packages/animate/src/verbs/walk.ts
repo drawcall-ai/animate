@@ -76,13 +76,13 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       return go;
     };
     // (given `until`, it follows its target, however it moves, until then — or it stalls short of one standing still)
-    if (until !== undefined) yield* during(request, 'go', 'asked', step, () => walk.stall !== null);
-    else yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stall !== null));
+    if (until !== undefined) yield* during(request, 'legs', 'asked', step, () => walk.stall !== null);
+    else yield* during(request, 'legs', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stall !== null));
     walk.report(self.frame);
     if (walk.stall) request.fail(stallOf(self, request, walk.stall));
     else request.met();
     // (there, the legs are its, standing, till its story moves on)
-    yield* during(request, 'go', 'asked', () => {});
+    yield* during(request, 'legs', 'asked', () => {});
   }, { until });
 }
 

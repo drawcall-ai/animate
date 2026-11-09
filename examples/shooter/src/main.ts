@@ -4,7 +4,7 @@ import { buildWorld } from '@drawcall/physics-rapier';
 import { Audio } from './audio';
 import { CameraRig } from './camera';
 import { MAGAZINE } from './combat';
-import { Enemy } from './enemy';
+import { Enemy } from './enemy/index';
 import { fighter, loadFighter } from './fighter';
 import { createEnvironment } from './environment';
 import { Input } from './input';

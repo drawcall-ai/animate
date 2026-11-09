@@ -1,12 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import { runTimeline, type ReusableTimeline } from '@pmndrs/timeline';
-import type { ReadonlyPose } from '../src/kernel/pose';
+import type { ReadonlyBonePose } from '../src/kernel/bone-pose';
 import type { Gazer } from '../src/species/define';
 import { Body, humanoid, type BodyOptions } from '../src/index';
 import { selfOf } from '../src/body';
 import { during, type Channel, type Tier } from '../src/kernel/requests';
 import type { Frame } from '../src/kernel/frame';
-import type { Go } from '../src/step/go';
+import type { LegGoal } from '../src/step/leg-goal';
 import type { Person } from '../src/person/person';
 import { palmOf } from '../src/person/anatomy/landmarks';
 import type { Side } from '../src/person/anatomy/bones';
@@ -45,7 +45,7 @@ export function run(body: Body, seconds: number, each?: (time: number) => void):
  * a request on `body` that takes `channel` at `tier` for as long as it is not dropped (no story renews it: it renews itself), `step` its
  * every sub-step; returns the drop
  */
-export function claim(body: Body, channel: Channel, step: (f: Frame) => Go | void, tier: Tier = 'asked'): () => void {
+export function claim(body: Body, channel: Channel, step: (f: Frame) => LegGoal | void, tier: Tier = 'asked'): () => void {
   const self = selfOf(body);
   const request = self.file('test', '', (filed) => () => during(filed, channel, tier, (f) => {
     filed.renewed = f.time;
@@ -80,7 +80,7 @@ export function scene(bodies: readonly Body[], story?: ReusableTimeline<unknown,
 }
 
 /** how far (rad) a gazer's eyes are off `point` (world): the head's line off it, less what the eyes take of a gaze shift at most (`lookAt`) */
-export function gazeOff(gazer: Gazer, pose: ReadonlyPose, point: Readonly<Vector3>): number {
+export function gazeOff(gazer: Gazer, pose: ReadonlyBonePose, point: Readonly<Vector3>): number {
   const _d = new Vector3(), _eyes = new Vector3(), _rel = new Quaternion();
   if (gazer.neck === undefined) throw new Error('gazeOff: the gaze has no neck');
   const bones = pose.skeleton.chain(gazer.neck);

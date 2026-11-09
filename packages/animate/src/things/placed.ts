@@ -1,7 +1,7 @@
 import { Matrix4, Quaternion, Vector3, type Object3D } from 'three';
-import type { ReadonlyPose } from '../kernel/pose';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import type { Placement } from '../kernel/goal';
-import { anchors, movers, orienters, type Holder } from './holder';
+import { anchors, movers, turners, type Holder } from './holder';
 
 /**
  * Where `node` is in the world this sub-step, as `reader` finds it (into `out`): the frame of the nearest anchor among its ancestors
@@ -10,16 +10,16 @@ import { anchors, movers, orienters, type Holder } from './holder';
  * sub-steps, exact at its end, or as it is now if `fresh` (the app moves it every sub-step). Scale is left out of the result (a body's
  * frames are metres) but carried through the chain. An app-owned world matrix (`matrixWorldAutoUpdate = false`) ends the chain.
  */
-export function resolve(reader: Holder, node: Object3D, out: Placement, fresh = false): Placement {
+export function placedFor(reader: Holder, node: Object3D, out: Placement, fresh = false): Placement {
   chainOf(reader, node, fresh, _chain).decompose(out.position, out.quaternion, _scale);
   return out;
 }
 
-/** `node`'s world matrix as `resolve` finds it, scale and all, into `chain` */
+/** `node`'s world matrix as `placedFor` finds it, scale and all, into `chain` */
 function chainOf(reader: Holder, node: Object3D, fresh: boolean, chain: Matrix4): Matrix4 {
   chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
-    const turned = orienters.get(at)?.turned.get(at);
+    const turned = turners.get(at)?.turned.get(at);
     if (turned) {
       // (turned in the world as its app keeps it, where its parent, as found now, carries its position)
       const parent = at.parent ? chainOf(reader, at.parent, fresh, new Matrix4()) : new Matrix4();
@@ -45,7 +45,7 @@ function chainOf(reader: Holder, node: Object3D, fresh: boolean, chain: Matrix4)
 }
 
 /** a body's object (bone −1) or moving bone, as `pose` places it */
-function frameOf(pose: ReadonlyPose, body: Holder, bone: number): Matrix4 {
+function frameOf(pose: ReadonlyBonePose, body: Holder, bone: number): Matrix4 {
   if (bone < 0) {
     const root = pose.position(0);
     return _anchor.compose(_p.set(root.x, body.floor(root.x, root.z), root.z), _q.setFromAxisAngle(UP, pose.facing), ONE);
@@ -59,7 +59,7 @@ function frameOf(pose: ReadonlyPose, body: Holder, bone: number): Matrix4 {
  * body's bone or thing a body moves (as last written to the scene), each local the app moves as `reader` read it at the end of its last
  * update (one it did not read then, as it is now). An app-owned world matrix ends the chain.
  */
-export function written(reader: Holder, node: Object3D, out: Matrix4): Matrix4 {
+export function writtenFor(reader: Holder, node: Object3D, out: Matrix4): Matrix4 {
   out.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
     if (anchors.has(at) || movers.has(at)) {

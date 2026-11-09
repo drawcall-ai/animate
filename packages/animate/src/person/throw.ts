@@ -27,7 +27,7 @@ const PATH = {
 const THROUGH = { direction: new Vector3(0.6, -0.7, 0.45).normalize(), share: 0.95 };
 /** how long each part takes (s): the windup to the cock, held there, the whip and follow-through, the hand held at its end; how far
  * ahead of the arm's whip the trunk's uncoil, and the free arm's pull, set off (s) */
-const TIMES = { windup: 0.32, cocked: 0.15, whip: 0.4, held: 0.15, lead: 0.05, pull: 0.25 };
+const TIMES = { windup: 0.32, cocked: 0.15, whip: 0.4, held: 0.15, early: 0.05, pull: 0.25 };
 /** the trunk (a right-handed throw's; `lower` and `shift`, m ahead, × scale): coiled, the chest 50° right and the hips 30°, sunk onto the
  * back foot; uncoiled, the chest 23° left and the hips 20°, bowed into the throw, the weight forward */
 const COILED = { twist: -0.8, hips: -0.5, bow: -0.1, lower: 0.07, shift: -0.06 }, UNCOILED = { twist: 0.4, hips: 0.3, bow: 0.6, lower: 0.1, shift: 0.08 };
@@ -76,15 +76,15 @@ export function* throwing(person: Person, request: Request, thing: Thing, side: 
   const elbow = () => person.pose.position(INDEX[`${side}UpperArm`]).clone().add(new Vector3(x * ELBOW.x, ELBOW.y, ELBOW.z).applyQuaternion(facing()));
   let whip: ReturnType<typeof timedPath> | null = null, gone = false, began = NaN;
   const since = (f: Frame) => f.time - (Number.isNaN(began) ? (began = f.time) : began);
-  const uncoiled = (f: Frame) => since(f) >= TIMES.windup + TIMES.cocked - TIMES.lead;
+  const uncoiled = (f: Frame) => since(f) >= TIMES.windup + TIMES.cocked - TIMES.early;
   // (a body standing strides into the throw, sinks into it and turns its hips with it; one already walking or running throws over its
   // own gait, whose steps, pelvis and knees a staggered stance, a coiled hip or a sink would fight)
   const ahead = STRIDE.ahead * person.proportions.legLength, stride = side === 'right' ? [ahead, 0] : [0, ahead], strides = !person.locomotion.moving;
   const trunk = (f: Frame): Asked => {
     // (uncoiled along a smooth ramp, the hips a moment ahead of the chest, not asked all at once: at the trunk's top rate all the way, it
     // stopped dead at the end of its turn, a jolt the hand carried into the whip)
-    const ask = uncoiled(f) ? UNCOILED : COILED, from = TIMES.windup + TIMES.cocked - TIMES.lead;
-    const turn = (lead: number) => MathUtils.smoothstep(since(f), from - lead - UNCOILING / 5, from - lead + UNCOILING * 4 / 5);
+    const ask = uncoiled(f) ? UNCOILED : COILED, from = TIMES.windup + TIMES.cocked - TIMES.early;
+    const turn = (early: number) => MathUtils.smoothstep(since(f), from - early - UNCOILING / 5, from - early + UNCOILING * 4 / 5);
     const twist = lerp(COILED.twist, UNCOILED.twist, turn(0)), hips = lerp(COILED.hips, UNCOILED.hips, turn(HIPS_LEAD));
     // (bowed into the throw as the hand lets go, not before, so the head does not run on past the hand)
     return {

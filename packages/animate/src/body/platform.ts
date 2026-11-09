@@ -1,6 +1,6 @@
 import { Matrix4, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
-import { Pose } from '../kernel/pose';
+import { BonePose } from '../kernel/bone-pose';
 import type { Skeleton } from '../kernel/skeleton';
 
 /** Read locomotion history in the support's current frame. World histories stay intact for gaze, hand targets and other bodies. */
@@ -8,13 +8,13 @@ export class PlatformFrame {
   private object: Object3D | undefined;
   private readonly last = new Matrix4();
   private readonly before = new Matrix4();
-  private readonly prev: Pose;
-  private readonly prev2: Pose;
+  private readonly prev: BonePose;
+  private readonly prev2: BonePose;
   readonly delta = new Matrix4();
 
   constructor(skeleton: Skeleton) {
-    this.prev = new Pose(skeleton);
-    this.prev2 = new Pose(skeleton);
+    this.prev = new BonePose(skeleton);
+    this.prev2 = new BonePose(skeleton);
   }
 
   read(frame: Frame, object: Object3D | undefined): Frame {

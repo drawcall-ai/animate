@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Body } from '../../src/index';
 import { species } from '../../src/species';
 import { selfOf } from '../../src/body';
-import { TrackedRotation } from '../../src/kernel/tracked';
+import { RotationFollower } from '../../src/kernel/follow';
 import { looking } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';
 import { LimbMover, reached } from '../../src/kernel/limb';
@@ -52,7 +52,7 @@ describe('chainTo', () => {
       return u ** 3 * (10 - 15 * u + 6 * u * u);
     };
     const body = leg(), tip = new LimbMover('leg');
-    claim(body, 'go', (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)));
+    claim(body, 'legs', (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)));
     claim(body, 'hand.leg', (f) => {
       const u = Math.max(0, Math.min(1, f.time - 1));
       tip.to(f, { position: new Vector3(0.1, 0.1 + 0.6 * ease(u), 0.5), velocity: new Vector3(0, 18 * u * u * (1 - u) ** 2, 0) }, { accel: 8, speed: 2 });
@@ -64,7 +64,7 @@ describe('chainTo', () => {
 
 describe('TrackedRotation', () => {
   it('holds a joint to its acceleration where its goal jumps, and follows a goal moving smoothly without lag', () => {
-    const joint = new TrackedRotation();
+    const joint = new RotationFollower();
     let goal = (t: number) => turn(1, 0, 0, Math.sin(2 * t));
     const body = leg();
     claim(body, 'hand.leg', (f) => void f.current.setLocal(2, joint.follow(f.prev2.local(2), f.prev.local(2), goal(f.time), { accel: 30, speed: 8 }, f.dt, new Quaternion())));
@@ -110,7 +110,7 @@ describe('looking', () => {
     const point = new Vector3(0.17, 0.95, 0.2);
     const sway = (t: number) => turn(0, 1, 0, 0.04 * Math.sin(2 * Math.PI * 3 * t)).multiply(turn(1, 0, 0, 0.4));
     const body = gazing();
-    claim(body, 'go', (f) => void f.current.setLocal(0, sway(f.time)));
+    claim(body, 'legs', (f) => void f.current.setLocal(0, sway(f.time)));
     claim(body, 'look', looking(selfOf(body), () => point));
     const heads: Quaternion[] = [];
     let missed = 0;

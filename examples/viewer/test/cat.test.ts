@@ -1,5 +1,5 @@
 // A cat: a dog of the SKILL's kind scaled by hand, k = 0.55 — every length × k, masses × k³, powerGait's height and clearance × k and its
-// slowest pace × √k; its stride, stance, footfalls, ranges and carriage angles left as they are, being dimensionless. It must walk, and
+// slowest pace × √k; its stride, stance, footfalls, ranges and trunk motion angles left as they are, being dimensionless. It must walk, and
 // touch, as cleanly as the dog.
 import { describe, expect, test } from 'vitest';
 import { Vector3 } from 'three';
@@ -39,12 +39,12 @@ function quadruped(k: number) {
     gaze: { neck: ['neck', 'head'], eyes: { bone: 'head', at: at(0, -0.02, 0.1) }, range: { down: 0.5, up: 0.4, side: 0.6 } },
     hands: { jaw: ['neck', 'head', 'jaw'] },
     legs: LEGS.map((leg) => ({ joints: JOINTS.map((joint) => ({ bone: `${leg}${joint}` as const, axes: ['yzx', 'x', 'x', 'zx'][joint] })), heel: at(0, -0.03, -0.02), toe: at(0, -0.03, 0.04) })),
-    carriage: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
+    trunk: { pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.6, period: 0.35, cycles: 6 },
       life: [['tail', { every: [2, 5], rate: 1, pick: swing }]] },
   }, {
     gait: {
       ...powerGait({ height: 0.44 * k, slowest: 0.3 * Math.sqrt(k), offsets: [0.52, 0.02, 0, 0.5], stride: 2.15, stance: 0.93, clearance: [0.03, 0.03, 0.03, 0.03].map((lift) => lift * k) }),
-      body: { withers: -0.012 * k, croup: [-0.012 * k, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
+      trunk: { withers: -0.012 * k, croup: [-0.012 * k, 0], spine: 0, spinePhase: 0, roll: 2, yaw: 1, headPitch: 2, headRise: 0, headWithers: 1 },
     },
     masses,
     limits,
