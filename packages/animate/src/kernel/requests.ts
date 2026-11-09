@@ -93,7 +93,9 @@ export class Request {
     } catch (cause) {
       // (a request of the body's own has no story to say it)
       if (this.owned) throw cause;
-      this.error = new Error(`${this.label}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+      // (its own name said once: a check at the call says it too)
+      const said = cause instanceof Error ? cause.message : String(cause);
+      this.error = new Error(`${this.label}: ${said.startsWith(`${this.verb}: `) ? said.slice(this.verb.length + 2) : said}`, { cause });
       this.outcome = 'failed';
       this.end();
       return;

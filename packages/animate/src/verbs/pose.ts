@@ -89,38 +89,30 @@ const LONGEST = { walking: 1.2, standing: 3 };
 const moving = (f: Frame, parts: readonly number[]) => Math.abs(f.prev.position(0).y - f.prev2.position(0).y) > STILL.height * f.dt
   || parts.some((part) => f.prev.rotation(part).angleTo(f.prev2.rotation(part)) > STILL.turn * f.dt);
 
-/** Until `parts` have been measured still, or have had `most` s to be: the last of a verb that ends once they are. */
-export function* comingToRest(parts: readonly number[], most: number) {
+/** Until `parts` have been measured still (no sooner than `soonest` s, as a part sets off slowly), or have had `most` s to be: the last of a verb that ends once they are. */
+export function* comingToRest(parts: readonly number[], most: () => number, soonest: number = STILL.soonest) {
   let elapsed = 0, still = 0;
   yield* action<Frame>({
     until: (f) => {
       elapsed += f.dt;
       still = moving(f, parts) ? 0 : still + f.dt;
-      return still >= STILL.seconds || elapsed >= most;
+      return (still >= STILL.seconds && elapsed >= soonest) || elapsed >= most();
     },
   });
 }
 
-/**
- * Met `hold` s after the parts `posture` poses have been measured still, or have waited their `LONGEST`: what stops short of its asked
- * angle (`lower: 3`) has come when it stops. Given no `hold`, it just keeps the pose on till its story ends it.
- */
-function coming(self: Self, request: Request, posture: Posture, hold: number | undefined) {
-  const { head, arms, fingers, ...trunk } = posture, person = self.species.person !== undefined;
-  const parts = [
-    ...(Object.keys(trunk).length ? [0, ...(person ? [INDEX.chest] : [])] : []),
-    ...(head && self.gazer ? [self.gazer.head] : []),
-    ...SIDES.flatMap((side) => arms?.[side] ? [INDEX[`${side}UpperArm`], INDEX[`${side}LowerArm`]] : []),
-  ];
-  const soonest = fingers ? STILL.fingers : STILL.soonest;
-  let elapsed = 0, still = 0, come = Infinity;
-  return action<Frame>({
-    update: (f) => {
-      if (hold === undefined) return;
-      elapsed += f.dt;
-      still = moving(f, parts) ? 0 : still + f.dt;
-      if (come === Infinity && ((still >= STILL.seconds && elapsed >= soonest) || elapsed >= (self.locomotion.moving ? LONGEST.walking : LONGEST.standing))) come = elapsed;
-      if (elapsed >= come + hold - 1e-9) request.met();
-    },
-  });
+/** Met `hold` s after the parts `posture` poses have come to rest (`comingToRest`), however far they got. Given no `hold`, it keeps the pose on till its story ends it. */
+function* coming(self: Self, request: Request, posture: Posture, hold: number | undefined) {
+  if (hold !== undefined) {
+    const { head, arms, fingers, ...trunk } = posture, person = self.species.person !== undefined;
+    yield* comingToRest([
+      ...(Object.keys(trunk).length ? [0, ...(person ? [INDEX.chest] : [])] : []),
+      ...(head && self.gazer ? [self.gazer.head] : []),
+      ...SIDES.flatMap((side) => arms?.[side] ? [INDEX[`${side}UpperArm`], INDEX[`${side}LowerArm`]] : []),
+    ], () => self.locomotion.moving ? LONGEST.walking : LONGEST.standing, fingers ? STILL.fingers : STILL.soonest);
+    let elapsed = 0;
+    if (hold > 0) yield* action<Frame>({ until: (f) => { const over = elapsed >= hold - 1e-9; elapsed += f.dt; return over; } });
+    request.met();
+  }
+  yield* action<Frame>({});
 }

@@ -151,7 +151,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return (selfOf(this).stepper?.legs ?? []).map((leg) => ({ position: leg.anchor.clone(), yaw: leg.yaw, planted: !leg.swing }));
   }
 
-  /** whether any of its hands holds `thing` */
+  /** whether any of its hands holds `thing`: its hold, not how near its hand is. A hand left behind by what the app moves stays holding, and is said once on the console */
   holds(thing: Object3D): boolean {
     return handsOn(selfOf(this), Thing.of(thing)).length > 0;
   }

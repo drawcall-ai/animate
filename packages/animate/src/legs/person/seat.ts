@@ -35,7 +35,8 @@ export function seating(person: PersonLegged, at: Readonly<Vector3>, yaw: number
   if (levelUnder(person.floor, standingFeet(p, feet.x, feet.z, yaw).flatMap((foot) => footprint(p, foot.position, foot.yaw))) === null) return { where: 'seat', off: Infinity, limit: 0, why: 'no room for its feet: no level floor before the seat' };
   const height = at.y + HIPS_ABOVE * s - floor, leg = Math.hypot(ahead, height - p.ankleHeight), most = REACHES * p.legLength;
   if (leg > most) return { where: 'seat', off: leg - most, limit: 0, why: `out of reach, ${(at.y - floor).toFixed(2)} m over the floor: its legs reach ${(leg - most).toFixed(2)} m short with its feet flat` };
-  const lower = person.pose.position(0).y - person.floor(person.pose.position(0).x, person.pose.position(0).z) - height, deepest = squatOf(p);
+  // (from its standing height, however it stands now: already seated or crouched, a sit's way down is the balance's to carry from where it is)
+  const lower = p.hipHeight - height, deepest = squatOf(p);
   if (lower > deepest) return { where: 'seat', off: lower - deepest, limit: 0, why: `too low, ${(at.y - floor).toFixed(2)} m over the floor: its knees fold ${(lower - deepest).toFixed(2)} m short` };
   return { hips: new Vector3(at.x, at.y + HIPS_ABOVE * s, at.z), stand, lower, seconds: Math.max(QUICKEST, 1.875 * lower / (PACE * s)) };
 }

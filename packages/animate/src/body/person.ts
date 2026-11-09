@@ -144,6 +144,8 @@ const GRIP_TAKEN = REACHED.distance + 0.02;
 /** How far a hand may be from the grip it holds on what is on the body (m): a hand on what the body carries or turns briskly lags it by
  * its own braking, a few centimetres, before it closes up again */
 const HELD = 0.05;
+/** Tuned: how far (m) a hand may lag a thing off the body the app moves before it has been left behind (a door walked with lags 5 cm) */
+const LEFT_BEHIND = 0.15;
 
 /** how far hand `side`'s wrist is from where `hold` puts it as the body is posed now (read afresh: a thing hanging from a hand moves with
  * it after the hands): its goal on the grip (a palm short of the turn its placement asks is put where the turn would have it) */
@@ -164,19 +166,21 @@ function checkTaking(person: Person, f: Frame, taking: Partial<Record<Side, read
 }
 
 /** Check final grip distance after fitting, once per hold (not of what hangs from its hand, which goes with it): unreachable carries draw
- * the wrists together and off their grips, and a hand on what the body wears is held off it by its joints. The verb moving that hand then
- * misses; a hand no verb moves has nothing to miss, and is said in the dev log. */
+ * the wrists together and off their grips, a hand on what the body wears is held off it by its joints, and a thing the app moves (a door
+ * swung) leaves a body standing behind. The verb moving that hand then misses; a hand no verb moves has nothing to miss: on what the body
+ * wears, it is in the dev log, as a jump's lag is; on what the app moves, it is said on the console. */
 function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
   for (const side of SIDES) {
     const hold = person.holding[side];
-    if (!hold || !bodyOf(hold.thing.object) || inHand(person, hold.thing) || noted.has(hold)) continue;
+    if (!hold || inHand(person, hold.thing) || noted.has(hold)) continue;
     const value = gripGap(person, f, side, hold);
-    if (value <= HELD) continue;
+    const worn = bodyOf(hold.thing.object) !== null, limit = worn ? HELD : LEFT_BEHIND;
+    if (value <= limit) continue;
     noted.add(hold);
-    const where = `${hold.thing.object.name} ${side}`, why = `the hand was drawn ${(100 * value).toFixed(1)} cm off its grip: its other hand or its joints hold it off`;
-    const mover = person.owner(`hand.${side}`)?.request;
-    if (mover && !mover.aimer && !mover.owned) mover.fail({ where, off: value, limit: HELD, why });
-    else f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where });
+    const name = hold.thing.object.name, off = (100 * value).toFixed(1), mover = person.owner(`hand.${side}`)?.request;
+    if (mover && !mover.aimer && !mover.owned) mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip: its other hand or its joints hold it off` });
+    else if (worn) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${name} ${side}` });
+    else person.warn(`held ${name} ${side} ${f.time}`, `the ${side} hand holding "${name}" has fallen ${off} cm off its grip, and it keeps its hold: walk the body with what moves it, or release it`);
   }
 }
 

@@ -3,7 +3,7 @@ import { MathUtils } from 'three';
 import { clamp, forwardOf, leftOf, lerp, wrapAngle } from '../../kernel/math';
 import { bears, hullOf, outside } from '../support';
 import { offsetAt, strideAt } from '../../species/gait';
-import { SETTLING, SHUFFLING, STANDING, STEP, TOGETHER, _b, _centre, _f, _v, mod, remaining, strayed, type Leg, type Now, type Steps, type Timing } from './state';
+import { runs, SETTLING, SHUFFLING, STANDING, STEP, TOGETHER, _b, _centre, _f, _v, mod, remaining, strayed, type Leg, type Now, type Steps, type Timing } from './state';
 import { aheadOf, hipOf, nominal, offHome, reach, xcomAhead } from './reach';
 import { landing, liftLeg } from './swing';
 import { RISE } from './way';
@@ -146,7 +146,7 @@ function isUrgent(steps: Steps, now: Now, cues: Cues, leg: Leg, other: Leg): boo
   // stood its stance, the other down or not; before then its reach alone would have it stand a frame)
   const recovering = !!now.contact && now.run === 0 && (steps.jumping.phase === 'down' || steps.jumping.phase === 'up');
   const pivoting = leg.pivot !== undefined || (now.spinning && steps.pivots(leg));
-  const flies = now.run > 0 && leg.planted >= now.Ts;
+  const flies = runs(steps.st, now.v) && leg.planted >= now.Ts;
   if (other.swing && ((r.forecast && !flies) || recovering || pivoting) && !steps.clocked) return false;
   // A lower leading foot takes the weight as the pelvis descends. A foot already home cannot improve its reach by stepping in place.
   const ahead = aheadOf(steps, now, leg) < 0;

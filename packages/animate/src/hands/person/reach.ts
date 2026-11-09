@@ -5,7 +5,7 @@ import type { Carrier } from '../../kernel/carrier';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
-import { lateReach, Progress, REACH, reached, unmet } from '../../kernel/tip';
+import { closeTo, lateReach, Progress, REACH, reached, unmet } from '../../kernel/tip';
 import { during, type Request } from '../../kernel/requests';
 import { PointVelocity } from '../../kernel/track';
 import { CALM, HOLD, reaching } from './arms';
@@ -54,13 +54,14 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
         velocity = sample.read(goal.position, f.time - time, motion.speed);
         time = f.time;
       }
-      return { ...goal, velocity: goal.velocity ?? velocity };
+      // (an object's turn is only preferred: as far as the wrist goes, the hand's point on it from wherever the arm comes. `track` holds it exactly)
+      return { ...goal, preferred: goal.quaternion !== undefined, velocity: goal.velocity ?? velocity };
     } };
   });
   const middle = (f: Frame) => targets.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(targets.length);
-  // (one measure: a reach is met once there and still, while one its story ends on is there however it is moving)
-  const there = (f: Frame, speed?: number) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f), undefined, speed));
-  request.there = () => there(person.frame, Infinity);
+  const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
+  // (the verdict as its story ends it, moving or not: as near as a stopped hand counts as there)
+  request.there = () => targets.every(({ side, target }) => closeTo(person.frame, person.hands[side], target(person.frame)));
   const going = targets.map(({ side, target }) => {
     const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
     const { speed } = pace, { accel } = motion;
@@ -78,18 +79,19 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
     if (targets.some(({ target }) => target(f).velocity!.length() > REACHED.speed)) stirred = f.time;
     return f.time - stirred < STILL;
   };
-  let close = false;
-  const late = lateWatch(person, request, targets.map(({ side, target }) => ({ side, goal: target, where: side })));
-  const eta = (f: Frame) => {
-    // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
-    // whole of a stance that never settles
-    if (stepping(person)) setOff += f.dt;
-    request.eta = Math.max(0, setOff + lasts - f.time);
-    moving(f);
-    close = late(f, Math.max(setOff, stirred) + lasts);
-  };
   yield* parallel<Frame>('all', function* () {
     for (;;) {
+      // (each plan watched afresh: a stop close to a target gone since says nothing of the new place)
+      let close = false;
+      const late = lateWatch(person, request, targets.map(({ side, target }) => ({ side, goal: target, where: side })));
+      const eta = (f: Frame) => {
+        // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
+        // whole of a stance that never settles
+        if (stepping(person)) setOff += f.dt;
+        request.eta = Math.max(0, setOff + lasts - f.time);
+        moving(f);
+        close = late(f, Math.max(setOff, stirred) + lasts);
+      };
       const planned = targets.map(({ target }) => target(person.frame).position.clone());
       const moved = (f: Frame) => targets.some(({ target }, i) => target(f).position.distanceTo(planned[i]) > MOVED * person.scale);
       const inReach = targets.every(({ side }, i) => armReaches(person, planned[i], side, true));
@@ -130,10 +132,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
 export function lateWatch(person: Reacher, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => Carrier; where: string }[]) {
   const progress = hands.map(() => new Progress());
   let late = false, close = false;
-  const within = (f: Frame) => hands.every(({ side, goal, on }) => {
-    const off = unmet(f, person.hands[side], goal(f), on?.());
-    return off.distance <= REACHED.close && off.angle <= REACHED.angle;
-  });
+  const within = (f: Frame) => hands.every(({ side, goal, on }) => closeTo(f, person.hands[side], goal(f), on?.()));
   return (f: Frame, ends: number): boolean => {
     if (close) return within(f);
     if (!person.locomotion.settled) progress.forEach((hand) => hand.reset());

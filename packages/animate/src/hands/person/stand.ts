@@ -48,7 +48,9 @@ export type WalkUp = Extract<ReturnType<typeof footing>, { walk: Walk }>;
 
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
-  const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight);
+  // (seated, its shoulders as far down as the seat lets them)
+  const down = person.seat && !person.seat.rising ? person.seat.seating.lower : 0;
+  const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight - down);
   const reach = ARM_REACH * proportions.armLength;
   if (!free || !side) return shoulder.distanceTo(at) < reach;
   // (the trunk turned toward it, as far as a hand held off its goal turns it (45°: the thoracolumbar spine's, AAOS; recalled), carries the
@@ -91,6 +93,8 @@ export function footing(person: Reacher, to: Stand, step = true) {
     if (quaternion) for (const { side, at } of to.held) grips.push({ side, at: at.clone().applyQuaternion(quaternion).add(start.position) });
     if (!grips.length) grips.push({ at: start.position.clone() });
   }
+  // (seated, what the arms reach from the seat keeps it there; beyond them it stands, and stands to it as anyone does)
+  if (person.seat && !person.seat.rising && grips.every(({ side, at }) => armReaches(person, at, side, true))) return 'there' as const;
   let face = facingFor(person, grips);
   const proportions = person.proportions;
   // (heights over the floor under the grips: the body stands on it there to take them)

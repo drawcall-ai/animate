@@ -23,7 +23,7 @@ export interface Grip {
   radius?: number;
   /** how far the hand slides along a handle, centred on the empty (m): a rail, a rope, a long rung */
   length?: number;
-  /** the digit whose pad goes on the empty instead of the palm's middle (a fingertip on a button): the hand comes as a loose fist, points
+  /** the digit whose pad goes on the empty instead of the palm's middle (a fingertip on a button; on a skeleton without finger bones, where that fingertip would be): the hand comes as a loose fist, points
    * before its last run in along `facing`, holds where the pad meets the face and draws back the way it came */
   point?: Digit;
   /** digits laid over the hand closed on the thing: a digit's values, or the name of an empty on the thing its pad presses on (read every

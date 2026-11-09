@@ -4,9 +4,10 @@ import { selfOf, Body } from '../body/body';
 /**
  * Runs `story` headless to its end as an app would, frame by frame (`dt`, s): the story, then each of `bodies`. Returns what it returned and
  * how long it took (s). A story still running after `limit` s throws, naming what was running: to verify a story, this ends what would
- * otherwise hang. It prints nothing: read `body.log` after it.
+ * otherwise hang. `frame` is called after the bodies update each frame, with the story's time (s): to measure as it goes. It prints nothing:
+ * read `body.log` after it.
  */
-export function play<R>(bodies: Body | readonly Body[], story: ReusableTimeline<unknown, R> | NonReuseableTimeline<unknown, R>, { limit = 60, dt = 1 / 60 }: { limit?: number; dt?: number } = {}): { result: R; time: number } {
+export function play<R>(bodies: Body | readonly Body[], story: ReusableTimeline<unknown, R> | NonReuseableTimeline<unknown, R>, { limit = 60, dt = 1 / 60, frame }: { limit?: number; dt?: number; frame?: (time: number) => void } = {}): { result: R; time: number } {
   const all = bodies instanceof Body ? [bodies] : bodies;
   const ended: R[] = [];
   const step = runTimeline(function* () {
@@ -18,6 +19,7 @@ export function play<R>(bodies: Body | readonly Body[], story: ReusableTimeline<
     time += dt;
     step(undefined, dt);
     for (const body of all) body.update(dt);
+    frame?.(time);
   }
   return { result: ended[0], time };
 }

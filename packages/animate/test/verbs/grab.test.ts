@@ -1,4 +1,4 @@
-import { Object3D, Vector3 } from 'three';
+import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
 import { runTimeline } from '@pmndrs/timeline';
@@ -211,22 +211,19 @@ describe('grab, from where it stands', () => {
   });
 });
 
-it('reach fails an unreachable hand turn and reports its angular error', () => {
-  for (const dev of [false, true]) {
-    const body = person({ dev }), room = roomOf(body);
-    const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
-    const grip = named(handle, 'right');
-    grip.rotation.z = Math.PI;
-    let miss: Missed | null | undefined;
-    play(function* () {
-      miss = yield* attempt(reach(body, { right: grip }));
-    }, [body], 12, () => miss !== undefined);
-    expect(body.holds(handle)).toBe(false);
-    // (the same with development on or off)
-    expect(miss).toBeInstanceOf(Missed);
-    expect(miss?.off).toBeGreaterThan(miss?.limit ?? Infinity);
-    expect(miss?.why).toContain('turned');
-  }
+it('a reach takes an object\'s turn only as far as the wrist goes, and is there; `track` holds it exactly or says so', () => {
+  const body = person(), room = roomOf(body);
+  const handle = box(room, new Vector3(-0.2, 1, 0.35), { mass: null, solid: false });
+  const grip = named(handle, 'right');
+  grip.rotation.z = Math.PI;
+  room.updateMatrixWorld(true);
+  const at = grip.getWorldPosition(new Vector3());
+  let done = false;
+  play(function* () { yield* reach(body, { right: grip }); done = true; }, [body], 12, () => done);
+  expect(done).toBe(true);
+  expect(body.holds(handle)).toBe(false);
+  expect(worldOf(body.bones.rightHand).distanceTo(at)).toBeLessThan(0.05);
+  expect(body.bones.rightHand.getWorldQuaternion(new Quaternion()).angleTo(grip.getWorldQuaternion(new Quaternion()))).toBeGreaterThan(0.1);
 });
 
 // (the trial that asked for it: a bearer who had to be seen picking both medals up, 9 s of the beat, to start it holding them)

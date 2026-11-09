@@ -266,6 +266,9 @@ export function strayRoom(st: Stepping, feet: Feet, leg: Leg, out: number): numb
 }
 
 /** how far the pelvis is let down moving (× scale): walking, side-stepping, running */
+/** whether `speed` (m/s: measured, asked or foreseen) is a run's, not a walk's: its stride has a flight */
+export const runs = (st: Stepping, speed: number) => speed >= st.run[0];
+
 export const dropOf = (st: Stepping, { across, run }: Timing & Reading) => lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run);
 /** how long a swing has left (s) */
 export const remaining = (w: Swing) => (1 - w.u) * w.T;

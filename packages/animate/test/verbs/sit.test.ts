@@ -1,12 +1,13 @@
-import { Object3D, Vector3 } from 'three';
+import { BoxGeometry, Group, Mesh, Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { parallel } from '@pmndrs/timeline';
-import { attempt, Body, dog, humanoid, lookAt, Missed, play, reach, sit, stand, wait, walkTo } from '../../src/index';
+import { attempt, Body, dog, grab, humanoid, lookAt, Missed, play, pose, reach, sit, stand, wait, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { PERSON } from '../../skills/animate/references/person';
 import { person, insides } from '../bodies';
+import { box, roomOf } from '../things';
 
-const seatAt = (height: number) => { const seat = new Object3D(); seat.position.y = height; seat.updateMatrixWorld(true); return seat; };
+const seatAt = (height: number, x = 0) => { const seat = new Object3D(); seat.position.set(x, height, 0); seat.updateMatrixWorld(true); return seat; };
 
 describe('sit', () => {
   it.each([[0, 3], [0, -3], [3, 0.3]])('comes from (%d, %d), sits with its hips over the seat and its feet still, and walks away clean', (x, z) => {
@@ -112,5 +113,50 @@ describe('sit', () => {
   it('standing, `stand` ends at once', () => {
     const body = person();
     expect(play(body, stand(body)).time).toBeLessThan(0.1);
+  });
+
+  it.each([
+    ['sits on another seat', (body: Body) => function* () { yield* sit(body, seatAt(0.45)); return yield* sit(body, seatAt(0.45, 2)); }],
+    ['sits on the same seat again', (body: Body) => function* () { const seat = seatAt(0.45); yield* sit(body, seat); return yield* sit(body, seat); }],
+    ['crouched, sits', (body: Body) => function* () { yield* pose(body, { lower: 0.5 }, { hold: 0 }); return yield* sit(body, seatAt(0.45)); }],
+  ] as const)('%s, and is down on it when it says so', (_, story) => {
+    const body = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } });
+    expect(play(body, story(body), { limit: 40 }).result).toBe(true);
+    expect(body.bones.hips.getWorldPosition(new Vector3()).y).toBeCloseTo(0.54, 2);
+  });
+
+  it('measures its seat from standing height, not from a crouch', () => {
+    const body = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } });
+    const { result } = play(body, function* () { yield* pose(body, { lower: 0.4 }, { hold: 0 }); return yield* attempt(sit(body, seatAt(0.1))); });
+    expect(result?.why).toMatch(/too low/);
+  });
+
+  it('a seat on a big floor under a scene group is only a seat', () => {
+    const body = person({ at: new Vector3(0, 0, -2), life: { seed: 1 } }), room = new Group(), floor = new Mesh(new BoxGeometry(20, 0.1, 20)), seat = seatAt(0.45);
+    room.add(body.object, floor);
+    floor.add(seat);
+    room.updateMatrixWorld(true);
+    expect(play(body, sit(body, seat), { limit: 40 }).result).toBe(true);
+  });
+
+  it('a reach or grab its arms make from the seat leaves it seated, step by default', () => {
+    const body = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } }), thing = box(roomOf(body), new Vector3(-0.3, 0.75, 0.45));
+    play(body, function* () {
+      yield* sit(body, seatAt(0.45));
+      yield* reach(body, { right: new Vector3(-0.3, 0.85, 0.45) });
+      expect(insides(body).seat?.seated).toBe(true);
+      yield* grab(body, thing, { left: 'left' });
+    }, { limit: 30 });
+    expect(insides(body).seat?.seated).toBe(true);
+    expect(body.holds(thing)).toBe(true);
+    expect(body.bones.hips.getWorldPosition(new Vector3()).y).toBeCloseTo(0.54, 2);
+  });
+
+  it('says of a bad speed or facing what is wrong; once the verb\'s name', () => {
+    const body = person();
+    expect(() => sit(body, seatAt(0.45), { speed: -1 })).toThrow('sit: a speed of -1');
+    expect(() => sit(body, seatAt(0.45), { face: NaN })).toThrow('sit: a facing of NaN');
+    const driven = person({ drive: () => ({ position: new Vector3(), velocity: new Vector3(), yaw: 0 }) });
+    expect(() => play(driven, sit(driven, seatAt(0.45)))).toThrow(/^sit \(sit\.test\.ts:\d+\): the body goes/);
   });
 });

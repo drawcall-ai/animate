@@ -2,6 +2,7 @@
 import { MathUtils, Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, softplus, wrapAngle, yawOf } from '../../kernel/math';
 import { hullOf, outside } from '../support';
+import { runs } from './state';
 import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, STEP, TURN, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, beyond, remaining, type FootPose, type Leg, type Now, type Steps, type Swing } from './state';
 import { foldLength, hipOf, home, homeOf, lengthOf, pace, shankLean, staysOn, travelOf, widthAt, xcomAhead } from './reach';
 import { FLAT, foothold, LEVEL } from '../floor';
@@ -65,7 +66,7 @@ function pivoted(steps: Steps, foot: Leg, ahead: number, remaining: number): num
  * and as it is (none for a body that does not catch its balance) */
 function balanced(steps: Steps, now: Now, leg: Leg, remaining: number, yaw: number): ((at: Readonly<Vector3>) => boolean) | undefined {
   const { st, feet, legs, pair } = steps, capture = st.capture, other = legs[pair[leg.i]];
-  if (capture === undefined || now.airborne || now.v >= st.run[0]) return undefined;
+  if (capture === undefined || now.airborne || runs(st, now.v)) return undefined;
   const others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw), centre = xcomAhead(steps, now, remaining, new Vector3());
   const centres = now.r.xcom ? [centre, now.r.xcom] : [centre];
   return (at) => {
@@ -92,7 +93,7 @@ function bend(steps: Steps, forecast: (ahead: number) => { position: Vector3 }, 
  */
 function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3, turned: number, side: Vector3, speed: number) {
   const { st, feet, legs, pair } = steps, s = st.scale, { r, airborne } = now, capture = st.capture;
-  if (capture === undefined || airborne || now.v >= st.run[0]) return;
+  if (capture === undefined || airborne || runs(st, now.v)) return;
   const other = legs[pair[leg.i]];
   const yawed = turned + leg.sign * st.toeOut, others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw);
   const past = (at: Vector3, centre: Vector3, margin = capture) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > margin * s;

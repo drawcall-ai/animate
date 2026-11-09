@@ -198,6 +198,12 @@ function turning(f: { prev2: TipPose; prev: TipPose; dt: number }, tip: number, 
   return near(f.prev.rotation(tip), placed && { current: placed.prev }).angleTo(was) / f.dt;
 }
 
+/** whether a tip stopped this near a goal is there: as near as a verb's verdict on it counts, moving or not (`reached` also asks it be still and nearer) */
+export function closeTo(f: Frame, tip: number, target: Goal, on?: Carrier): boolean {
+  const off = unmet(f, tip, target, on);
+  return off.distance <= REACHED.close && off.angle <= REACHED.angle;
+}
+
 /** The unmet turn, in radians, as the last final pose has it. */
 function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: Carrier): number {
   if (!target.quaternion) return 0;

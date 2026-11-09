@@ -9,7 +9,7 @@ import { follow } from '../../kernel/follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, wrapAngle } from '../../kernel/math';
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
-import {
+import { runs,
   AIMED, LOWEST, PASSING, PIVOTED, PIVOTING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
   _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
   dropOf, mod, remaining, strayPast, Steps, SPUN, turnTo,
@@ -43,8 +43,8 @@ export class Stepper extends Steps {
    * is down to `LEAST_SWING`. A gait's swing keeps its time: nothing but its legs keeping up holds it.
    */
   get top(): number {
-    const { travel, duty, scale, capture } = this.st;
-    return capture === undefined ? Infinity : travel.run * scale * (1 - duty.run) / duty.run / (LEAST_SWING * Math.sqrt(scale));
+    const { travel, duty, scale, gait } = this.st;
+    return gait ? Infinity : travel.run * scale * (1 - duty.run) / duty.run / (LEAST_SWING * Math.sqrt(scale));
   }
 
   /** Carry all gait state with the physical support, before reading this sub-step's root. */
@@ -343,7 +343,7 @@ export class Stepper extends Steps {
     if (Number.isNaN(this.low)) return true;
     // (a person's run, as it will be going by the time its stride is set, is no walk: nothing below holds it. Each stance is cut to its travel,
     // each foot aimed by its forecast, and a flight has no feet to be within: what a player's root runs on, foreseeing nothing)
-    if (st.capture !== undefined && forecast(PACING + SUB_STEP).position.distanceTo(forecast(PACING).position) >= st.run[0] * SUB_STEP) return true;
+    if (!st.gait && runs(st, forecast(PACING + SUB_STEP).position.distanceTo(forecast(PACING).position) / SUB_STEP)) return true;
     const hipAt = (leg: Leg, at: { position: Vector3; yaw: number }) => {
       const build = feet.legs[leg.i];
       return _w.copy(at.position).add(this.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))

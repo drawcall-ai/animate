@@ -254,12 +254,65 @@ describe('play', () => {
     expect(() => play(body, lookAt(body, new Vector3(0, 1.5, 3)), { limit: 0.5 })).toThrow(/^story still running after 0\.5 s: lookAt \(outcome\.test\.ts:\d+, since 0\.0 s, never ends without until\)/);
   });
 
+  it('calls `frame` after the bodies update, each frame, with the time', () => {
+    const body = person();
+    let seen = 0, last = 0;
+    const { time } = play(body, wait(0.5), { frame: (now) => { seen++; last = now; } });
+    expect(last).toBe(time);
+    expect(seen).toBeCloseTo(time * 60, 0);
+  });
+
   it('prints nothing', () => {
     const log = vi.spyOn(console, 'log');
     const body = person();
     play(body, wait(0.1));
     expect(log).not.toHaveBeenCalled();
     log.mockRestore();
+  });
+});
+
+describe('a door swung with the body standing still', () => {
+  const door = (body: Body) => {
+    const room = roomOf(body), hinge = new Object3D(), leaf = new Mesh(new BoxGeometry(0.8, 2, 0.04));
+    hinge.position.set(-0.7, 0, 0.55);
+    room.add(hinge);
+    leaf.name = 'door';
+    leaf.position.set(0.4, 1, 0);
+    hinge.add(leaf);
+    grip(leaf, 'handle', [0.3, 0, -0.03], { handle: [0, 1, 0], radius: 0.015 });
+    room.updateMatrixWorld(true);
+    const swing = (rate = 1.2) => wait(() => {
+      hinge.rotation.y -= rate / 60;
+      hinge.updateMatrixWorld(true);
+      return hinge.rotation.y < -1.8;
+    });
+    return { leaf, swing };
+  };
+
+  it('keeps its hold, and is said once with no dev flag, naming the thing, how far and the fix', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = person({ life: { seed: 1 } }), { leaf, swing } = door(body);
+    play(body, function* () {
+      yield* grab(body, leaf, { right: 'handle' }, { step: false });
+      yield* swing();
+      yield* wait(0.3);
+    });
+    const said = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(body.holds(leaf)).toBe(true);
+    expect(said).toEqual([expect.stringMatching(/hand holding "door" has fallen [\d.]+ cm off its grip.*walk the body with what moves it, or release it/)]);
+  });
+
+  it('walked with, it is not', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = person({ life: { seed: 1 } }), { leaf, swing } = door(body);
+    play(body, function* () {
+      yield* grab(body, leaf, { right: 'handle' }, { step: false });
+      yield* parallel('all', swing(0.4), walkTo(body, new Vector3(-0.6, 0, 0.75), { speed: 0.4, face: 0 }));
+    });
+    const said = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    expect(said).toEqual([]);
   });
 });
 
