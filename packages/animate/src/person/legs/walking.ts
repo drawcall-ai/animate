@@ -62,6 +62,8 @@ export function walking(person: Person, options: { seed?: number } = {}): Behavi
       velocity.set(0, 0, 0);
       // (a walk let go of under way stops as soon as it brakes to rest, not at the goal it was walking to: it walked on there)
       if (seen) stop.copy(root).addScaledVector(plan.root.velocity, plan.root.velocity.length() / (2 * BRAKING * s)).setY(0);
+      // (standing, asked nowhere, it is where it stands: its weight settling over feet that stepped, it is not to walk back to where it last stopped)
+      else if (!moving) stop.copy(root).setY(0);
     }
     seen = !!go;
     // (where it rests: its weight shifted from there as a reach asks, back there after)

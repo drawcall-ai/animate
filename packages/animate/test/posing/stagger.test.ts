@@ -52,4 +52,17 @@ describe('a pose\'s stagger', () => {
     expect(Math.abs(arrived)).toBeLessThan(0.02);
     expect(body.log).toEqual([]);
   });
+
+  it('stays where its feet have brought it, however often it staggers, and does not walk back to where it last stopped', () => {
+    const body = person({ dev: true, life: { seed: 3 } }), stood: number[] = [];
+    play(function* () {
+      for (let time = 0; time < 8; time++) {
+        yield* parallel('race', pose(body, { stagger: 0.3 }), wait(3));
+        yield* wait(4);
+        stood.push(body.object.position.z);
+      }
+    }, [body], 60);
+    for (let k = 1; k < stood.length; k++) expect(stood[k]).toBeGreaterThan(stood[k - 1] - 0.02);
+    expect(body.log).toEqual([]);
+  });
 });
