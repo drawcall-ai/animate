@@ -60,8 +60,9 @@ describe('grab already', () => {
     });
     expect(took).toBe(true);
     expect(first).toBeCloseTo(1 / 60, 6);
-    // (riding the hips as a held thing does, through a body's first half second settling: 2 mm a frame at most on them, no reach, no jump onto the grips)
-    expect(fastest).toBeLessThan(0.15);
+    // (riding the hips as a held thing does, through a body's first half second settling: 8 mm a frame at most on them as the thing is taken
+    // up in its second, no reach, no jump onto the grips)
+    expect(fastest).toBeLessThan(0.5);
     expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.03 * scale);
     expect(palmAt(insides(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
     expect(body.log).toEqual([]);

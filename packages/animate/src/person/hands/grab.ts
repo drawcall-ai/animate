@@ -119,9 +119,7 @@ export function* grabAtOnce(person: Person, request: Request, takes: readonly Ha
       why: `at once, the grip is ${short.toFixed(2)} m beyond the arm's reach from where the body stands (the arm ${person.proportions.armLength.toFixed(2)} m: species.person.armLength): start it nearer` });
   }
   if (request.outcome === 'failed') return;
-  // (a loose thing with a mass taken up where it is, as a finished grab leaves it, with the last hand on it)
-  const loose = takes.map((take) => take.thing).filter((thing, k, all) => all.indexOf(thing) === k && thing.massive && !bodyOf(thing.object));
-  let placed = 0;
+  let placed = false;
   yield* parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked', (f) => {
     const frame = person.movingFrameOf(take.thing.object).at(f.time).current;
     // (posed again until the wrist stays put: on a grip that sets no turn the wrist is a palm back from it along the hand as last posed)
@@ -131,8 +129,10 @@ export function* grabAtOnce(person: Person, request: Request, takes: readonly Ha
       person.startAs((['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const).map((bone) => INDEX[`${take.side}${bone}`]));
     }
     grasp(person, take.side, { ...holdOn(person, take), by: request });
-    if (++placed === takes.length) for (const thing of loose) lift(person, thing);
-  }, () => placed === takes.length)));
+    placed = true;
+  }, () => placed)));
+  // (a loose thing with a mass taken up where it is, as a finished grab leaves it, its weight coming on over a moment as there)
+  for (const thing of new Set(takes.map((take) => take.thing))) if (thing.massive && !bodyOf(thing.object)) lift(person, thing);
 }
 
 /**
