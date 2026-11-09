@@ -3,7 +3,9 @@ import { setImmediate } from 'node:timers/promises';
 import { Vector3 } from 'three';
 import { afterEach, expect, it, vi } from 'vitest';
 import { SCENARIOS } from '../src/scenarios/index';
+import { stableMorning } from '../src/scenarios/stable-morning';
 import { stroll } from '../src/scenarios/stroll';
+import type { BodyOptions } from '@drawcall/animate';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
@@ -55,6 +57,15 @@ it('stroll: the pelvis bobs on a bend within 1 cm of walking straight', () => {
   expect(straight && curve).toBeTruthy();
   if (!straight || !curve) throw new Error('no steady strides');
   expect(curve.pelvisUp, 'curve pelvis vertical (m)').toBeLessThanOrEqual(straight.pelvisUp + 0.01);
+});
+
+// (a life seed at which the pelvis, turning at 3 rad/s as it walks up to the knot, once stopped dead: its head flung on the chest at 203 rad/s²)
+it('stable-morning: the pelvis brakes as it waits for the root, the head kept on the chest', () => {
+  const scenario = stableMorning(), { stage } = scenario;
+  const seeded: Scenario = { ...scenario, stage: (cast) => stage(Object.assign(Object.create(cast), {
+    person: (options: BodyOptions = {}, skeleton: Parameters<typeof cast.person>[1]) => cast.person({ ...options, life: { ...options.life, seed: 31 } }, skeleton),
+  })) };
+  expect(measure(frames(new Simulation(seeded))).neck.peak.value).toBeLessThan(160);
 });
 
 it('judges head roll while looking and outside samples borrowed by hand tasks', () => {

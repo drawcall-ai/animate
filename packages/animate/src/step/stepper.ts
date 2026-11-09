@@ -332,7 +332,7 @@ function face(stepper: Stepper, { f, r, dt, wanted, spin }: Reading): number {
 
 /**
  * The pelvis facing `yaw`, toward `goal`, as a walker's — a foreseen root's — turns it: never past the feet's reach of it (`low` …
- * `high`), braking into the limit; past it in the way the root turns, or turned up to `PAUSE` s ago, never turning back: it waits for it.
+ * `high`), braking into the limit; past it in the way the root turns, or turned up to `PAUSE` s ago, never turning back: it brakes and waits for it.
  */
 function foresee(stepper: Stepper, r: Steering, dt: number, yaw: number, goal: number, low: number, high: number): number {
   const { yaws } = stepper;
@@ -340,7 +340,8 @@ function foresee(stepper: Stepper, r: Steering, dt: number, yaw: number, goal: n
   if (low <= high) yaw = clamp(yaw, low, high);
   const turning = Math.sign(wrapAngle(r.forecast(SENSING).yaw - r.yaw));
   [stepper.sense, stepper.paused] = turning !== 0 ? [turning, 0] : [stepper.sense, stepper.paused + dt];
-  if (stepper.paused < PAUSE && (yaw - yaws[1]) * stepper.sense < 0 && (yaws[1] - goal) * stepper.sense > 0) return yaws[1];
+  // (coming to a stop as it brakes for anything: stopped dead at 3 rad/s, it jerked the head on the chest at 200 rad/s²)
+  if (stepper.paused < PAUSE && (yaw - yaws[1]) * stepper.sense < 0 && (yaws[1] - goal) * stepper.sense > 0) return follow(yaws[0], yaws[1], yaws[1], TURN, dt);
   return yaw;
 }
 
