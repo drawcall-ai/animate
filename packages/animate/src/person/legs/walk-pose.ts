@@ -79,7 +79,7 @@ export interface WalkPoseState {
   offset: Vector3; yaw: number; walk: number; run: number; moving: boolean;
   /** where the feet stood or, swinging, were to land as the sub-step began */
   feet: readonly { readonly anchor: Vector3 }[];
-  /** the weight going off a foot, standing, for it to lift and as it swings: where the centre of mass goes (`Steps.onto`), whether the
+  /** the weight going off a foot, standing, for it to lift and as it swings: where the centre of mass goes (`Stepper.onto`), whether the
    * foot has lifted; none */
   unloading: { onto: Vector3; lifted: boolean } | null;
   pelvis: Vector3; pelvisRotation: Quaternion;

@@ -2,21 +2,21 @@
 import { MathUtils, Vector3 } from 'three';
 import { lerp, minimumJerk, quintic, wrapAngle } from '../kernel/math';
 import { FLAT, highestUnder, lowestUnder } from './floor';
-import type { Steps } from './steps';
-import type { Leg, StepInput, Swing } from './types';
+import type { Stepper } from './stepper';
+import type { Leg, Swing } from './types';
 
 /** how high a swing's arc lifts its foot over its path `u` through it (m): it peaks mid-swing walking; a runner's heel stays up later, the
  * knee bent late into the swing; a gait's as its `arc` has it */
-export function arcOf(steps: Steps, input: StepInput, leg: Leg, w: Swing, u: number): number {
-  const { st } = steps, a = st.gait ? st.arc : lerp(3, st.arc, w.run), peak = a / (a + 3);
-  const { up, down } = stepping(steps, leg, w);
-  const terrain = input.physical ? Math.max(up, down) : down;
+export function arcOf(stepper: Stepper, leg: Leg, w: Swing, u: number): number {
+  const { st } = stepper, a = st.gait ? st.arc : lerp(3, st.arc, w.run), peak = a / (a + 3);
+  const { up, down } = stepping(stepper, leg, w);
+  const terrain = stepper.input.physical ? Math.max(up, down) : down;
   return w.lift * (1 - terrain) * (u ** a * (1 - u) ** 3) / (peak ** a * (1 - peak) ** 3);
 }
 
 /** how far a swing steps up and down (0 … 1 each): its landing `STEP_UP` or more above or below the floor it left */
-export function stepping(steps: Steps, leg: Leg, w: Swing): { up: number; down: number } {
-  const climb = leg.anchor.y - steps.feet.ankleHeight - w.level, step = STEP_UP * steps.st.scale;
+export function stepping(stepper: Stepper, leg: Leg, w: Swing): { up: number; down: number } {
+  const climb = leg.anchor.y - stepper.feet.ankleHeight - w.level, step = STEP_UP * stepper.st.scale;
   return { up: MathUtils.smoothstep(climb, 0, step), down: MathUtils.smoothstep(-climb, 0, step) };
 }
 
@@ -25,10 +25,10 @@ export function stepping(steps: Steps, leg: Leg, w: Swing): { up: number; down: 
  * there; else over the floor as `wayOf` has it — held, braking over `BRAKING` s; its way across and its height each in their time —
  * raised no higher than `ceiling` (m).
  */
-export function swingOver(steps: Steps, input: StepInput, leg: Leg, w: Swing, land: Readonly<Vector3>, ceiling: number, dt: number) {
-  const { across, up, pass, held, raise } = steps.floor === FLAT ? { across: w.rest, up: w.rest, pass: -Infinity, held: false, raise: 0 } : swingPathOf(steps, input, leg, w, land);
+export function swingOver(stepper: Stepper, leg: Leg, w: Swing, land: Readonly<Vector3>, ceiling: number, dt: number) {
+  const { across, up, pass, held, raise } = stepper.floor === FLAT ? { across: w.rest, up: w.rest, pass: -Infinity, held: false, raise: 0 } : swingPathOf(stepper, leg, w, land);
   // A planned walk can wait for its foot to clear a riser; a controller-driven root keeps travelling.
-  for (const axis of ['x', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = held && !input.physical
+  for (const axis of ['x', 'z'] as const) [w.x[axis], w.v[axis], w.a[axis]] = held && !stepper.input.physical
     ? quintic(w.x[axis], w.v[axis], w.a[axis], w.x[axis] + w.v[axis] * BRAKING / 2, 0, BRAKING, dt)
     : quintic(w.x[axis], w.v[axis], w.a[axis], land[axis], 0, across, dt);
   [w.x.y, w.v.y, w.a.y] = quintic(w.x.y, w.v.y, w.a.y, Math.max(land.y, pass), 0, up, dt);
@@ -51,8 +51,8 @@ export function swingOver(steps: Steps, input: StepInput, leg: Leg, w: Swing, la
  * landing that much before it lands — and its ankle stays as high as it `pass`es over a floor higher than its landing's on the way still
  * ahead. `across` and `up`: how long it takes for its way across and its height (s).
  */
-function swingPathOf(steps: Steps, input: StepInput, leg: Leg, w: Swing, land: Readonly<Vector3>): { across: number; up: number; pass: number; held: boolean; raise: number } {
-  const { floor, feet, st } = steps, level = leg.anchor.y - feet.ankleHeight, climb = level - w.level;
+function swingPathOf(stepper: Stepper, leg: Leg, w: Swing, land: Readonly<Vector3>): { across: number; up: number; pass: number; held: boolean; raise: number } {
+  const { floor, feet, st, input } = stepper, level = leg.anchor.y - feet.ankleHeight, climb = level - w.level;
   const sooner = Math.min(STAIR.share * w.T, Math.abs(climb) / STAIR.speed);
   // A landing can still move; the early axis needs a remaining horizon, never a deadline already passed.
   const early = Math.max(SHORTEST, w.rest * (1 - sooner / w.T));
@@ -78,7 +78,7 @@ function swingPathOf(steps: Steps, input: StepInput, leg: Leg, w: Swing, land: R
       if (share > 1e-6) raise = Math.max(raise, (there + clearance - y) / share);
     } else if (there > level + RISE) pass = Math.max(pass, there + over);
     if (k === 0 || climb <= RISE || t > CLEAR || w.u > HOLDING || there <= w.level + RISE) continue;
-    const sole = quintic(w.x.y, w.v.y, w.a.y, land.y, 0, up, t)[0] + arcOf(steps, input, leg, w, u) - w.drop;
+    const sole = quintic(w.x.y, w.v.y, w.a.y, land.y, 0, up, t)[0] + arcOf(stepper, leg, w, u) - w.drop;
     held ||= sole < there + st.clearance * st.scale;
   }
   return { across, up, pass, held, raise };

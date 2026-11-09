@@ -5,7 +5,7 @@ import { clamp, lerp, mod } from '../kernel/math';
 import { offsetAt, strideAt, type Gait } from '../species/gait';
 import { velocityAhead } from './leg-reach';
 import { STROLL } from './leg-goal';
-import { type Steps } from './steps';
+import type { Stepper } from './stepper';
 import type { CadencedStepping, Feet, Leg, Reading, Timing } from './types';
 import { remaining } from './swing-path';
 
@@ -199,11 +199,11 @@ export class GaitClock {
    * or as its turn comes round if the gait has it leave the floor before they do; turning on the spot, till its own turn comes round;
    * walking, toward its own turn too, `AWAIT` of a cycle at most, and till what it waits for to lift lands
    */
-  wait(leg: Leg, cycle: number, moving: number, input: Pick<Timing, 'Tsw' | 'C'> | undefined): number {
+  wait(leg: Leg, cycle: number, moving: number, input: Pick<Timing, 'Tsw' | 'C'>): number {
     const { legs } = this, landed = Math.max(0, ...legs.map((l) => l.swing ? remaining(l.swing) : 0));
     const own = mod(this.lifts[leg.i] - this.at) * cycle;
     let wait = Math.max(Math.min(landed, this.scheduled[leg.i] < STANDING ? own : Infinity), moving > 0.05 ? 0 : own);
-    if (!input || !this.walking) return wait;
+    if (!this.walking) return wait;
     if (!this.owed[leg.i]) wait = Math.max(wait, this.inTurn(leg) ? 0 : Math.min(own, AWAIT * cycle));
     return Math.max(wait, ...legs.map((o) => o.swing && this.exclusive(leg, o, input) ? remaining(o.swing) : 0));
   }
@@ -213,12 +213,12 @@ export class GaitClock {
    * footfalls it has within `TOGETHER` of a cycle (a trot's diagonals) together; a leap's all at once — and, walking, none lifts while one
    * whose turn is a swing or more from it (a girdle's) is in the air.
    */
-  check(f: Frame, steps: Pick<Steps, 'feet' | 'airborne' | 'input' | 'above'>): void {
+  check(f: Frame, stepper: Pick<Stepper, 'feet' | 'airborne' | 'input' | 'above'>): void {
     if (!f.dev) return;
-    const { legs } = this, { feet, airborne, input } = steps, was = this.aloft;
+    const { legs } = this, { feet, airborne, input } = stepper, was = this.aloft;
     const aloft = legs.map((leg) => {
       const { foot, toes } = feet.legs[leg.i], rotation = f.prev.rotation(foot);
-      return steps.above(feet.soles(leg.i, f.prev.position(foot), rotation, toes === undefined ? rotation : f.prev.rotation(toes))) > LIFTED;
+      return stepper.above(feet.soles(leg.i, f.prev.position(foot), rotation, toes === undefined ? rotation : f.prev.rotation(toes))) > LIFTED;
     });
     this.aloft = aloft;
     if (!was || airborne) return;
@@ -226,7 +226,7 @@ export class GaitClock {
     const left = legs.filter((leg) => aloft[leg.i] && !was[leg.i]);
     // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — lifts none while the one half a cycle
     // from it, a girdle's, is in the air; a stance cut short past half the cycle is a run's, and a pair a run lifted not the walk's after)
-    if (input && input.Ts / input.C >= 0.5 && this.walking) for (const a of left) for (const b of legs) {
+    if (input.Ts / input.C >= 0.5 && this.walking) for (const a of left) for (const b of legs) {
       const d = mod(this.footfalls[a.i] - this.footfalls[b.i]), value = Math.min(d, 1 - d);
       if (b === a || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
       f.dev.append(f.time - f.dt, { check: 'walk pair in the air together (cycle apart)', value, limit: 0.5 - TOGETHER, where: `${name(a)} with ${name(b)}` });

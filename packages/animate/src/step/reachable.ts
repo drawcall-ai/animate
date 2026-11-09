@@ -4,7 +4,8 @@ import { SUBSTEP } from '../kernel/frame';
 import { forwardOf, leftOf, quintic, wrapAngle } from '../kernel/math';
 import { AWAIT } from './gait-clock';
 import { landing } from './landing';
-import { AIMED, runs, SETTLE, strayPast, THRESHOLDS, type Steps } from './steps';
+import { AIMED, runs, SETTLE, strayPast, THRESHOLDS } from './thresholds';
+import type { Stepper } from './stepper';
 import { hullOf, outside, xcomOf } from './support';
 import { settle } from './swing';
 import { remaining } from './swing-path';
@@ -17,15 +18,15 @@ type Forecast = (ahead: number) => { position: Vector3; yaw: number };
  * planted foot within its leg's reach — the pelvis let down all it may, the foot rolled as far as it may — until it may next lift (the
  * other foot down), and turned from it no further than the pelvis turns; each swing past re-aiming lands within reach of its hip.
  */
-export function reachable(steps: Steps, forecast: Forecast): boolean {
-  const { st, feet, legs, pair, clock } = steps;
-  if (Number.isNaN(steps.low)) return true;
+export function reachable(stepper: Stepper, forecast: Forecast): boolean {
+  const { st, feet, legs, pair, clock } = stepper;
+  if (Number.isNaN(stepper.low)) return true;
   // (a person's run, as it will be going by the time its stride is set, is no walk: nothing below holds it. Each stance is cut to its travel,
   // each foot aimed by its forecast, and a flight has no feet to be within: what a player's root runs on, foreseeing nothing)
   if (!clock && runs(st, forecast(PACING + SUBSTEP).position.distanceTo(forecast(PACING).position) / SUBSTEP)) return true;
   const hipAt = (leg: Leg, at: { position: Vector3; yaw: number }) => {
     const build = feet.legs[leg.i];
-    return _w.copy(at.position).add(steps.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))
+    return _w.copy(at.position).add(stepper.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))
       .addScaledVector(forwardOf(at.yaw, _o), build.ahead ?? 0).setY(0);
   };
   const inwardOf = (leg: Leg, at: { position: Vector3; yaw: number }) => _b.subVectors(hipAt(leg, at), leg.anchor).dot(leftOf(at.yaw, _l)) * leg.sign;
@@ -38,10 +39,10 @@ export function reachable(steps: Steps, forecast: Forecast): boolean {
     const at = forecast(ahead), build = feet.legs[leg.i], up = build.up ?? 0;
     // (and turned no further from a planted foot than the pelvis may — a gait's pivots in place on the floor as far as the body turns
     // — the hip not in over it nor a stance's travel past it)
-    if (!clock && !leg.swing && Math.abs(wrapAngle(at.yaw - leg.yaw + leg.sign * st.toeOut)) > steps.pelvisTurn) return false;
+    if (!clock && !leg.swing && Math.abs(wrapAngle(at.yaw - leg.yaw + leg.sign * st.toeOut)) > stepper.pelvisTurn) return false;
     if (!leg.swing && strayPast(st, feet, leg, inwardOf(leg, at)) > strays[leg.i] + 1e-6) return false;
     const hip = hipAt(leg, at);
-    if (!leg.swing && _b.subVectors(hip, leg.anchor).dot(forwardOf(leg.yaw, _f)) > steps.most) return false;
+    if (!leg.swing && _b.subVectors(hip, leg.anchor).dot(forwardOf(leg.yaw, _f)) > stepper.most) return false;
     // (a gait's planted foot that pivots will have turned in place with the body by then)
     const pivot = !leg.swing && clock ? feet.turnAbout : undefined;
     const anchor = pivot ? _pivot.copy(leg.anchor) : leg.anchor, yaw = pivot ? at.yaw + leg.sign * st.toeOut : leg.yaw;
@@ -49,8 +50,8 @@ export function reachable(steps: Steps, forecast: Forecast): boolean {
       if (pivot) pivot.call(feet, leg.i, anchor.copy(leg.anchor), leg.yaw, yaw, pitch);
       const ankle = feet.ankle(leg.i, anchor, yaw, pitch, _a);
       const most = st.reach * (build.length ?? feet.length), depth = build.depth;
-      if (depth) return depth(_n.subVectors(ankle, hip).dot(leftOf(at.yaw, _l)) * leg.sign, _n.dot(forwardOf(at.yaw, _f)), pitch) >= steps.low + up - ankle.y;
-      return Math.hypot(ankle.x - hip.x, ankle.z - hip.z) ** 2 + Math.max(0, steps.low + up - ankle.y) ** 2 <= most * most;
+      if (depth) return depth(_n.subVectors(ankle, hip).dot(leftOf(at.yaw, _l)) * leg.sign, _n.dot(forwardOf(at.yaw, _f)), pitch) >= stepper.low + up - ankle.y;
+      return Math.hypot(ankle.x - hip.x, ankle.z - hip.z) ** 2 + Math.max(0, stepper.low + up - ankle.y) ** 2 <= most * most;
     });
   };
   // (balance first: a walker's extrapolated centre of mass kept within the feet as they stand and land — no further past them than it is;
@@ -58,7 +59,7 @@ export function reachable(steps: Steps, forecast: Forecast): boolean {
   // a forecast would pass one sub-step and fail the next, once the landing is re-aimed for it — the root flipping between turning and
   // not each sub-step, the foot landing where either had it)
   if (st.capture !== undefined && legs.some((leg) => leg.swing)) {
-    const landings = aim(steps, forecast);
+    const landings = aim(stepper, forecast);
     const support = hullOf(legs.flatMap((leg, k) => feet.print(leg.i, landings[k], leg.yaw)));
     const xcom = (t: number) => {
       const at = forecast(t).position;
@@ -76,38 +77,37 @@ export function reachable(steps: Steps, forecast: Forecast): boolean {
         const facing = forecast(t).yaw, foot = quintic(w.turn.x, w.turn.v, w.turn.a, w.turn.x + wrapAngle(leg.yaw - w.turn.x), 0, remaining(w), t)[0];
         return Math.abs(wrapAngle(facing - foot + leg.sign * st.toeOut));
       };
-      const allowed = Math.max(steps.pelvisTurn, turned(0)), rest = remaining(w);
+      const allowed = Math.max(stepper.pelvisTurn, turned(0)), rest = remaining(w);
       for (let t = rest / 4; t <= rest + 1e-9; t += rest / 4) if (turned(t) > allowed + 1e-6) return false;
       // (a gait's landing, frozen once aimed, is kept within reach from then on: its body's forecast may turn out slower)
       if (w.u < (clock ? AIMED : SETTLE)) return true;
       if (!within(leg, rest, [0])) return false;
       // Touchdown alone is not enough: the root needs time to brake while this foot supports it. Look into the
       // first stance over the same horizon as a planted walking foot, so it brakes before contact is lost.
-      const stance = Math.min(steps.Ts, AWAIT * steps.cycle);
+      const stance = Math.min(stepper.Ts, AWAIT * stepper.cycle);
       if (clock) for (let n = 1; n <= 6; n++) if (!within(leg, rest + stance * n / 6, [0, st.pitch.ball])) return false;
       return true;
     }
     const other = legs[pair[leg.i]].swing;
-    const wait = clock ? clock.wait(leg, steps.cycle, steps.moving, steps.input) : other ? remaining(other) : 0;
+    const wait = clock ? clock.wait(leg, stepper.cycle, stepper.moving, stepper.input) : other ? remaining(other) : 0;
     for (let t = 0; t <= wait + 1e-9; t += Math.max(1 / 60, wait / 6)) if (!within(leg, t, [0, st.pitch.heel, st.pitch.ball])) return false;
     return true;
   });
 }
 
 /** Where the feet will land for another forecast: those still re-aimed as the last sub-step's would be, for it. */
-function aim(steps: Steps, forecast: Forecast): Vector3[] {
-  const input = steps.input;
-  if (!input) return steps.legs.map((leg) => leg.anchor);
+function aim(stepper: Stepper, forecast: Forecast): Vector3[] {
+  const { input } = stepper;
   const { r } = input, was = r.forecast;
   r.forecast = forecast;
   try {
-    return steps.legs.map((leg) => {
+    return stepper.legs.map((leg) => {
       const w = leg.swing;
       if (!w || input.airborne || w.u >= AIMED || (w.age >= remaining(w) && !w.capture)) return leg.anchor;
       // (kept within reach of the hip as `settle` keeps it)
-      const anchor = leg.anchor, aimed = landing(steps, input, leg, remaining(w))[0];
+      const anchor = leg.anchor, aimed = landing(stepper, leg, remaining(w))[0];
       leg.anchor = aimed;
-      settle(steps, input, leg, w, false);
+      settle(stepper, leg, w, false);
       leg.anchor = anchor;
       return aimed;
     });

@@ -4,7 +4,7 @@ import type { Dev } from '../../kernel/dev';
 import type { Frame } from '../../kernel/frame';
 import { pointSegmentDistance } from '../../kernel/math';
 import type { LegGoal } from '../../step/leg-goal';
-import { runs } from '../../step/steps';
+import { runs } from '../../step/thresholds';
 import { bears, hullOf, outside, xcomOf } from '../../step/support';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { solePoints } from '../anatomy/landmarks';

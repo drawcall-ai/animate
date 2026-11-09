@@ -4,7 +4,7 @@ import { STROLL, type LegGoal } from './leg-goal';
 import type { Miss, Request } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
-import { SETTLED_AFTER } from './steps';
+import { SETTLED_AFTER } from './thresholds';
 import { FLAT } from './floor';
 import type { Self } from '../body/self';
 import { remaining } from './swing-path';
@@ -249,7 +249,7 @@ function stepped(self: Self, from: Readonly<Vector3>, to: Readonly<Vector3>): bo
 }
 
 /** where a walk takes the body: a species' legs carry its root there, a person's balance its centre of mass — as it stands without the
- * moment's shift of its weight over its feet (`Steps.shifted`): edged back for it, the body stepped where it would not */
+ * moment's shift of its weight over its feet (`Stepper.shifted`): edged back for it, the body stepped where it would not */
 const placeOf = (self: Self, f: Frame) => {
   if (self.species.legs) return _com.copy(f.prev.position(0)).setY(0);
   const com = f.prev.com(_com).setY(0);

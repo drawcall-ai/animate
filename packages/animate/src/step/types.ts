@@ -126,7 +126,7 @@ export interface Leg {
   leapt?: boolean;
   sign: 1 | -1; anchor: Vector3; yaw: number; pitch: number; heel: boolean; free: boolean;
   planted: number; lifted: number; strike: number; landed: boolean; swing: Swing | null;
-  /** the way a planted foot headed as it began to pivot (rad; `Steps.pivots`); none: it has not since it landed */
+  /** the way a planted foot headed as it began to pivot (rad; `Stepper.pivots`); none: it has not since it landed */
   pivot?: number;
   /** The planted foot or swing landing, in its own platform's frame. */
   on?: { platform?: Object3D; anchor: Vector3; yaw: number };
@@ -161,15 +161,13 @@ export interface Timing {
   pacing: number; across: number;
   C: number; duty: number; Ts: number; Tsw: number; most: number; landAhead: number;
 }
-/** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), the ground under it, how
- * fast that rises (m/s) and the height its pelvis stands at over it (m, both world heights). */
-export interface StepBody extends Reading, Timing {
+/** A sub-step as its phases share it (`Stepper.input`), the root and stride read, and the body over the feet: its facing (rad), half the feet's
+ * spread (m), how far it walks (0 … 1), the ground under it, how fast that rises (m/s) and the height its pelvis stands at over it (m, both world heights). */
+export interface StepInput extends Reading, Timing {
   yaw: number; width: number; moving: number; ground: number; climb: number; standing: number;
   /** where the centre of mass is over the floor from the root (m) */
   over: Vector3;
 }
-/** A sub-step as its phases share it: the body, and the height a landing must hold the hip at (m) and how far out each foot may land so (m). */
-export interface StepInput extends StepBody { holding: number; reaches: number[] }
 export interface Swing {
   capture: boolean; u: number; age: number; rest: number; T: number;
   /** it lifted once the weight was off it: the body stands on the others through it */

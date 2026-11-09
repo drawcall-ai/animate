@@ -38,7 +38,7 @@ export function seedFor(person: Pick<Person, 'proportions' | 'pose' | 'yaw'>, se
  * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
  * to (`PACE`), nodding, bowed and twisted as asked, the thorax counter-rotating. Let down as asked (`lower`) or as the root crouches it,
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
- * less as it holds still (`steady`). It steps, swings its arms and sways as the `variation` it is; `foreseen`: `Steps.foreseen`.
+ * less as it holds still (`steady`). It steps, swings its arms and sways as the `variation` it is; `foreseen`: `Stepper.foreseen`.
  */
 export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null, asks: Asks, stepper: Stepper) => Steering, options: { foreseen: boolean; seed?: number; variation: Variation }): Behaviour {
   const { foreseen, variation } = options, proportions = person.proportions;
