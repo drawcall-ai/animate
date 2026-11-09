@@ -2,6 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { movingPoint, type Placement, type Goal } from '../../kernel/goal';
+import { leftOf } from '../../kernel/math';
 import { loadFactor } from '../../kernel/load';
 import { type Waypoint } from '../../kernel/timed-path';
 import { noticing } from '../../look/gaze';
@@ -63,6 +64,7 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   if (plan === 'there') yield* way.own ? moving() : parallel<Frame>('race', noticing(person, request, (f) => end(f).position), moving());
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   request.met();
+  noteCrossed(person, thing);
   const kept = guides();
   // (at the end of a story's `until`: on the place it was asked to, not where a guide kept it clear of the body)
   request.there = () => {
@@ -72,15 +74,28 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: C
   yield* holdAlong(person, request, thing, kept, end, undefined, way.own);
 }
 
+/** how far (m, default body) a thing in both hands may end with the left hand to the right of the right before the dev log says so */
+const CROSSED = 0.05;
+
+/** said in a dev log: a thing in both hands ended with the arms crossed, as its target's turn had it */
+function noteCrossed(person: Person, thing: Thing): void {
+  const f = person.frame, { left, right } = person.holding;
+  if (!f.dev || left?.thing !== thing || right?.thing !== thing) return;
+  const crossed = _v.subVectors(f.prev.position(person.hands.right), f.prev.position(person.hands.left)).dot(leftOf(person.locomotion.facing));
+  if (crossed > CROSSED * person.scale) f.dev.append(f.time, { check: 'arms crossed at the end of a carry (m)', value: crossed, limit: CROSSED * person.scale, where: thing.object.name });
+}
+
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
 function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: ReachWalk, guides: Guides, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
   const movingFrame = person.movingFrameOf(thing.object);
   const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
-  // (in both hands, squared to the body; in one, turned with the body as it was taken: a bucket by its handle, squared, would turn the
-  // hand half round)
-  const single = handsOn(person, thing).length === 1;
-  const atBody = carried(person, single ? movingFrame.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing)) : IDENTITY);
+  // (in both hands, squared to the body, whichever way round keeps each hand on its own side: a box taken by grips the other way round —
+  // a hand-over's — would have the arms cross; in one, turned with the body as it was taken: a bucket by its handle, squared, would turn
+  // the hand half round)
+  const single = handsOn(person, thing).length === 1, { left, right } = person.holding;
+  const crossing = !single && left && right && thing.grip(left.grip).at.position.x < thing.grip(right.grip).at.position.x;
+  const atBody = carried(person, single ? movingFrame.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing)) : crossing ? ABOUT : IDENTITY);
   const rise = atBody(person.frame).position.y - from;
   let lifted = rise <= 0, approached = false;
   // (raised onto its place as the body comes there turned as it stands: begun before it has turned, the load would turn to its place's
@@ -215,4 +230,4 @@ function inReach(person: Person, thing: Thing, wideOnly = false): number {
 /** Tuned carry staging (m at default stature): how far ahead of the hips a load is carried, clear of the thighs with room for two hands,
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
-const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), _v = new Vector3();
+const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), ABOUT = new Quaternion(0, 1, 0, 0), _v = new Vector3();

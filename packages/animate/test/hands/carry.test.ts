@@ -258,3 +258,37 @@ it('walks on with what the arm cannot hold at its carrying place, and ends', () 
   }, [body], 30, () => carried !== null);
   expect(carried).toBe(true);
 });
+
+describe('a thing in both hands', () => {
+  // (a hand-over's taker holds it by grips the other way round from the body's own axes)
+  it('walked to a point keeps each hand on its own side, its turn squared to the body', () => {
+    const body = person({ dev: true }), room = roomOf(body);
+    const load = box(room, new Vector3(0, 1, 0.4), { turn: Math.PI, solid: false });
+    let most = -Infinity, carried: boolean | null = null, walking = false;
+    play(function* () {
+      yield* grab(body, load, { left: 'right', right: 'left' });
+      walking = true;
+      carried = yield* carry(body, load, new Vector3(0, 1.05, 3));
+    }, [body], 15, () => {
+      // (how far the left hand is on the body's right of the right hand)
+      if (walking) most = Math.max(most, worldOf(body.bones.rightHand).sub(worldOf(body.bones.leftHand)).x);
+      return carried !== null;
+    });
+    expect(carried).toBe(true);
+    expect(most).toBeLessThan(0);
+    expect(load.getWorldQuaternion(new Quaternion()).angleTo(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI))).toBeLessThan(0.1);
+    expect(body.log).toEqual([]);
+  });
+
+  it('turned by its target so the arms cross, says so in the dev log', () => {
+    const body = person({ dev: true }), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { solid: false });
+    const there = empty(room, 'there', new Vector3(0, 1.05, 0.45));
+    there.rotation.y = Math.PI;
+    room.updateMatrixWorld(true);
+    play(function* () {
+      yield* grab(body, load, BOTH);
+      yield* attempt(carry(body, load, there, { step: false }));
+    }, [body], 10);
+    expect(body.log.map(({ check }) => check)).toContain('arms crossed at the end of a carry (m)');
+  });
+});

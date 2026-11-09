@@ -14,7 +14,9 @@ import type { HandOptions } from '../body/hand-staging';
  * thing), and in to the last target the way that target's approach comes (`userData.approach`: the names of empties beside it, under its
  * parent, outermost first; slowing to its `userData.speed`); an
  * `Object3D` target (or a function returning one) turns it as the target is turned, reached by the start of the last straight; a point keeps
- * it turned as it is. In one
+ * it turned as it is, in the world where the body stands, with the body where it must walk there (a walk turns what it carries: in both
+ * hands squared to the body, each hand on its own side, in one as the hand holds it). A target whose turn has a thing in both hands end with
+ * the arms crossed says so in the dev log. In one
  * hand by a grip that sets no turn it goes as the hand holds it, the arm turning it: if the arm cannot hold it so at the end — in the
  * trunk, past a joint's range, or strained — the hand regrips it in its fingers as it comes there, onto a grasp the arm holds there
  * comfortably (people choose a grasp for the posture it ends in), the thing still ending turned as asked. When it must walk there (and `step`
