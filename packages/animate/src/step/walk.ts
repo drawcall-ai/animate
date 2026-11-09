@@ -264,7 +264,7 @@ const _com = new Vector3(), _way = new Vector3();
 const _v = new Vector3();
 
 /** what a walk of `request`'s stalled of: a newer verb taking the legs is why it got no nearer, whatever it looked like from here */
-export function stallOf(self: Pick<Self, 'owner'>, request: Request, stall: Miss): Miss {
-  const over = self.owner('legs')?.request;
+export function stallOf(self: Pick<Self, 'claims'>, request: Request, stall: Miss): Miss {
+  const over = self.claims.owner('legs')?.request;
   return over && over !== request ? { ...stall, why: `${over.label} took the legs from it` } : stall;
 }

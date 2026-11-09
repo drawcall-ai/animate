@@ -2,11 +2,12 @@ import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import type { Binding } from '../body/binding';
 import type { HandStaging } from '../body/hand-staging';
-import { Self, type Behaviours, type SelfOptions } from '../body/self';
+import { Self, type Behaviours } from '../body/self';
 import type { AnySpecies } from '../species/define';
 import { bear, checkParents } from '../things/hold';
 import { creature } from './balance';
 import { creatureHands, idleHold } from './hands';
+import type { SelfOptions } from '../body/setup';
 
 /** Any species but a person: its legs and trunk motion, and hands that are each the tip of a chain. */
 export class Creature extends Self {

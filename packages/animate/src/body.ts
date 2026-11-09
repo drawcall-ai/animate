@@ -6,11 +6,12 @@ import type { LogEntry } from './kernel/dev';
 import type { AnySpecies, Species } from './species/define';
 import { Person } from './person/person';
 import { Creature } from './creature/creature';
-import type { Self, SelfOptions } from './body/self';
+import type { Self } from './body/self';
 import { Binding } from './body/binding';
 import { handsOn } from './things/hold';
 import { Thing } from './things/thing';
 import type { Channel, Tier } from './kernel/requests';
+import type { SelfOptions } from './body/setup';
 
 /** How a body is made. It keeps clear of the bodies it deals with, never of things: the scene's places say where it stands. */
 export type BodyOptions = SelfOptions;
@@ -161,7 +162,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
   get owners(): Owners {
     const self = selfOf(this);
     const owner = (channel: Channel): Owner | undefined => {
-      const claim = self.owner(channel);
+      const claim = self.claims.owner(channel);
       return claim && { verb: claim.request.verb, site: claim.request.site, tier: claim.tier };
     };
     const hands = Object.keys(self.hands).flatMap((hand) => {

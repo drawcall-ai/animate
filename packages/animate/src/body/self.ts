@@ -2,12 +2,11 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { BonePose, type ReadonlyBonePose } from '../kernel/bone-pose';
 import { SUBSTEP, type Frame, type Behaviour } from '../kernel/frame';
 import { Dev, OFF_FLOOR, type LogEntry } from '../kernel/dev';
-import { Skeleton, type SkinVolume } from '../kernel/skeleton';
+import { Skeleton } from '../kernel/skeleton';
 import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
 import { Asks } from '../kernel/asks';
 import { HeadOffset } from '../look/offset';
-import type { LegGoal } from '../step/leg-goal';
 import { createLocomotion, type Locomotion } from '../step/locomotion';
 import type { Root } from '../step/root';
 import type { Stepper } from '../step/stepper';
@@ -18,7 +17,7 @@ import { Binding } from './binding';
 import { PlatformFrame } from './platform';
 import { placedFor } from '../things/placed';
 import { anchors, movers, type Hold, type Holder, type Interpolated } from '../things/holder';
-import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
+import { Claims, Request, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
 import { heldMass, wornOf, type Bearing } from '../things/hold';
@@ -26,46 +25,9 @@ import type { HandStaging } from './hand-staging';
 import { FLAT, type Floor } from '../step/floor';
 import { FingerState } from '../fingers/state';
 import { TurnedNodes } from './turned-nodes';
-import { checkShear, massed, restPose } from './setup';
+import { checkShear, massed, restPose, type SelfOptions } from './setup';
 import { Springs, type TrunkCapsules } from './springs';
 import type { Person } from '../person/person';
-
-/** How a body is made. */
-export interface SelfOptions {
-  /** where it stands (default the origin): x and z — it stands on its floor there; a y off that floor is ignored, with a warning */
-  at?: Vector3;
-  /**
-   * the floor's height under a world point (x, z) (m; default 0 everywhere): what it stands and steps on — a raised stage, a dais, a
-   * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
-   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (`species.person.heelBack + toeFront`; 0.35 m
-   * of tread for the default body) and steps
-   * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled for
-   * walks; with physics support the controller carries the root over them, given matching world-space heights. A height-only floor does
-   * not supply surface normals.
-   * A person's step length against a tread decides whether it puts one foot or both on each; between the two it mixes them from tread to
-   * tread, which reads as hesitation. Give every body on a set the same function, or they disagree on where its floor is.
-   */
-  floor?: Floor;
-  /** the way it faces (rad about +Y; 0 faces +Z) */
-  face?: number;
-  /** its root driven by the app (a player's, or a scripted path a walk cannot take), read every sub-step with the body's time (s): its legs
-   * keep up, and nothing borrows them; give `at` and `face` as the drive starts, or the first sub-step jumps there */
-  drive?: (time: number) => Root;
-  /** its quiet life: a seed that fixes its variation (unseeded, it varies with where the body is made), what tethers it and what startles it */
-  life?: Temperament;
-  /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces — a walk given a `speed` keeps
-   * that speed, tempo or not; how it steps at a pace is its species' (a person's `stride`) */
-  tempo?: number;
-  /**
-   * what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³, within half and twice its
-   * species' mass: it warns when it is held so, or the mesh is open and the species' mass is taken); default its species'
-   */
-  mass?: number | SkinVolume;
-  /** the container its mesh was rigged in with @drawcall/rig (`skin(model, skeleton)`): the body poses its bones; without it, the body is bare */
-  model?: Object3D;
-  /** checks its motion each sub-step and records what went wrong in `Body.log`; off in a build, it costs nothing */
-  dev?: boolean;
-}
 
 /** Body state and arbitration. Each 1/60 s sub-step applies balance, request staging, part claims, then carried things.
  * Balance reads the previous sub-step’s asks; after all writes, final poses advance current → prev → prev2. */
@@ -114,7 +76,7 @@ export abstract class Self implements Holder {
   lastMover = -Infinity;
   /** what it wears (things on its bones its hands do not hold), as of its update's start */
   worn: Thing[] = [];
-  private readonly claims = new Map<Channel, Claim[]>();
+  readonly claims = new Claims();
   /** what it tracks of the scene, a sub-step's placement each */
   private readonly tracked = new WeakMap<Object3D, MovingFrame>();
   private readonly snaps = new SnapChecks();
@@ -327,35 +289,6 @@ export abstract class Self implements Holder {
     return this.frame.time;
   }
 
-  claim(claim: Claim): void {
-    const claims = this.claims.get(claim.channel) ?? [];
-    claims.push(claim);
-    claims.sort(rank);
-    this.claims.set(claim.channel, claims);
-  }
-
-  unclaim(claim: Claim): void {
-    const claims = this.claims.get(claim.channel);
-    if (!claims) return;
-    const k = claims.indexOf(claim);
-    if (k >= 0) claims.splice(k, 1);
-  }
-
-  /** the claim that has `channel` (its last in order), if any */
-  owner(channel: Channel): Claim | undefined {
-    const claims = this.claims.get(channel);
-    return claims?.[claims.length - 1];
-  }
-
-  /** Losing leg claims still tick for progress tracking; only the owner's result drives the body. */
-  private run(channel: Channel, f: Frame): LegGoal | void {
-    const claims = this.claims.get(channel);
-    if (!claims?.length) return;
-    const owner = claims[claims.length - 1];
-    if (channel === 'legs') for (const claim of claims.slice(0, -1)) claim.step(f);
-    return owner.step(f);
-  }
-
   /** advances by `seconds`: every whole sub-step it covers, with what earlier updates left over */
   update(seconds: number): void {
     if (!(seconds >= 0 && Number.isFinite(seconds))) throw new Error(`cannot update by ${seconds} s`);
@@ -478,17 +411,17 @@ export abstract class Self implements Holder {
         f.dev.append(f.time, { check: `request not renewed for ${STALE} s: its story stopped stepping (s)`, value: f.time - request.renewed, limit: STALE, where: request.label });
       }
     }
-    this.asks.legGoal = this.run('legs', f) ?? null;
+    this.asks.legGoal = this.claims.run('legs', f) ?? null;
     behaviours.gaze?.(f);
-    this.run('look', f);
-    this.run('head', f);
+    this.claims.run('look', f);
+    this.claims.run('head', f);
     this.headOffset.write(f);
-    this.run('trunk', f);
-    for (const arm of this.arms) this.run(arm, f);
-    if (this.fingers) for (const hand of Object.keys(this.hands)) this.run(`fingers.${hand}`, f);
+    this.claims.run('trunk', f);
+    for (const arm of this.arms) this.claims.run(arm, f);
+    if (this.fingers) for (const hand of Object.keys(this.hands)) this.claims.run(`fingers.${hand}`, f);
     behaviours.hands?.(f);
     for (const hand of Object.keys(this.hands)) {
-      if (this.owner(`hand.${hand}`)) this.run(`hand.${hand}`, f);
+      if (this.claims.owner(`hand.${hand}`)) this.claims.run(`hand.${hand}`, f);
       else if (this.holding[hand]) behaviours.idleHold?.(f, hand);
     }
     if (this.fingers) this.meetContacts(this.fingers, f);

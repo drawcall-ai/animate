@@ -125,22 +125,7 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     if (!over) ways(_line.copy(d).applyAxisAngle(Y, -Math.sign(aside) * glance));
     // Follow in world space so the trunk can move beneath a steady gaze.
     const whole = _whole.copy(over ? _o : _q);
-    const used = strainOf(whole);
-    if (used > 1 && eyes.value > 0) {
-      // A close target can consume lateral and downward eye range together. Past their ellipse, the head takes the declination back
-      // until the eyes are within their comfortable share of it (EYES_MOST) again.
-      const best = strainOf(_full.copy(whole).multiply(_p.setFromAxisAngle(X, eyes.value)));
-      if (best < used) {
-        let lo = 0, hi = eyes.value;
-        while (hi - lo > SETTLED) {
-          const middle = (lo + hi) / 2;
-          if (strainOf(_candidate.copy(whole).multiply(_p.setFromAxisAngle(X, middle))) > Math.max(EYES_MOST, best)) lo = middle;
-          else hi = middle;
-        }
-        whole.multiply(_p.setFromAxisAngle(X, hi));
-        eyes.value -= hi;
-      }
-    }
+    declinationToHead(whole, eyes, strainOf);
     // The desired look depends on the last eye position. Differentiate over two steps so alternating errors in that feedback
     // are not chased as target velocity; a steady pursuit keeps its exact speed.
     const pursuit = jumped || !seen ? _spin.set(0, 0, 0) : spinOf(seenBefore ?? seen, whole, f.dt * (seenBefore ? 2 : 1), _spin).clampLength(0, motion.turnSpeed ?? Infinity);
@@ -170,6 +155,25 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     if (!sighted) sightedBefore = null;
     shareOver(pose.skeleton, bones, followed.premultiply(_rel.copy(turned).invert()), (b, share) => pose.setLocal(b, share));
   };
+}
+
+/**
+ * A close target can consume lateral and downward eye range together. Past their ellipse, the head takes the declination back
+ * until the eyes are within their comfortable share of it (EYES_MOST) again.
+ */
+function declinationToHead(whole: Quaternion, eyes: EyePitch, strainOf: (head: Quaternion) => number): void {
+  const used = strainOf(whole);
+  if (used <= 1 || eyes.value <= 0) return;
+  const best = strainOf(_full.copy(whole).multiply(_p.setFromAxisAngle(X, eyes.value)));
+  if (best >= used) return;
+  let lo = 0, hi = eyes.value;
+  while (hi - lo > SETTLED) {
+    const middle = (lo + hi) / 2;
+    if (strainOf(_candidate.copy(whole).multiply(_p.setFromAxisAngle(X, middle))) > Math.max(EYES_MOST, best)) lo = middle;
+    else hi = middle;
+  }
+  whole.multiply(_p.setFromAxisAngle(X, hi));
+  eyes.value -= hi;
 }
 
 /**

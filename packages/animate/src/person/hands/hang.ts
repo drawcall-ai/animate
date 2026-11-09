@@ -80,7 +80,7 @@ export function hanging(person: Person): Behaviour {
     SIDES.forEach((side, s) => {
       const posed = person.armPose[side], { shrug, forward, out: spread, twist, elbow } = posed;
       [posed.shrug, posed.forward, posed.out, posed.twist, posed.elbow] = [0, 0, 0, 0, 0];
-      const busy = person.holding[side] !== null || person.owner(`hand.${side}`) !== undefined, handed = taken[side] && !busy;
+      const busy = person.holding[side] !== null || person.claims.owner(`hand.${side}`) !== undefined, handed = taken[side] && !busy;
       taken[side] = busy;
       if (person.holding[side]) return;
       const sign = s === 0 ? 1 : -1;
@@ -101,7 +101,7 @@ export function hanging(person: Person): Behaviour {
       const clear = (outward(rest) - outward(f.prev.position(INDEX[`${side}UpperArm`]))) / proportions.armLength;
       // (posed: swung forward, lifted out and twisted about its own length over that, as `ArmPosture` has them)
       const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1))) + spread;
-      const other = SIDES[1 - s], working = person.holding[other] !== null || person.owner(`hand.${other}`) !== undefined;
+      const other = SIDES[1 - s], working = person.holding[other] !== null || person.claims.owner(`hand.${other}`) !== undefined;
       const turn = back[side], held = working ? 1 - locomotion.walk : 0;
       turn.rate += (omega ** 2 * (drawnBack(proportions, locomotion.bow, held) - turn.angle) - 2 * SWAY.damping * omega * turn.rate) * f.dt;
       turn.angle += turn.rate * f.dt;

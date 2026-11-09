@@ -23,8 +23,41 @@ export type Staging = (request: Request) => ReusableTimeline<Frame>;
 /** the body a request is filed with, as a request sees it */
 interface Filed {
   readonly time: number;
-  claim(claim: Claim): void;
-  unclaim(claim: Claim): void;
+  readonly claims: Claims;
+}
+
+/** The claims on a body's parts, each channel's in `rank`'s order: its last has it. */
+export class Claims {
+  private readonly on = new Map<Channel, Claim[]>();
+
+  add(claim: Claim): void {
+    const claims = this.on.get(claim.channel) ?? [];
+    claims.push(claim);
+    claims.sort(rank);
+    this.on.set(claim.channel, claims);
+  }
+
+  remove(claim: Claim): void {
+    const claims = this.on.get(claim.channel);
+    if (!claims) return;
+    const k = claims.indexOf(claim);
+    if (k >= 0) claims.splice(k, 1);
+  }
+
+  /** the claim that has `channel`, if any */
+  owner(channel: Channel): Claim | undefined {
+    const claims = this.on.get(channel);
+    return claims?.[claims.length - 1];
+  }
+
+  /** Losing leg claims still tick for progress tracking; only the owner's result drives the body. */
+  run(channel: Channel, f: Frame): LegGoal | void {
+    const claims = this.on.get(channel);
+    if (!claims?.length) return;
+    const owner = claims[claims.length - 1];
+    if (channel === 'legs') for (const claim of claims.slice(0, -1)) claim.step(f);
+    return owner.step(f);
+  }
 }
 
 /** What a verb fell short of: where, how far off against what limit (in the check's units), and a reader's account of why, naming the fix where one is known. */
@@ -109,9 +142,9 @@ export class Request {
   claim(channel: Channel, tier: Tier, step: (f: Frame) => LegGoal | void): () => void {
     const claim: Claim = { request: this, channel, tier, step };
     this.claims.add(claim);
-    this.body.claim(claim);
+    this.body.claims.add(claim);
     return () => {
-      if (this.claims.delete(claim)) this.body.unclaim(claim);
+      if (this.claims.delete(claim)) this.body.claims.remove(claim);
     };
   }
 
@@ -128,7 +161,7 @@ export class Request {
   /** its staging stopped (its cleanups run: its claims let go) */
   end(): void {
     this.runner?.cancel();
-    for (const claim of this.claims) this.body.unclaim(claim);
+    for (const claim of this.claims) this.body.claims.remove(claim);
     this.claims.clear();
   }
 }

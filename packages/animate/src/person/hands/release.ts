@@ -57,7 +57,7 @@ export function* backingOut(person: Person, request: Request, hands: readonly { 
     return during(request, `hand.${side}`, 'borrowed', (f: Frame) => {
       if (away && f.time < drawn) person.fingers?.holdShape(side);
       return step(f);
-    }, (f) => done(f) || person.holding[side] !== null || (!away && person.owner(`arm.${side}`) !== undefined));
+    }, (f) => done(f) || person.holding[side] !== null || (!away && person.claims.owner(`arm.${side}`) !== undefined));
   }));
 }
 

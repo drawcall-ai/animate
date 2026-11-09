@@ -1,9 +1,10 @@
-import { Matrix4, Quaternion, Vector3 } from 'three';
+import { Matrix4, Quaternion, Vector3, Object3D } from 'three';
 import { BonePose } from '../kernel/bone-pose';
 import { Skeleton, type SkinVolume } from '../kernel/skeleton';
-import type { AnySpecies } from '../species/define';
+import type { AnySpecies, Temperament } from '../species/define';
 import type { Floor } from '../step/floor';
 import type { Binding } from './binding';
+import type { Root } from '../step/root';
 
 // What a body is made from: its skeleton massed as asked, the pose it starts in, and the check of the model it poses.
 
@@ -55,4 +56,41 @@ export function checkShear(binding: Binding): void {
     const even = close(Math.abs(scale.x), Math.abs(scale.y)) && close(Math.abs(scale.y), Math.abs(scale.z));
     if (!even || !rest.elements.every((x, k) => close(x, recomposed[k]))) throw new Error(`bone "${name}" is sheared or scaled unevenly at rest: rig the model so each bone rests as a turn, a move and one scale`);
   }
+}
+
+/** How a body is made. */
+export interface SelfOptions {
+  /** where it stands (default the origin): x and z — it stands on its floor there; a y off that floor is ignored, with a warning */
+  at?: Vector3;
+  /**
+   * the floor's height under a world point (x, z) (m; default 0 everywhere): what it stands and steps on — a raised stage, a dais, a
+   * step, a flight of stairs — its feet each landing whole on one level, the body rising and falling over its legs as it goes. Level
+   * areas with edges between them: a person climbs treads deeper than about 1.3 of its foot (`species.person.heelBack + toeFront`; 0.35 m
+   * of tread for the default body) and steps
+   * up a curb; a creature stands on raised floors and steps up single steps. Slopes, and stairs with shallower treads, are not handled for
+   * walks; with physics support the controller carries the root over them, given matching world-space heights. A height-only floor does
+   * not supply surface normals.
+   * A person's step length against a tread decides whether it puts one foot or both on each; between the two it mixes them from tread to
+   * tread, which reads as hesitation. Give every body on a set the same function, or they disagree on where its floor is.
+   */
+  floor?: Floor;
+  /** the way it faces (rad about +Y; 0 faces +Z) */
+  face?: number;
+  /** its root driven by the app (a player's, or a scripted path a walk cannot take), read every sub-step with the body's time (s): its legs
+   * keep up, and nothing borrows them; give `at` and `face` as the drive starts, or the first sub-step jumps there */
+  drive?: (time: number) => Root;
+  /** its quiet life: a seed that fixes its variation (unseeded, it varies with where the body is made), what tethers it and what startles it */
+  life?: Temperament;
+  /** how quick it is, all told (1: as tuned; 1.2: a fifth quicker): its walks', reaches' and carries' paces — a walk given a `speed` keeps
+   * that speed, tempo or not; how it steps at a pace is its species' (a person's `stride`) */
+  tempo?: number;
+  /**
+   * what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³, within half and twice its
+   * species' mass: it warns when it is held so, or the mesh is open and the species' mass is taken); default its species'
+   */
+  mass?: number | SkinVolume;
+  /** the container its mesh was rigged in with @drawcall/rig (`skin(model, skeleton)`): the body poses its bones; without it, the body is bare */
+  model?: Object3D;
+  /** checks its motion each sub-step and records what went wrong in `Body.log`; off in a build, it costs nothing */
+  dev?: boolean;
 }

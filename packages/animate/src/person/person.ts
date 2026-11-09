@@ -12,7 +12,7 @@ import { REACHED, type Goal } from '../kernel/goal';
 import { LimbMover } from '../kernel/limb';
 import { forwardOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
-import { Self, type Behaviours, type SelfOptions } from '../body/self';
+import { Self, type Behaviours } from '../body/self';
 import type { Binding } from '../body/binding';
 import { placedFor } from '../things/placed';
 import type { Hold } from '../things/holder';
@@ -45,6 +45,7 @@ import type { Target } from '../things/target';
 import type { ThrowOptions } from '../verbs/throw';
 import type { Tracked } from '../verbs/track';
 import type { Seat } from './legs/seat';
+import type { SelfOptions } from '../body/setup';
 
 /** an arm posed nowhere off its hang */
 const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0 });
@@ -206,7 +207,7 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
     const worn = bodyOf(hold.thing.object) !== null, limit = worn ? HELD : LEFT_BEHIND;
     if (value <= limit) continue;
     noted.add(hold);
-    const name = hold.thing.object.name, off = (100 * value).toFixed(1), mover = person.owner(`hand.${side}`)?.request;
+    const name = hold.thing.object.name, off = (100 * value).toFixed(1), mover = person.claims.owner(`hand.${side}`)?.request;
     if (mover && !mover.aimer && !mover.owned) mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip: its other hand or its joints hold it off` });
     else if (worn) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${name} ${side}` });
     else person.warn(`held ${name} ${side} ${f.time}`, `the ${side} hand holding "${name}" has fallen ${off} cm off its grip, and it keeps its hold: walk the body with what moves it, or release it`);

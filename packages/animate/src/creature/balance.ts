@@ -12,7 +12,8 @@ import { drivenRoot } from '../step/root';
 import { strideAt } from '../species/gait';
 import { Inertia } from '../kernel/inertia';
 import type { Self } from '../body/self';
-import type { Steering } from '../step/types';
+import type { LegChain } from '../species/leg-chain';
+import type { Feet, Steering } from '../step/types';
 import { ChainLeg } from './chain-leg';
 
 /**
@@ -29,22 +30,7 @@ export function creature(body: Self): Behaviour {
   const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
   const turn = Math.min(...posers.map((poser) => poser.turn)), ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);
-  feet.legs.forEach((leg, i) => {
-    if ((leg.span?.(record.drop.walk) ?? 0) > 0) return;
-    const chain = kind.chains[i], name = (index: number) => skeleton.bones[index].name;
-    const top = name(leg.top), foot = name(leg.foot);
-    const joints = chain.joints.slice(1, -1).map(({ bone }) => name(bone)).join(', ');
-    const at = rest.position(leg.top), under = rest.position(leg.foot), drop = at.y - under.y - record.drop.walk;
-    // (what it measured: how far below its top the leg reaches its foot where it stands, sole flat within the joint ranges, and straight)
-    const reach = leg.depth?.(leg.sign * (under.x - at.x), under.z - at.z, 0) ?? 0;
-    const straight = chain.joints.slice(1).reduce((sum, { bone }, k) => sum + rest.position(bone).distanceTo(rest.position(chain.joints[k].bone)), 0);
-    const reached = Number.isFinite(reach) ? `it reaches ${reach.toFixed(3)} m below ${top} there, ${Math.max(0, drop - reach).toFixed(3)} m short`
-      : `no pose its joint ranges allow sets ${foot}'s sole flat there`;
-    throw new Error(`leg ${top} → ${foot}: joint ${top} stands too high for ${foot} to step with its sole flat within the joint ranges ` +
-      `(standing drop ${drop.toFixed(3)} m, including the gait's lowering; ${reached}; straight, the chain is ${straight.toFixed(3)} m). Lower ${top}'s skeleton position.y while keeping ${foot} on the floor; ` +
-      `reposition the intermediate joints (${joints}) in x/z to preserve segment lengths and leave a bent rest chain with spare reach; ` +
-      `see the skill's reference skeletons.`);
-  });
+  checkLegsFit(kind.chains, feet, rest, record.drop.walk);
   const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone(), yaw: body.yaw }));
   const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw, body.floor));
   const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
@@ -57,18 +43,7 @@ export function creature(body: Self): Behaviour {
   const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
   let going = false, followed: Vector3 | null = null;
   let lowering: Eased = [0, 0], bowing: Eased = [0, 0], twisting: Eased = [0, 0], leaning: Eased = [0, 0];
-  // (development check: the legs across a girdle never pass through each other — their bones kept `CLEARANCE` of a leg apart)
-  const across = feet.legs.flatMap((leg, i) => leg.partner !== undefined && leg.partner > i ? [[i, leg.partner]] : []);
   const bones = kind.chains.map((chain) => chain.joints.map(({ bone }) => bone));
-  const clear = (f: Frame) => {
-    if (!f.dev) return;
-    for (const [a, b] of across) {
-      const gap = Math.min(...bones[a].slice(1).flatMap((bone, k) => bones[b].slice(1).map((other, m) =>
-        nearestBetween(f.prev.position(bones[a][k]), f.prev.position(bone), f.prev.position(bones[b][m]), f.prev.position(other), _p1, _p2))));
-      const limit = CLEARANCE * feet.length;
-      if (gap < limit) f.dev.append(f.time - f.dt, { check: 'leg clearance (m)', value: gap, limit, where: f.prev.skeleton.bones[bones[a][bones[a].length - 1]].name });
-    }
-  };
   const inertia = body.species.inertia && new Inertia(body.species.inertia);
   const legs = {
     legs: phases, height: start.y, held: start.y, stride: { cycle: 1, stance: 0.5 }, turn: { rate: 0, ahead: 0 }, lean: inertia,
@@ -81,7 +56,7 @@ export function creature(body: Self): Behaviour {
     // (a goal nowhere — not a finite point — it does not go for: it stands)
     const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
     const go = finite ? asked0 : null;
-    if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); clear(f); stepper.check(f); }
+    if (f.time > f.dt) { posers.forEach((poser) => poser.check(f)); checkClearance(f, feet, bones); stepper.check(f); }
     const stance = stanceYaw(stepper.legs, planner.root.yaw);
     // (a goal off its way it turns to first, as a person does: facing it till it is on its way; nearer than its feet stand, it is there)
     // (it sets off for a goal further than `STOP.start`, or one on the move, and stops within `STOP.distance` of a still one, slow:
@@ -130,22 +105,7 @@ export function creature(body: Self): Behaviour {
     bowing = ease(bowing, clamp(bow, -POSED.bow, Math.max(tasked, STOOPING.bow)), f.dt);
     twisting = ease(twisting, clamp(posed.twist, -POSED.twist, POSED.twist), f.dt);
     leaning = ease(leaning, clamp(posed.lean + (own?.roll ?? 0), -POSED.lean, POSED.lean), f.dt);
-    if (Math.max(Math.abs(lowering[0]), Math.abs(bowing[0]), Math.abs(twisting[0]), Math.abs(leaning[0])) > 1e-6) {
-      const aheads = feet.legs.map((leg) => leg.ahead ?? 0), end = bowing[0] >= 0 ? Math.min(...aheads) : Math.max(...aheads);
-      const girdle = feet.legs.filter((_, i) => Math.abs(aheads[i] - end) <= 1e-6), hip = _p.set(0, 0, 0), middle = _m.set(0, 0, 0);
-      for (const leg of girdle) hip.add(f.current.position(leg.top));
-      hip.divideScalar(girdle.length);
-      for (const leg of feet.legs) middle.add(f.current.position(leg.top));
-      middle.divideScalar(feet.legs.length);
-      const about = (pivot: Vector3, turn: Quaternion) => {
-        f.current.setRoot(_at.copy(f.current.position(0)).sub(pivot).applyQuaternion(turn).add(pivot));
-        f.current.setLocal(0, _q.copy(turn).multiply(f.current.local(0)));
-      };
-      const turn = _turn.setFromAxisAngle(UP, twisting[0]).multiply(_bow.setFromAxisAngle(forwardOf(stepper.yaw, _left), leaning[0]));
-      about(middle, turn);
-      about(hip.sub(middle).applyQuaternion(turn).add(middle), _bow.setFromAxisAngle(leftOf(stepper.yaw, _left), bowing[0]));
-      f.current.setRoot(_at.copy(f.current.position(0)).setY(f.current.position(0).y - lowering[0]));
-    }
+    letDown(f, feet, stepper.yaw, lowering[0], bowing[0], twisting[0], leaning[0]);
     const speed = Math.hypot(r.velocity.x, r.velocity.z), walking = Math.min(1, speed / (gait.referenceSpeed ?? gait.slowest));
     stepper.legs.forEach((leg, i) => {
       // (each leg through its own stride by the cycle, as the gait's cycles are read: a stance cut short swings on from where it is)
@@ -163,6 +123,59 @@ export function creature(body: Self): Behaviour {
     [locomotion.facing, locomotion.moving, locomotion.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
     locomotion.there = !!go && !go.velocity?.lengthSq() && !going;
   };
+}
+
+/** A rigged leg's top must stand low enough for its foot to step with its sole flat: said at once, what it measured and how to fix it. */
+function checkLegsFit(chains: readonly LegChain[], feet: Feet, rest: BonePose, lowered: number): void {
+  feet.legs.forEach((leg, i) => {
+    if ((leg.span?.(lowered) ?? 0) > 0) return;
+    const chain = chains[i], name = (index: number) => rest.skeleton.bones[index].name;
+    const top = name(leg.top), foot = name(leg.foot);
+    const joints = chain.joints.slice(1, -1).map(({ bone }) => name(bone)).join(', ');
+    const at = rest.position(leg.top), under = rest.position(leg.foot), drop = at.y - under.y - lowered;
+    // (what it measured: how far below its top the leg reaches its foot where it stands, sole flat within the joint ranges, and straight)
+    const reach = leg.depth?.(leg.sign * (under.x - at.x), under.z - at.z, 0) ?? 0;
+    const straight = chain.joints.slice(1).reduce((sum, { bone }, k) => sum + rest.position(bone).distanceTo(rest.position(chain.joints[k].bone)), 0);
+    const reached = Number.isFinite(reach) ? `it reaches ${reach.toFixed(3)} m below ${top} there, ${Math.max(0, drop - reach).toFixed(3)} m short`
+      : `no pose its joint ranges allow sets ${foot}'s sole flat there`;
+    throw new Error(`leg ${top} → ${foot}: joint ${top} stands too high for ${foot} to step with its sole flat within the joint ranges ` +
+      `(standing drop ${drop.toFixed(3)} m, including the gait's lowering; ${reached}; straight, the chain is ${straight.toFixed(3)} m). Lower ${top}'s skeleton position.y while keeping ${foot} on the floor; ` +
+      `reposition the intermediate joints (${joints}) in x/z to preserve segment lengths and leave a bent rest chain with spare reach; ` +
+      `see the skill's reference skeletons.`);
+  });
+}
+
+/** Development check: the legs across a girdle never pass through each other — their bones kept `CLEARANCE` of a leg apart. */
+function checkClearance(f: Frame, feet: Feet, bones: readonly (readonly number[])[]): void {
+  const { dev } = f;
+  if (!dev) return;
+  feet.legs.forEach((leg, a) => {
+    const b = leg.partner;
+    if (b === undefined || b <= a) return;
+    const gap = Math.min(...bones[a].slice(1).flatMap((bone, k) => bones[b].slice(1).map((other, m) =>
+      nearestBetween(f.prev.position(bones[a][k]), f.prev.position(bone), f.prev.position(bones[b][m]), f.prev.position(other), _p1, _p2))));
+    const limit = CLEARANCE * feet.length;
+    if (gap < limit) dev.append(f.time - f.dt, { check: 'leg clearance (m)', value: gap, limit, where: f.prev.skeleton.bones[bones[a][bones[a].length - 1]].name });
+  });
+}
+
+/** The body let down `lower` on its legs, its front or croup tipped `bow` about the far girdle, turned `twist` and rolled `lean` about its legs' tops' middle. */
+function letDown(f: Frame, feet: Feet, yaw: number, lower: number, bow: number, twist: number, lean: number): void {
+  if (Math.max(Math.abs(lower), Math.abs(bow), Math.abs(twist), Math.abs(lean)) <= 1e-6) return;
+  const aheads = feet.legs.map((leg) => leg.ahead ?? 0), end = bow >= 0 ? Math.min(...aheads) : Math.max(...aheads);
+  const girdle = feet.legs.filter((_, i) => Math.abs(aheads[i] - end) <= 1e-6), hip = _p.set(0, 0, 0), middle = _m.set(0, 0, 0);
+  for (const leg of girdle) hip.add(f.current.position(leg.top));
+  hip.divideScalar(girdle.length);
+  for (const leg of feet.legs) middle.add(f.current.position(leg.top));
+  middle.divideScalar(feet.legs.length);
+  const about = (pivot: Vector3, turn: Quaternion) => {
+    f.current.setRoot(_at.copy(f.current.position(0)).sub(pivot).applyQuaternion(turn).add(pivot));
+    f.current.setLocal(0, _q.copy(turn).multiply(f.current.local(0)));
+  };
+  const turn = _turn.setFromAxisAngle(UP, twist).multiply(_bow.setFromAxisAngle(forwardOf(yaw, _left), lean));
+  about(middle, turn);
+  about(hip.sub(middle).applyQuaternion(turn).add(middle), _bow.setFromAxisAngle(leftOf(yaw, _left), bow));
+  f.current.setRoot(_at.copy(f.current.position(0)).setY(f.current.position(0).y - lower));
 }
 
 /**

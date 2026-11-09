@@ -182,16 +182,7 @@ export class Solver {
         fixed.fill(0);
         for (let pass = 0; pass <= n; pass++) {
           solveFree(H, g, fixed, d, n, q, lb, ub);
-          let out = false;
-          for (let j = 0; j < n; j++) {
-            if (fixed[j]) continue;
-            const x = q[j] + d[j];
-            if (x < lb[j] - 1e-12 || x > ub[j] + 1e-12) {
-              fixed[j] = x < lb[j] ? 1 : 2;
-              out = true;
-            }
-          }
-          if (!out) break;
+          if (!holdPastBounds(fixed, d, n, q, lb, ub)) break;
         }
         for (let j = 0; j < n; j++) trial[j] = Math.min(ub[j], Math.max(lb[j], q[j] + d[j]));
         this.bound(trial);
@@ -353,6 +344,20 @@ const _H = new Float64Array(MOST * MOST), _J = new Float64Array(6 * MOST), _weig
 const [_g, _d, _trial, _tried, _diagonal, _row] = Array.from({ length: 6 }, () => new Float64Array(MOST));
 
 /** H d = −g over the free coordinates, the fixed ones stepped onto the bound they passed (1: the lower, 2: the upper) */
+/** each free coordinate the step `d` would carry past a bound held there (1: its low, 2: its high): whether any was */
+function holdPastBounds(fixed: Uint8Array, d: Float64Array, n: number, q: Float64Array, lb: Float64Array, ub: Float64Array): boolean {
+  let out = false;
+  for (let j = 0; j < n; j++) {
+    if (fixed[j]) continue;
+    const x = q[j] + d[j];
+    if (x < lb[j] - 1e-12 || x > ub[j] + 1e-12) {
+      fixed[j] = x < lb[j] ? 1 : 2;
+      out = true;
+    }
+  }
+  return out;
+}
+
 function solveFree(H: Float64Array, g: Float64Array, fixed: Uint8Array, d: Float64Array, n: number, q: Float64Array, lb: Float64Array, ub: Float64Array) {
   const free = _free;
   let m = 0;
