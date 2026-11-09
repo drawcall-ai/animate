@@ -37,7 +37,7 @@ function reachFrom(at: Vector3, sides: readonly Side[] = ['right']): { speed: Re
 describe('grab, walking up', () => {
   const pickup = (variation: number) => `looks at a two-hand pickup at least a second before its last travelling touchdown (variation ${variation})`;
   // (XCoM past the feet for a sub-step or two, its bound 0.1 m: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: to 0.126 m at these life seeds)
-  const test = cases([[pickup(0), /XCoM/, [1]], [pickup(1), /XCoM/, [1, 3]]]);
+  const test = cases([[pickup(1), /XCoM/, [1, 3]]]);
   for (const variation of [0, 1, 2]) test(pickup(variation), () => {
     const body = person({ dev: true, at: new Vector3(1.5 + variation * 0.02, 0, 0), face: -0.1 }), h = readings(body), room = roomOf(body);
     const load = box(room, new Vector3(1.1, 0.88, 2), { size: new Vector3(0.44, 0.25, 0.3), mass: 8, turn: Math.PI / 2 });
