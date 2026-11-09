@@ -283,6 +283,17 @@ describe('set down low', () => {
     }, [body], 20);
     expect(carried).toBe(true);
   });
+
+  // (its hips as low as what it holds has them come level with its top: it stands clear of them, not as near as a shallow bow would have it)
+  it.each<[number, number]>([[15, 3], [12, 0.7], [20, 3], [20, 0.7]])('a box as high as the crouched hips, %f kg to 0.15 m up, %f m ahead', (mass, z) => {
+    const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.42), { mass, size: new Vector3(0.3, 0.2, 0.25) });
+    let carried: boolean | null = null;
+    play(function* () {
+      yield* grab(body, load, BOTH);
+      carried = yield* carry(body, load, new Vector3(0, 0.15, z));
+    }, [body], 20);
+    expect(carried).toBe(true);
+  });
 });
 
 describe('a thing in both hands', () => {
