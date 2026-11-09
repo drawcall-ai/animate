@@ -78,6 +78,8 @@ A gesture is a loop of short poses, each held long enough to arrive, since a pos
 
 To sit a person, `yield* sit(body, seat)`: `seat` is the point on the surface under its hips, best an empty on the chair whose +Z is the way the sitter faces. It walks there, round the chair if behind it, sits and ends seated, then stays so, with `lookAt`, `reach`, `grab` and `pose` working as usual, until `yield* stand(body)`, a `walkTo` or a `reach` needing its legs stands it. It throws `Missed` for a seat too high or too low for its legs, or no level floor for its feet. Nothing collides, so its way round goes through a wall behind the seat: bring a walled seat from the front. A creature does not sit.
 
+To brace a person, a fighter's stance or a lunge, stand its feet apart fore and aft with a pose's `stagger` (metres, left foot ahead; negative, right) and race it with what goes on over it: `parallel('race', pose(body, { stagger: 0.2 }), reach(…))`. A walk keeps its own stride, and the feet square up once the pose ends.
+
 No body kneels, lies or climbs. A pose's `lower` is a deep crouch on both feet and reads as one. For those, use a puppet: stop updating the body and write its `bones` from its last pose yourself, placing each hand with `@drawcall/animate/puppet` every frame, with a grip empty wherever a hand holds. To hand back, create a fresh body where it stands and blend from your pose onto it.
 
 ## Knowing when something has finished

@@ -20,6 +20,9 @@ export interface Posture {
   /** the head turned on its neck over where its eyes look (rad): `pitch` + chin down (a nod), `yaw` + to its left, `roll` + its left
    * side up (tipped toward its right shoulder) */
   head?: { pitch?: number; yaw?: number; roll?: number };
+  /** a person's feet stood apart fore and aft (m: its left this far ahead of its right along its facing, − its right ahead; at most 0.35 of the
+   * leg's length, about 30 cm), its weight between them, for as long as nothing walks it: balance and the hands go on over it */
+  stagger?: number;
   /** a person's arms posed over their hang and swing, each its own (`ArmPosture`) */
   arms?: { left?: ArmPosture; right?: ArmPosture };
   /** a person's fingers, each hand's shape: not added onto anything but taken as asked, by a hand holding nothing and no older than a
@@ -44,7 +47,7 @@ export interface ArmPosture {
 }
 
 /** A `Posture`'s trunk, each field given. */
-type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
+type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers' | 'stagger'>>;
 const UNPOSED: TrunkPosture = { bow: 0, twist: 0, lean: 0, lower: 0 };
 
 /** What a body is asked to do with its stance this sub-step (see `Asks`), each field as it combines with the others asked. */
