@@ -4,7 +4,7 @@ import { SCENARIOS } from '../src/scenarios/index';
 import { reaching } from '../src/scenarios/tracking';
 import { knownFailure, seeded } from '../scripts/run';
 import { SOLDIER, OUTLIER } from '../src/skeletons/index';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 
 const test = cases([
   ['stable-morning on the soldier: final-pose dev checks', [1]], // XCoM 0.107 m for a sub-step as the carry's trailing foot lifts.

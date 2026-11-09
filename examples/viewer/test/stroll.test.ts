@@ -6,7 +6,7 @@ import { checks, failed, measure } from './metrics';
 import { frames, type Frame } from './frame';
 import { Simulation } from '../src/simulation';
 import { knownFailure, run } from '../scripts/run';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 
 // (marginal at this life seed: arm swing peak acceleration 2.14 × the sinusoid's, max 2)
 const test = cases([['strolls straight on: knees near straight at mid-stance, a 3.5–5 cm bob lowest just after contact', [3]]]);

@@ -9,7 +9,7 @@ import { Simulation } from '../src/simulation';
 import { checks, failed, measure, type MetricsOptions } from './metrics';
 import { frames } from './frame';
 import { GaitKinematics } from './gait';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 
 // Whole-scene simulations can occupy a worker for over a minute; let Vitest receive its RPC replies between cases.
 afterEach(() => setImmediate());

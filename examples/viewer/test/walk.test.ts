@@ -6,7 +6,7 @@ import { Simulation } from '../src/simulation';
 import { OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from '../src/skeletons/index';
 import { failed, measure, walkingForm } from './metrics';
 import { frames } from './frame';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 
 // A walk's form as people walk (`walkingForm`: the stance's share, the trunk's lean, the elbows, the pelvis's rise and fall) on the
 // default body and on skeletons unlike it, on both legs: the stroll's (a go-there point, balance) and a player's (a driven root).

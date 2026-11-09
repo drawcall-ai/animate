@@ -6,7 +6,7 @@ import { expect, it } from 'vitest';
 import * as animate from '@drawcall/animate';
 import * as three from 'three';
 import * as timeline from '@pmndrs/timeline';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 import { PERSON } from '../../../packages/animate/skills/animate/references/person';
 
 // Compile and run the shipped skill's standalone examples.

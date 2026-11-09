@@ -10,7 +10,7 @@ import { box } from '../src/things';
 import { Actor } from './actor';
 import { segmentDistance } from './clearance';
 import { headShift, SHIFT_BOUNDS, spin } from './gaze';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 import { poseOf } from '@drawcall/animate';
 
 // Recalled conservative human radii, as shares of stature: the head round its centre, the trunk (hips–chest), the thorax (chest–neck,

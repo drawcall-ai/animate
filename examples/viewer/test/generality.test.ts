@@ -3,7 +3,7 @@ import { action, parallel, runTimeline, type NonReuseableTimeline } from '@pmndr
 import { expect, it } from 'vitest';
 import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, wait, walkTo, type Species, attempt, Missed, grip, poseOf } from '@drawcall/animate';
 import { selfOf } from '../../../packages/animate/src/body';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
 import { DOG, HORSE, PERSON, scaled } from '../src/skeletons/index';
 import { ball, box, cylinder } from '../src/things';
 
