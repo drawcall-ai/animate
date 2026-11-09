@@ -153,11 +153,12 @@ export class FingerState {
   }
 
   /** a hand verb is bringing `side` to `placement`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`),
-   * from the shape it sets off in if a pose asked it of it — a fist kept back from a button — else from relaxed */
+   * from the shape it sets off in if a pose asked it of it — a fist kept back from a button; one the pose asks as they begin together —
+   * else from relaxed */
   toward(side: 'left' | 'right', placement: HandPlacement | null): void {
-    const hand = this.hands[side];
+    const hand = this.hands[side], posed = hand.posing ?? (hand.posed ? hand.shape : null);
     if (placement) this.take(hand, placement);
-    [hand.coming, hand.from] = [placement, placement && hand.posed ? structuredClone(hand.shape) : null];
+    [hand.coming, hand.from] = [placement, placement && posed ? structuredClone(posed) : null];
   }
 
   /** `side`'s fingers eased `seconds` on toward `to`, for a hand its app poses: a placement as they come to it and take it (`onto`), its

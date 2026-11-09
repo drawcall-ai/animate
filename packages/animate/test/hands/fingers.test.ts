@@ -253,8 +253,9 @@ describe('fingers', () => {
   });
 
   it('rest as a pose asks under a story, a grab pre-shaping over it and giving the hand back as it lets go; a pose begun after the grab keeps it', () => {
-    /** the index's bend as the wrist comes within 22 cm of the rod (`first`: which of the grab and the pose begins first), and 1 s after letting go */
-    const run = (first: 'pose' | 'grab') => {
+    /** the index's bend 0.1 s into the grab and as the wrist comes within 22 cm of the rod (`first`: which of the grab and the pose begins
+     * first, or both `together`, the pose listed first), and 1 s after letting go */
+    const run = (first: 'pose' | 'grab' | 'together') => {
       const body = new Body(humanoid(FINGERED)), room = roomOf(body);
       const rod = new Mesh(new CylinderGeometry(0.025, 0.025, 0.3, 16));
       rod.name = 'rod';
@@ -265,7 +266,7 @@ describe('fingers', () => {
       room.add(rod);
       const resting = () => pose(body, { fingers: { right: { index: { curl: 0.9, hook: 0.5 } } } });
       const take = function* () { if (!(yield* grab(body, rod, { right: 'grip' }, { step: false }))) throw new Error('not taken'); };
-      let near = NaN, after = 0, going = false;
+      let near = NaN, early = NaN, after = 0, going = false, began = NaN;
       play(function* () {
         const taking = function* () {
           going = true;
@@ -275,16 +276,24 @@ describe('fingers', () => {
           yield* wait(1);
           after = bent(body, 'rightIndexIntermediate');
         };
-        yield* first === 'pose' ? parallel('race', resting(), function* () { yield* wait(0.6); yield* taking(); }) : parallel('race', function* () { yield* taking(); }, resting());
-      }, [body], 5, () => {
+        yield* first === 'pose' ? parallel('race', resting(), function* () { yield* wait(0.6); yield* taking(); })
+          : first === 'together' ? parallel('race', resting(), taking) : parallel('race', function* () { yield* taking(); }, resting());
+      }, [body], 5, (time) => {
+        if (going && Number.isNaN(began)) began = time;
+        if (going && Number.isNaN(early) && time - began >= 0.1) early = bent(body, 'rightIndexIntermediate');
         if (going && Number.isNaN(near) && body.bones.rightHand.getWorldPosition(new Vector3()).distanceTo(rod.position) < 0.22) near = bent(body, 'rightIndexIntermediate');
       });
-      return { near, after };
+      return { near, early, after };
     };
-    const under = run('pose'), over = run('grab');
+    const under = run('pose'), over = run('grab'), together = run('together');
     expect(under.near).toBeLessThan(1);
     expect(under.after).toBeGreaterThan(1.5);
     expect(over.near).toBeGreaterThan(1.5);
+    // (begun with the grab, the pose listed first sets the shape the hand sets out in, as one begun before it does: not relaxed, 0.6)
+    expect(under.early).toBeGreaterThan(1.2);
+    expect(together.early).toBeGreaterThan(1.2);
+    expect(together.near).toBeLessThan(1);
+    expect(together.after).toBeGreaterThan(1.5);
   });
 
   /** how far a finger lifts past straight, as `pose` takes it */

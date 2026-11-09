@@ -52,6 +52,8 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   if (until !== undefined && hold !== undefined) throw new Error('pose: give `until` or `hold`, not both');
   if (hold !== undefined && !(hold >= 0 && hold < Infinity)) throw new Error(`pose: a hold of ${hold} s`);
   return verb(body, 'pose', (request) => function* () {
+    // (the fingers asked at once, as it begins: a grab begun with it sets the hand out from its shape)
+    for (const { side, shape, state } of shapes) state.ask(side, shape);
     const posedArms = armPose ? SIDES.flatMap((side) => {
       const arm = arms?.[side];
       return arm ? [{ side, into: armPose[side], arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];
