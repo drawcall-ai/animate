@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { movingPoint, type Placement, type Goal } from '../../kernel/goal';
@@ -222,21 +222,21 @@ function carried(person: Person, turn: Readonly<Quaternion>): (f: Frame) => Plac
       return held ? [thing.grip(held.grip).at.position.y] : [];
     }) : [];
     const gripsAt = grips.length ? grips.reduce((sum, y) => sum + y, 0) / grips.length : 0;
-    const above = Math.max(CARRY_HEIGHT * person.scale - gripsAt, thing ? inReach(person, thing) : -Infinity);
+    const above = Math.max(CARRY_HEIGHT * person.scale - gripsAt, thing ? inReach(person, thing, turn) : -Infinity);
     goal.position.y = floorUnder(person) + person.proportions.hipHeight + above;
     goal.velocity.y = 0;
     return { position: goal.position, quaternion: goal.quaternion, velocity: goal.velocity };
   };
 }
 
-/** Minimum carry height that puts every held grip in reach without intersecting the trunk. */
-function inReach(person: Person, thing: Thing): number {
+/** Minimum carry height that puts every held grip in reach without intersecting the trunk, the thing turned `turn` from the body's facing. */
+function inReach(person: Person, thing: Thing, turn: Readonly<Quaternion>): number {
   const proportions = person.proportions, o = proportions.offsets, reach = ARM_REACH * proportions.armLength + PROTRACTION * proportions.height;
-  const ahead = BODY_RADIUS * proportions.height + LOAD_RESERVE * person.scale - thing.bounds.min.z;
+  const ahead = BODY_RADIUS * proportions.height + LOAD_RESERVE * person.scale - _bounds.copy(thing.bounds).applyMatrix4(_turn.makeRotationFromQuaternion(turn)).min.z;
   return Math.max(-Infinity, ...SIDES.map((side) => {
     const hold = person.holding[side];
     if (hold?.thing !== thing) return -Infinity;
-    const grip = hold.goal.position;
+    const grip = _v.copy(hold.goal.position).applyQuaternion(turn);
     const shoulder = o[`${side}Shoulder`].clone().add(o[`${side}UpperArm`]);
     const across = Math.hypot(grip.x - shoulder.x, ahead + grip.z - o.spine.z - o.chest.z - shoulder.z);
     return proportions.shoulderHeight - proportions.hipHeight - Math.sqrt(Math.max(0, reach ** 2 - across ** 2)) - grip.y;
@@ -248,4 +248,4 @@ function inReach(person: Person, thing: Thing): number {
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
 /** Tuned: a walk levels what it carries if the cosine of the angle between the thing's own +Y and up is at least this (45°) */
 const LEVELS = Math.SQRT1_2;
-const UP = new Vector3(0, 1, 0), _v = new Vector3();
+const UP = new Vector3(0, 1, 0), _v = new Vector3(), _bounds = new Box3(), _turn = new Matrix4();

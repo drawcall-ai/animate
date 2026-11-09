@@ -156,6 +156,10 @@ describe('a loose thing lifted clear', () => {
     expect(lifted(Math.PI).rise).toBeLessThan(0.1);
     expect(lifted(0, 0.5).rise).toBeLessThan(0.1);
   });
+
+  it('is carried as high turned about as not', () => {
+    expect(Math.abs(lifted(Math.PI, 0.15, true).top - lifted(0, 0.15, true).top)).toBeLessThan(0.05);
+  });
 });
 
 describe('grab, from where it stands', () => {
