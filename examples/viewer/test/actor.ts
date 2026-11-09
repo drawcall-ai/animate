@@ -118,13 +118,6 @@ export const jointOf = (h: Actor, name: string, out = new Vector3()) => h.joint(
 /** the eyes' midpoint (where a head target goes) */
 export const eyesOf = (h: Actor, out = new Vector3()) => h.joint('leftEye', out).add(h.joint('rightEye', _v)).multiplyScalar(0.5);
 
-/** the unit vector a facing of `yaw` points along (rad about +Y; 0 faces +Z) */
-export const forwardOf = (yaw: number) => new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-
-/** the unit vector to the left of a facing of `yaw` */
-export const leftOf = (yaw: number) => new Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-
-/** `angle` wrapped into (−π, π] */
-export const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
-
 const _v = new Vector3();
+
+export { forwardOf, leftOf, wrapAngle } from '../../../packages/animate/test/kit/angles';
