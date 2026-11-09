@@ -8,13 +8,13 @@ import { reaching } from './arms';
 import { clearArm } from './hang';
 import { ARM_REACH } from './bend';
 import { INDEX, type Side } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import { BACK } from './press';
+import type { Person } from '../../body/person';
 
 /** Release preserves follow-through within arm reach, without recruiting the trunk; idle arms resume on arrival or timeout. A hand given
  * a way `away` (world: a fingertip off its button, `backOff`) draws straight back along it instead (`BACK`), its fingers kept as they
  * pressed until it is off (curling as it left, a fingertip dragged down the face), and stays there until it is asked elsewhere. */
-export function* backingOut(person: Reacher, request: Request, hands: readonly { side: Side; away: Vector3 | null }[]) {
+export function* backingOut(person: Person, request: Request, hands: readonly { side: Side; away: Vector3 | null }[]) {
   const sides = hands.map(({ side }) => side);
   const proportions = person.proportions, began = person.frame.time, drawn = began + BACK.seconds / person.tempo;
   for (const { side, away } of hands) if (away) person.drawingBack[side] = drawn;

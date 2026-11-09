@@ -11,11 +11,11 @@ import { fixes, gripAt, holdOn, type Taking } from './take';
 import { padOff, pressingIn, runOf, TOUCH, touching } from './press';
 import { reaching } from './arms';
 import { INDEX, type Side } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import type { Pace } from '../handling';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { ARM } from './trunk';
 import { following, lateWatch, LEADING, reachTime } from './reach';
+import type { Person } from '../../body/person';
 
 // The hands' last reach onto the grips they take: each round what is in its way to the face nearest its grip (or, for a fingertip, in
 // along its button's face), timed together, the leading hand first, then all closing on their grips at once.
@@ -24,7 +24,7 @@ import { following, lateWatch, LEADING, reachTime } from './reach';
 const STAGING = 0.4;
 
 /** Hands close together after reaching every grip; route staging is separate from final closure. */
-export function* approach(person: Reacher, request: Request, takes: readonly Taking[], motion?: Pace) {
+export function* approach(person: Person, request: Request, takes: readonly Taking[], motion?: Pace) {
   // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
   yield* action<Frame>({ until: (f) => takes.every((take) => f.time >= person.drawingBack[take.side]) });
   const began = person.frame.time;
@@ -127,7 +127,7 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
 }
 
 /** Put a reaching hand on its own side of a held obstacle before it closes on an external grip. */
-function aroundHeld(person: Reacher, side: Side, from: Vector3, target: Vector3): Vector3[] {
+function aroundHeld(person: Person, side: Side, from: Vector3, target: Vector3): Vector3[] {
   const root = person.pose.position(0), turn = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), person.locomotion.facing);
   const back = turn.clone().invert(), start = from.clone().sub(root).applyQuaternion(back), end = target.clone().sub(root).applyQuaternion(back);
   const direction = end.clone().sub(start), length = direction.length(), ray = new Ray(start, direction.normalize());
@@ -149,7 +149,7 @@ function aroundHeld(person: Reacher, side: Side, from: Vector3, target: Vector3)
  * the room it keeps (m; Drillis & Contini's hand, as `trunk.ts` has it), and where its shoulder is (the thing's frame) */
 interface Hand { fingers: Vector3; length: number; radius: number; reserve: number; shoulder: Vector3 }
 
-function handOf(person: Reacher, side: Side, shoulder: Vector3): Hand {
+function handOf(person: Person, side: Side, shoulder: Vector3): Hand {
   const { height, offsets } = person.proportions;
   return { fingers: offsets[`${side}Hand`].clone().normalize(), length: ARM.length * height, radius: ARM.hand * height, reserve: LOAD_RESERVE * person.scale, shoulder };
 }

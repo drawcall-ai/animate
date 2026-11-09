@@ -3,7 +3,7 @@ import type { Frame } from '../kernel/frame';
 import type { Pose } from '../kernel/pose';
 import { Carrier } from '../kernel/carrier';
 import { follow } from '../kernel/follow';
-import { anchors, movers, resolve, written, type Hold, type Holder, type Resolving } from './resolve';
+import { anchors, movers, resolve, written, type Hold, type Holder } from './resolve';
 import { Thing } from './thing';
 import type { Placement } from '../kernel/goal';
 
@@ -84,7 +84,7 @@ export function supported(thing: Thing): boolean {
  * the app has moved it since — the parent, a bone, still stands as the body last wrote it, so read as moved on, the thing would be
  * taken off the palm by as much, the grasp keeping it so.
  */
-export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void {
+export function attach(thing: Thing, parent: Object3D, reader?: Holder): void {
   const object = thing.object, mover = movers.get(object);
   const world = reader && written(reader, object, _world);
   mover?.leave(object);
@@ -97,7 +97,7 @@ export function attach(thing: Thing, parent: Object3D, reader?: Resolving): void
 }
 
 /** `object` written relative to `parent` to be at `position`, turned `quaternion` (world), as `reader` finds `parent` */
-function placeUnder(reader: Resolving, object: Object3D, parent: Object3D, position: Readonly<Vector3>, quaternion: Readonly<Quaternion>): void {
+function placeUnder(reader: Holder, object: Object3D, parent: Object3D, position: Readonly<Vector3>, quaternion: Readonly<Quaternion>): void {
   const frame = resolve(reader, parent, _frame), back = _back.copy(frame.quaternion).invert();
   object.position.copy(position).sub(frame.position).applyQuaternion(back).divideScalar(_scale.setFromMatrixScale(parent.matrixWorld).x);
   object.quaternion.copy(back).multiply(quaternion);

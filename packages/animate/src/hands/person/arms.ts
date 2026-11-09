@@ -9,7 +9,6 @@ import { ChainTip } from '../../kernel/tip';
 import { solveChain } from '../../kernel/chain';
 import { TrackedRotation } from '../../kernel/track';
 import { INDEX, type Side } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import { Pose, type ReadonlyPose } from '../../kernel/pose';
 import type { Thing } from '../../things/thing';
 import { boneOf, onBody } from '../../things/hold';
@@ -18,6 +17,7 @@ import { clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { followJoint } from './hang';
 import type { Proportions } from '../../species/humanoid/proportions';
 import { palmOf } from '../../species/humanoid/landmarks';
+import type { Person } from '../../body/person';
 
 // A hand going somewhere: its arm solved onto a timed glide or a pace, the clavicle and the trunk joining it, kept out of the trunk.
 
@@ -54,7 +54,7 @@ interface HandOptions extends Partial<Motion> {
 }
 
 /** Reach by a timed glide or pace, borrowing posture when leading. */
-export function reaching(person: Reacher, side: Side, target: Live<Goal>, options: HandOptions = {}): Step {
+export function reaching(person: Person, side: Side, target: Live<Goal>, options: HandOptions = {}): Step {
   const seconds = options.seconds, arm = new ChainTip(`${side}Arm`), bone = INDEX[`${side}Hand`];
   let glide: Glide | null = null, waited = 0, waiting = options.after ?? 0;
   // (waiting, the arm's joints kept as they were when it began: the hand neither dropped to its hang nor taken up by the arm's solve)
@@ -158,7 +158,7 @@ interface Toward {
 }
 
 /** one sub-step of `reaching`, its arm's tip `arm` */
-export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, options: HandOptions, arm: ChainTip, toward?: Toward) {
+export function handStep(person: Person, f: Frame, side: Side, target: Goal, options: HandOptions, arm: ChainTip, toward?: Toward) {
   // A grip attached to this arm follows the arm; solving the arm after that grip chases itself.
   if (options.thing && f.current.skeleton.chain(`${side}Arm`).includes(boneOf(person, options.thing.object))) return;
   const proportions = person.proportions;
@@ -210,7 +210,7 @@ export function handStep(person: Reacher, f: Frame, side: Side, target: Goal, op
 }
 
 /** arm `side` posed onto `goal` (world) at once, its elbow bent the way a reach there bends it */
-export function placeArm(person: Reacher, f: Pick<Frame, 'current'>, side: Side, goal: Goal): void {
+export function placeArm(person: Person, f: Pick<Frame, 'current'>, side: Side, goal: Goal): void {
   solveChain(f, `${side}Arm`, { tip: { position: goal.position, quaternion: goal.quaternion }, pole: elbowPole(f.current, person.proportions, side, goal.position, _pole) });
 }
 
@@ -271,7 +271,7 @@ export function elbowPole(pose: ReadonlyPose, proportions: Proportions, side: Si
  * How the arm brings hand `side` to have its palm at `at` (world): the hand bone's turn (world, into `out`) with the arm posed onto it
  * from `pose` on `scratch` — its elbow bent the way a reach there bends it, the forearm and the wrist unturned, as a hanging arm's are
  */
-export function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
+export function broughtTurn(person: Person, pose: ReadonlyPose, side: Side, at: Readonly<Vector3>, scratch: Pose, out: Quaternion): Quaternion {
   scratch.copy(pose);
   const proportions = person.proportions, hand = INDEX[`${side}Hand`], palm = palmOf(proportions, side), wrist = _wrist;
   // (the wrist a palm back from `at` along the hand as the last pass turned it: two more passes bring it within a millimetre)
@@ -284,8 +284,8 @@ export function broughtTurn(person: Reacher, pose: ReadonlyPose, side: Side, at:
 }
 
 /** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
-const scratches = new WeakMap<Reacher, { brought: Pose; trial: Pose }>();
-export function scratch(person: Reacher): { brought: Pose; trial: Pose } {
+const scratches = new WeakMap<Person, { brought: Pose; trial: Pose }>();
+export function scratch(person: Person): { brought: Pose; trial: Pose } {
   let poses = scratches.get(person);
   const skeleton = person.frame.prev.skeleton;
   if (!poses) scratches.set(person, (poses = { brought: new Pose(skeleton), trial: new Pose(skeleton) }));
@@ -299,7 +299,7 @@ const _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vect
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _along = new Vector3();
 const _tipGoal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-const shoulders = new WeakMap<Reacher, Record<Side, Carrier>>();
+const shoulders = new WeakMap<Person, Record<Side, Carrier>>();
 const _turnAt = new Quaternion(), _gliding = new Quaternion(), _wrist = new Vector3();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
@@ -312,7 +312,7 @@ const _glided = { position: new Vector3(), velocity: new Vector3() };
  * sub-step, so its motion is the shoulder's however long it went unread (moved only when read, a hand set off from the hang read its
  * walking speed as its own and was flung out in front).
  */
-function shoulderOf(person: Reacher, f: Frame, side: Side): Carrier {
+function shoulderOf(person: Person, f: Frame, side: Side): Carrier {
   const bone = INDEX[`${side}Shoulder`], at = f.current.position(bone);
   let carriers = shoulders.get(person);
   if (!carriers) shoulders.set(person, (carriers = { left: new Carrier(at), right: new Carrier(at) }));

@@ -4,9 +4,9 @@ import { STROLL, type Go, type Stance } from '../kernel/go';
 import type { Miss } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
-import type { Legged } from './legged';
 import { remaining, SETTLED_AFTER } from './step/state';
 import { FLAT } from './floor';
+import type { Self } from '../body/runtime';
 
 /** Tuned: this share of a speed asked counts as reaching it */
 const NEAR = 0.9;
@@ -83,7 +83,7 @@ export class Walk {
   /** how fast its goal goes (m/s) */
   private goalPace = 0;
 
-  constructor(private readonly self: Legged, private readonly way: Route, private readonly arrives = true) {
+  constructor(private readonly self: Self, private readonly way: Route, private readonly arrives = true) {
     this.go.plant = way.plant;
     this.go.settles = arrives;
   }
@@ -208,7 +208,7 @@ export class Walk {
  * steps once more to square the stance (a stepping cycle steps every foot once; measured: a person's last closing step lands 0.75–1.35 s
  * after it is there, its cycle ~1 s), then all stand still till settled
  */
-function closing(self: Legged, after: number | null): number {
+function closing(self: Self, after: number | null): number {
   const stepper = self.stepper;
   if (!stepper) throw new Error('walk: the body has no stepping legs');
   if (after === null) return stepper.cycle + SETTLED_AFTER;
@@ -226,7 +226,7 @@ function closing(self: Legged, after: number | null): number {
  * setting off), plus slowing to a stop, or the turn left at `turning` rad/s, whichever is longer (the trajectory a motion-matching query
  * predicts, here from the walk's own goal)
  */
-function etaOf(self: Legged, body: Readonly<Vector3>, go: Go, yaw: number | null, turning: number): number {
+function etaOf(self: Self, body: Readonly<Vector3>, go: Go, yaw: number | null, turning: number): number {
   const left = Math.hypot(go.to.x - body.x, go.to.z - body.z) - ARRIVED.distance * self.scale;
   const v = Math.min(go.speed, Math.max(self.locomotion.velocity.length(), SETTING_OFF));
   const walk = left > 0 ? left / v + v / (2 * go.accel) : 0;
@@ -238,7 +238,7 @@ function etaOf(self: Legged, body: Readonly<Vector3>, go: Go, yaw: number | null
  * whether the floor rises or falls by `STAIRS.rise` or more (m, default body) on the way from `from` to `to`, `STAIRS.ahead` (m) of it
  * at most, and `STAIRS.behind` (m) back: the body keeps its pace till it is past the edge
  */
-function stepped(self: Legged, from: Readonly<Vector3>, to: Readonly<Vector3>): boolean {
+function stepped(self: Self, from: Readonly<Vector3>, to: Readonly<Vector3>): boolean {
   if (self.floor === FLAT) return false;
   const way = _way.subVectors(to, from).setY(0), along = way.length(), s = self.scale;
   if (along < 1e-6) return false;
@@ -254,7 +254,7 @@ function stepped(self: Legged, from: Readonly<Vector3>, to: Readonly<Vector3>): 
 
 /** where a walk takes the body: a species' legs carry its root there, a person's balance its centre of mass — as it stands without the
  * moment's shift of its weight over its feet (`Steps.shifted`): edged back for it, the body stepped where it would not */
-const placeOf = (self: Legged, f: Frame) => {
+const placeOf = (self: Self, f: Frame) => {
   if (self.species.legs) return _com.copy(f.prev.position(0)).setY(0);
   const com = f.prev.com(_com).setY(0);
   return self.stepper ? com.sub(self.stepper.shifted) : com;

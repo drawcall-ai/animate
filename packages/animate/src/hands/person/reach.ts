@@ -12,9 +12,9 @@ import { CALM, HOLD, reaching } from './arms';
 import { armReaches, footing, walking } from './stand';
 import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import { paceAt, type HandOptions } from '../handling';
 import { BODY_RADIUS } from './clearance';
+import type { Person } from '../../body/person';
 
 /**
  * how long a calm reach `distance` away to take something takes (s; m, default body): Fitts' law, MT = a + b · log2(2 D / W) (recalled,
@@ -42,7 +42,7 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 }
 
 /** Follow targets with borrowed walking; replan after movement while keeping each hand's motion history. */
-export function* reachingTo(person: Reacher, request: Request, targets: readonly { side: Side; target: (f: Frame) => Goal }[], pace: HandOptions) {
+export function* reachingTo(person: Person, request: Request, targets: readonly { side: Side; target: (f: Frame) => Goal }[], pace: HandOptions) {
   const motion = paceAt(pace.speed, CALM);
   targets = targets.map(({ side, target }) => {
     const sample = new PointVelocity();
@@ -129,7 +129,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
  * is off its goal. While the legs are still stepping or settling under the hands, each is watched afresh: the body carrying a hand past
  * its goal and back is not the hand's own lack of progress. Returns whether every hand has stopped as near as counts as there.
  */
-export function lateWatch(person: Reacher, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => Carrier; where: string }[]) {
+export function lateWatch(person: Person, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => Carrier; where: string }[]) {
   const progress = hands.map(() => new Progress());
   let late = false, close = false;
   const within = (f: Frame) => hands.every(({ side, goal, on }) => closeTo(f, person.hands[side], goal(f), on?.()));
@@ -156,7 +156,7 @@ export function lateWatch(person: Reacher, request: Request, hands: readonly { s
  * shoulder, or nearer the trunk than the arm is kept clear of it; else something within reach (a joint's range, the other hand, the
  * body's balance)
  */
-export function limitOf(person: Reacher, side: Side): (at: Vector3) => string {
+export function limitOf(person: Person, side: Side): (at: Vector3) => string {
   return (at) => {
     const pose = person.pose, arm = person.proportions.armLength, shoulder = pose.position(INDEX[`${side}UpperArm`]).distanceTo(at);
     if (shoulder > REACH * arm) return `beyond the arm’s reach: the shoulder ${shoulder.toFixed(2)} m from it, the arm ${arm.toFixed(2)} m`;
@@ -176,4 +176,4 @@ const STILL = 2;
 const _middle = new Vector3(), _turn = new Quaternion();
 
 /** whether a foot is in the air under `person`: a support step under way */
-const stepping = (person: Reacher) => person.stepper?.legs.some((leg) => leg.swing) ?? false;
+const stepping = (person: Person) => person.stepper?.legs.some((leg) => leg.swing) ?? false;

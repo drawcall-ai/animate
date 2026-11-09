@@ -2,13 +2,13 @@ import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { seeded } from '../kernel/random';
 import type { ReadonlyPose } from '../kernel/pose';
-import type { PersonLegged } from '../legs/person/legged';
 
 import { forwardOf, lerp } from '../kernel/math';
 import { steadiness } from '../species/define';
+import type { Person } from '../body/person';
 
 /** a person as its idle eyes see it: how it walks, its proportions, the floor it walks on and how still its life holds it */
-type Walking = Pick<PersonLegged, 'locomotion' | 'proportions' | 'floor' | 'life'>;
+type Walking = Pick<Person, 'locomotion' | 'proportions' | 'floor' | 'life'>;
 
 /** the share of the thorax's gait rotation the head goes along with (CMU mocap: ~55%) */
 const HEAD_SHARE = 0.55;

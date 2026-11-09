@@ -1,11 +1,11 @@
 import type { Go } from '../../kernel/go';
 import type { Poise } from '../../kernel/poise';
-import type { PersonLegged } from './legged';
 import { MathUtils, Vector3 } from 'three';
 import { lerp } from '../../kernel/math';
 import { irregular, seeded, seedOf } from '../../kernel/random';
 import { Life as Rhythms, type Rhythm } from '../../kernel/life';
 import type { Side } from '../../species/humanoid/bones';
+import type { Person } from '../../body/person';
 
 /**
  * A person's weight shift standing quiet. Tuned: the first after a 10–20 s observation window; recalled
@@ -45,7 +45,7 @@ export class Quiet {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(go: Go | null, poise: Poise, person: PersonLegged): boolean {
+  quiet(go: Go | null, poise: Poise, person: Person): boolean {
     return !go && !person.locomotion.moving && !person.holding.left && !person.holding.right && poise.lower === 0 && poise.bow === 0 && poise.steady === 0;
   }
 

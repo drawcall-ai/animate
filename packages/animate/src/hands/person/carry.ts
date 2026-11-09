@@ -8,7 +8,6 @@ import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
 import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
 import type { Thing } from '../../things/thing';
-import type { Reacher } from './reacher';
 import { paceAt, type HandOptions } from '../handling';
 import type { Way } from '../route';
 import { floorUnder } from '../../legs/person/legged';
@@ -19,6 +18,7 @@ import { footing, walking, type WalkUp } from './stand';
 import { guidesFor, CARRYING, type Guides } from './guide';
 import { closeOn, holdAlong, travel } from './travel';
 import { regripping, type Regripping } from './grasp';
+import type { Person } from '../../body/person';
 
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
 const PREPARED = 2;
@@ -35,7 +35,7 @@ const ALONG = { speed: 0.5, least: 0.4 };
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
 /** Carry the route, retaining a fresh guide at each travel/hold boundary. */
-export function* carrying(person: Reacher, request: Request, thing: Thing, way: Way, options: HandOptions) {
+export function* carrying(person: Person, request: Request, thing: Thing, way: Way, options: HandOptions) {
   const sides = handsOn(person, thing).map(sideOf);
   const resting = supported(thing);
   yield* lifting(person, request, thing);
@@ -73,7 +73,7 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
-function* transferring(person: Reacher, request: Request, thing: Thing, way: Way, plan: WalkUp, guides: Guides, resting: boolean, grasp: Regripping) {
+function* transferring(person: Person, request: Request, thing: Thing, way: Way, plan: WalkUp, guides: Guides, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
   const carrier = person.track(thing.object);
   const from = carrier.current.position.y, watched = carrier.current.position.clone();
@@ -115,7 +115,7 @@ function* transferring(person: Reacher, request: Request, thing: Thing, way: Way
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(person: Reacher, request: Request, thing: Thing, way: Way, guides: Guides, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
+function* along(person: Person, request: Request, thing: Thing, way: Way, guides: Guides, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
   const least = ALONG.least;
   let points = way.points;
   if (way.outside > 0) {
@@ -131,7 +131,7 @@ function* along(person: Reacher, request: Request, thing: Thing, way: Way, guide
 }
 
 /** waypoints through `points` (from where the thing is now), each timed by its length at `speed` (m/s), the whole at least `least` s */
-function timed(person: Reacher, thing: Thing, points: readonly ((f: Frame) => Goal)[], speed: number, least: number): Waypoint[] {
+function timed(person: Person, thing: Thing, points: readonly ((f: Frame) => Goal)[], speed: number, least: number): Waypoint[] {
   const f = person.frame;
   let from = person.track(thing.object).current.position.clone();
   const lengths = points.map((point) => {
@@ -144,7 +144,7 @@ function timed(person: Reacher, thing: Thing, points: readonly ((f: Frame) => Go
 }
 
 /** Support take-up precedes lifting; heavy supported loads get an anticipatory knee dip. */
-function* lifting(person: Reacher, request: Request, thing: Thing) {
+function* lifting(person: Person, request: Request, thing: Thing) {
   if (carriedBy(person, thing)) return;
   // Tuned APA: 100 ms / 5 mm before support leaves; a low reach already prepares the knees.
   const hips = floorUnder(person) + person.proportions.hipHeight;
@@ -157,7 +157,7 @@ function* lifting(person: Reacher, request: Request, thing: Thing) {
 }
 
 /** a loose thing with a mass, held, lifted clear of what it rests on (`CLEAR`), then held as it is */
-export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
+export function* liftingClear(person: Person, request: Request, thing: Thing) {
   const resting = supported(thing);
   yield* lifting(person, request, thing);
   const carrier = person.track(thing.object);
@@ -176,7 +176,7 @@ export function* liftingClear(person: Reacher, request: Request, thing: Thing) {
 }
 
 /** A comfortable carry in front of the hips, following the body: where a transfer carries its load, turned `turn` from the body's facing. */
-function carried(person: Reacher, turn: Readonly<Quaternion>): (f: Frame) => Placement & { velocity: Vector3 } {
+function carried(person: Person, turn: Readonly<Quaternion>): (f: Frame) => Placement & { velocity: Vector3 } {
   // Recalled load law: shorten the lever arm with squared pace effort (35 → 19 cm at 8 kg).
   const at = movingPoint(person, 0, () => ({ position: new Vector3(0, 0, CARRY_AHEAD / loadFactor(heldMass(person)) ** 2), quaternion: turn.clone() }),
     () => new Quaternion().setFromAxisAngle(UP, person.locomotion.facing));
@@ -198,7 +198,7 @@ function carried(person: Reacher, turn: Readonly<Quaternion>): (f: Frame) => Pla
 }
 
 /** Minimum carry height that puts every held grip in reach without intersecting the trunk. */
-function inReach(person: Reacher, thing: Thing, wideOnly = false): number {
+function inReach(person: Person, thing: Thing, wideOnly = false): number {
   const proportions = person.proportions, o = proportions.offsets, reach = ARM_REACH * proportions.armLength + PROTRACTION * proportions.height;
   const ahead = BODY_RADIUS * proportions.height + LOAD_RESERVE * person.scale - thing.bounds.min.z;
   return Math.max(-Infinity, ...SIDES.map((side) => {

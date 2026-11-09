@@ -5,9 +5,9 @@ import { type Live, type Motion, type Placement, type Goal } from '../../kernel/
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
 import { follow } from '../../kernel/follow';
 import type { Thing } from '../../things/thing';
-import type { Reacher } from './reacher';
 import type { Clearance } from '../route';
 import { clearBody } from './clearance';
+import type { Person } from '../../body/person';
 
 // A carried thing's guide: where it is to go each sub-step, followed at a carry's pace about its grips and kept clear of the body.
 
@@ -16,7 +16,7 @@ export const CARRYING = { accel: 6, speed: 3, turnAccel: 8, turnSpeed: 4 } satis
 
 export type Guides = (factor?: number, clearance?: Clearance) => Guide;
 
-export function guidesFor(person: Reacher, thing: Thing, motion: Motion, clear: Clearance): Guides {
+export function guidesFor(person: Person, thing: Thing, motion: Motion, clear: Clearance): Guides {
   return (factor = 1, clearance = clear) => new Guide(person, thing, { ...motion, accel: motion.accel / factor }, clearance);
 }
 
@@ -39,7 +39,7 @@ export class Guide {
   private readonly pivot = new Vector3();
 
 
-  constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance) {
+  constructor(private readonly person: Person, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance) {
     const own = person.track(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its course has it, the hand with it)

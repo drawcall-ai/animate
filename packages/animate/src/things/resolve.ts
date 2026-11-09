@@ -7,25 +7,6 @@ import type { Goal, Placement } from '../kernel/goal';
 import type { Thing } from './thing';
 import type { HandPlacement, HandPoint } from '../fingers/placement';
 
-/**
- * A body as targets resolve against it: the pose its frames are read from by a reader — its own as posed so far this sub-step,
- * another body's as it was before that body's update this frame — its bones as they stand in the scene, and where a thing it moves
- * itself is, read the same way (its own this sub-step: its moves come after its hands). As a reader: how many updates it has finished,
- * the share of the update's time its sub-step has reached, and the transforms it has seen.
- */
-export interface Resolving {
-  readonly updates: number;
-  readonly share: number;
-  readonly frames: WeakMap<Object3D, Interpolated>;
-  poseFor(reader: Resolving): ReadonlyPose;
-  movedFor(reader: Resolving, node: Object3D): Placement | null;
-  /** a moving bone's rest frame in the scene (`turn⁻¹ · rest`), and its scale */
-  restOf(bone: number): Readonly<Quaternion>;
-  scaleOf(bone: number): number;
-  /** the floor's height under a world point (x, z): a body's object stands on it */
-  readonly floor: (x: number, z: number) => number;
-}
-
 /** What a hand holds: the thing, by which of its empties, and where the hand is on it (its goal in the thing's frame) — for a person's
  * hand, the placement it took there, fixed on the thing while it holds it, and the point of the hand that took it. */
 export interface Hold {
@@ -39,8 +20,24 @@ export interface Hold {
   by?: Request;
 }
 
-/** A body as the things it holds see it: its object and moving bones' nodes, its hands' tip bones and holds, what it moves and tracks. */
-export interface Holder extends Resolving {
+/**
+ * A body as the things it holds, and the targets resolved against it, see it: its object and moving bones' nodes, its hands' tip bones and
+ * holds, what it moves and tracks; the pose its frames are read from by a reader — its own as posed so far this sub-step, another body's
+ * as it was before that body's update this frame — and where a thing it moves itself is, read the same way (its own this sub-step: its
+ * moves come after its hands). As a reader: how many updates it has finished, the share of the update's time its sub-step has reached, and
+ * the transforms it has seen.
+ */
+export interface Holder {
+  readonly updates: number;
+  readonly share: number;
+  readonly frames: WeakMap<Object3D, Interpolated>;
+  poseFor(reader: Holder): ReadonlyPose;
+  movedFor(reader: Holder, node: Object3D): Placement | null;
+  /** a moving bone's rest frame in the scene (`turn⁻¹ · rest`), and its scale */
+  restOf(bone: number): Readonly<Quaternion>;
+  scaleOf(bone: number): number;
+  /** the floor's height under a world point (x, z): a body's object stands on it */
+  readonly floor: (x: number, z: number) => number;
   readonly frame: Frame;
   readonly object: Object3D;
   boneNode(bone: number): Object3D;
@@ -78,13 +75,13 @@ export interface Interpolated {
  * sub-steps, exact at its end, or as it is now if `fresh` (the app moves it every sub-step). Scale is left out of the result (a body's
  * frames are metres) but carried through the chain. An app-owned world matrix (`matrixWorldAutoUpdate = false`) ends the chain.
  */
-export function resolve(reader: Resolving, node: Object3D, out: Placement, fresh = false): Placement {
+export function resolve(reader: Holder, node: Object3D, out: Placement, fresh = false): Placement {
   chainOf(reader, node, fresh, _chain).decompose(out.position, out.quaternion, _scale);
   return out;
 }
 
 /** `node`'s world matrix as `resolve` finds it, scale and all, into `chain` */
-function chainOf(reader: Resolving, node: Object3D, fresh: boolean, chain: Matrix4): Matrix4 {
+function chainOf(reader: Holder, node: Object3D, fresh: boolean, chain: Matrix4): Matrix4 {
   chain.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
     const turned = orienters.get(at)?.turned.get(at);
@@ -113,7 +110,7 @@ function chainOf(reader: Resolving, node: Object3D, fresh: boolean, chain: Matri
 }
 
 /** a body's object (bone −1) or moving bone, as `pose` places it */
-function frameOf(pose: ReadonlyPose, body: Resolving, bone: number): Matrix4 {
+function frameOf(pose: ReadonlyPose, body: Holder, bone: number): Matrix4 {
   if (bone < 0) {
     const root = pose.position(0);
     return _anchor.compose(_p.set(root.x, body.floor(root.x, root.z), root.z), _q.setFromAxisAngle(UP, pose.facing), ONE);
@@ -127,7 +124,7 @@ function frameOf(pose: ReadonlyPose, body: Resolving, bone: number): Matrix4 {
  * body's bone or thing a body moves (as last written to the scene), each local the app moves as `reader` read it at the end of its last
  * update (one it did not read then, as it is now). An app-owned world matrix ends the chain.
  */
-export function written(reader: Resolving, node: Object3D, out: Matrix4): Matrix4 {
+export function written(reader: Holder, node: Object3D, out: Matrix4): Matrix4 {
   out.identity();
   for (let at: Object3D | null = node; at; at = at.parent) {
     if (anchors.has(at) || movers.has(at)) {
@@ -144,7 +141,7 @@ export function written(reader: Resolving, node: Object3D, out: Matrix4): Matrix
 }
 
 /** The app's matrix (local, or world if it owns that), eased across the update unless its frame changed; fresh reads are exact. */
-function matrixOf(reader: Resolving, node: Object3D, fresh = false): Matrix4 {
+function matrixOf(reader: Holder, node: Object3D, fresh = false): Matrix4 {
   if (node.matrixAutoUpdate) node.updateMatrix();
   const parent = node.matrixWorldAutoUpdate ? node.parent : null, matrix = node.matrixWorldAutoUpdate ? node.matrix : node.matrixWorld;
   if (fresh) return matrix;

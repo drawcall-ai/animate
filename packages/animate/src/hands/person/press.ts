@@ -7,9 +7,9 @@ import { SHAPING } from '../../fingers/shape';
 import type { GripOn } from '../../things/thing';
 import { worn } from '../../things/hold';
 import { INDEX } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import { HOLD, reaching } from './arms';
 import type { Taking } from './take';
+import type { Person } from '../../body/person';
 
 /*
  * A fingertip's press (a grip with `userData.point`): the hand turned to point into the face, pointed before its way's last run in along
@@ -31,7 +31,7 @@ export const BACK = { distance: 0.07, seconds: 0.15 } as const;
 
 /** where a fingertip's way to its button turns in for its run (`RUN`, the thing's frame): out from its goal along the face's normal;
  * none: no fingertip's grip */
-export function runOf(person: Reacher, take: Taking): Vector3 | null {
+export function runOf(person: Person, take: Taking): Vector3 | null {
   const grip = take.thing.grip(take.grip);
   if (grip.point === 'palm' || !grip.facing) return null;
   return take.goal.position.clone().addScaledVector(grip.facing, -RUN * person.scale);
@@ -42,7 +42,7 @@ export function runOf(person: Reacher, take: Taking): Vector3 | null {
  * in to its grip (`points`), timed by one minimum-jerk profile over its length (it passes the run without stopping and comes to rest
  * only on the button), set off `after` s on; its index points before the way's run in (`FingerState.pointAt`, `POINTS`), frozen so
  */
-export function pressingIn(person: Reacher, hand: Taking & { from: Vector3; points: Vector3[]; lengths: number[]; seconds: number }, after: number) {
+export function pressingIn(person: Person, hand: Taking & { from: Vector3; points: Vector3[]; lengths: number[]; seconds: number }, after: number) {
   const total = hand.lengths.reduce((sum, length) => sum + length, 0) || 1, seconds = hand.seconds;
   const path = course({ current: { position: hand.from, quaternion: IDENTITY } }, hand.points.map((position, k) => [seconds * hand.lengths[k] / total, { position }] as const), { delay: after });
   let began = NaN;
@@ -57,12 +57,12 @@ export function pressingIn(person: Reacher, hand: Taking & { from: Vector3; poin
 }
 
 /** whether `take`'s grip is a fingertip's, and its pad is on its empty (`TOUCH`): a press ends there */
-export function touching(person: Reacher, take: Taking, f: Frame): boolean {
+export function touching(person: Person, take: Taking, f: Frame): boolean {
   return take.thing.grip(take.grip).point !== 'palm' && padOff(person, take, f) < TOUCH * person.scale;
 }
 
 /** how far (m) `take`'s pad is off its empty, each as it last stood */
-export function padOff(person: Reacher, take: Pick<Taking, 'side' | 'thing' | 'grip' | 'point'>, f: Frame): number {
+export function padOff(person: Person, take: Pick<Taking, 'side' | 'thing' | 'grip' | 'point'>, f: Frame): number {
   const bone = person.hands[take.side], pad = _pad.copy(take.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
   const { position, quaternion } = person.track(take.thing.object).at(f.time).prev;
   return pad.distanceTo(_empty.copy(take.thing.grip(take.grip).at.position).applyQuaternion(quaternion).add(position));
@@ -72,7 +72,7 @@ export function padOff(person: Reacher, take: Pick<Taking, 'side' | 'thing' | 'g
  * the way (world, unit) a fingertip on `grip` of a thing placed so draws back off its button as it lets go: back along the line from
  * the button to the eyes that watch it, as far as `SIGHTED` off the face's normal; none: no fingertip's grip
  */
-export function backOff(person: Reacher, grip: GripOn, placed: { position: Vector3; quaternion: Quaternion }): Vector3 | null {
+export function backOff(person: Person, grip: GripOn, placed: { position: Vector3; quaternion: Quaternion }): Vector3 | null {
   if (grip.point === 'palm' || !grip.facing) return null;
   const empty = grip.at.position.clone().applyQuaternion(placed.quaternion).add(placed.position);
   const out = grip.facing.clone().applyQuaternion(placed.quaternion).negate(), way = person.pose.position(INDEX.head).clone().sub(empty).normalize();

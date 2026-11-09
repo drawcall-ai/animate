@@ -8,10 +8,10 @@ import { during, type Request } from '../../kernel/requests';
 import { ARM_REACH, PROTRACTION } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { INDEX, type Side } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import { floorUnder } from '../../legs/person/legged';
 import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../../legs/person/posture';
 import { defaultStance } from '../../species/humanoid/stance';
+import type { Person } from '../../body/person';
 
 /** Comfortable stand distance as a share of arm length. */
 const WITHIN = 0.8;
@@ -47,7 +47,7 @@ interface Placed { bounds: Box3; position: Vector3; quaternion: Quaternion }
 export type WalkUp = Extract<ReturnType<typeof footing>, { walk: Walk }>;
 
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
-export function armReaches(person: Reacher, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
+export function armReaches(person: Person, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
   // (seated, its shoulders as far down as the seat lets them)
   const down = person.seat && !person.seat.rising ? person.seat.seating.lower : 0;
   const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight - down);
@@ -72,7 +72,7 @@ const TRUNK_TURN = Math.PI / 4, TURNS = 6;
 const TURNED = 0.95;
 const _arm = new Vector3(), _turned = new Vector3(), _up = new Vector3(0, 1, 0);
 
-function shoulderOf(person: Reacher, side?: Side): Vector3 {
+function shoulderOf(person: Person, side?: Side): Vector3 {
   return side
     ? person.pose.position(INDEX[`${side}UpperArm`]).clone()
     : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
@@ -82,7 +82,7 @@ function shoulderOf(person: Reacher, side?: Side): Vector3 {
  * Find a comfortable stand clear of bodies and support: there already, nowhere it could (and why), or a walk there. Without `step`, the
  * feet stay where they stand: there if the hands reach from it (`planted`), else nowhere.
  */
-export function footing(person: Reacher, to: Stand, step = true) {
+export function footing(person: Person, to: Stand, step = true) {
   const f0 = person.frame, point = 'place' in to;
   const start = point ? to.place(f0) : null;
   if (start?.carriedBy === person) return 'there' as const;
@@ -222,7 +222,7 @@ export function* walking(request: Request, plan: WalkUp, after?: number) {
  * one above, the trunk turning that shoulder up to its half-width further toward it and the clavicle drawing it out (`PROTRACTION`) — as
  * `footing` judges a placing point's reach
  */
-function planted(person: Reacher, grip: { side?: Side; at: Vector3 }): number {
+function planted(person: Person, grip: { side?: Side; at: Vector3 }): number {
   const proportions = person.proportions, reach = ARM_REACH * proportions.armLength;
   const standing = floorUnder(person) + proportions.shoulderHeight, height = grip.at.y;
   const { drop, forward } = stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach));
@@ -232,14 +232,14 @@ function planted(person: Reacher, grip: { side?: Side; at: Vector3 }): number {
 }
 
 /** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */
-function stoop(proportions: Reacher['proportions'], want: number): { drop: number; forward: number } {
+function stoop(proportions: Person['proportions'], want: number): { drop: number; forward: number } {
   const lever = bowLever(proportions, proportions.shoulderHeight), most = squatOf(proportions) + lever * (1 - Math.cos(MOST_BOW));
   const drop = Math.min(want, most), { bow } = lowering(proportions, { drop, ahead: 0, height: proportions.shoulderHeight });
   return { drop, forward: lever * Math.sin(bow) };
 }
 
 /** the facing to take grips `grips` with: the left hand's to the left of the right's, or toward a single one from where the body stands */
-function facingFor(person: Reacher, grips: { side?: Side; at: Vector3 }[]): number {
+function facingFor(person: Person, grips: { side?: Side; at: Vector3 }[]): number {
   const left = grips.find((grip) => grip.side === 'left');
   const right = grips.find((grip) => grip.side === 'right');
   if (left && right) return Math.atan2(-(left.at.z - right.at.z), left.at.x - right.at.x);

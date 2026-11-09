@@ -3,7 +3,6 @@ import type { Frame, Step } from '../../kernel/frame';
 import { limited } from '../../kernel/limits';
 import { TrackedRotation } from '../../kernel/track';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import type { Thing } from '../../things/thing';
 import { boneOf } from '../../things/hold';
 import { ArmClear, checkArms, keepArmOut, NUDGED } from './trunk';
@@ -11,6 +10,7 @@ import { clamp, leftOf, lerp, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 import { palmOf } from '../../species/humanoid/landmarks';
 import { bowAhead } from '../../legs/person/posture';
+import type { Person } from '../../body/person';
 
 // A free arm: it hangs from the shoulder, swings with the stride, turns back with the trunk's bow and is posed over that as asked.
 
@@ -57,7 +57,7 @@ export const SWING = { accel: 25, speed: 2.5 };
 const OVERRUN = Math.PI / 2;
 
 /** Free arms follow their own histories back into stride swing, posed over it as asked (`armPose`, cleared); holding hands keep their grips. */
-export function hanging(person: Reacher): Step {
+export function hanging(person: Person): Step {
   const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
   /** whether each arm was another's (a hand verb's, or holding) the sub-step before: taken back, it is carried on no faster than it swings */
   const taken = { left: true, right: true };
@@ -123,7 +123,7 @@ export function hanging(person: Reacher): Step {
 }
 
 /** Keep a resting wrist outside equipment worn beside it, using the same padding as the thigh, judged facing `yaw` (default: the pelvis's). */
-export function clearArm(person: Reacher, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0)), obstacles: readonly Thing[] = person.worn): Vector3 {
+export function clearArm(person: Person, f: Frame, side: Side, at: Vector3, yaw = yawOf(f.current.local(0)), obstacles: readonly Thing[] = person.worn): Vector3 {
   const sign = side === 'left' ? 1 : -1, hips = f.current.position(0);
   const inverse = _r.setFromAxisAngle(Y, -yaw);
   const local = _rest.subVectors(at, hips).applyQuaternion(inverse);

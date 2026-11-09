@@ -5,13 +5,13 @@ import type { Pose } from '../kernel/pose';
 import { TrackedPoint, TrackedRotation } from '../kernel/track';
 import { bowAhead, lowering, LOWER } from '../legs/person/posture';
 import { INDEX } from '../species/humanoid/bones';
-import type { PersonLegged } from '../legs/person/legged';
 import type { Frame, Step } from '../kernel/frame';
 import { forwardOf, wrapAngle, yawOf } from '../kernel/math';
 import type { Go } from '../kernel/go';
+import type { Person } from '../body/person';
 
 /** a person as a led head sees it: its proportions, how it walks and stands, and what its parts ask of its stance */
-type Led = Pick<PersonLegged, 'proportions' | 'locomotion' | 'poise' | 'floor'>;
+type Led = Pick<Person, 'proportions' | 'locomotion' | 'poise' | 'floor'>;
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
 const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;

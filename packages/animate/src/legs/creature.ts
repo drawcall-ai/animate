@@ -9,9 +9,10 @@ import { ChainLeg, feetOf, steppingOf } from './feet';
 import { offTheWay, Planner, stanceYaw } from './planner';
 import { Stepper } from './step/stepper';
 import { type Steering } from './step/state';
-import { drivenRoot, type Legged } from './legged';
+import { drivenRoot } from './legged';
 import { strideAt } from '../species/gait';
 import { Inertia } from '../kernel/inertia';
+import type { Self } from '../body/runtime';
 
 /**
  * A creature's balance, a sub-step at a time: its species' legs carry it where the request that has its legs asks (`going`) — the planner takes its root
@@ -19,7 +20,7 @@ import { Inertia } from '../kernel/inertia';
  * drives it; the stepper keeps its feet under it, its posture or carriage rides on the stride, and each leg is posed down to its foot.
  * Asked nothing, it stands. It keeps `locomotion` for walks and `arriving`.
  */
-export function creature(body: Legged): Step {
+export function creature(body: Self): Step {
   const kind = body.species.legs;
   if (!kind) throw new Error('creature: the species has no legs');
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);

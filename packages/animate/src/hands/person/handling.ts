@@ -4,19 +4,19 @@ import { paceAt, type Handling } from '../handling';
 import { CALM } from './arms';
 import { bodyOf } from '../../things/hold';
 import { sideOf } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
 import { grabbing, grabAtOnce } from './grab';
 import { carrying, liftingClear } from './carry';
 import { wayOf } from '../route';
 import { reachingTo } from './reach';
 import { backingOut } from './release';
 import { settling, takingOf } from './take';
+import type { Person } from '../../body/person';
 
 /** the longest a grab waits, its hands on their grips, for their fingers to close (s) */
 const CLOSING = 0.2;
 
 /** Human hand staging; the right hand leads coordinated reaches. */
-export function personHands(person: Reacher): Handling {
+export function personHands(person: Person): Handling {
   return {
     take: function* (request, thing, grips, options) {
       const loose = thing.massive && !bodyOf(thing.object);

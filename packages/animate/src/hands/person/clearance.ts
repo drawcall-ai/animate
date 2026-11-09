@@ -5,7 +5,7 @@ import type { Placement } from '../../kernel/goal';
 import { worn } from '../../things/hold';
 import { forwardOf, leftOf } from '../../kernel/math';
 import { INDEX } from '../../species/humanoid/bones';
-import type { Reacher } from './reacher';
+import type { Person } from '../../body/person';
 
 /** Tuned, uncalibrated: the trunk as a capsule this thick (× stature) */
 export const BODY_RADIUS = 0.06;
@@ -13,14 +13,14 @@ export const BODY_RADIUS = 0.06;
 export const LOAD_RESERVE = 0.04;
 
 /** Clear a load position against the trunk and neck→head chain, in place; returns how far the neck and head moved it (m). */
-export function clearBody(person: Reacher, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Placement, trunk = true, parts = false): number {
+export function clearBody(person: Person, f: Frame, item: Thing, at: Vector3, rotation: Quaternion, current: Placement, trunk = true, parts = false): number {
   if (worn(item)) return 0;
   if (trunk) clearBounds(person, f, item.bounds, at, rotation, current, 0, 1);
   // Separate mesh bounds keep empty space under a rim from becoming as low as a projecting guard.
   return (parts ? item.parts : [item.bounds]).reduce((moved, part) => moved + clearBounds(person, f, part, at, rotation, current, 1, 2), 0);
 }
 
-function clearBounds(person: Reacher, f: Frame, bounds: Box3, at: Vector3, rotation: Quaternion, current: Placement, first: number, last: number): number {
+function clearBounds(person: Person, f: Frame, bounds: Box3, at: Vector3, rotation: Quaternion, current: Placement, first: number, last: number): number {
   const center = bounds.getCenter(_center), half = bounds.getSize(_half).multiplyScalar(0.5);
   const forward = forwardOf(person.locomotion.facing, _forward), left = leftOf(person.locomotion.facing, _left);
   let back = Infinity, bottom = Infinity, top = -Infinity, near = Infinity, far = -Infinity;

@@ -9,7 +9,6 @@ import { course, type Waypoint } from '../../kernel/course';
 import { during, type Request } from '../../kernel/requests';
 import { handsOn, inHand, worn } from '../../things/hold';
 import type { Thing } from '../../things/thing';
-import type { Reacher } from './reacher';
 import { handStep, HOLD } from './arms';
 import { sideOf } from '../../species/humanoid/bones';
 import { bringShoulder } from './bend';
@@ -18,6 +17,7 @@ import { following, LEADING, limitOf } from './reach';
 import { grasped, seat, shifts, type Regripping } from './grasp';
 import type { Hold } from '../../things/resolve';
 import type { Guide, Guides } from './guide';
+import type { Person } from '../../body/person';
 
 // A carried thing along its course: the hands holding it on its guide, until it has come to rest at the course's end — or is late there,
 // stalled short of it, or held off it by the body's own trunk and head — its one-handed grasp weighed for the end as it nears it.
@@ -45,7 +45,7 @@ const SETTLING = 0.5;
  * from when the body stands. Its request's eta is `eta` of the course's time left (s; default that time): what the carry does besides the
  * course counted in.
  */
-export function* travel(person: Reacher, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
+export function* travel(person: Person, request: Request, thing: Thing, waypoints: readonly Waypoint[], guides: Guides, resting: boolean,
   { near = END.distance, on, end = false, walks = false, ready, eta = (left) => left, grasp }: { near?: number; on?: (f: Frame) => Goal; end?: boolean; walks?: boolean; ready?: () => boolean; eta?: (left: number) => number; grasp?: Regripping } = {}) {
   const carrier = person.track(thing.object);
   const grips = Object.fromEntries(Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing ? [[sideOf(side), hold.grip]] : []));
@@ -153,7 +153,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
 }
 
 /** what holds each hand off where the carried thing's grips would be at its goal, as a late reach says it */
-function limits(person: Reacher, thing: Thing, guide: Guide): string {
+function limits(person: Person, thing: Thing, guide: Guide): string {
   const goal = guide.goal;
   return Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing
     ? [`${side} hand ${limitOf(person, sideOf(side))(_g.copy(hold.goal.position).applyQuaternion(goal.quaternion).add(goal.position))}`] : []).join('; ')
@@ -181,7 +181,7 @@ function tipOf(hold: Hold, hand: string): ChainTip {
 }
 
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
-export function holdAlong(person: Reacher, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
+export function holdAlong(person: Person, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
     ? [{ side: sideOf(hand), hold, tip: tipOf(hold, hand) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)

@@ -3,7 +3,7 @@ import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import type { Thing } from '../things/thing';
 import { bodyOf, boneOf } from '../things/hold';
-import type { Handed } from './handed';
+import type { Self } from '../body/runtime';
 
 /** How a carried thing is kept clear of the body: of its trunk and head (true); of its head alone (`head`: on its way to a place on the
  * body); of its trunk, and of its head by each of its parts' bounds (`parts`: on its way along the outside to a place on the body); or
@@ -14,7 +14,7 @@ export type Clearance = boolean | 'head' | 'parts';
 export type Way = ReturnType<typeof wayOf>;
 
 /** Exit the source approach from its nearest point, then traverse targets and the destination approach. */
-export function wayOf(person: Handed, thing: Thing, targets: readonly ((f: Frame) => Goal)[], end: Object3D | null) {
+export function wayOf(person: Self, thing: Thing, targets: readonly ((f: Frame) => Goal)[], end: Object3D | null) {
   const f = person.frame, at = person.track(thing.object).current.position.clone();
   const turn = (f: Frame) => targets[targets.length - 1](f).quaternion;
   const seat = thing.object.parent;

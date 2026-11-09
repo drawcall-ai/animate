@@ -1,6 +1,6 @@
 // The trunk's turn about the vertical with the stride: the pelvis and the thorax, walking and running, arms free or holding.
 import { lerp } from '../../kernel/math';
-import type { PersonLegged } from './legged';
+import type { Person } from '../../body/person';
 
 /**
  * How far each turns per metre the left foot leads the right along the facing (rad/m, walking ~1.3 m/s and running ~3.5 m/s; × its
@@ -25,7 +25,7 @@ const HELD = { thorax: 1.4, pelvis: 1.6 };
 const ROLL = { walk: 0.55, run: 0.14 };
 
 /** neither arm free to swing: both hands hold something */
-export const armsHeld = (person: Pick<PersonLegged, 'holding'>) => !!person.holding.left && !!person.holding.right;
+export const armsHeld = (person: Pick<Person, 'holding'>) => !!person.holding.left && !!person.holding.right;
 
 /** the pelvis's and the thorax's turn off the facing (rad, + to the left), the thorax's roll (rad) */
 export interface Turn { pelvis: number; thorax: number; roll: number }

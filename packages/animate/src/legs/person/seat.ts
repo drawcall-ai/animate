@@ -7,7 +7,7 @@ import { OVER_ANKLES, standingFeet } from '../../species/humanoid/stance';
 import { footprint } from './foot';
 import { squatOf } from './posture';
 import { levelUnder } from '../floor';
-import type { PersonLegged } from './legged';
+import type { Person } from '../../body/person';
 
 /** Tuned (× the thigh): the ankles stand this far ahead of the hips seated, nearer than under the knee. Recalled: feet drawn back ease rising (Janssen et al. 2002) */
 const FEET = 0.62;
@@ -28,7 +28,7 @@ const REACHES = 0.97;
 export interface Seating { hips: Vector3; stand: Vector3; lower: number; seconds: number }
 
 /** How `person` sits on the surface at `at` facing `yaw`, or what stops it: the seat too high or too low for its legs, or no level floor for its feet. */
-export function seating(person: PersonLegged, at: Readonly<Vector3>, yaw: number): Seating | Miss {
+export function seating(person: Person, at: Readonly<Vector3>, yaw: number): Seating | Miss {
   const p = person.proportions, s = p.scale, ahead = FEET * p.thigh;
   const stand = forwardOf(yaw).multiplyScalar(ahead + OVER_ANKLES * s).add(at).setY(0);
   const feet = forwardOf(yaw).multiplyScalar(-OVER_ANKLES * s).add(stand), floor = person.floor(feet.x, feet.z);
@@ -50,7 +50,7 @@ export class Seat {
   rising = false;
   private time = 0;
 
-  constructor(private readonly person: PersonLegged, readonly seating: Seating) {}
+  constructor(private readonly person: Person, readonly seating: Seating) {}
 
   /** a sub-step on: this seat, or none once it has stood */
   step(dt: number, asked: Go | null): Seat | null {

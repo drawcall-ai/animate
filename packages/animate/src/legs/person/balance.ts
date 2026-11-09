@@ -20,12 +20,12 @@ import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './po
 import { armsHeld } from './turn';
 import { bears, hullOf, outside, xcomOf, xcomOfPoses } from '../support';
 import { INDEX, SIDES, type Side } from '../../species/humanoid/bones';
-import type { PersonLegged } from './legged';
 import { drivenRoot } from '../legged';
 import { solePoints } from '../../species/humanoid/landmarks';
 import { humanStepping } from './stepping';
 import { KNEE_FLEXION } from '../../species/humanoid/limits';
 import { defaultStance, standingFeet } from '../../species/humanoid/stance';
+import type { Person } from '../../body/person';
 
 /**
  * How quickly a person's legs take it up to a pace and down from it (m/s²), which the trunk carries itself at — its lean into the
@@ -79,12 +79,12 @@ const AIMING = { accel: 300 };
  * capsule carries them: a leap it asks is taken as soon as the feet can, and `airborne` says when it is in the air; the body over it is
  * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; not its XCoM, which follows its input, not its balance.
  */
-export function driven(person: PersonLegged, seed?: number): Step {
+export function driven(person: Person, seed?: number): Step {
   return drivenBy(person, drivenRoot(person), { individual: individualOf(seedFor(person, seed)), seed });
 }
 
 /** the seed a person's life and individuality are drawn from: `seed` if given, else one from its build and where it was made */
-export function seedFor(person: Pick<PersonLegged, 'proportions' | 'pose' | 'yaw'>, seed?: number): number {
+export function seedFor(person: Pick<Person, 'proportions' | 'pose' | 'yaw'>, seed?: number): number {
   if (seed !== undefined) return seed;
   const root = person.pose.position(0), standing = standingFeet(person.proportions, root.x, root.z, person.yaw);
   return seedOf(person.proportions.height, standing[0].position.x, standing[0].position.z);
@@ -98,7 +98,7 @@ export function seedFor(person: Pick<PersonLegged, 'proportions' | 'pose' | 'yaw
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
  * less as it holds still (`steady`). It steps, swings its arms and sways as the `individual` it is.
  */
-export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number; individual: Individual }): Step {
+export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number; individual: Individual }): Step {
   const individual = options.individual;
   const proportions = person.proportions, s = proportions.scale;
   const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
@@ -370,7 +370,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
 }
 
 /** Final-pose checks of the last sub-step, against the legs as they were posed then. */
-function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
+function check(person: Person, f: Frame, dev: Dev, legs: readonly Leg[]) {
   const proportions = person.proportions, time = f.time - f.dt;
   legs.forEach((leg, i) => {
     const side = SIDES[i], bone = INDEX[`${side}Foot`];
@@ -413,7 +413,7 @@ function check(person: PersonLegged, f: Frame, dev: Dev, legs: readonly Leg[]) {
  * under a still body's weight (slower than `MOVING`, the weight on it: `bears`) till the body moves:
  * falling toward no landing, it stood on the other foot alone meanwhile. A planted sole supports as wide as its heel (`heelSides`).
  */
-export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
+export function checkSupport(person: Person, f: Frame, dev: Dev): void {
   if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);

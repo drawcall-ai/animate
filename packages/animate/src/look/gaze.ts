@@ -9,35 +9,21 @@ import { limited } from '../kernel/limits';
 import { angleOf, spinOf } from '../kernel/rotation';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Skeleton } from '../kernel/skeleton';
-import type { Poise } from '../kernel/poise';
 import type { Gazer } from '../species/define';
-import type { Locomotion } from '../legs/locomotion';
-import type { HeadOffset } from './offset';
 import { EYES, EYES_MOST, EyePitch } from './eyes';
-
-/** A body as its eyes see it: its gaze, where a neckless species' posture turns its head, its poise and its walk. */
-export interface Looker {
-  readonly gazer?: Gazer;
-  look: Readonly<Vector3> | null;
-  readonly poise: Poise;
-  readonly locomotion: Locomotion;
-  /** its head's turn over the gaze, which the gaze reads the head without */
-  readonly headOffset: HeadOffset;
-  /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
-  lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
-}
+import type { Self } from '../body/runtime';
 
 /** Horizontal view cone (rad, ~80° each side): neck and head turn ~75°, with the eyes taking the rest. */
 const IN_VIEW = 1.4;
 
 /** whether `point` is in view of the body as it faces (from where its weight was the sub-step before) */
-export function inView(self: Looker, point: Readonly<Vector3>, f: Frame): boolean {
+export function inView(self: Self, point: Readonly<Vector3>, f: Frame): boolean {
   const com = f.prev.com(_com);
   return Math.abs(wrapAngle(headingOf(point.x - com.x, point.z - com.z) - self.locomotion.facing)) < IN_VIEW;
 }
 
 /** Borrow gaze only once `seen` (default: target) is visible, unless `anyway` permits it sooner. */
-export function* noticing(self: Looker, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean } = {}) {
+export function* noticing(self: Self, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean } = {}) {
   yield* action<Frame>({ until: (f) => anyway?.() || inView(self, seen(f), f) });
   yield* during(request, 'look', 'borrowed', looking(self, target, { motion: SHIFT }));
 }
@@ -58,7 +44,7 @@ const SHIFT = { turnAccel: 60, turnSpeed: 6 };
  * head turn uses headPace, capped by motion. `recentring`: the eyes re-centre in the head once the body is still under the look (a look
  * asked for; one borrowed by the hands, or idle, leaves the head where it is).
  */
-export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false, head }: { motion?: HeadMotion; recentring?: boolean; head?: number } = {}): Step {
+export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false, head }: { motion?: HeadMotion; recentring?: boolean; head?: number } = {}): Step {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   if (neck === undefined && head !== undefined) throw new Error('lookAt: a head share needs a neck to turn the head (its posture turns it)');
@@ -203,7 +189,7 @@ function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<
 /** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned `share` of the bearing to `at` (at most 45°)
  * and pitched `PITCHED` × `share` of its pitch, a sub-step. Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine
  * and neck; the base shares it over spine/chest, gaze handles neck/head/eyes. */
-export function aiming(self: Looker, at: (f: Frame) => Readonly<Vector3>, share: number): Step {
+export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>, share: number): Step {
   if (!self.gazer) throw new Error('lookAt: the body has no gaze');
   return (f) => {
     const direction = at(f).clone().sub(self.headOffset.eyes(f.prev, new Vector3()));

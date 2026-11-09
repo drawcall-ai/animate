@@ -16,7 +16,7 @@ import { Carrier } from '../kernel/carrier';
 import { yawOf } from '../kernel/math';
 import { Binding } from './model';
 import { PlatformFrame } from './platform';
-import { anchors, movers, resolve, type Hold, type Holder, type Interpolated, type Resolving } from '../things/resolve';
+import { anchors, movers, resolve, type Hold, type Holder, type Interpolated } from '../things/resolve';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
@@ -176,6 +176,9 @@ export class Self implements Holder {
   /** what it bears of the things it holds and wears */
   readonly borne = new Map<Thing, Bearing>();
 
+  /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
+  lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
+
   /** what its hands do for the verbs (made when first asked, once all it is has been made) */
   get handling(): Handling {
     return (this.handled ??= this.handle());
@@ -234,13 +237,13 @@ export class Self implements Holder {
   }
 
   /** Self reads the pose being written (the last final pose between sub-steps); a body ahead of another reader exposes its update-start pose. */
-  poseFor(reader: Resolving): ReadonlyPose {
+  poseFor(reader: Holder): ReadonlyPose {
     if (reader === this) return this.stepping ? this.frame.current : this.frame.prev;
     return this.updates > reader.updates ? this.before[0] : this.frame.prev;
   }
 
   /** its final poses as `reader` reads them (`poseFor`): the last and the one before */
-  posesFor(reader: Resolving): readonly [ReadonlyPose, ReadonlyPose] {
+  posesFor(reader: Holder): readonly [ReadonlyPose, ReadonlyPose] {
     return this.updates > reader.updates ? [this.before[0], this.before[1]] : [this.frame.prev, this.frame.prev2];
   }
 
@@ -252,7 +255,7 @@ export class Self implements Holder {
   }
 
   /** where it moves `node`, as `reader` reads it (`poseFor`): its own this sub-step; another's as it was before its update this frame */
-  movedFor(reader: Resolving, node: Object3D): Placement | null {
+  movedFor(reader: Holder, node: Object3D): Placement | null {
     const carrier = this.carried.get(node);
     if (!carrier) return null;
     if (reader === this) return carrier.at(this.frame.time).current;

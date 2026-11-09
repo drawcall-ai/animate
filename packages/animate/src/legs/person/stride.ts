@@ -9,9 +9,9 @@ import { hullOf, past } from '../support';
 import { footprint } from './foot';
 import { checkSupport, drivenBy, feetBehind, seedFor } from './balance';
 import { individualOf } from './individual';
-import type { PersonLegged } from './legged';
 import { humanGait, humanStepping } from './stepping';
 import { OVER_ANKLES } from '../../species/humanoid/stance';
+import type { Person } from '../../body/person';
 
 /**
  * A person standing and walking where asked on the core legs: the root — the body's centre of mass over the floor — goes where the
@@ -20,7 +20,7 @@ import { OVER_ANKLES } from '../../species/humanoid/stance';
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
  */
-export function stride(person: PersonLegged, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
+export function stride(person: Person, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
   const proportions = person.proportions, s = proportions.scale, toeOut = humanStepping(proportions, true, person.stride).toeOut;
   const individual = individualOf(seedFor(person, options.seed));
   // (asked off, it sets off its own moment later: since when it was asked, s)

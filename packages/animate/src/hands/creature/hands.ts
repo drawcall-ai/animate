@@ -12,9 +12,9 @@ import { Pose, type ReadonlyPose } from '../../kernel/pose';
 import { STOOPING } from '../../legs/creature';
 import { forwardOf, minimumJerk } from '../../kernel/math';
 import { followRotation } from '../../kernel/follow';
-import type { Handed } from '../handed';
 import { wayOf } from '../route';
 import { paceAt, type Handling, type Pace } from '../handling';
+import type { Self } from '../../body/runtime';
 
 // A creature's hands, by name (`Species.hands`): the tip of the skeleton's chain named for each (a jaw, a trunk) reaches; what it takes
 // it holds rigidly (attached to the tip's bone).
@@ -30,14 +30,14 @@ const OUT = 0.9, AHEAD = 0.6;
 const PRESSING = 0.1;
 
 /** the chain hand `hand` reaches with */
-function chainOf(self: Handed, hand: string): string {
+function chainOf(self: Self, hand: string): string {
   const chain = self.species.hands?.get(hand);
   if (!chain) throw new Error(`the body has no hand "${hand}"`);
   return chain;
 }
 
 /** A creature's hand holding something, a sub-step: its chain as its balance carries it, its tip to rest (a dog's neck carrying a ball nods as it walks) */
-export function keeping(self: Handed): (f: Frame, hand: string) => void {
+export function keeping(self: Self): (f: Frame, hand: string) => void {
   return (f, hand) => {
     const bones = f.current.skeleton.chain(chainOf(self, hand));
     for (const b of bones) {
@@ -48,7 +48,7 @@ export function keeping(self: Handed): (f: Frame, hand: string) => void {
 }
 
 /** The hands' chains back to where balance has them over `HANDING` s, with what they hold, at a calm dip's pace (the first hand `use`d) */
-function handingBack(self: Handed, request: Request, hands: readonly string[], use: 'asked' | 'borrowed') {
+function handingBack(self: Self, request: Request, hands: readonly string[], use: 'asked' | 'borrowed') {
   const bones = hands.flatMap((hand) => self.pose.skeleton.chain(chainOf(self, hand)));
   let began = NaN, dips: Quaternion[][] = [];
   return during(request, `hand.${hands[0]}`, use, (f) => {
@@ -65,7 +65,7 @@ function handingBack(self: Handed, request: Request, hands: readonly string[], u
 }
 
 /** Split low reach between bow and leg lowering from standing geometry, without chasing the tip while it is still approaching. */
-function stooping(self: Handed, bones: readonly number[]) {
+function stooping(self: Self, bones: readonly number[]) {
   const legs = self.species.legs?.chains ?? [], tip = bones[bones.length - 1], length = chainLength(self, bones);
   const lowest = legs.length ? STOOPING.lowest * Math.min(...legs.map((leg) => chainLength(self, leg.joints.map(({ bone }) => bone)))) : 0;
   const lever = (f: { prev: ReadonlyPose }) => {
@@ -88,7 +88,7 @@ function stooping(self: Handed, bones: readonly number[]) {
 }
 
 /** the chain of `bones` laid out end to end (m) */
-function chainLength(self: Handed, bones: readonly number[]): number {
+function chainLength(self: Self, bones: readonly number[]): number {
   return bones.slice(1).reduce((sum, b) => sum + self.pose.skeleton.bones[b].offset.length(), 0);
 }
 
@@ -99,7 +99,7 @@ const _v = new Vector3(), _t = new Vector3();
 const dipping = (distance: number, pace: Pace) => distance / pace.speed + pace.speed / pace.accel;
 
 /** Borrow walking to a stand within chain reach (with `step`: without it, the feet stay put); fail unreachable heights, points out of reach without a step and stalled walks. */
-function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Pace, step: boolean) {
+function* walkingUp(self: Self, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, where: string, pace: Pace, step: boolean) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones);
   if (!self.species.legs || self.drive) return { chain, bones, stoop };
   const at = point(self.frame), lowered = stoop.most(self.frame), base = self.pose.position(bones[0]), out = OUT * chainLength(self, bones);
@@ -129,7 +129,7 @@ function* walkingUp(self: Handed, request: Request, hand: string, point: (f: Fra
 }
 
 /** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */
-function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) => Goal, pace: Pace, on?: Carrier) {
+function tipping(self: Self, request: Request, hand: string, goal: (f: Frame) => Goal, pace: Pace, on?: Carrier) {
   const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new ChainTip(chain);
   const first = goal(self.frame), at = on ? on.toWorld(first, _world, self.frame.time).position : first.position;
   const ends = self.frame.time + dipping(self.pose.position(bone).distanceTo(at), pace);
@@ -157,7 +157,7 @@ function tipping(self: Handed, request: Request, hand: string, goal: (f: Frame) 
 }
 
 /** A creature's hand walked up to `point`, then its tip (`bone`) onto the goal `aim` gives, at a calm dip's pace: met once there, it keeps there */
-function* holdingOn(self: Handed, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Pace, step: boolean) {
+function* holdingOn(self: Self, request: Request, hand: string, where: string, point: (f: Frame) => Readonly<Vector3>, aim: (bone: number) => (f: Frame) => Goal, pace: Pace, step: boolean) {
   const reach = yield* walkingUp(self, request, hand, point, where, pace, step);
   if (!reach) return;
   const bone = reach.bones[reach.bones.length - 1], goal = aim(bone);
@@ -175,7 +175,7 @@ function* holdingOn(self: Handed, request: Request, hand: string, where: string,
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() }, _iq = new Quaternion();
 
 /** A creature's hands for the verbs: one at a time, each its chain's tip, walked up to stand with the grip or target in reach; what it takes it holds rigidly */
-export function creatureHands(self: Handed): Handling {
+export function creatureHands(self: Self): Handling {
   const only = <Use>(verb: string, uses: readonly Use[]) => {
     if (uses.length > 1) throw new Error(`${verb}: a creature uses one hand at a time`);
     return uses[0];

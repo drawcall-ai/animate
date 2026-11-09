@@ -11,7 +11,6 @@ import { clearArm } from './hang';
 import type { Pace } from '../handling';
 import { INDEX } from '../../species/humanoid/bones';
 import { ARM_REACH } from './bend';
-import type { Reacher } from './reacher';
 import { pathAhead } from '../../look/around';
 import { bringShoulder } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
@@ -19,6 +18,7 @@ import { approach } from './approach';
 import { emptyAt, gripAt, holdOn, type Taking } from './take';
 import { ARM } from './trunk';
 import { flat, footing, walking } from './stand';
+import type { Person } from '../../body/person';
 
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
 const LOOKING = 0.6;
@@ -31,7 +31,7 @@ const REACHED_AFTER = 0.35;
 const CLOSE = 1.6;
 
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
-export function* grabbing(person: Reacher, request: Request, takes: readonly Taking[], step: boolean, motion?: Pace) {
+export function* grabbing(person: Person, request: Request, takes: readonly Taking[], step: boolean, motion?: Pace) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so the
   // bow would never bring the grip nearer, only bend the trunk as far as it goes)
@@ -109,7 +109,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
  * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
  * the arm's reach from where the body stands fails it.
  */
-export function* grabAtOnce(person: Reacher, request: Request, takes: readonly Taking[]) {
+export function* grabAtOnce(person: Person, request: Request, takes: readonly Taking[]) {
   if (person.updates > 0) throw new Error('grab: `speed: Infinity` takes hold at once only as a body starts (in its first update): a body already shown reaches for it');
   const f = person.frame, reach = ARM_REACH * person.proportions.armLength;
   for (const take of takes) {
@@ -139,7 +139,7 @@ export function* grabAtOnce(person: Reacher, request: Request, takes: readonly T
  * length, half-thickness and reserve) is short of that thing's envelope — the hands rising toward it as the body comes up do not go into
  * it — in place
  */
-function shortOf(person: Reacher, take: Taking, shoulder: Vector3, at: Vector3): void {
+function shortOf(person: Person, take: Taking, shoulder: Vector3, at: Vector3): void {
   const frame = person.track(take.thing.object).current, back = _back.copy(frame.quaternion).invert();
   const box = _box.copy(take.thing.bounds).expandByScalar(ARM.hand * person.proportions.height + LOAD_RESERVE * person.scale);
   if (box.isEmpty()) return;
