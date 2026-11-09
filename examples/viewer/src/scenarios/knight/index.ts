@@ -2,7 +2,7 @@ import { Euler, Group, Matrix4, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { arriving, carry, grab, lookAt, release, wait, walkTo, type Target, grip } from '@drawcall/animate';
 import type { Scenario } from '../../scenario';
-import { PERSON, scaled } from '../../skeletons/index';
+import { PERSON, scaled } from '../../skeletons';
 import { ball, box, cylinder } from '../../things';
 import { beltEnd, gauntlet, harness, helm, lance, scabbard, shield, solidsOf, strap, sword } from './gear';
 

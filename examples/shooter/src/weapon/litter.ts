@@ -1,6 +1,6 @@
 import { BoxCollider, RigidBody } from '@drawcall/physics';
 import { BufferGeometry, Mesh, Object3D, Vector3 } from 'three';
-import { RIFLE } from './index';
+import { RIFLE } from '.';
 
 /** A magazine's body as it collides (m, its frame): its 2.8 cm thick, 15.5 cm long, 8 cm deep curved box, squared off. */
 const BODY = { size: [0.028, 0.155, 0.08] as const, at: new Vector3(0, -0.004, -0.005) };
@@ -12,7 +12,7 @@ const KEPT = 6;
 
 /**
  * What a soldier lets go of to fall, its spent magazines: each a rigid body of its own under the scene, as a dead soldier's rifle is,
- * leaving the hand as the hand last moved and turned it, falling onto the floor and the path and coming to rest by itself; past `KEPT`
+ * leaving the hand as the hand last moved and turned it, falling onto the floor and the course and coming to rest by itself; past `KEPT`
  * the oldest is cleared away.
  */
 export class Litter {

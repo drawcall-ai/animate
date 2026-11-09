@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RigidBody, SphereCollider } from '@drawcall/physics';
 import { Vector3 } from 'three';
-import { FUSE, Grenades } from '../src/grenade/index';
+import { FUSE, Grenades } from '../src/grenade';
 import { GrenadeModel } from '../src/grenade/model';
 import { box, cleanup, course, DT, node, offGrip, soldiers } from './course';
 

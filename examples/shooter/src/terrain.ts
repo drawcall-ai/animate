@@ -18,7 +18,7 @@ interface Surface {
   height: number;
 }
 
-/** Exact upward faces of the path's physics boxes (other shapes are no floor), sampled without resyncing the world for every foot probe. */
+/** Exact upward faces of the course's physics boxes (other shapes are no floor), sampled without resyncing the world for every foot probe. */
 export class Terrain {
   private ceiling = HEIGHT;
   private readonly surfaces: Surface[] = [];
@@ -33,7 +33,7 @@ export class Terrain {
     this.world.scene.traverse((body) => {
       if (!(body instanceof RigidBody)) return;
       for (const collider of body.getColliders()) {
-        // (the path is built of boxes: anything else — a grenade, its pin — is nothing to stand on)
+        // (the course is built of boxes: anything else — a grenade, its pin — is nothing to stand on)
         const shape = collider.shape();
         if (shape.kind !== 'box') continue;
         const half = new Vector3(...shape.size).multiplyScalar(0.5);

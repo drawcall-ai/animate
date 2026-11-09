@@ -5,8 +5,8 @@ import { Actor } from './actor';
 import { Clearance } from './clearance';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
-import { SCENARIOS } from '../src/scenarios/index';
-import { SOLDIER } from '../src/skeletons/index';
+import { SCENARIOS } from '../src/scenarios';
+import { SOLDIER } from '../src/skeletons';
 import { cases } from '../../../packages/animate/test/open';
 
 const test = cases([

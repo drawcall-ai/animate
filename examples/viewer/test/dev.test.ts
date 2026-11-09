@@ -1,9 +1,9 @@
 import { run } from './dev-log';
 import { expect } from 'vitest';
-import { SCENARIOS } from '../src/scenarios/index';
+import { SCENARIOS } from '../src/scenarios';
 import { reaching } from '../src/scenarios/tracking';
 import { knownFailure, seeded } from '../scripts/run';
-import { SOLDIER, OUTLIER } from '../src/skeletons/index';
+import { SOLDIER, OUTLIER } from '../src/skeletons';
 import { cases } from '../../../packages/animate/test/open';
 
 const test = cases([

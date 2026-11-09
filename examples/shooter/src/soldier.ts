@@ -15,7 +15,7 @@ import { Driver } from './rover/driver';
 import type { Handling } from './rover/handling';
 import type { Rover } from './rover/model';
 import { Terrain } from './terrain';
-import { Grenades } from './grenade/index';
+import { Grenades } from './grenade';
 
 /** The most seconds a fresh body may take to have its rifle in its hands. */
 const READY = 3;

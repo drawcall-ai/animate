@@ -1,7 +1,7 @@
 import { VIEWS, type View } from './stage/camera';
 import { byId } from './dom';
 import type { Scenario } from './scenario';
-import { SCENARIOS } from './scenarios/index';
+import { SCENARIOS } from './scenarios';
 
 /** what the side panel sets */
 export interface Settings {

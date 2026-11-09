@@ -65,7 +65,7 @@ export function followRotation(prev2: Quaternion, prev: Quaternion, target: Quat
   return on ? out.premultiply(on.current.quaternion) : out;
 }
 
-/** `world` into the frame of a moving frame placed `at` */
+/** `world` into a moving frame placed `at` */
 export function toLocal(at: Placement, world: Vector3): Vector3 {
   return world.sub(at.position).applyQuaternion(_r.copy(at.quaternion).invert());
 }

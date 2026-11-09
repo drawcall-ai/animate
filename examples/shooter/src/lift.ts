@@ -29,7 +29,7 @@ const REACH = { near: 0.38, far: 0.55, aside: { least: 0.085, most: 0.2 }, facin
 const UP = new Vector3(0, 1, 0);
 
 /**
- * The path's lift: a kinematic platform that stays at the foot or at the upper deck until one of its buttons is pressed, then rides to
+ * The course's lift: a kinematic platform that stays at the foot or at the upper deck until one of its buttons is pressed, then rides to
  * the other level. On it a panel sends it up or down; on each landing a post calls it there. Each button is a thing of its own (massless: a
  * fixture) with one grip, `press`: its cap's face, where the left index's pad goes (`userData.point`), pressed straight in (`facing`): the
  * hand comes as a loose fist to before it, points and pushes in; the cap and the pad on it go in with the press.

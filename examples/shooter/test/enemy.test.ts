@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { wrapAngle } from '../src/angles';
-import { Enemy } from '../src/enemy/index';
+import { Enemy } from '../src/enemy';
 import { visible } from '../src/enemy/cover';
 import { Navigation } from '../src/nav';
 import { box, DT, soldiers } from './course';

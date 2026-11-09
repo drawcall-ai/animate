@@ -3,7 +3,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { RigLoader, type SkeletonBone } from '@drawcall/rig';
 import type { Body } from '@drawcall/animate';
 import { Joints } from '../joints';
-import { OpenPoseSkeleton } from '../openpose/index';
+import { OpenPoseSkeleton } from '../openpose';
 import { isPerson } from '../simulation';
 
 /** The rigged models bodies wear, each loaded and skinned once (by @drawcall/rig, on the skeleton measured on it), by that skeleton. */

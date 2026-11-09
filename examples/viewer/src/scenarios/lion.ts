@@ -3,7 +3,7 @@ import { action, parallel } from '@pmndrs/timeline';
 import { walkTo } from '@drawcall/animate';
 import { carriages, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate/species';
 import type { Scenario } from '../scenario';
-import { LION } from '../skeletons/index';
+import { LION } from '../skeletons';
 import { ball } from '../things';
 
 type LionBone = (typeof LION)[number]['name'];

@@ -8,7 +8,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { drawOpenPose2D, projectBody25 } from '../openpose/index';
+import { drawOpenPose2D, projectBody25 } from '../openpose';
 import type { Joints } from '../joints';
 
 const FOV = 38;

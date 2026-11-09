@@ -32,7 +32,7 @@ it('keeps the posed soles on a vertically moving lift without walking in place',
   expect(lifted).toBe(0);
 });
 
-/** The path's lift beside its upper deck; the lift starts at `height(0)`. */
+/** The course's lift beside its upper deck; the lift starts at `height(0)`. */
 function liftAndDeck(height: (time: number) => number) {
   return (scene: Scene) => {
     box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');

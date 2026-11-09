@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { BEATS } from '../src/beats/index';
+import { BEATS } from '../src/beats';
 import { playsThrough } from './play-through';
 
 // Every registered beat but the film, which is as long as all of these together: its file gets a worker of its own beside them.

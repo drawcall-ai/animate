@@ -27,7 +27,7 @@ export function box(scene: Scene, size: [number, number, number], at: [number, n
   return body;
 }
 
-/** The path's eight 22 cm risers on 55 cm treads, rising toward +z from their front edge at `z`, with the 1.76 m landing above. */
+/** The course's eight 22 cm risers on 55 cm treads, rising toward +z from their front edge at `z`, with the 1.76 m landing above. */
 export function stairs(scene: Scene, x = 0, z = 0) {
   for (let i = 0; i < 8; i++) box(scene, [3, (i + 1) * 0.22, 0.55], [x, (i + 1) * 0.11, z + i * 0.55 + 0.275], 'static', 'Stairs');
   box(scene, [3, 1.76, 3], [x, 0.88, z + 5.9], 'static', 'Stair landing');
@@ -64,7 +64,7 @@ export async function course<T>(build: (scene: Scene) => T, { spawn = new Vector
   return { scene, world, movement, advance, built };
 }
 
-/** `timedPath` with the player's avatar driven by the capsule after every physics step, as `Soldier` drives it. */
+/** `course` with the player's avatar driven by the capsule after every physics step, as `Soldier` drives it. */
 export async function soldierOn<T>(build: (scene: Scene) => T, options: Options & { pitch?: number; firstPerson?: boolean } = {}) {
   const { pitch = 0, firstPerson = true } = options;
   const run = await course(build, options);

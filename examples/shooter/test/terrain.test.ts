@@ -7,7 +7,7 @@ import { SOLDIER } from '../src/skeleton';
 import { Terrain } from '../src/terrain';
 import { box, cleanup, ramp, soles, stairs } from './course';
 
-/** The path's stairs, tunnel ceiling, walkway, ramp and lift, plus one tilted block, as bare colliders. */
+/** The course's stairs, tunnel ceiling, walkway, ramp and lift, plus one tilted block, as bare colliders. */
 async function yard() {
   const scene = new Scene();
   box(scene, [44, 1, 44], [0, -0.5, 2]);

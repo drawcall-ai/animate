@@ -5,7 +5,7 @@ import { carry, grab, horse, lookAt, wait, walkTo, type Body, grip } from '@draw
 import { Simulation } from '../src/simulation';
 import { GATE, LEAD_ROPE, RAIL, TIED, stableMorning } from '../src/scenarios/stable-morning';
 import { Cast, type Scenario } from '../src/scenario';
-import { HORSE, SOLDIER, type PersonSkeleton } from '../src/skeletons/index';
+import { HORSE, SOLDIER, type PersonSkeleton } from '../src/skeletons';
 import { box } from '../src/things';
 import { Actor } from './actor';
 import { segmentDistance } from './clearance';

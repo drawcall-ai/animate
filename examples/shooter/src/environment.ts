@@ -12,7 +12,7 @@ type Point = readonly [number, number, number];
 /** Headroom under the crouch tunnel's ceiling, in metres. */
 export const TUNNEL_CLEARANCE = 1.55;
 
-// The training path: stairs, a ramp, raised walkways, step-height blocks, a crouch tunnel, cover, a lift that rides up and down at the
+// The training course: stairs, a ramp, raised walkways, step-height blocks, a crouch tunnel, cover, a lift that rides up and down at the
 // press of a button on its panel or is called by the post at either landing, targets, physics crates and an open-topped Land Rover to drive.
 export function createEnvironment(scene: Scene) {
   const yard = new Group();
