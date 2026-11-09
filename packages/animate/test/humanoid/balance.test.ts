@@ -53,7 +53,7 @@ describe('balance', () => {
   it('stands still where it starts, its feet planted, and reads and clears what it is asked every sub-step', () => {
     const asked: number[] = [];
     const body = person(), h = insides(body);
-    claim(body, 'trunk', () => void (asked.push(h.poise.lower), h.poise.add({ lower: 0.01 })));
+    claim(body, 'trunk', () => void (asked.push(h.asks.lower), h.asks.add({ lower: 0.01 })));
     body.update(dt);
     const start = feetOf(h).map((f) => f.position.clone());
     run(body, 2);

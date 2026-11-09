@@ -1,5 +1,5 @@
 import type { Go } from '../../step/go';
-import type { Poise } from '../../kernel/poise';
+import type { Asks } from '../../kernel/asks';
 import { MathUtils, Vector3 } from 'three';
 import { lerp } from '../../kernel/math';
 import { irregular, seeded, seedOf } from '../../kernel/random';
@@ -45,8 +45,8 @@ export class Quiet {
     return weight > 0 ? 'left' : weight < 0 ? 'right' : null;
   }
 
-  quiet(go: Go | null, poise: Poise, person: Person): boolean {
-    return !go && !person.locomotion.moving && !person.holding.left && !person.holding.right && poise.lower === 0 && poise.bow === 0 && poise.steady === 0;
+  quiet(go: Go | null, asks: Asks, person: Person): boolean {
+    return !go && !person.locomotion.moving && !person.holding.left && !person.holding.right && asks.lower === 0 && asks.bow === 0 && asks.steady === 0;
   }
 
   /** `steady`: how still it holds itself (0 … 1: aiming) */

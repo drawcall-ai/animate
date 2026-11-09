@@ -93,7 +93,7 @@ export function limited(skeleton: Skeleton, bone: number, q: Quaternion): Quater
 }
 
 /** how far (rad) `q` is beyond `limit`: the angle to its clamp (0 within it) */
-export function beyond(q: Quaternion, limit: Limit): number {
+export function pastLimit(q: Quaternion, limit: Limit): number {
   const r = _beyond.copy(q);
   if (!clampRotation(r, limit)) return 0;
   const d = r.invert().multiply(q);
@@ -109,7 +109,7 @@ const _c = coordinates(), _abc = [0, 0, 0], _beyond = new Quaternion(), _checked
 export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {
   pose.skeleton.limits.forEach((limit, bone) => {
     if (!limit) return;
-    const value = beyond(_checked.copy(pose.local(bone)), limit) * 180 / Math.PI;
+    const value = pastLimit(_checked.copy(pose.local(bone)), limit) * 180 / Math.PI;
     if (value > 0.5) dev.append(time, { check: 'joint range (°)', value, limit: 0.5, where: pose.skeleton.bones[bone].name });
   });
 }

@@ -1,7 +1,7 @@
 import { action, parallel } from '@pmndrs/timeline';
 import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
-import type { ArmPosture, Posture } from '../kernel/poise';
+import type { ArmPosture, Posture } from '../kernel/asks';
 import { selfOf, type Body } from '../body';
 import type { Self } from '../body/self';
 import { comingToRest, STILL } from '../kernel/rest';
@@ -53,7 +53,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
     });
     yield* parallel('all',
       coming(self, request, posture, hold),
-      posed && during(request, 'trunk', 'asked', () => self.poise.add({ posture: asked })),
+      posed && during(request, 'trunk', 'asked', () => self.asks.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
       ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(self.person.armPose[side], arm))),
       ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));

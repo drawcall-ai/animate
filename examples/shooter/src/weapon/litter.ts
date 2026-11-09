@@ -12,7 +12,7 @@ const KEPT = 6;
 
 /**
  * What a soldier lets go of to fall, its spent magazines: each a rigid body of its own under the scene, as a dead soldier's rifle is,
- * leaving the hand as the hand last moved and turned it, falling onto the floor and the course and coming to rest by itself; past `KEPT`
+ * leaving the hand as the hand last moved and turned it, falling onto the floor and the path and coming to rest by itself; past `KEPT`
  * the oldest is cleared away.
  */
 export class Litter {

@@ -3,10 +3,10 @@ import type { Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
 import { limited } from '../kernel/limits';
 import type { ReadonlyPose } from '../kernel/pose';
-import type { Posture } from '../kernel/poise';
+import type { Posture } from '../kernel/asks';
 import type { Gazer } from '../species/define';
 
-/** A head's turn as `Posture.head` has it: pitch (+ chin down), yaw (+ to its left), roll (+ its left side up), each given (rad). */
+/** A head's turn as `WalkPose.head` has it: pitch (+ chin down), yaw (+ to its left), roll (+ its left side up), each given (rad). */
 type Angles = Required<NonNullable<Posture['head']>>;
 
 /**

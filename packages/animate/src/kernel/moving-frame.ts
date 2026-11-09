@@ -1,5 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import { STEP } from './frame';
+import { SUBSTEP } from './frame';
 import type { Trail, Placement, Goal } from './goal';
 import { spinOf } from './rotation';
 
@@ -8,7 +8,7 @@ import { spinOf } from './rotation';
  * last moved to, `prev` and `prev2` the two sub-steps before. It is moved once per sub-step: by the body that moves what it is, after
  * that body's hands, or as it is found the first time it is read in a sub-step. Read it at a sub-step's time (`at`).
  */
-export class Carrier implements Trail {
+export class MovingFrame implements Trail {
   readonly prev2: Placement;
   readonly prev: Placement;
   readonly current: Placement;
@@ -28,7 +28,7 @@ export class Carrier implements Trail {
   /** moves it to where it is at `time` (s): once per sub-step; a sub-step it was not moved in it stood still */
   move(time: number, position: Readonly<Vector3>, quaternion: Readonly<Quaternion> = this.current.quaternion): void {
     if (time <= this.time + 1e-9) throw new Error(`a carrier moved twice at ${time.toFixed(4)} s`);
-    const still = time - this.time > 1.5 * STEP;
+    const still = time - this.time > 1.5 * SUBSTEP;
     copy(this.prev2, still ? this.current : this.prev);
     copy(this.prev, this.current);
     this.current.position.copy(position);
@@ -40,7 +40,7 @@ export class Carrier implements Trail {
    * body moves what it wears after its behaviour — carried on as it last moved */
   at(time: number): Trail {
     // (not moved the sub-step before nor this one, it has stood still since it last moved: no motion carried over)
-    if (this.dueAt !== time && time - this.time > 1.5 * STEP) return { prev2: this.current, prev: this.current, current: this.current };
+    if (this.dueAt !== time && time - this.time > 1.5 * SUBSTEP) return { prev2: this.current, prev: this.current, current: this.current };
     if (this.dueAt !== time || this.moved(time)) return this;
     const { position, quaternion } = this.ahead;
     position.copy(this.current.position).multiplyScalar(2).sub(this.prev.position);
@@ -73,7 +73,7 @@ export class Carrier implements Trail {
 
   /** its velocity (m/s) over the last sub-step */
   velocity(out: Vector3): Vector3 {
-    return out.subVectors(this.current.position, this.prev.position).divideScalar(STEP);
+    return out.subVectors(this.current.position, this.prev.position).divideScalar(SUBSTEP);
   }
 
   /** `local` (in its frame) in the world as it is now — at `time` (s), if given (`at`) — into `out`: moving with it (v + ω × r) */
@@ -83,8 +83,8 @@ export class Carrier implements Trail {
     out.position.copy(r).add(position);
     if (local.quaternion) (out.quaternion ??= new Quaternion()).copy(quaternion).multiply(local.quaternion);
     else out.quaternion = undefined;
-    spinOf(prev.quaternion, quaternion, STEP, out.spin);
-    out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(out.spin, r));
+    spinOf(prev.quaternion, quaternion, SUBSTEP, out.spin);
+    out.velocity.subVectors(position, prev.position).divideScalar(SUBSTEP).add(_v.crossVectors(out.spin, r));
     return out;
   }
 
@@ -95,9 +95,9 @@ export class Carrier implements Trail {
     const r = _r.subVectors(world.position, position);
     out.position.copy(r).applyQuaternion(inverse);
     out.quaternion = world.quaternion && (out.quaternion ?? new Quaternion()).copy(inverse).multiply(world.quaternion);
-    const spin = spinOf(prev.quaternion, quaternion, STEP, _s);
+    const spin = spinOf(prev.quaternion, quaternion, SUBSTEP, _s);
     // (the world's velocity less the frame's at the point, v + ω × r, then turned into it)
-    out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(spin, r)).negate();
+    out.velocity.subVectors(position, prev.position).divideScalar(SUBSTEP).add(_v.crossVectors(spin, r)).negate();
     if (world.velocity) out.velocity.add(world.velocity);
     out.velocity.applyQuaternion(inverse);
     out.spin.copy(world.spin ?? ZERO).sub(spin).applyQuaternion(inverse);

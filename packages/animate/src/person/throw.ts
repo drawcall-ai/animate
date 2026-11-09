@@ -1,18 +1,18 @@
 import { MathUtils, Object3D, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { letGo } from '../body/letgo';
-import { course, still } from '../kernel/course';
+import { letGo } from '../body/let-go';
+import { timedPath, still } from '../kernel/timed-path';
 import type { Frame } from '../kernel/frame';
 import { lerp } from '../kernel/math';
-import type { Asked } from '../kernel/poise';
+import type { Asked } from '../kernel/asks';
 import { during, type Miss, type Request } from '../kernel/requests';
-import { ChainTip } from '../kernel/tip';
+import { LimbMover } from '../kernel/limb';
 import type { Target } from '../things/target';
 import type { Thing } from '../things/thing';
 import type { ThrowOptions } from '../verbs/throw';
 import { INDEX, type Side } from './anatomy/bones';
 import { handStep } from './hands/arms';
-import { crouchOf } from './legs/legged';
+import { crouchOf } from './legs/height';
 import type { Person } from './person';
 
 /** where the throwing hand's wrist goes, from the head standing upright, as low as its root crouches it (the body's frame for a right
@@ -64,9 +64,9 @@ export function* throwing(person: Person, request: Request, thing: Thing, side: 
   // (`coil`: the offset turned with the trunk's coil, as far as that is in, so `behind` is behind the turned shoulders, as it looks)
   const at = (offset: Vector3, coil = 0) => () => ({ position: new Vector3(x * offset.x, offset.y, offset.z).applyAxisAngle(UP, coil * x * COILED.twist)
     .multiplyScalar(scale).add(head).applyQuaternion(facing()).add(ground()) });
-  const windup = course({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
+  const windup = timedPath({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
     [[TIMES.windup / 2, at(PATH.aside, 0.25)], [TIMES.windup / 2, at(PATH.cocked, 0.5)], [TIMES.cocked, still]]);
-  const arm = new ChainTip(`${side}Arm`), free = !person.holding[off];
+  const arm = new LimbMover(`${side}Arm`), free = !person.holding[off];
   // (the hand eased through the windup and the cock from how it held the thing, turned with the body, to straight on the forearm, the
   // turn the whip takes it in, not snapped there in a sub-step)
   const forearm = INDEX[`${side}LowerArm`], held = facing().invert().multiply(person.pose.rotation(bone));
@@ -74,7 +74,7 @@ export function* throwing(person: Person, request: Request, thing: Thing, side: 
   const through = () => ({ position: new Vector3(x * THROUGH.direction.x, THROUGH.direction.y, THROUGH.direction.z).multiplyScalar(THROUGH.share * person.proportions.armLength)
     .applyQuaternion(facing()).add(person.pose.position(INDEX[`${side}UpperArm`])) });
   const elbow = () => person.pose.position(INDEX[`${side}UpperArm`]).clone().add(new Vector3(x * ELBOW.x, ELBOW.y, ELBOW.z).applyQuaternion(facing()));
-  let whip: ReturnType<typeof course> | null = null, gone = false, began = NaN;
+  let whip: ReturnType<typeof timedPath> | null = null, gone = false, began = NaN;
   const since = (f: Frame) => f.time - (Number.isNaN(began) ? (began = f.time) : began);
   const uncoiled = (f: Frame) => since(f) >= TIMES.windup + TIMES.cocked - TIMES.lead;
   // (a body standing strides into the throw, sinks into it and turns its hips with it; one already walking or running throws over its
@@ -94,20 +94,20 @@ export function* throwing(person: Person, request: Request, thing: Thing, side: 
   };
   const aiming: { short: Miss | null } = { short: null };
   yield* parallel<Frame>('race',
-    during(request, 'trunk', 'asked', (f) => person.poise.add(trunk(f))),
+    during(request, 'trunk', 'asked', (f) => person.asks.add(trunk(f))),
     free && during(request, `arm.${off}`, 'asked', (f) => {
       // (pulled in ahead of the trunk's uncoil, at an arm's pace, so the turn does not swing the raised arm out wide)
       const pose = since(f) >= TIMES.windup + TIMES.cocked - TIMES.pull ? OFF.pulled : OFF.pointing, to = person.armPose[off];
       for (const key of ['forward', 'out', 'twist', 'elbow'] as const) to[key] += pose[key];
     }),
     during(request, `hand.${side}`, 'asked', (f) => {
-      if (since(f) < TIMES.windup + TIMES.cocked) return void handStep(person, f, side, { position: windup.to(f).position, quaternion: wrist(f) }, { ...QUICK, lead: false, pole: elbow() }, arm);
-      whip ??= course({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
+      if (since(f) < TIMES.windup + TIMES.cocked) return void handStep(person, f, side, { position: windup.to(f).position, quaternion: wrist(f) }, { ...QUICK, bodyFollows: false, pole: elbow() }, arm);
+      whip ??= timedPath({ current: { position: person.pose.position(bone).clone(), quaternion: new Quaternion() } },
         [[TIMES.whip * 0.3, at(PATH.passing)], [TIMES.whip * 0.2, at(PATH.out)], [TIMES.whip * 0.5, through]]);
       // (the hand turned with the forearm through the whip)
       // (the elbow kept out and level through the follow-through as well: let loose after the release, a short arm's solve could pick the
       // elbow over the shoulder from one sub-step to the next)
-      handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, lead: false, pole: elbow() }, arm);
+      handStep(person, f, side, { position: whip.to(f).position, quaternion: f.prev.rotation(forearm) }, { ...QUICK, bodyFollows: false, pole: elbow() }, arm);
       // (let go as it passes ahead of the head, or as the whip reaches where that is, whichever is first)
       if (gone || (local(f.current.position(bone)).z < PATH.out.z * scale && since(f) < TIMES.windup + TIMES.cocked + TIMES.whip / 2)) return;
       gone = true;
@@ -123,8 +123,8 @@ export function* throwing(person: Person, request: Request, thing: Thing, side: 
   // (the hand held at the end of its follow-through a moment, the trunk held there with it; then the arm is free, and the trunk and the
   // stride come back on their own as the next verb begins)
   yield* parallel<Frame>('race',
-    during(request, 'trunk', 'asked', (f) => person.poise.add(trunk(f))),
-    during(request, `hand.${side}`, 'asked', (f) => handStep(person, f, side, { ...through(), quaternion: f.prev.rotation(forearm) }, { ...QUICK, lead: false }, arm), (f) => since(f) >= TIMES.windup + TIMES.cocked + TIMES.whip + TIMES.held));
+    during(request, 'trunk', 'asked', (f) => person.asks.add(trunk(f))),
+    during(request, `hand.${side}`, 'asked', (f) => handStep(person, f, side, { ...through(), quaternion: f.prev.rotation(forearm) }, { ...QUICK, bodyFollows: false }, arm), (f) => since(f) >= TIMES.windup + TIMES.cocked + TIMES.whip + TIMES.held));
   if (aiming.short) request.fail(aiming.short);
   else request.met();
 }

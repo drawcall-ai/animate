@@ -2,7 +2,7 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { Body, dog, horse, humanoid, lookAt, pose, reach, track, wait, walkTo, type Posture, type Species } from '../../src/index';
-import type { ArmPosture } from '../../src/kernel/poise';
+import type { ArmPosture } from '../../src/kernel/asks';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { INDEX, SIDES } from '../../src/person/anatomy/bones';
 import { palmOf } from '../../src/person/anatomy/landmarks';

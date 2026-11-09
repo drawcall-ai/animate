@@ -56,7 +56,7 @@ export class Grenades {
   drop(object: Object3D, motion: Released) {
     this.group.attach(object);
     // Tiny cosmetic parts have no rigid colliders: a lever starts inside its grenade, and neither a pin nor a lever
-    // should obstruct the player's capsule or deflect the projectile. They fall to the course's surfaces instead.
+    // should obstruct the player's capsule or deflect the projectile. They fall to the path's surfaces instead.
     this.debris.push({ object, velocity: motion.velocity.clone(), spin: motion.spin.clone().clampLength(0, 30), remaining: FUSE });
   }
 

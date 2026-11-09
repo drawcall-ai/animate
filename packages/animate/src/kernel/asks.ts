@@ -44,8 +44,8 @@ export interface ArmPosture {
 /** A `Posture`'s trunk, each field given. */
 type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
 
-/** What a body is asked to do with its stance this sub-step (see `Poise`), each field as it combines with the others asked. */
-export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'bowRate' | 'twist' | 'twistRate' | 'hips' | 'stagger' | 'shift' | 'steady'>> & { posture?: TrunkPosture };
+/** What a body is asked to do with its stance this sub-step (see `Asks`), each field as it combines with the others asked. */
+export type Asked = Partial<Pick<Asks, 'lower' | 'bow' | 'bowLimit' | 'bowRate' | 'twist' | 'twistRate' | 'hips' | 'stagger' | 'shift' | 'steady'>> & { posture?: TrunkPosture };
 
 /**
  * How a body is asked to hold itself over its legs this sub-step — what each of its parts may ask at once and balance serves together:
@@ -54,7 +54,7 @@ export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'bowRate'
  * largest `twist`, `hips`, `twistRate`, `bowRate`, `shift` and `steady`, the last `stagger`; a `posture` is summed and added onto them
  * all. Balance takes what was asked at the start of its sub-step and clears it (so it acts on it a sub-step later).
  */
-export class Poise {
+export class Asks {
   /** let the pelvis down by the knees (m; negative: up onto the toes) */
   lower = 0;
   /** bend the trunk forward at the hips and lower back (rad) */
@@ -95,7 +95,7 @@ export class Poise {
   }
 
   /** what it holds, copied into `into`, and itself cleared */
-  pass(into: Poise): Poise {
+  pass(into: Asks): Asks {
     [into.lower, into.bow, into.bowLimit, into.bowRate, into.twist, into.twistRate, into.hips, into.stagger, into.shift, into.steady] =
       [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady];
     [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady] = [0, 0, Infinity, 0, 0, 0, 0, null, null, 0];

@@ -1,6 +1,6 @@
 import type { HandPart, HandPoint } from './placement';
 import { Matrix4, Quaternion, Ray, Vector3, type Object3D, type SkinnedMesh } from 'three';
-import { palmFacing, type DigitBones } from './bones';
+import { palmFacing, type DigitBones } from './digit-bones';
 import { bisect } from '../kernel/math';
 import { Triangles } from '../kernel/triangles';
 import { DIGITS, RELAXED, type Digit, type DigitName, type Shape } from './shape';
@@ -8,7 +8,7 @@ import { DIGITS, RELAXED, type Digit, type DigitName, type Shape } from './shape
 /** One finger joint: its node and rest rotation, where it stands at rest from the joint before it (the hand, for the first), the axis it
  * bends toward the palm about, how far it is bent about it at rest, and its segment out to the next joint, with how far its palm side lies
  * from it (all its own frame). */
-interface Joint {
+interface DigitJoint {
   node: Object3D;
   rest: Quaternion;
   offset: Matrix4;
@@ -26,7 +26,7 @@ interface Joint {
   end: number;
 }
 
-type Three = readonly [Joint, Joint, Joint];
+type Three = readonly [DigitJoint, DigitJoint, DigitJoint];
 
 /** A finger's joints from the palm out, and the axis its knuckle fans it about away from the middle finger (none: the middle finger). */
 interface FingerJoints {
@@ -71,9 +71,9 @@ const FLEXING = 15;
 /** the halvings a digit braked to `FLEXING` is held back in (to 1/64 of its way on) */
 const BRAKING = 6;
 /** how far off its length toward its palm side the point of a fingertip that touches is: pressing a button nearly end on (`TIP`), and
- * pressing with the flat of the pad on what the hand holds (`FLAT`) (rad) */
+ * pressing with the flat of the pad on what the hand holds (`FLAT_PAD`) (rad) */
 const TIP = (25 * Math.PI) / 180;
-export const FLAT = (70 * Math.PI) / 180;
+export const FLAT_PAD = (70 * Math.PI) / 180;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;
@@ -142,7 +142,7 @@ export class Joints {
         if (tip) return tip.position.clone().applyQuaternion(turnOf(name));
         return point(name).sub(point(names[k - 1])).multiplyScalar(0.8);
       });
-      const [a, b, c] = names.map((name, k): Joint => {
+      const [a, b, c] = names.map((name, k): DigitJoint => {
         const back = turnOf(name).invert(), segment = segments[k], unit = segment.clone().normalize();
         const flex = bending(unit).normalize(), palmar = new Vector3().crossVectors(flex, unit).normalize();
         const middle = point(name).addScaledVector(segment, 0.5);
@@ -228,7 +228,7 @@ export class Joints {
 
   /**
    * where `digit`'s pad is as `shape` would have it, in the hand's frame, and the way it faces (into `out`, `facing`): the point of its
-   * rounded end that faces `round` off its length toward its palm side (`TIP`, `FLAT`)
+   * rounded end that faces `round` off its length toward its palm side (`TIP`, `FLAT_PAD`)
    */
   pad(digit: Digit, shape: Shape, out: Vector3, facing = new Vector3(), round = TIP): Vector3 {
     const last = this.chain(digit)[2], frame = this.frames(digit, shape)[2];
@@ -313,7 +313,7 @@ export class Joints {
 }
 
 /** `joint` turned from its rest: fanned `fanned` rad about `fan`, then bent `bend` rad from straight */
-function bent(joint: Joint, bend: number, fan: Vector3 | null, fanned: number): Quaternion {
+function bent(joint: DigitJoint, bend: number, fan: Vector3 | null, fanned: number): Quaternion {
   const turn = joint.rest.clone();
   if (fan && fanned) turn.multiply(_q.setFromAxisAngle(fan, fanned));
   return turn.multiply(_q.setFromAxisAngle(joint.flex, bend - joint.flexed));

@@ -54,11 +54,11 @@ const RANGES = {
   toes: range(2, [-70, 45], [-10, 10], [-10, 10]),
 };
 
-type Joint = keyof typeof RANGES;
-const isJoint = (name: string): name is Joint => name in RANGES;
+type JointName = keyof typeof RANGES;
+const isJoint = (name: string): name is JointName => name in RANGES;
 
 /** the joint `bone` is: its name without its side (`leftUpperArm`: `upperArm`) */
-function jointOf(bone: ChildBone): Joint {
+function jointOf(bone: ChildBone): JointName {
   const name = bone.replace(/^(left|right)/, ''), joint = name[0].toLowerCase() + name.slice(1);
   if (!isJoint(joint)) throw new Error(`no range of motion for "${bone}"`);
   return joint;

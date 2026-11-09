@@ -4,10 +4,10 @@
 // the rig's own range for it; the ground a stiff one-sided target; every joint within its range.
 import { Quaternion, Vector3 } from 'three';
 import { wrapAngle, yawOf } from '../kernel/math';
-import { beyond, clampRotation } from '../kernel/limits';
+import { pastLimit, clampRotation } from '../kernel/limits';
 import type { Pose } from '../kernel/pose';
 import type { Limit, Skeleton } from '../kernel/skeleton';
-import type { LegChain } from '../species/leg';
+import type { LegChain } from '../species/leg-chain';
 
 /** A joint's axes, as a chain names them: y turns it, z swings it aside, x bends it (+ its far end forward) — Euler products, for their
  * analytic per-axis Jacobians; the rig's combined swing/twist range is enforced on them by `bound` */
@@ -233,7 +233,7 @@ export class Solver {
   private excess(q: Float64Array, k: number, scale: number, limit: Limit): number {
     _l.identity();
     for (let j = 0; j < this.n; j++) if (this.of[j] === k) _l.multiply(_q.setFromAxisAngle(this.axes[j], q[j] * scale));
-    return beyond(_l, limit);
+    return pastLimit(_l, limit);
   }
 
   /** Tuned sqrt(STIFF): geometric midpoint of unit reference and contact stiffness.

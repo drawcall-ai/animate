@@ -4,15 +4,16 @@ import type { Goal, Placement } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
 import { digitsOf } from '../../fingers/placement';
 import { handsOn, inHand } from '../../things/hold';
-import { resolve, type Hold } from '../../things/resolve';
+import { resolve } from '../../things/resolve';
+import type { Hold } from '../../things/holder';
 import type { Thing } from '../../things/thing';
 import { sideOf, type Side } from '../anatomy/bones';
 import { broughtTurn, elbowPole, scratch } from './arms';
-import { holdsClear } from './trunk';
+import { holdsClear } from './arm-clearance';
 import { solveChain } from '../../kernel/chain';
 import { coordinates, coordinatesOf } from '../../kernel/limits';
 import type { Pose, ReadonlyPose } from '../../kernel/pose';
-import { fixes } from './take';
+import { fixes } from './plan';
 import type { Person } from '../person';
 
 /**
@@ -22,7 +23,7 @@ import type { Person } from '../person';
  * into where it goes: the thing's turn is the carry's, the hand's follows from the grasp.
  *
  * A grip that leaves the hand's turn free has its placement picked as the grab starts, for that moment, so the grasp may change. From
- * half a second before a carry's course ends (`PLANNED`, travel.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
+ * half a second before a carry's path ends (`PLANNED`, travel.ts), with the body nearly as it will stand, the hand weighs the grasp it has at the end, each sub-step while it
  * keeps it: solved there, how far its joints are out of the middle of their ranges (`strainAt`). Comfortable enough (`STRAINED`), it is
  * kept, the arm working for it (a lance borne upright beside the hip); else the hand regrips onto the least turned of the grasps tried
  * there that the arm holds clearly more comfortably (strained by half `STRAINED` at most, and by `STRAINED` less) — the hand as the arm
@@ -31,7 +32,7 @@ import type { Person } from '../person';
  * if none is, onto the least strained, but only where the arm cannot hold the one it has at all (in the trunk: a belt's buckle taken
  * palm down off a table, held to the belly, its wrist a palm behind it; or far short of its turn). The hand turns the thing in its
  * fingers about the palm onto it (`REGRIP` s; an in-hand rotation, Exner 1992, recalled), and the thing still ends turned as the carry
- * asks. A thing not at rest half a second after its course is over is weighed again, from the body as it then stands, and held turned
+ * asks. A thing not at rest half a second after its path is over is weighed again, from the body as it then stands, and held turned
  * off its end (`TURNED_OFF`) its grasp counts as one the arm does not hold there. A grip that sets
  * the hand's turn is never regripped: the author fixed the hand on it; nor one that declares its contact (`shifts`), the fingers kept on it.
  */
@@ -74,7 +75,7 @@ function heldNow(person: Person, side: Side, thing: Thing, out: InHand): InHand 
 }
 
 /**
- * Where hand `side` goes for `thing`, hanging from it, in the thing's frame (to be where a carrier has it): where its grasp has the hand
+ * Where hand `side` goes for `thing`, hanging from it, in the thing's frame (to be where a moving frame has it): where its grasp has the hand
  * bone in the thing, its rest undone. Mid-regrip, the grasp the regrip has reached, the thing placed in the hand so.
  */
 export function grasped(person: Person, side: Side, thing: Thing): (f: Frame) => Goal {

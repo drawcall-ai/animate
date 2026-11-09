@@ -1,5 +1,5 @@
 import { Vector3, type Quaternion } from 'three';
-import type { Step } from '../../kernel/frame';
+import type { Behaviour } from '../../kernel/frame';
 import { offTheWay, Planner, stanceYaw } from '../../step/planner';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
 import { INDEX } from '../anatomy/bones';
@@ -9,7 +9,7 @@ import { hullOf, past } from '../../step/support';
 import { footprint } from './foot';
 import { checkSupport, drivenBy, feetBehind, seedFor } from './balance';
 import { individualOf } from './individual';
-import { humanGait, humanStepping } from './stepping';
+import { personGait, personStepping } from './stepping';
 import { OVER_ANKLES } from '../anatomy/stance';
 import type { Person } from '../person';
 
@@ -20,8 +20,8 @@ import type { Person } from '../person';
  * step when it leaves the feet. A walk starts once the goal is `START` off (its glide kept to `START_GLIDE` until the first foot lands)
  * and ends once close, slow and the goal still (`STOP`).
  */
-export function stride(person: Person, options: { stance?: Partial<Stance>; seed?: number } = {}): Step {
-  const proportions = person.proportions, s = proportions.scale, toeOut = humanStepping(proportions, true, person.stride).toeOut;
+export function walking(person: Person, options: { stance?: Partial<Stance>; seed?: number } = {}): Behaviour {
+  const proportions = person.proportions, s = proportions.scale, toeOut = personStepping(proportions, true, person.stride).toeOut;
   const individual = individualOf(seedFor(person, options.seed));
   // (asked off, it sets off its own moment later: since when it was asked, s)
   let asked = NaN;
@@ -39,12 +39,12 @@ export function stride(person: Person, options: { stance?: Partial<Stance>; seed
     for (let k = 0; k < 12; k++) [lo, hi] = past(hull, at((lo + hi) / 2)) <= -LEAN.inside * s ? [(lo + hi) / 2, hi] : [lo, (lo + hi) / 2];
     return at(lo);
   };
-  return drivenBy(person, (f, go, poise, stepper) => {
+  return drivenBy(person, (f, go, asks, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
     if (f.dev) checkSupport(person, f, f.dev);
     const dt = f.dt, asking = go?.face;
     if (!planner) {
-      planner = new Planner(f.prev.com(new Vector3()), person.yaw, humanGait(proportions), proportions.hipHalfWidth);
+      planner = new Planner(f.prev.com(new Vector3()), person.yaw, personGait(proportions), proportions.hipHalfWidth);
       stop.copy(planner.root.position);
     }
     const plan = planner, root = plan.root.position;
@@ -81,7 +81,7 @@ export function stride(person: Person, options: { stance?: Partial<Stance>; seed
     const faced = !!face || !moving || offTheWay(heading, plan.root.yaw);
     const stance = stanceYaw(stepper.legs, plan.root.yaw, toeOut);
     // (stopped close to a goal still asked, the body edges on onto it, the feet staying put; at rest, its weight goes as a reach shifts it)
-    const shift = !moving && !go ? poise.shift : null;
+    const shift = !moving && !go ? asks.shift : null;
     const leaned = still && (shift || leaning) ? within(still, shift, stepper) : null;
     leaning = !!leaned && (!!shift || root.distanceTo(leaned) > LEAN.back * s);
     // (at rest on planted feet it settles over their rear half, `OVER_ANKLES` ahead of the ankles, as a person stands — read: Winter 1995,

@@ -1,11 +1,11 @@
 // The root planner: a root stream toward a goal — the same a player's input makes — for a stepper to follow.
 import { MathUtils, Quaternion, Vector3 } from 'three';
-import { STEP, type Frame } from '../kernel/frame';
+import { SUBSTEP, type Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
 import { clamp, lerp, wrapAngle, yawOf } from '../kernel/math';
 import { strideAt, type Gait } from '../species/gait';
-import type { Steering } from './state';
+import type { Steering } from './steps';
 
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
 /** where to go, how fast it moves, the facing to arrive with, and whether a few steps back or aside keep the facing (`KEPT`) */
@@ -63,8 +63,8 @@ export class Planner {
         plan = accepted ?? planned(0);
       }
     }
-    const chosen = plan, now = f.time;
-    this.root.forecast = (ahead) => chosen(now + ahead);
+    const chosen = plan, input = f.time;
+    this.root.forecast = (ahead) => chosen(input + ahead);
     const next = plan(f.time);
     this.state.velocity.subVectors(next.position, this.state.position).setY(0).divideScalar(f.dt);
     this.state.angular = wrapAngle(next.yaw - this.state.yaw) / f.dt;
@@ -106,11 +106,11 @@ function rootPlan(
     const target = _target.copy(goal).addScaledVector(velocity, acceleration === 0 ? ahead : goalSpeed > 0 ? travel / goalSpeed : 0);
     const futureVelocity = _velocity.copy(velocity);
     if (goalTurn !== 0 && goalSpeed > 0) {
-      const tick = Math.round(ahead / STEP);
+      const tick = Math.round(ahead / SUBSTEP);
       while (targets.length <= tick) {
-        const t = (targets.length - 0.5) * STEP;
+        const t = (targets.length - 0.5) * SUBSTEP;
         const v = Math.max(0, Math.min(motion.speed ?? Infinity, goalSpeed + acceleration * t));
-        targets.push(targets[targets.length - 1].clone().addScaledVector(_direction.copy(velocity).applyAxisAngle(UP, goalTurn * t), v / goalSpeed * STEP));
+        targets.push(targets[targets.length - 1].clone().addScaledVector(_direction.copy(velocity).applyAxisAngle(UP, goalTurn * t), v / goalSpeed * SUBSTEP));
       }
       target.copy(targets[tick]);
       futureVelocity.applyAxisAngle(UP, goalTurn * ahead).setLength(Math.max(0, goalSpeed + acceleration * accelerating));
@@ -138,7 +138,7 @@ function rootPlan(
     const closing = (arrival > 0 && untilFacing > 0 ? Math.min(paced, distance / untilFacing) : paced) * first;
     const wanted = delta.setLength(distance > 1e-9 ? Math.sqrt(2 * Math.max(0, accel + Math.min(0, acceleration)) * distance) : 0)
       .add(futureVelocity).clampLength(0, closing);
-    const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * STEP));
+    const next = from.velocity.clone().add(wanted.sub(from.velocity).clampLength(0, accel * SUBSTEP));
     const v = next.length();
     const travelYaw = v > 1e-4 ? Math.atan2(next.x, next.z) : facing ? heading : yaw;
     const goalAngle = facing ? wrapAngle(facingYaw - travelYaw) : 0, direction = Math.sign(goalAngle);
@@ -152,21 +152,21 @@ function rootPlan(
     const direct = wrapAngle(bearing - yaw), toFacing = facing ? wrapAngle(facingYaw - yaw) : direct;
     const angle = Math.min(Math.abs(direct), Math.abs(toFacing)) > Math.PI - ABOUT && toFacing * direct < 0 ? direct - Math.sign(direct) * 2 * Math.PI : direct;
     const turn = Math.min(motion.turnSpeed ?? Infinity, motion.accel / Math.max(gait.slowest, v)) * share;
-    const desired = Math.sign(angle) * Math.min(turn, Math.abs(angle) / STEP);
-    let angular = Math.max(from.angular - turnAccel * STEP, Math.min(from.angular + turnAccel * STEP, desired));
+    const desired = Math.sign(angle) * Math.min(turn, Math.abs(angle) / SUBSTEP);
+    let angular = Math.max(from.angular - turnAccel * SUBSTEP, Math.min(from.angular + turnAccel * SUBSTEP, desired));
     angular = facing && turnAccel > 0 && Number.isFinite(turnAccel)
-      ? (follow(yaw - from.angular * STEP, yaw, yaw + angle, { accel: turnAccel, speed: turn }, STEP) - yaw) / STEP
-      : Math.sign(angle) * Math.min(Math.abs(angular), Math.abs(angle) / STEP);
+      ? (follow(yaw - from.angular * SUBSTEP, yaw, yaw + angle, { accel: turnAccel, speed: turn }, SUBSTEP) - yaw) / SUBSTEP
+      : Math.sign(angle) * Math.min(Math.abs(angular), Math.abs(angle) / SUBSTEP);
     if (Math.abs(angular) < 1e-9) angular = 0;
     return {
-      position: from.position.clone().addScaledVector(next, STEP).setY(from.position.y),
-      yaw: yawOf(_turn.setFromAxisAngle(UP, yaw + angular * STEP)),
+      position: from.position.clone().addScaledVector(next, SUBSTEP).setY(from.position.y),
+      yaw: yawOf(_turn.setFromAxisAngle(UP, yaw + angular * SUBSTEP)),
       velocity: next, angular,
     };
   };
   return (time) => {
-    const tick = Math.max(0, Math.round((time - f.time) / STEP));
-    while (states.length <= tick) states.push(advance(states[states.length - 1] ?? previous, states.length * STEP));
+    const tick = Math.max(0, Math.round((time - f.time) / SUBSTEP));
+    while (states.length <= tick) states.push(advance(states[states.length - 1] ?? previous, states.length * SUBSTEP));
     return states[tick];
   };
 }

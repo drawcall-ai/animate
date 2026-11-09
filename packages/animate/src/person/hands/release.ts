@@ -2,11 +2,11 @@ import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { movingPoint, type Goal } from '../../kernel/goal';
-import { reached } from '../../kernel/tip';
+import { reached } from '../../kernel/limb';
 import { during, type Request } from '../../kernel/requests';
 import { reaching } from './arms';
 import { clearArm } from './hang';
-import { ARM_REACH } from './bend';
+import { ARM_REACH } from './shoulder';
 import { INDEX, type Side } from '../anatomy/bones';
 import { BACK } from './press';
 import type { Person } from '../person';
@@ -53,7 +53,7 @@ export function* backingOut(person: Person, request: Request, hands: readonly { 
   // (a hand that has taken hold of something again is no longer backing out: its hold keeps it once the grab that took it is over; nor is
   // one whose arm a pose asks for)
   yield* parallel<Frame>('all', ...hands.map(({ side, away }, k) => {
-    const step = reaching(person, side, (f) => off(f)[k], { lead: false, ...(away && { seconds: BACK.seconds / person.tempo, straight: true }) });
+    const step = reaching(person, side, (f) => off(f)[k], { bodyFollows: false, ...(away && { seconds: BACK.seconds / person.tempo, straight: true }) });
     return during(request, `hand.${side}`, 'borrowed', (f: Frame) => {
       if (away && f.time < drawn) person.fingers?.keep(side);
       return step(f);

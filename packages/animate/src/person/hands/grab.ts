@@ -10,14 +10,14 @@ import { placeArm, reaching } from './arms';
 import { clearArm } from './hang';
 import type { Pace } from '../../body/handling';
 import { INDEX } from '../anatomy/bones';
-import { ARM_REACH } from './bend';
+import { ARM_REACH } from './shoulder';
 import { pathAhead } from '../look/around';
-import { bringShoulder } from './bend';
-import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
+import { bringShoulder } from './shoulder';
+import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { approach } from './approach';
-import { emptyAt, gripAt, holdOn, type Taking } from './take';
-import { ARM } from './trunk';
-import { flat, footing, walking } from './stand';
+import { emptyAt, gripAt, holdOn, type HandPlan } from './plan';
+import { ARM } from './arm-clearance';
+import { flat, footing, walkingUp } from './standing-spot';
 import type { Person } from '../person';
 
 /** Minimum final-approach gaze lead (s); distance also brings the eyes back within two steps. */
@@ -31,7 +31,7 @@ const REACHED_AFTER = 0.35;
 const CLOSE = 1.6;
 
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
-export function* grabbing(person: Person, request: Request, takes: readonly Taking[], step: boolean, motion?: Pace) {
+export function* grabbing(person: Person, request: Request, takes: readonly HandPlan[], step: boolean, motion?: Pace) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
   // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so the
   // bow would never bring the grip nearer, only bend the trunk as far as it goes)
@@ -61,7 +61,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Taki
     returning ||= flat(f.prev.com(com), middle(f)) < CLOSE * person.scale || near();
     return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(person, f.prev, ahead);
   };
-  const raisedHand = (f: Frame, take: Taking) => {
+  const raisedHand = (f: Frame, take: HandPlan) => {
     const shoulder = f.prev.position(INDEX[`${take.side}UpperArm`]);
     const at = shoulder.clone().lerp(gripAt(person, take, f, _grip), 0.5);
     shortOf(person, take, shoulder, at);
@@ -77,7 +77,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Taki
     yield* action<Frame>({ until: (f) => stood || (inView(person, middle(f), f) && raising()) });
     // (the hands rising halfway toward what they take, before the body has come up to it)
     yield* parallel<Frame>('race', action<Frame>({ until: () => stood || near() }), () => parallel<Frame>('all', ...takes.map((take) => during(request, `hand.${take.side}`, 'asked',
-      reaching(person, take.side, (f) => raisedHand(f, take), { lead: false })))));
+      reaching(person, take.side, (f) => raisedHand(f, take), { bodyFollows: false })))));
     yield* parallel<Frame>('race', approach(person, request, takes, motion), function* () {
       yield* action<Frame>({ until: () => stood || preparing() });
       yield* during(request, 'trunk', 'borrowed', (f) => {
@@ -92,7 +92,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Taki
     if (plan === 'there') return;
     // (the hands on the grips, it stands: a walk it has not yet ended — the legs another's — is not walked on, away from what they hold)
     yield* parallel<Frame>('race', action<Frame>({ until: () => held }), function* () {
-      const stall = yield* walking(request, plan, REACHED_AFTER);
+      const stall = yield* walkingUp(request, plan, REACHED_AFTER);
       if (stall) request.fail(stall);
     });
     stood = true;
@@ -109,7 +109,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Taki
  * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
  * the arm's reach from where the body stands fails it.
  */
-export function* grabAtOnce(person: Person, request: Request, takes: readonly Taking[]) {
+export function* grabAtOnce(person: Person, request: Request, takes: readonly HandPlan[]) {
   if (person.updates > 0) throw new Error('grab: `speed: Infinity` takes hold at once only as a body starts (in its first update): a body already shown reaches for it');
   const f = person.frame, reach = ARM_REACH * person.proportions.armLength;
   for (const take of takes) {
@@ -139,7 +139,7 @@ export function* grabAtOnce(person: Person, request: Request, takes: readonly Ta
  * length, half-thickness and reserve) is short of that thing's envelope — the hands rising toward it as the body comes up do not go into
  * it — in place
  */
-function shortOf(person: Person, take: Taking, shoulder: Vector3, at: Vector3): void {
+function shortOf(person: Person, take: HandPlan, shoulder: Vector3, at: Vector3): void {
   const frame = person.track(take.thing.object).current, back = _back.copy(frame.quaternion).invert();
   const box = _box.copy(take.thing.bounds).expandByScalar(ARM.hand * person.proportions.height + LOAD_RESERVE * person.scale);
   if (box.isEmpty()) return;

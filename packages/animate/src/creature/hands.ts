@@ -2,8 +2,8 @@ import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../kernel/goal';
-import type { Carrier } from '../kernel/carrier';
-import { ChainTip, lateReach, Progress, reached, unmet } from '../kernel/tip';
+import type { MovingFrame } from '../kernel/moving-frame';
+import { LimbMover, lateReach, Progress, reached, unmet } from '../kernel/limb';
 import { noticing } from '../look/gaze';
 import { Walk } from '../step/walk';
 import { during, type Request } from '../kernel/requests';
@@ -12,7 +12,7 @@ import { Pose, type ReadonlyPose } from '../kernel/pose';
 import { STOOPING } from './balance';
 import { forwardOf, minimumJerk } from '../kernel/math';
 import { followRotation } from '../kernel/follow';
-import { wayOf } from '../things/route';
+import { carryPathOf } from '../things/carry-path';
 import { paceAt, type Handling, type Pace } from '../body/handling';
 import type { Self } from '../body/self';
 
@@ -82,7 +82,7 @@ function stooping(self: Self, bones: readonly number[]) {
       const root = f.prev.position(0), short = standing + self.floor(root.x, root.z) - goal.y - OUT * length, most = bowed(f) + lowest;
       if (arrived) pressing = Math.max(0, Math.min(most, pressing + Math.sign(f.prev.position(tip).y - goal.y - REACHED.distance) * PRESSING * f.dt));
       const drop = short > 0 ? Math.min(most, short + pressing) : 0, bow = drop * bowed(f) / most;
-      if (drop > 0) self.poise.add({ bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });
+      if (drop > 0) self.asks.add({ bow: Math.asin(Math.min(1, bow / lever(f))), lower: Math.min(lowest, drop - bow) });
     },
   };
 }
@@ -129,8 +129,8 @@ function* walkingUp(self: Self, request: Request, hand: string, point: (f: Frame
 }
 
 /** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */
-function tipping(self: Self, request: Request, hand: string, goal: (f: Frame) => Goal, pace: Pace, on?: Carrier) {
-  const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new ChainTip(chain);
+function tipping(self: Self, request: Request, hand: string, goal: (f: Frame) => Goal, pace: Pace, on?: MovingFrame) {
+  const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), bone = bones[bones.length - 1], stoop = stooping(self, bones), tip = new LimbMover(chain);
   const first = goal(self.frame), at = on ? on.toWorld(first, _world, self.frame.time).position : first.position;
   const ends = self.frame.time + dipping(self.pose.position(bone).distanceTo(at), pace);
   let late = false;
@@ -164,7 +164,7 @@ function* holdingOn(self: Self, request: Request, hand: string, where: string, p
   request.there = () => reached(self.frame, bone, goal(self.frame), undefined, Infinity);
   yield* tipping(self, request, hand, goal, pace);
   request.met();
-  const tip = new ChainTip(reach.chain);
+  const tip = new LimbMover(reach.chain);
   yield* during(request, `hand.${hand}`, 'asked', (f) => {
     const target = goal(f);
     reach.stoop.to(f, target.position);
@@ -195,7 +195,7 @@ export function creatureHands(self: Self): Handling {
     },
     bring: function* (request, thing, points, end, options) {
       const motion = paceAt(options.speed, DIP);
-      const way = wayOf(self, thing, points, end);
+      const way = carryPathOf(self, thing, points, end);
       if (way.points.length !== 1) throw new Error('carry: creature hands do not support waypoints or approach routes');
       if (end?.userData.speed !== undefined) throw new Error('carry: creature hands do not support approach speed; give the carry a `speed`');
       const to = way.points[0];

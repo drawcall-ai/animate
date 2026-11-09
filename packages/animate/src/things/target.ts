@@ -1,11 +1,11 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { sameThree } from '../kernel/math';
 import type { Frame } from '../kernel/frame';
-import type { Holder } from './resolve';
+import type { Holder } from './holder';
 import type { Goal } from '../kernel/goal';
 import { bodyOf, boneOf } from './hold';
 import { resolve } from './resolve';
-import { Carrier } from '../kernel/carrier';
+import { MovingFrame } from '../kernel/moving-frame';
 
 /**
  * Where a verb goes: a point (`Vector3`), a place that moves with its parent and sets the orientation too (an `Object3D`: an empty, a
@@ -42,11 +42,11 @@ export function finder(self: Holder, target: Target): (f: Frame) => Found {
   sameThree(target);
   const found: Found = { position: new Vector3() }, turn = new Quaternion(), velocity = new Vector3(), placed = { position: new Vector3(), quaternion: new Quaternion() };
   // (a function's object as it leaves it each sub-step, not eased across the update as the app moving it once an update would be)
-  let made: Carrier | null = null;
+  let made: MovingFrame | null = null;
   const fresh = (at: Object3D, time: number) => {
     resolve(self, at, placed, true);
     if (made) made.move(time, placed.position, placed.quaternion);
-    else (made = new Carrier(placed.position, placed.quaternion)).place(time, placed.position, placed.quaternion);
+    else (made = new MovingFrame(placed.position, placed.quaternion)).place(time, placed.position, placed.quaternion);
     return made;
   };
   let time = NaN;

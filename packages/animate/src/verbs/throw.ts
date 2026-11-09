@@ -1,6 +1,6 @@
 import type { Object3D } from 'three';
 import { selfOf, type Body } from '../body';
-import type { Released } from '../body/letgo';
+import type { Released } from '../body/let-go';
 import { handsOn } from '../things/hold';
 import type { Target } from '../things/target';
 import { Thing } from '../things/thing';

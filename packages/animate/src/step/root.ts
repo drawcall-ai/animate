@@ -1,7 +1,7 @@
 import { Vector3, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import { OFF_FLOOR } from '../kernel/dev';
-import type { Steering } from './state';
+import type { Steering } from './steps';
 import type { Self } from '../body/self';
 
 /** What a body's root does when the app drives it (a player's): its position, velocity, facing and stance. */
@@ -29,7 +29,7 @@ export interface Root {
  * A body's root as its app drives it (`drive`), a sub-step at a time: where it is, its velocity (read off its moves when not given),
  * facing and crouch; a leap it asks is passed to the legs.
  */
-export function drivenRoot(self: Pick<Self, 'drive' | 'driven' | 'stepper' | 'poise' | 'floor' | 'warn'>): (f: Frame) => Steering {
+export function drivenRoot(self: Pick<Self, 'drive' | 'driven' | 'stepper' | 'asks' | 'floor' | 'warn'>): (f: Frame) => Steering {
   if (!self.drive) throw new Error('drivenRoot: the body is not driven');
   let last: Vector3 | null = null;
   return (f) => {

@@ -5,7 +5,7 @@
 import { Vector3, type Object3D } from 'three';
 import { forwardOf, leftOf } from '../kernel/math';
 import type { Spot } from './support';
-import type { Feet } from './state';
+import type { Feet } from './steps';
 
 /** The floor's height under a world point (x, z), in metres. */
 export interface Floor {

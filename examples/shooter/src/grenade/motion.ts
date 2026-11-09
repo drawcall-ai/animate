@@ -26,13 +26,13 @@ export class GrenadeMotion {
   private current: GrenadeModel | undefined;
   private armed = false;
 
-  constructor(private readonly person: Body, carrier: Object3D, private readonly grenades: Grenades) {
+  constructor(private readonly person: Body, movingFrame: Object3D, private readonly grenades: Grenades) {
     const scale = person.species.person?.scale ?? 1;
     for (let i = 0; i < grenades.count; i++) {
       const slot = new Object3D(), model = new GrenadeModel(i + 1);
       slot.name = `Grenade clip ${i + 1}`;
       slot.position.fromArray(SLOTS[i]).multiplyScalar(scale);
-      carrier.add(slot);
+      movingFrame.add(slot);
       slot.add(model.object);
       const strap = new Mesh(new BoxGeometry(0.062, 0.075, 0.016), this.webbing);
       strap.position.z = -0.035;

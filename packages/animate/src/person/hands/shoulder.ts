@@ -2,13 +2,13 @@ import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
-import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../legs/posture';
+import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../legs/walk-pose';
 import { INDEX, type Side } from '../anatomy/bones';
 import type { Proportions } from '../anatomy/proportions';
-import { NECK_PITCH, TRUNK_PITCH } from '../anatomy/limits';
+import { NECK_PITCH, TRUNK_PITCH } from '../anatomy/ranges';
 import { heldMass } from '../../things/hold';
 import { loadFactor } from '../../kernel/load';
-import { crouchOf, floorUnder } from '../legs/legged';
+import { crouchOf, floorUnder } from '../legs/height';
 import type { Person } from '../person';
 
 /** how far a hand reaches, bowing and crouching for it (× the arm's length): all but straight, held out at most this far */
@@ -40,7 +40,7 @@ export function twistToward(person: Person, pose: ReadonlyPose, point: Readonly<
   const twisted = carried && held > 0 ? Math.max(0, Math.sign(bearing) * wrapAngle(yawOf(pose.rotation(INDEX.chest)) - person.locomotion.facing)) : 0;
   const turn = Math.max(Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start)), Math.min(TWIST.held, twisted + held / person.proportions.shoulderHalfWidth));
   const twist = Math.sign(bearing) * turn * share;
-  person.poise.add({ twist });
+  person.asks.add({ twist });
 }
 
 /** Tuned: a back bowed this share of what the load lets it is bowed its most */
@@ -60,11 +60,11 @@ export function bringShoulder(person: Person, f: Frame, side: Side, hand: Readon
   // A short arm can still miss the floor with the comfortable bow and a full squat: recruit the remaining trunk range.
   const deeper = low && height < shoulderHeight(proportions, squatOf(proportions), MOST_BOW) - proportions.armLength;
   if (deeper) bowLimit = TRUNK_PITCH * Math.PI / 180 / factor ** 2;
-  if (low) person.poise.add({ bowLimit });
+  if (low) person.asks.add({ bowLimit });
   // Preserve the landing leg's clearance; loaded knees prepare as root travel ends.
   if (low && factor > 1 && person.locomotion.moving) return;
   // Recalled: ≥10–15° knees under load. Tuned 30° ceiling on each leg segment (knee flexion is their sum), scaled by the same load law.
-  if (low) person.poise.add({ lower: proportions.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
+  if (low) person.asks.add({ lower: proportions.legLength * (1 - Math.cos(Math.PI / 6 * (1 - 1 / factor ** 2))) * share });
   const shoulder = f.current.position(INDEX[`${side}UpperArm`]);
   // (a hand high up reached for with the shoulder lifted as the arm lifts it, not on the toes)
   const elevation = elevationFor(proportions, side, height);
@@ -82,7 +82,7 @@ export function bringShoulder(person: Person, f: Frame, side: Side, hand: Readon
   // Tuned 2% reserve for the articulated shoulder arc: its single lever overestimates the reach a deep squat's tucked pelvis leaves.
   const reach = 0.98 * ARM_REACH * proportions.armLength;
   const { lower, bow } = handLowering(proportions, { ahead, lateral, height: height - elevation, reach, bowLimit });
-  if (share > 0) person.poise.add({ lower: (crouched + lower) * share });
+  if (share > 0) person.asks.add({ lower: (crouched + lower) * share });
   // (standing, a hand short of what it reaches for — further than the arm holds out, `ARM_REACH` — shifts the weight toward it, as far
   // as the feet let it: before a step; reaching below the hips, only once the back bows as far as the load lets it. Short of it from the
   // shoulder as low as the knees are asked to let it: a crouch still coming closes the reach by itself — leaning for it meanwhile, the
@@ -91,7 +91,7 @@ export function bringShoulder(person: Person, f: Frame, side: Side, hand: Readon
   const short = _lowered.copy(shoulder).setY(shoulder.y - coming).distanceTo(hand) - ARM_REACH * proportions.armLength;
   if (!person.locomotion.moving && short > 0 && (!low || pitch >= BOWED * bowLimit)) {
     const toward = new Vector3(hand.x - shoulder.x, 0, hand.z - shoulder.z);
-    if (toward.lengthSq() > 1e-12) person.poise.add({ shift: toward.setLength(short * share) });
+    if (toward.lengthSq() > 1e-12) person.asks.add({ shift: toward.setLength(short * share) });
   }
   // The standing lever leaves a residual on hip-high grips (hands.test.ts).
   const correction = low ? Math.max(0, shoulder.distanceTo(hand) - reach) / (proportions.shoulderHeight - proportions.hipHeight) : 0;
@@ -102,8 +102,8 @@ export function bringShoulder(person: Person, f: Frame, side: Side, hand: Readon
   const span = proportions.shoulderHeight - proportions.hipHeight;
   const overflow = !deep && mass > 0 ? Math.max(0, short - (bowLimit - pitch) * span)
     : Math.max(0, pitch + correction - (deep ? bowLimit : MOST_BOW)) * span;
-  if (low && overflow > 0) person.poise.add({ lower: Math.min(squatOf(proportions), crouched + lower + overflow) * share });
-  person.poise.add({ bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
+  if (low && overflow > 0) person.asks.add({ lower: Math.min(squatOf(proportions), crouched + lower + overflow) * share });
+  person.asks.add({ bow: Math.max(0, Math.min(bowLimit, bow + correction) * share) });
 }
 
 /** Downward gaze recruits the same bow solver once neck and eye declination run out. */
@@ -120,6 +120,6 @@ export function gazeAsks(person: Person, pose: ReadonlyPose, point: Readonly<Vec
   const eyeAhead = proportions.offsets.head.y * Math.sin(neck / 2) + proportions.eyes.y * Math.sin(neck) + proportions.eyes.z * Math.cos(neck);
   const needed = Math.max(0, Math.atan2(eyeUp - (point.y - hips.y), distance - eyeAhead) - neck - person.gazer.range.down);
   const bow = Math.max(0, Math.min(needed, MOST_BOW));
-  person.poise.add({ bow });
+  person.asks.add({ bow });
 }
 const _lowered = new Vector3(), _station = new Vector3(), _upright = new Vector3(), _v = new Vector3(), _forward = new Vector3(), _left = new Vector3();

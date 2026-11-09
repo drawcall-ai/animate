@@ -3,19 +3,19 @@
 // foot placement): each foot has a home off the root; it steps when it falls too far from it,
 // landing where the home will be.
 import { MathUtils, Matrix4, Vector3 } from 'three';
-import { STEP as SUB_STEP, type Frame } from '../kernel/frame';
+import { SUBSTEP, type Frame } from '../kernel/frame';
 import { STROLL } from './go';
 import { follow } from '../kernel/follow';
 import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, wrapAngle } from '../kernel/math';
 import { hullOf, outside, xcomOf } from './support';
 import { strideAt } from '../species/gait';
 import { runs,
-  AIMED, LOWEST, PASSING, PIVOTED, PIVOTING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, STEP, SWEEPING, TOGETHER, TURN,
+  AIMED, LOWEST, PASSING, PIVOTED, PIVOTING, SETTLE, SETTLED_AFTER, SETTLING, STANDING, THRESHOLDS, SWEEPING, TOGETHER, TURN,
   _a, _accel, _b, _c, _d, _f, _l, _m, _n, _o, _over, _pivot, _w, _x,
   dropOf, mod, remaining, strayPast, Steps, SPUN, turnTo,
-  physicsOf, type Body, type FootPose, type Leg, type Now, type Physics, type Reading, type Steering, type Timing,
-} from './state';
-import { lengthOf, nominal, pace, strokeOf, widthAt } from './reach';
+  physicsOf, type StepBody, type FootPose, type Leg, type StepInput, type Physics, type Reading, type Steering, type Timing,
+} from './steps';
+import { lengthOf, nominal, velocityAhead, strokeOf, widthAt } from './leg-reach';
 import { landing, settle, swingOn } from './swing';
 import { cue, exclusive, inTurn, isWalking, keepTime, liftFeet, together, wants } from './cues';
 import { placePelvis } from './pelvis';
@@ -81,28 +81,28 @@ export class Stepper extends Steps {
     const timed = { ...root, ...timing }, ground = this.ground.at(r, f.dt, stroke, physics.contact), climb = this.ground.rising;
     // (first moved: standing as high over the ground as it stands)
     if (Number.isNaN(this.stand)) this.stand = this.heights[1] - ground;
-    const body: Body = {
+    const body: StepBody = {
       ...timed, yaw, width: widthAt(this, timed, v), moving: MathUtils.smoothstep(v, 0, 1), ground, climb,
       standing: ground + this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? ZERO).setY(0),
     };
-    const now: Now = { ...body, ...this.landingReach(body) };
-    this.now = now;
-    this.carry(now);
-    const cues = cue(this, now);
-    keepTime(this, now, cues);
-    if (!r.seated) liftFeet(this, now, cues);
+    const input: StepInput = { ...body, ...this.landingReach(body) };
+    this.input = input;
+    this.carry(input);
+    const cues = cue(this, input);
+    keepTime(this, input, cues);
+    if (!r.seated) liftFeet(this, input, cues);
     bindFeet(this, physics.contact && r.platform);
-    placePelvis(this, now);
+    placePelvis(this, input);
     const stepping = legs.some((leg) => leg.swing);
-    this.phase += Math.PI * now.dt / (now.C / 2) * Number(stepping);
-    [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, now.moving, run, now.Ts, now.C];
+    this.phase += Math.PI * input.dt / (input.C / 2) * Number(stepping);
+    [this.yaw, this.moving, this.run, this.Ts, this.cycle] = [yaw, input.moving, run, input.Ts, input.C];
     const still = !(v > 0.05 || stepping) && legs.every((leg) => leg.planted > SETTLED_AFTER);
     // (and no foot would step once the root is at rest: a root creeping to its rest is not yet settled on feet that would square up there)
-    const resting = { ...now, v: 0 };
+    const resting = { ...input, v: 0 };
     this.settled = still && legs.every((leg) => !wants(this, resting, cues, leg));
     // (a gait's body as low as its running lets it down)
     const drop = this.clocked ? lerp(st.drop.walk, st.drop.run, run) : 0;
-    [this.low, this.most] = [now.standing - (drop + st.bob + STEP.short) * s, now.most];
+    [this.low, this.most] = [input.standing - (drop + st.bob + THRESHOLDS.short) * s, input.most];
   }
 
   /**
@@ -119,11 +119,11 @@ export class Stepper extends Steps {
     });
     this.aloft = aloft;
     if (!was || this.airborne) return;
-    const name = (leg: Leg) => f.prev.skeleton.bones[feet.legs[leg.i].foot].name, now = this.now;
+    const name = (leg: Leg) => f.prev.skeleton.bones[feet.legs[leg.i].foot].name, input = this.input;
     const left = legs.filter((leg) => aloft[leg.i] && !was[leg.i]);
     // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — lifts none while the one half a cycle
     // from it, a girdle's, is in the air; a stance cut short past half the cycle is a run's, and a pair a run lifted not the walk's after)
-    if (now && now.Ts / now.C >= 0.5 && isWalking(this)) for (const a of left) for (const b of legs) {
+    if (input && input.Ts / input.C >= 0.5 && isWalking(this)) for (const a of left) for (const b of legs) {
       const d = mod(this.footfalls[a.i] - this.footfalls[b.i]), value = Math.min(d, 1 - d);
       if (b === a || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
       f.dev.append(f.time - f.dt, { check: 'walk pair in the air together (cycle apart)', value, limit: 0.5 - TOGETHER, where: `${name(a)} with ${name(b)}` });
@@ -193,7 +193,7 @@ export class Stepper extends Steps {
     // (trotting, held back from going faster than a stroll, as fast as it would be going: slowed to the pace held, each foot's turn came later,
     // the wait held it back more, and it trotted stop-go at a walk's pace however fast it was asked)
     const goes = r.wanted?.velocity.length() ?? 0, hurried = goes > STROLL.speed + 1e-6 && !isWalking(this);
-    const coming = this.clocked && r.forecast ? Math.max(v, hurried ? goes : pace(root, PACING, _x).length()) : v;
+    const coming = this.clocked && r.forecast ? Math.max(v, hurried ? goes : velocityAhead(root, PACING, _x).length()) : v;
     const pacing = Math.max(coming, TURNING * s * (Math.abs(pressed) + Math.abs(wanted - yaws[1]))), stride = st.gait && strideAt(st.gait, pacing, 0);
     const along = v > 1e-6 ? r.velocity.dot(forward) / v : 1, across = v > 1e-6 ? r.velocity.dot(left) / v : 0;
     // (side-stepping, quicker: short open-and-close steps rather than long straddles)
@@ -277,7 +277,7 @@ export class Stepper extends Steps {
 
   /** The furthest from under its hip a foot lands (m): the height a landing must hold the hip at, and how far out it may land so, as
    * the legs stand before they move this sub-step. */
-  private landingReach(body: Body): { holding: number; reaches: number[] } {
+  private landingReach(body: StepBody): { holding: number; reaches: number[] } {
     const { st, feet, legs } = this, s = st.scale, { r, standing, moving } = body;
     // A planned root can slow for a landing at its contact height; an externally driven one may need extra drop.
     const holding = r.forecast
@@ -292,13 +292,13 @@ export class Stepper extends Steps {
    * The feet carried on: the swings on their way, the planted feet standing — a gait's that pivots turning in place, heading the body's
    * way; a biped's standing alone pivoting as the pelvis turns over it (`pivots`), no further off it than `PIVOTED`.
    */
-  private carry(now: Now) {
-    const { st, feet, legs } = this, { dt, yaw } = now;
+  private carry(input: StepInput) {
+    const { st, feet, legs } = this, { dt, yaw } = input;
     for (const leg of legs) {
       leg.landed = false;
       if (leg.swing) {
         leg.pivot = undefined;
-        swingOn(this, now, leg, leg.swing);
+        swingOn(this, input, leg, leg.swing);
       } else {
         leg.planted += dt;
         const off = wrapAngle(yaw + leg.sign * st.toeOut - leg.yaw);
@@ -343,7 +343,7 @@ export class Stepper extends Steps {
     if (Number.isNaN(this.low)) return true;
     // (a person's run, as it will be going by the time its stride is set, is no walk: nothing below holds it. Each stance is cut to its travel,
     // each foot aimed by its forecast, and a flight has no feet to be within: what a player's root runs on, foreseeing nothing)
-    if (!st.gait && runs(st, forecast(PACING + SUB_STEP).position.distanceTo(forecast(PACING).position) / SUB_STEP)) return true;
+    if (!st.gait && runs(st, forecast(PACING + SUBSTEP).position.distanceTo(forecast(PACING).position) / SUBSTEP)) return true;
     const hipAt = (leg: Leg, at: { position: Vector3; yaw: number }) => {
       const build = feet.legs[leg.i];
       return _w.copy(at.position).add(this.hips).addScaledVector(leftOf(at.yaw, _m), leg.sign * (build.hip ?? feet.hip))
@@ -354,7 +354,7 @@ export class Stepper extends Steps {
     // steps in its turn; held back for it, the body stood waiting on a foot that waits on its turn, a slow horse curving after its groom
     // stopping and going. A trot's diagonals, a quarter cycle quicker, keep to it: let on, a dog's hoof lost its contact)
     const current = forecast(0), walking = isWalking(this);
-    const strays = legs.map((leg) => leg.swing || !walking ? 0 : Math.min(STRAYED * (feet.legs[leg.i].stray ?? STEP.medial * st.scale), Math.max(0, strayPast(st, feet, leg, inwardOf(leg, current)))));
+    const strays = legs.map((leg) => leg.swing || !walking ? 0 : Math.min(STRAYED * (feet.legs[leg.i].stray ?? THRESHOLDS.medial * st.scale), Math.max(0, strayPast(st, feet, leg, inwardOf(leg, current)))));
     const within = (leg: Leg, ahead: number, pitches: readonly number[]) => {
       const at = forecast(ahead), build = feet.legs[leg.i], up = build.up ?? 0;
       // (and turned no further from a planted foot than the pelvis may — a gait's pivots in place on the floor as far as the body turns
@@ -383,7 +383,7 @@ export class Stepper extends Steps {
       const support = hullOf(legs.flatMap((leg, k) => feet.print(leg.i, landings[k], leg.yaw)));
       const xcom = (t: number) => {
         const at = forecast(t).position;
-        return xcomOf(at, _c.subVectors(forecast(t + SUB_STEP).position, at).divideScalar(SUB_STEP), feet.length, _x);
+        return xcomOf(at, _c.subVectors(forecast(t + SUBSTEP).position, at).divideScalar(SUBSTEP), feet.length, _x);
       };
       const allowed = Math.max(st.capture * st.scale, outside(support, xcom(0)));
       const rest = Math.max(...legs.map((leg) => leg.swing ? remaining(leg.swing) : 0));
@@ -416,10 +416,10 @@ export class Stepper extends Steps {
       let wait = other ? remaining(other) : 0;
       if (st.gait) wait = Math.max(Math.min(landed, this.scheduled[leg.i] < STANDING ? own : Infinity), this.moving > 0.05 ? 0 : own);
       // (walking, toward its own turn too, `AWAIT` of a cycle at most, and till what it waits for to lift lands)
-      const now = this.now;
-      if (st.gait && now && isWalking(this)) {
+      const input = this.input;
+      if (st.gait && input && isWalking(this)) {
         if (!this.owed[leg.i]) wait = Math.max(wait, inTurn(this, leg) ? 0 : Math.min(own, AWAIT * this.cycle));
-        wait = Math.max(wait, ...legs.map((o) => o.swing && exclusive(this, leg, o, now) ? remaining(o.swing) : 0));
+        wait = Math.max(wait, ...legs.map((o) => o.swing && exclusive(this, leg, o, input) ? remaining(o.swing) : 0));
       }
       for (let t = 0; t <= wait + 1e-9; t += Math.max(1 / 60, wait / 6)) if (!within(leg, t, [0, st.pitch.heel, st.pitch.ball])) return false;
       return true;
@@ -428,18 +428,18 @@ export class Stepper extends Steps {
 
   /** Where the feet will land for another forecast: those still re-aimed as the last sub-step's would be, for it. */
   private aim(forecast: (ahead: number) => { position: Vector3; yaw: number }): Vector3[] {
-    const now = this.now;
-    if (!now) return this.legs.map((leg) => leg.anchor);
-    const { r } = now, was = r.forecast;
+    const input = this.input;
+    if (!input) return this.legs.map((leg) => leg.anchor);
+    const { r } = input, was = r.forecast;
     r.forecast = forecast;
     try {
       return this.legs.map((leg) => {
         const w = leg.swing;
-        if (!w || now.airborne || w.u >= AIMED || (w.age >= remaining(w) && !w.capture)) return leg.anchor;
+        if (!w || input.airborne || w.u >= AIMED || (w.age >= remaining(w) && !w.capture)) return leg.anchor;
         // (kept within reach of the hip as `settle` keeps it)
-        const anchor = leg.anchor, aimed = landing(this, now, leg, remaining(w))[0];
+        const anchor = leg.anchor, aimed = landing(this, input, leg, remaining(w))[0];
         leg.anchor = aimed;
-        settle(this, now, leg, w, false);
+        settle(this, input, leg, w, false);
         leg.anchor = anchor;
         return aimed;
       });

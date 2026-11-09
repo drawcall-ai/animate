@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { follow, followRotation } from '../../src/kernel/follow';
-import { Carrier } from '../../src/kernel/carrier';
+import { MovingFrame } from '../../src/kernel/moving-frame';
 import type { FollowOptions } from '../../src/kernel/goal';
 import { turn } from './rigs';
 
@@ -90,7 +90,7 @@ describe('follow', () => {
   });
 
   it('on a carrier: follows the goal in its frame and goes along with it', () => {
-    const cart = new Carrier(new Vector3());
+    const cart = new MovingFrame(new Vector3());
     const goal = new Vector3(0.5, 0, 0);
     const path = [new Vector3(), new Vector3()];
     for (let k = 1; k <= 300; k++) {

@@ -2,16 +2,16 @@ import { Quaternion, Vector3 } from 'three';
 import type { Goal, Motion } from '../../kernel/goal';
 import { limited } from '../../kernel/limits';
 import type { Pose } from '../../kernel/pose';
-import { TrackedPoint, TrackedRotation } from '../../kernel/track';
-import { bowAhead, lowering, LOWER } from '../legs/posture';
+import { TrackedPoint, TrackedRotation } from '../../kernel/tracked';
+import { bowAhead, lowering, LOWER } from '../legs/walk-pose';
 import { INDEX } from '../anatomy/bones';
-import type { Frame, Step } from '../../kernel/frame';
+import type { Frame, Behaviour } from '../../kernel/frame';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
 import type { Go } from '../../step/go';
 import type { Person } from '../person';
 
 /** a person as a led head sees it: its proportions, how it walks and stands, and what its parts ask of its stance */
-type Led = Pick<Person, 'proportions' | 'locomotion' | 'poise' | 'floor'>;
+type Led = Pick<Person, 'proportions' | 'locomotion' | 'asks' | 'floor'>;
 
 /** how a tracked head moves (m/s², m/s, rad/s², rad/s): a headset's motion is followed as it comes, only a jump braked */
 const HEADSET = { accel: 30, speed: 4, turnAccel: 60, turnSpeed: 10 } satisfies Motion;
@@ -39,7 +39,7 @@ const SPOT_RATE = 10;
 const UNDER = { speed: 1.0, accel: 1.2 };
 
 /** Follow tracked eye-midpoint position and orientation (default: level, facing with the pelvis). Run `under` before `look`, and both before the hands, which depend on the posed chest. */
-export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Frame) => Go; look: Step } {
+export function heading(person: Led, eyes: (f: Frame) => Goal): { under: (f: Frame) => Go; look: Behaviour } {
   const at = new TrackedPoint();
   const turned = new TrackedRotation();
   const joints = SPINE.map(() => new TrackedRotation());
@@ -102,7 +102,7 @@ function bringingUnder(person: Led): (f: Frame, eyes: Vector3, yaw: number) => G
     const spot = _spot.copy(eyes).addScaledVector(fwd, -EYES_AHEAD * proportions.scale - BOW_AHEAD * bowAhead(proportions, lower, bow, 'eyes')).setY(0);
     if (!Number.isNaN(go.to.x)) go.velocity.lerp(_v.subVectors(spot, go.to).divideScalar(f.dt), 1 - Math.exp(-SPOT_RATE * f.dt));
     go.to.copy(spot);
-    person.poise.add({ lower, bow });
+    person.asks.add({ lower, bow });
     return go;
   };
 }

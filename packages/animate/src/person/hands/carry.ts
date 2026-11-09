@@ -3,18 +3,18 @@ import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { movingPoint, type Placement, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
-import { type Waypoint } from '../../kernel/course';
+import { type Waypoint } from '../../kernel/timed-path';
 import { noticing } from '../../look/gaze';
 import { during, type Request } from '../../kernel/requests';
 import { carriedBy, handsOn, heldMass, lift, supported } from '../../things/hold';
 import type { Thing } from '../../things/thing';
 import { paceAt, type HandOptions } from '../../body/handling';
-import type { Way } from '../../things/route';
-import { floorUnder } from '../legs/legged';
+import type { CarryPath } from '../../things/carry-path';
+import { floorUnder } from '../legs/height';
 import { SIDES, sideOf } from '../anatomy/bones';
-import { ARM_REACH, PROTRACTION } from './bend';
-import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { footing, walking, type WalkUp } from './stand';
+import { ARM_REACH, PROTRACTION } from './shoulder';
+import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
+import { footing, walkingUp, type WalkUp } from './standing-spot';
 import { guidesFor, CARRYING, type Guides } from './guide';
 import { closeOn, holdAlong, travel } from './travel';
 import { regripping, type Regripping } from './grasp';
@@ -35,7 +35,7 @@ const ALONG = { speed: 0.5, least: 0.4 };
 const CLEAR = { height: 0.03, seconds: 0.4, out: 0.8, near: 0.015 };
 
 /** Carry the route, retaining a fresh guide at each travel/hold boundary. */
-export function* carrying(person: Person, request: Request, thing: Thing, way: Way, options: HandOptions) {
+export function* carrying(person: Person, request: Request, thing: Thing, way: CarryPath, options: HandOptions) {
   const sides = handsOn(person, thing).map(sideOf);
   const resting = supported(thing);
   yield* lifting(person, request, thing);
@@ -73,14 +73,14 @@ export function* carrying(person: Person, request: Request, thing: Thing, way: W
 }
 
 /** the transfer of a load: lifted to the body, carried there as the legs walk (`plan`), raised onto its place over the last of the walk */
-function* transferring(person: Person, request: Request, thing: Thing, way: Way, plan: WalkUp, guides: Guides, resting: boolean, grasp: Regripping) {
+function* transferring(person: Person, request: Request, thing: Thing, way: CarryPath, plan: WalkUp, guides: Guides, resting: boolean, grasp: Regripping) {
   const end = way.points[way.points.length - 1];
-  const carrier = person.track(thing.object);
-  const from = carrier.current.position.y, watched = carrier.current.position.clone();
+  const movingFrame = person.track(thing.object);
+  const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
   // (in both hands, squared to the body; in one, turned with the body as it was taken: a bucket by its handle, squared, would turn the
   // hand half round)
   const single = handsOn(person, thing).length === 1;
-  const atBody = carried(person, single ? carrier.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing)) : IDENTITY);
+  const atBody = carried(person, single ? movingFrame.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing)) : IDENTITY);
   const rise = atBody(person.frame).position.y - from;
   let lifted = rise <= 0, approached = false;
   // (raised onto its place as the body comes there turned as it stands: begun before it has turned, the load would turn to its place's
@@ -96,10 +96,10 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Way,
   };
   yield* parallel<Frame>('race', noticing(person, request, eyes), function* () {
     yield* parallel<Frame>('all', function* () {
-      yield* action<Frame>({ until: () => lifted || carrier.current.position.y >= from + rise * APPROACH_RISE });
+      yield* action<Frame>({ until: () => lifted || movingFrame.current.position.y >= from + rise * APPROACH_RISE });
       // (setting off, the eyes leave where it was for where it goes: held on the empty spot, they would swing across behind the body)
       lifted = true;
-      const stall = yield* walking(request, plan);
+      const stall = yield* walkingUp(request, plan);
       if (stall) request.fail(stall);
       approached = true;
     }, function* () {
@@ -115,7 +115,7 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Way,
 }
 
 /** carried straight along `way` (no walk): its points timed by their lengths at `speed`, the last straight at its own */
-function* along(person: Person, request: Request, thing: Thing, way: Way, guides: Guides, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
+function* along(person: Person, request: Request, thing: Thing, way: CarryPath, guides: Guides, resting: boolean, grasp: Regripping, speed = ALONG.speed * person.tempo) {
   const least = ALONG.least;
   let points = way.points;
   if (way.outside > 0) {
@@ -150,7 +150,7 @@ function* lifting(person: Person, request: Request, thing: Thing) {
   const hips = floorUnder(person) + person.proportions.hipHeight;
   if (supported(thing) && thing.mass > PREPARED && (thing.object.getWorldPosition(_v).y >= hips || hips - person.pose.position(0).y < 0.005 * person.scale)) {
     let since = NaN;
-    yield* during(request, 'trunk', 'borrowed', () => person.poise.add({ lower: 0.005 * person.scale }),
+    yield* during(request, 'trunk', 'borrowed', () => person.asks.add({ lower: 0.005 * person.scale }),
       (frame) => (Number.isNaN(since) ? (since = frame.time, false) : frame.time - since >= 0.1 - 1e-9));
   }
   lift(person, thing);
@@ -160,10 +160,10 @@ function* lifting(person: Person, request: Request, thing: Thing) {
 export function* liftingClear(person: Person, request: Request, thing: Thing) {
   const resting = supported(thing);
   yield* lifting(person, request, thing);
-  const carrier = person.track(thing.object);
+  const movingFrame = person.track(thing.object);
   // (first up off what it rests on, then drawn in toward the hips to within `CLEAR.out` of them: held at arm's length, the arms would
   // fall short of it once the reach no longer bows the body for them)
-  const quaternion = carrier.current.quaternion.clone(), up = carrier.current.position.clone(), root = person.pose.position(0);
+  const quaternion = movingFrame.current.quaternion.clone(), up = movingFrame.current.position.clone(), root = person.pose.position(0);
   // A bulky load must rise into reach as it comes clear of the trunk, rather than drawing in below that reachable height.
   up.y = Math.max(up.y + CLEAR.height * person.scale, floorUnder(person) + person.proportions.hipHeight + inReach(person, thing, true));
   const out = Math.hypot(up.x - root.x, up.z - root.z), most = CLEAR.out * person.proportions.armLength;

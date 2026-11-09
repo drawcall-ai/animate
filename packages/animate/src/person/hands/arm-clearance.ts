@@ -3,7 +3,7 @@ import type { Frame } from '../../kernel/frame';
 import { solveChain } from '../../kernel/chain';
 import type { Dev } from '../../kernel/dev';
 import { clampRotation } from '../../kernel/limits';
-import { REACH } from '../../kernel/tip';
+import { REACH } from '../../kernel/limb';
 import { bisect, nearestBetween } from '../../kernel/math';
 import type { ReadonlyPose } from '../../kernel/pose';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';

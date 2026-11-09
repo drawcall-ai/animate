@@ -1,6 +1,6 @@
 import { Object3D } from 'three';
 import { selfOf, type Body, type ByHand } from '../body';
-import { letGo, type Released } from '../body/letgo';
+import { letGo, type Released } from '../body/let-go';
 import type { AnySpecies } from '../species/define';
 import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';

@@ -6,7 +6,7 @@ import { expectSmooth, Motion } from './motion';
 
 describe.each([0.45, 0.75])('a %s m block', (height) => {
   it('stops a sprint at its face, then takes a jump onto it, with every joint continuous', async () => {
-    // The course's own block positions.
+    // The path's own block positions.
     const x = -17.7, z = height === 0.45 ? 0.6 : 3.4;
     const { world, movement, avatar, acquire } = await soldierOn((scene) => {
       box(scene, [40, 1, 40], [0, -0.5, 0]);

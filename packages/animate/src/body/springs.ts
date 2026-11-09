@@ -15,7 +15,7 @@ export class Springs {
   /** each root given a `hang`, and that turn: set again every step, after the body has written its pose over it */
   private readonly hangs: [Object3D, Quaternion][] = [];
 
-  constructor(species: AnySpecies, binding: Binding, private readonly trunk: Trunk | null) {
+  constructor(species: AnySpecies, binding: Binding, private readonly trunk: Capsules | null) {
     const children = new Map<string, string[]>();
     for (const bone of species.bones) {
       if (bone.parent === undefined) continue;
@@ -110,7 +110,7 @@ class Link {
     return nearestBetween(this.anchor, this.tip, a, b, _onLink, _onAxis) > radius;
   }
 
-  step(dt: number, trunk: Trunk | null): void {
+  step(dt: number, trunk: Capsules | null): void {
     const node = this.node;
     node.updateWorldMatrix(true, false);
     const origin = _origin.setFromMatrixPosition(node.matrixWorld);
@@ -163,7 +163,7 @@ function posedBones(species: AnySpecies): Set<string> {
 export type Capsule = readonly [Vector3, Vector3];
 
 /** what a body's springs keep out of (a person's trunk) */
-export interface Trunk {
+export interface Capsules {
   /** capsules' axes, as `place` last put them */
   readonly capsules: readonly Capsule[];
   /** their radius (m, world), as `place` last put it */

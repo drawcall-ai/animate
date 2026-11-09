@@ -3,7 +3,7 @@ import { sameThree } from '../kernel/math';
 import { surfaceOf, Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import { vectorOf } from '../kernel/scene';
-import type { Holder } from './resolve';
+import type { Holder } from './holder';
 import { digitOf } from '../fingers/shape';
 
 /** Object mass (`userData.mass`, kg), centre (`userData.centre`, local; default origin), and bounds excluding attached things.

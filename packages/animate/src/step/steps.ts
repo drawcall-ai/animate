@@ -178,14 +178,14 @@ export interface Timing {
 
 /** The body over the feet this sub-step: its facing (rad), half the feet's spread (m), how far it walks (0 … 1), the ground under it, how
  * fast that rises (m/s) and the height its pelvis stands at over it (m, both world heights). */
-export interface Body extends Reading, Timing {
+export interface StepBody extends Reading, Timing {
   yaw: number; width: number; moving: number; ground: number; climb: number; standing: number;
   /** where the centre of mass is over the floor from the root (m) */
   over: Vector3;
 }
 
 /** A sub-step as its phases share it: the body, and the height a landing must hold the hip at (m) and how far out each foot may land so (m). */
-export interface Now extends Body { holding: number; reaches: number[] }
+export interface StepInput extends StepBody { holding: number; reaches: number[] }
 
 /**
  * The turn (rad) from facing `from` to `to`: the short way round, but for one more than a quarter turn the other way, the `way` (±1, 0:
@@ -214,7 +214,7 @@ export const SWEEPING = 4;
  * off it; at once if it would hold the pelvis `short` (m) below its height, or is `medial` (m) in from its hip under the body, or a whole
  * stance's travel behind it
  */
-export const STEP = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
+export const THRESHOLDS = { distance: 0.06, still: 0.02, turn: (25 * Math.PI) / 180, squared: (2 * Math.PI) / 180, short: 0.03, square: 0.2, medial: 0.1 };
 /** Tuned: how long every foot stands planted, none wanting a step, before the legs are settled (s) */
 export const SETTLED_AFTER = 0.4;
 /** Tuned: the pelvis turns at most `PELVIS_TURN` (rad) from a planted foot's facing (the trunk and gaze take the rest) */
@@ -245,7 +245,7 @@ export const PASSING = 0.4;
 
 /**
  * whether a planted foot is too far in under the body from its hip (`inward`, m, + toward the body's middle): a person's more than
- * `STEP.medial`; a leg with its own `stray`, that far either way from where it stands under its hip
+ * `THRESHOLDS.medial`; a leg with its own `stray`, that far either way from where it stands under its hip
  */
 export function strayed(st: Stepping, feet: Feet, leg: Leg, inward: number): boolean {
   return strayPast(st, feet, leg, inward) > 0;
@@ -254,14 +254,14 @@ export function strayed(st: Stepping, feet: Feet, leg: Leg, inward: number): boo
 /** how far (m) a planted foot `inward` from its hip is past straying (≤ 0: within) */
 export function strayPast(st: Stepping, feet: Feet, leg: Leg, inward: number): number {
   const stray = feet.legs[leg.i].stray;
-  if (stray === undefined) return inward - STEP.medial * st.scale;
+  if (stray === undefined) return inward - THRESHOLDS.medial * st.scale;
   return Math.abs(inward - ((feet.legs[leg.i].hip ?? feet.hip) - st.width.stand)) - stray;
 }
 
 /** how far in under the body (m) a foot `out` m out from the body's middle line may land and not be `strayed` there */
 export function strayRoom(st: Stepping, feet: Feet, leg: Leg, out: number): number {
   const stray = feet.legs[leg.i].stray, hip = feet.legs[leg.i].hip ?? feet.hip;
-  if (stray === undefined) return Math.max(0, STEP.medial * st.scale - (hip - out));
+  if (stray === undefined) return Math.max(0, THRESHOLDS.medial * st.scale - (hip - out));
   return Math.max(0, stray - (hip - out - (hip - st.width.stand)));
 }
 
@@ -275,7 +275,7 @@ export const remaining = (w: Swing) => (1 - w.u) * w.T;
 /** `x` wrapped into a cycle (0 … 1) */
 export const mod = (x: number) => ((x % 1) + 1) % 1;
 /** how far `x` (rad) is past 0, easing in from `BEND`/2 before it (C¹: the heel starts lifting at rest) */
-export const beyond = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
+export const easedPast = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
 /** a planted foot's roll off its strike (rad): flat after `ROLL` */
 export const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 export const [_v, _w, _a, _b, _c, _x, _n, _hipAt, _accel, _l, _f, _m, _d, _o, _hipThen, _pivot, _centre, _over] = Array.from({ length: 18 }, () => new Vector3());
@@ -377,7 +377,7 @@ export class Steps {
   readonly velocity = new Vector3();
   poses: (FootPose | null)[] = [];
   /** the last `move`'s sub-step: what `pose` plants the feet by and `reachable` re-aims their landings for */
-  now: Now | undefined;
+  input: StepInput | undefined;
 
   /** the ground its pelvis stands over: the floor under its way, smoothed over its stride */
   readonly ground: Ground;

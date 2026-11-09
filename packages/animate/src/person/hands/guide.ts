@@ -1,12 +1,12 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
-import { Carrier } from '../../kernel/carrier';
+import { MovingFrame } from '../../kernel/moving-frame';
 import { type Live, type Motion, type Placement, type Goal } from '../../kernel/goal';
-import { TrackedPoint, TrackedRotation } from '../../kernel/track';
+import { TrackedPoint, TrackedRotation } from '../../kernel/tracked';
 import { follow } from '../../kernel/follow';
 import type { Thing } from '../../things/thing';
-import type { Clearance } from '../../things/route';
-import { clearBody } from './clearance';
+import type { Clearance } from '../../things/carry-path';
+import { clearBody } from './load-clearance';
 import type { Person } from '../person';
 
 // A carried thing's guide: where it is to go each sub-step, followed at a carry's pace about its grips and kept clear of the body.
@@ -20,11 +20,11 @@ export function guidesFor(person: Person, thing: Thing, motion: Motion, clear: C
   return (factor = 1, clearance = clear) => new Guide(person, thing, { ...motion, accel: motion.accel / factor }, clearance);
 }
 
-/** One load path: clear its course before following it, and judge the same endpoint. */
+/** One load path: clear its path before following it, and judge the same endpoint. */
 export class Guide {
   readonly goal = { position: new Vector3(), quaternion: new Quaternion() };
-  private readonly carrier: Carrier;
-  private readonly nominal: Carrier;
+  private readonly carrier: MovingFrame;
+  private readonly nominal: MovingFrame;
   private readonly position = new TrackedPoint();
   private readonly rotation = new TrackedRotation();
   private readonly at = new Vector3();
@@ -42,15 +42,15 @@ export class Guide {
   constructor(private readonly person: Person, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance) {
     const own = person.track(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
-    // (held in both hands; one hand's thing goes where its course has it, the hand with it)
+    // (held in both hands; one hand's thing goes where its path has it, the hand with it)
     if (grips.length > 1) for (const grip of grips) this.pivot.addScaledVector(grip, 1 / grips.length);
-    this.nominal = new Carrier(own.current.position, own.current.quaternion);
-    this.carrier = new Carrier(own.current.position, own.current.quaternion);
+    this.nominal = new MovingFrame(own.current.position, own.current.quaternion);
+    this.carrier = new MovingFrame(own.current.position, own.current.quaternion);
     this.nominal.prev.position.copy(own.prev.position);
     this.nominal.prev.quaternion.copy(own.prev.quaternion);
   }
 
-  read(f: Frame, to: Live<Goal>): Carrier {
+  read(f: Frame, to: Live<Goal>): MovingFrame {
     if (this.time === f.time) return this.carrier;
     this.time = f.time;
     const { nominal, goal, person, thing, motion } = this;

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Pose } from '../../src/kernel/pose';
 import type { Skeleton } from '../../src/kernel/skeleton';
 import { solveChain } from '../../src/kernel/chain';
-import { beyond } from '../../src/kernel/limits';
+import { pastLimit } from '../../src/kernel/limits';
 import { hinge, horseLeg, leg, turn } from './rigs';
 
 const solve = (skeleton: Skeleton, ...args: Parameters<typeof solveChain> extends [unknown, unknown, ...infer R] ? R : never) => {
@@ -13,7 +13,7 @@ const solve = (skeleton: Skeleton, ...args: Parameters<typeof solveChain> extend
 };
 
 /** how far each bone of the chain is beyond its limit (rad) */
-const excess = (pose: Pose) => pose.skeleton.limits.map((l) => (l ? beyond(pose.local(l.bone), l) : 0));
+const excess = (pose: Pose) => pose.skeleton.limits.map((l) => (l ? pastLimit(pose.local(l.bone), l) : 0));
 
 describe('solveChain', () => {
   it('puts a limb’s tip on a reachable goal exactly, turned as asked, the knee toward the pole', () => {
@@ -77,8 +77,8 @@ describe('solveChain', () => {
     const before = pose.local(2).clone(), ankle = pose.position(3).clone();
     target.z = 1e-6;
     solveChain({ current: pose }, 'leg', { tip: { position: target }, pole, swivel: false });
-    expect(beyond(pose.local(1), thigh)).toBeLessThan(1e-9);
-    expect(beyond(pose.local(2), knee)).toBeLessThan(1e-9);
+    expect(pastLimit(pose.local(1), thigh)).toBeLessThan(1e-9);
+    expect(pastLimit(pose.local(2), knee)).toBeLessThan(1e-9);
     expect(pose.local(2).angleTo(before), 'a 2 µm target move must not switch flexion to hyperextension').toBeLessThan(0.001);
     expect(pose.position(3).distanceTo(ankle)).toBeLessThan(0.001);
   });
@@ -89,7 +89,7 @@ describe('solveChain', () => {
     const pose = solve(skeleton, { tip: { position: new Vector3(0.1, 0.5, 0.2) }, pole: new Vector3(0.1, 0.6, 2) });
     expect(Math.max(...excess(pose))).toBeLessThan(1e-9);
     const free = solve(leg(), { tip: { position: new Vector3(0.1, 0.5, 0.2) }, pole: new Vector3(0.1, 0.6, 2) });
-    expect(beyond(free.local(2), hinge(2, 0, 2.4))).toBeGreaterThan(0.5);
+    expect(pastLimit(free.local(2), hinge(2, 0, 2.4))).toBeGreaterThan(0.5);
   });
 
   it('can prioritize a leg bend plane over a foot rotation outside the ankle range', () => {

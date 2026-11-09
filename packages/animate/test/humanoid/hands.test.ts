@@ -4,7 +4,7 @@ import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { carry, grab, lookAt, reach, wait } from '../../src/index';
 import { INDEX, type Side } from '../../src/person/anatomy/bones';
-import { clearBody } from '../../src/person/hands/clearance';
+import { clearBody } from '../../src/person/hands/load-clearance';
 import { grasp } from '../../src/things/hold';
 import { Thing } from '../../src/things/thing';
 import { pointSegmentDistance } from '../../src/kernel/math';

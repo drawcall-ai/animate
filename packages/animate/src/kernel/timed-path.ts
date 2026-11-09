@@ -4,19 +4,19 @@ import type { Placement, Goal } from './goal';
 import { exp, log } from './rotation';
 import { minimumJerk } from './math';
 
-/** A waypoint's duration (s) and place (world), read every sub-step. A goal may also read the fixed course start and the preceding
+/** A waypoint's duration (s) and place (world), read every sub-step. A goal may also read the fixed path start and the preceding
  * place. `still` pauses at the preceding place. */
 export type Waypoint = [seconds: number, to: Goal | ((f: Frame, start: Placement, last: Placement) => Goal)];
 
 /**
- * A course (world) from where `item` is when it is first read, through its waypoints' placements as one smooth curve (centripetal
+ * A path (world) from where `origin` is when it is first read, through its waypoints' placements as one smooth curve (centripetal
  * Catmull–Rom, the rotation turned along it), timed by one minimum-jerk profile over its whole length that takes as long as its
  * waypoints together, `pace` times as fast as they say: it passes its placements on the way without stopping and comes to rest only
  * at the end — and where a waypoint holds still (`still`) or the way turns back on itself (by more than 135°: the hand stops to
  * reverse), it comes to rest there and sets off again. It sets off `delay` s after it is first read.
- * With `on`, its starting placement follows that moving approach frame throughout the course.
+ * With `on`, its starting placement follows that moving approach frame throughout the path.
  */
-export function course(item: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0, on }: { pace?: number; delay?: number; on?: (f: Frame) => Goal } = {}) {
+export function timedPath(origin: { readonly current: Placement }, waypoints: readonly Waypoint[], { pace = 1, delay = 0, on }: { pace?: number; delay?: number; on?: (f: Frame) => Goal } = {}) {
   let start = NaN;
   let runs: Run[] = [];
   let from: Placement | undefined, carriedBy: object | undefined;
@@ -27,7 +27,7 @@ export function course(item: { readonly current: Placement }, waypoints: readonl
     const anchor = on?.(f), turn = anchor?.quaternion ?? IDENTITY;
     if (from === undefined) {
       start = f.time;
-      from = { position: item.current.position.clone(), quaternion: item.current.quaternion.clone() };
+      from = { position: origin.current.position.clone(), quaternion: origin.current.quaternion.clone() };
       if (anchor) {
         const inverse = turn.clone().invert();
         relative = { position: from.position.clone().sub(anchor.position).applyQuaternion(inverse),
@@ -50,7 +50,7 @@ export function course(item: { readonly current: Placement }, waypoints: readonl
       runs = runsOf(stops, waypoints.map(([seconds]) => seconds / pace));
     }
     // (a run that takes no time — a waypoint of 0 s, the thing put at once where it turns back — is gone as it begins: timed as a share
-    // of its 0 s, it was nowhere, 0 / 0, while the course waited out its delay)
+    // of its 0 s, it was nowhere, 0 / 0, while the path waited out its delay)
     let t = Math.max(0, f.time - start - delay);
     let i = 0;
     while (i < runs.length - 1 && t >= runs[i].seconds) t -= runs[i++].seconds;
@@ -63,15 +63,15 @@ export function course(item: { readonly current: Placement }, waypoints: readonl
 /** a waypoint that stays where the one before ended: a moment held still */
 export const still = (_f: Frame, _start: Placement, last: Placement) => last;
 
-/** a stretch of a course gone without stopping: how long it takes (s), and where it is a share `s` of its length along */
+/** a stretch of a path gone without stopping: how long it takes (s), and where it is a share `s` of its length along */
 type Run = ReturnType<typeof curve>;
 
-/** how far a turn counts as going along a course (m per rad): a hand turning what it holds about its grip moves its far side about so much */
+/** how far a turn counts as going along a path (m per rad): a hand turning what it holds about its grip moves its far side about so much */
 const TURN = 0.1;
 /** how sharply the way may bend at a placement and still be passed without stopping (rad): a hand sweeps round a bend, but stops to go back the way it came */
 const REVERSE = (3 * Math.PI) / 4;
 
-/** the course through `stops`, each waypoint taking `seconds`, cut into runs where it holds still or turns back on itself */
+/** the path through `stops`, each waypoint taking `seconds`, cut into runs where it holds still or turns back on itself */
 function runsOf(stops: readonly Placement[], seconds: readonly number[]): Run[] {
   const runs: Run[] = [];
   let first = 0;

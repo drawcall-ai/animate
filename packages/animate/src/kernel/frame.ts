@@ -2,7 +2,7 @@ import type { Dev } from './dev';
 import type { Pose, ReadonlyPose } from './pose';
 
 /** the sub-step (s): fixed, so that what is read off the pose history (velocities) does not depend on the frame rate */
-export const STEP = 1 / 60;
+export const SUBSTEP = 1 / 60;
 
 /**
  * What a body's motion gets each sub-step: the two last final poses and the pose being written. `current` starts as a copy of `prev`;
@@ -10,7 +10,7 @@ export const STEP = 1 / 60;
  * keep them.
  */
 export interface Frame {
-  /** the sub-step's length (s): always `STEP` */
+  /** the sub-step's length (s): always `SUBSTEP` */
   dt: number;
   /** the time `current` is posed for (s); the body starts at 0 */
   time: number;
@@ -21,4 +21,4 @@ export interface Frame {
 }
 
 /** a body part's behaviour this sub-step */
-export type Step = (f: Frame) => void;
+export type Behaviour = (f: Frame) => void;

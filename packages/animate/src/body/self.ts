@@ -1,22 +1,23 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
-import { STEP, type Frame, type Step } from '../kernel/frame';
+import { SUBSTEP, type Frame, type Behaviour } from '../kernel/frame';
 import { Dev, OFF_FLOOR, type LogEntry } from '../kernel/dev';
 import { Skeleton, type SkinVolume } from '../kernel/skeleton';
 import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
-import { Poise } from '../kernel/poise';
+import { Asks } from '../kernel/asks';
 import { HeadOffset } from '../look/offset';
 import type { Go } from '../step/go';
 import { createLocomotion, type Locomotion } from '../step/locomotion';
 import type { Root } from '../step/root';
 import type { Stepper } from '../step/stepper';
 import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
-import { Carrier } from '../kernel/carrier';
+import { MovingFrame } from '../kernel/moving-frame';
 import { yawOf } from '../kernel/math';
 import { Binding } from './binding';
 import { PlatformFrame } from './platform';
-import { anchors, movers, resolve, type Hold, type Holder, type Interpolated } from '../things/resolve';
+import { resolve } from '../things/resolve';
+import { anchors, movers, type Hold, type Holder, type Interpolated } from '../things/holder';
 import { rank, Request, type Channel, type Claim, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
@@ -26,7 +27,7 @@ import { FLAT, type Floor } from '../step/floor';
 import { FingerState } from '../fingers/state';
 import { Orient } from './orient';
 import { checkShear, massed, restPose } from './setup';
-import { Springs, type Trunk } from './springs';
+import { Springs, type Capsules } from './springs';
 import type { Person } from '../person/person';
 
 /** How a body is made. */
@@ -83,7 +84,7 @@ export abstract class Self implements Holder {
   share = 0;
   readonly frames = new WeakMap<Object3D, Interpolated>();
   /** how it is asked to hold itself over its legs, by all its parts this sub-step: balance takes it at the start of the next */
-  readonly poise = new Poise();
+  readonly asks = new Asks();
   /** its head turned over its gaze as its story asks (`pose`, `lookAt`'s roll and pitch), written after the eyes each sub-step */
   readonly headOffset: HeadOffset;
   /** where the request that has its legs asks them to take it this sub-step (balance takes it at the start of the next) */
@@ -109,7 +110,7 @@ export abstract class Self implements Holder {
   /** the bodies it keeps clear of: those it has dealt with (`meet`), either way */
   readonly near = new Set<Self>();
   /** what it moves itself, by object, each on its own frame's history (after its hands, each sub-step) */
-  readonly carried = new Map<Object3D, Carrier>();
+  readonly carried = new Map<Object3D, MovingFrame>();
   /** the nodes on it its app keeps turned in the world (`Body.orient`) */
   readonly orient = new Orient(this);
   readonly requests: Request[] = [];
@@ -119,7 +120,7 @@ export abstract class Self implements Holder {
   worn: Thing[] = [];
   private readonly claims = new Map<Channel, Claim[]>();
   /** what it tracks of the scene, a sub-step's placement each */
-  private readonly tracked = new WeakMap<Object3D, Carrier>();
+  private readonly tracked = new WeakMap<Object3D, MovingFrame>();
   private readonly snaps = new SnapChecks();
   private readonly platform: PlatformFrame;
   private pending = 0;
@@ -130,7 +131,7 @@ export abstract class Self implements Holder {
   readonly fingers: FingerState | null;
   private readonly springs: Springs | null;
 
-  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose, trunk?: Trunk) {
+  constructor(readonly species: AnySpecies, options: SelfOptions, readonly binding: Binding, start?: (skeleton: Skeleton, floor: Floor) => Pose, trunk?: Capsules) {
     const dev = options.dev ? new Dev() : undefined;
     this.log = dev?.log ?? EMPTY;
     this.skeleton = massed(species, options.mass, (check, message) => this.warn(check, message));
@@ -157,7 +158,7 @@ export abstract class Self implements Holder {
     this.poses = Array.from({ length: 5 }, () => new Pose(this.skeleton).copy(pose));
     this.platform = new PlatformFrame(this.skeleton);
     this.before = [this.poses[3], this.poses[4]];
-    this.frame = { dev, dt: STEP, time: 0, prev2: this.poses[0], prev: this.poses[1], current: this.poses[2] };
+    this.frame = { dev, dt: SUBSTEP, time: 0, prev2: this.poses[0], prev: this.poses[1], current: this.poses[2] };
     anchors.set(this.binding.object, { body: this, bone: -1 });
     this.skeleton.bones.forEach((bone, i) => {
       const node: Object3D | undefined = this.binding.bones[bone.name];
@@ -173,7 +174,7 @@ export abstract class Self implements Holder {
   readonly borne = new Map<Thing, Bearing>();
 
   /** asks the body to come along before the head aims at `point` (a person bows to see low down) */
-  lead?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
+  gazeAsks?(pose: ReadonlyPose, point: Readonly<Vector3>): void;
 
   /** what its hands do for the verbs (made when first asked, once all it is has been made) */
   get handling(): Handling {
@@ -244,51 +245,51 @@ export abstract class Self implements Holder {
 
   /** where it moves `node`, as `reader` reads it (`poseFor`): its own this sub-step; another's as it was before its update this frame */
   movedFor(reader: Holder, node: Object3D): Placement | null {
-    const carrier = this.carried.get(node);
-    if (!carrier) return null;
-    if (reader === this) return carrier.at(this.frame.time).current;
-    return this.updates > reader.updates ? this.movedBefore.get(node) ?? carrier.current : carrier.current;
+    const movingFrame = this.carried.get(node);
+    if (!movingFrame) return null;
+    if (reader === this) return movingFrame.at(this.frame.time).current;
+    return this.updates > reader.updates ? this.movedBefore.get(node) ?? movingFrame.current : movingFrame.current;
   }
 
   /** where it moved each thing it carries as its last update began: what others read while it is ahead of them */
   private readonly movedBefore = new Map<Object3D, Placement>();
 
   /** moves `node` itself from now on (a thing in both its hands), from where `carrier` has it */
-  carry(node: Object3D, carrier: Carrier): void {
+  carry(node: Object3D, movingFrame: MovingFrame): void {
     movers.get(node)?.leave(node);
-    this.carried.set(node, carrier);
+    this.carried.set(node, movingFrame);
     movers.set(node, this);
   }
 
   /** stops moving `node` itself: it reads it on from there, its history (velocity, spin) carried over */
   leave(node: Object3D): void {
-    const carrier = this.carried.get(node);
-    if (!carrier) return;
+    const movingFrame = this.carried.get(node);
+    if (!movingFrame) return;
     this.carried.delete(node);
     this.movedBefore.delete(node);
     if (movers.get(node) === this) movers.delete(node);
-    this.tracked.set(node, carrier);
+    this.tracked.set(node, movingFrame);
   }
 
   /** where `node` is this sub-step, tracked over the sub-steps (velocity, spin, the frame a hand follows on it) */
-  track(node: Object3D): Carrier {
+  track(node: Object3D): MovingFrame {
     const f = this.frame, own = this.carried.get(node);
     if (own) {
       own.due(f.time);
       return own;
     }
-    let carrier = this.tracked.get(node);
-    if (!carrier) {
+    let movingFrame = this.tracked.get(node);
+    if (!movingFrame) {
       const at = resolve(this, node, { position: new Vector3(), quaternion: new Quaternion() });
-      this.tracked.set(node, (carrier = new Carrier(at.position, at.quaternion)));
-      carrier.place(f.time, at.position, at.quaternion);
-      return carrier;
+      this.tracked.set(node, (movingFrame = new MovingFrame(at.position, at.quaternion)));
+      movingFrame.place(f.time, at.position, at.quaternion);
+      return movingFrame;
     }
-    if (!carrier.moved(f.time)) {
+    if (!movingFrame.moved(f.time)) {
       const at = resolve(this, node, _local);
-      carrier.move(f.time, at.position, at.quaternion);
+      movingFrame.move(f.time, at.position, at.quaternion);
     }
-    return carrier;
+    return movingFrame;
   }
 
   /**
@@ -364,8 +365,8 @@ export abstract class Self implements Holder {
     if (!(seconds >= 0 && Number.isFinite(seconds))) throw new Error(`cannot update by ${seconds} s`);
     this.pending += Math.min(seconds, MOST);
     // (1e-9: 1/30 is a hair under two sub-steps of 1/60 in floating point)
-    const steps = Math.floor(this.pending / STEP + 1e-9);
-    this.pending = Math.max(0, this.pending - steps * STEP);
+    const steps = Math.floor(this.pending / SUBSTEP + 1e-9);
+    this.pending = Math.max(0, this.pending - steps * SUBSTEP);
     [this.before[0], this.before[1]] = [this.frame.prev, this.frame.prev2];
     for (const [node, carrier] of this.carried) {
       const before = this.movedBefore.get(node) ?? { position: new Vector3(), quaternion: new Quaternion() };
@@ -380,12 +381,12 @@ export abstract class Self implements Holder {
       this.stepping = true;
       for (let i = 0; i < steps; i++) {
         this.share = (i + 1) / steps;
-        this.step();
+        this.subStep();
         if (this.springs) {
           this.springs.restore();
           this.binding.write(this.pose, this.floor);
           this.orient.write();
-          this.springs.step(STEP);
+          this.springs.step(SUBSTEP);
         }
       }
     } finally {
@@ -447,7 +448,7 @@ export abstract class Self implements Holder {
     return this.requests.map((request) => request.label).join(' ∥ ');
   }
 
-  private step(): void {
+  private subStep(): void {
     const { frame: f } = this, { prev, current } = f;
     if (f.dev && f.time > 0) {
       checkLimits(f.prev, f.dev, f.time);
@@ -463,7 +464,7 @@ export abstract class Self implements Holder {
     // Gait follows its supporting frame; gaze and hand targets keep their world-space motion histories.
     behaviours.balance?.(carried);
     // (how still its life holds it, asked for balance's next sub-step as its parts ask)
-    if (this.life.steady !== undefined) this.poise.add({ steady: steadiness(this.life, f.time) });
+    if (this.life.steady !== undefined) this.asks.add({ steady: steadiness(this.life, f.time) });
     // (its pose faces the way balance turned it before anything reads its object's frame: a place before it, a thing on it)
     current.facing = this.locomotion.facing;
     this.orient.step(f);
@@ -507,11 +508,11 @@ export abstract class Self implements Holder {
 
 /** a body's behaviours, in the order they run each sub-step: balance, the eyes when nothing asks, the free hands, a holding hand's keep, what it moves */
 export interface Behaviours {
-  balance?: Step;
-  gaze?: Step;
-  hands?: Step;
+  balance?: Behaviour;
+  gaze?: Behaviour;
+  hands?: Behaviour;
   keep?: (f: Frame, hand: string) => void;
-  things?: Step;
+  things?: Behaviour;
 }
 
 const IDENTITY = new Matrix4();

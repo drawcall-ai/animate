@@ -20,7 +20,7 @@ export class WeaponModel {
 
   rifle(parent: Object3D, arms: number) {
     const p = new Parts();
-    // Bevelled upper/lower receiver, magwell, ejection port and bolt carrier.
+    // Bevelled upper/lower receiver, magwell, ejection port and bolt moving frame.
     p.profile([[-0.095, 0.045], [-0.095, 0.084], [-0.07, 0.099], [0.26, 0.099], [0.285, 0.079], [0.275, 0.035], [0.025, 0.032]], 0.06, [0, 0, 0], this.metal);
     p.profile([[-0.073, 0.034], [0.163, 0.034], [0.161, -0.047], [0.125, -0.069], [0.058, -0.055], [0.052, -0.003], [-0.058, -0.006]], 0.052, [0, 0, 0], this.metal);
     p.box([0.002, 0.021, 0.092], [0.032, 0.068, 0.12], this.inset);

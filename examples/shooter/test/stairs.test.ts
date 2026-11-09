@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { box, DT, node, soldierOn, soles, stairs } from './course';
 import { expectSmooth, Motion } from './motion';
 
-/** The course's staircase on the floor, and the soldier standing seen from outside at `spawn`, settled 3 s. */
+/** The path's staircase on the floor, and the soldier standing seen from outside at `spawn`, settled 3 s. */
 async function setup(spawn: Vector3, yaw: number) {
   const run = await soldierOn((scene) => {
     box(scene, [40, 1, 40], [0, -0.5, 0]);
@@ -111,7 +111,7 @@ const stops = [
 ];
 
 it.each(stops)('settles on different stair treads after direction $direction stops at $stop with warmup $warmup', async ({ direction, stop, warmup }) => {
-  // The course's own staircase position.
+  // The path's own staircase position.
   const X = -8, Z = -5.275;
   const { world, movement, avatar, acquire } = await soldierOn((scene) => {
     box(scene, [40, 1, 40], [X, -0.5, Z]);

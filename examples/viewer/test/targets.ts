@@ -16,7 +16,7 @@ export class Targets {
   readonly eyesPeak = new Peak();
   readonly pastPeak = new Peak();
   private past = NaN;
-  /** how far a tracked target's error goes past the bound its course sets (m; see `judge`), and on which target and course */
+  /** how far a tracked target's error goes past the bound its path sets (m; see `judge`), and on which target and path */
   readonly over = { value: -Infinity, at: 0, what: '' };
   private readonly wrists = { left: new Course(), right: new Course() };
   private readonly heads = new Course();

@@ -4,16 +4,16 @@ import type { Frame } from '../../kernel/frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { pointSegmentDistance } from '../../kernel/math';
 import { seedOf } from '../../kernel/random';
-import { reached } from '../../kernel/tip';
+import { reached } from '../../kernel/limb';
 import { during, type Request } from '../../kernel/requests';
 import { grasp, held, onBody, worn } from '../../things/hold';
-import { fixes, gripAt, holdOn, type Taking } from './take';
+import { fixes, gripAt, holdOn, type HandPlan } from './plan';
 import { padOff, pressingIn, runOf, TOUCH, touching } from './press';
 import { reaching } from './arms';
 import { INDEX, type Side } from '../anatomy/bones';
 import type { Pace } from '../../body/handling';
-import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
-import { ARM } from './trunk';
+import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
+import { ARM } from './arm-clearance';
 import { following, lateWatch, LEADING, reachTime } from './reach';
 import type { Person } from '../person';
 
@@ -24,12 +24,12 @@ import type { Person } from '../person';
 const STAGING = 0.4;
 
 /** Hands close together after reaching every grip; route staging is separate from final closure. */
-export function* approach(person: Person, request: Request, takes: readonly Taking[], motion?: Pace) {
+export function* approach(person: Person, request: Request, takes: readonly HandPlan[], motion?: Pace) {
   // (a fingertip let go of first draws back off its button, not dragged across it to what it takes next)
   yield* action<Frame>({ until: (f) => takes.every((take) => f.time >= person.drawingBack[take.side]) });
   const began = person.frame.time;
   // (a fingertip must meet its grip where the hand is free to turn on it: its hold would keep what its reach left; one that fixes the hand makes up what the wrist can turn, on a thing not lifted, and what it cannot stays off, judged once its turn is made up: `settling`)
-  const exact = ({ thing, grip }: Taking) => thing.grip(grip).point !== 'palm' && !fixes(thing.grip(grip));
+  const exact = ({ thing, grip }: HandPlan) => thing.grip(grip).point !== 'palm' && !fixes(thing.grip(grip));
   // (a fingertip is there as its pad meets its button, while the hand's turn still settles: a press is a touch, not a pose)
   const there = (f: Frame) => takes.every((take) => touching(person, take, f) || (!exact(take) && reached(f, person.hands[take.side], take.goal, person.track(take.thing.object))));
   const close = () => takes.forEach((take) => grasp(person, take.side, { ...holdOn(person, take), by: request }));
@@ -104,12 +104,12 @@ export function* approach(person: Person, request: Request, takes: readonly Taki
         : until(there);
       const on = person.track(hand.thing.object);
       const pace = motion ? { accel: motion.accel, speed: motion.speed } : { seconds, after, straight: hand.route.length > 0 };
-      yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, goal, { on, thing: hand.thing, lead: !worn(hand.thing), ...pace }), ready);
+      yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, goal, { on, thing: hand.thing, bodyFollows: !worn(hand.thing), ...pace }), ready);
     }
     staged++;
     // (staged first, it is held there for the other: let go, it would fall toward its hang and set off for its grip from that fall)
     if (hand.route.length) yield* during(request, `hand.${hand.side}`, 'asked', reaching(person, hand.side, { ...hand.goal, position: hand.points[hand.points.length - 1] },
-      { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), () => staged === plan.length);
+      { on: person.track(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing) }), () => staged === plan.length);
   }));
   // (both hands reach the outside staging points before closing on the actual grips: the closing judged late from as long after it sets
   // off as a reach that far takes — a hand held up short of its staging point, by as long as it may wait there, `STAGING`, found the end
@@ -121,7 +121,7 @@ export function* approach(person: Person, request: Request, takes: readonly Taki
       ends = Math.max(ends, f.time + reachTime(distance / person.scale, seedOf(hand.grip, Math.round(distance * 1000))) / person.tempo);
     }
     yield* parallel<Frame>('all', ...plan.map((hand) => during(request, `hand.${hand.side}`, 'asked',
-      reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing) }), until(there))));
+      reaching(person, hand.side, hand.goal, { on: person.track(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing) }), until(there))));
   }
   close();
 }
@@ -146,10 +146,10 @@ function aroundHeld(person: Person, side: Side, from: Vector3, target: Vector3):
 }
 
 /** a hand as `outside` keeps it off what it reaches for: its fingers' way in its own frame, its length and half-thickness from the wrist,
- * the room it keeps (m; Drillis & Contini's hand, as `trunk.ts` has it), and where its shoulder is (the thing's frame) */
-interface Hand { fingers: Vector3; length: number; radius: number; reserve: number; shoulder: Vector3 }
+ * the room it keeps (m; Drillis & Contini's hand, as `arm-clearance.ts` has it), and where its shoulder is (the thing's frame) */
+interface HandEnvelope { fingers: Vector3; length: number; radius: number; reserve: number; shoulder: Vector3 }
 
-function handOf(person: Person, side: Side, shoulder: Vector3): Hand {
+function handOf(person: Person, side: Side, shoulder: Vector3): HandEnvelope {
   const { height, offsets } = person.proportions;
   return { fingers: offsets[`${side}Hand`].clone().normalize(), length: ARM.length * height, radius: ARM.hand * height, reserve: LOAD_RESERVE * person.scale, shoulder };
 }
@@ -158,7 +158,7 @@ function handOf(person: Person, side: Side, shoulder: Vector3): Hand {
  * The way round the thing's envelope to the face nearest its grip, the wrist ending outside that face as far as the hand turned as it
  * will hold the grip (it turns so on the way round) is then clear of it by its reserve; the final closure onto the grip is separate.
  */
-function outside(bounds: Box3, grip: Goal, from: Vector3, hand: Hand): Vector3[] {
+function outside(bounds: Box3, grip: Goal, from: Vector3, hand: HandEnvelope): Vector3[] {
   const size = bounds.getSize(new Vector3());
   if (size.x * size.y * size.z === 0) return [];
   const at = grip.position;

@@ -107,6 +107,6 @@ it('walks, trots and gallops after its prey — a rotary gallop, two flights a s
       expect(range(stride.map((row) => row.head))).toBeLessThan(0.37 * range(stride.map((row) => row.pitch)));
     }
   }
-  // (speeding up, it pitches head-end down into its acceleration [read: Walter & Carrier 2009, a dog setting off])
+  // (speeding up, it pitches head-end down into its acceleration [read: Walter & MovingFrame 2009, a dog setting off])
   expect(mean(speedingUp)).toBeGreaterThan(2);
 });

@@ -2,13 +2,13 @@ import { Quaternion, Vector3 } from 'three';
 import type { Inertial } from '../kernel/inertia';
 import type { Gait } from './gait';
 import type { CarriedBones, Striding } from '../creature/carriage';
-import type { LegChain } from './leg';
+import type { LegChain } from './leg-chain';
 import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton, type BoneDef, type Limit, type SkeletonBone } from '../kernel/skeleton';
 import type { Proportions } from '../person/anatomy/proportions';
 import type { Stride } from '../person/anatomy/humanoid';
-import type { DigitBones } from '../fingers/bones';
+import type { DigitBones } from '../fingers/digit-bones';
 import type { Spring } from './spring';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
@@ -54,7 +54,7 @@ export interface Species<Bone extends string = string, Hand extends string = str
     readonly chains: readonly LegChain[];
     readonly gait: Gait;
     readonly carriage?: CarriedBones;
-    readonly posture?: (start: ReadonlyPose, gait: Gait, seed?: number) => Posture;
+    readonly posture?: (start: ReadonlyPose, gait: Gait, seed?: number) => SpeciesPosture;
   };
   /** how its trunk takes its root's acceleration (none: it does not lean) */
   readonly inertia?: Inertial;
@@ -102,7 +102,7 @@ export function steadiness(life: Temperament, time: number): number {
 }
 
 /** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */
-interface Posture { prepare(f: Frame, legs: Striding, attention: Attention, look: Readonly<Vector3> | null): void }
+interface SpeciesPosture { prepare(f: Frame, legs: Striding, attention: Attention, look: Readonly<Vector3> | null): void }
 
 /** A joint's range of motion, as `Limit` has it, for a bone named so: without a `neutral`, measured from the rest pose, so a joint bent at
  * rest needs range to straighten. A + turn about +X (the body's left) swings a leg bone's lower end back: a knee flexes +, a hip −. */

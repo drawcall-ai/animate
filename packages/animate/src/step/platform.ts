@@ -1,7 +1,7 @@
 // A gait on moving platforms: its state carried with the root's, and each foot kept on its own.
 import { Matrix3, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { yawOf } from '../kernel/math';
-import type { Steps } from './state';
+import type { Steps } from './steps';
 
 /** A supported gait is relative to its platform, including swing paths and the pelvis' history. */
 export function transport(steps: Steps, matrix: Matrix4) {

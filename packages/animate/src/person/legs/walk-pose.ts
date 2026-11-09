@@ -3,7 +3,7 @@ import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
 import type { Quiet } from './quiet';
-import { TRUNK_PITCH } from '../anatomy/limits';
+import { TRUNK_PITCH } from '../anatomy/ranges';
 import { INDEX } from '../anatomy/bones';
 import { clamp, forwardOf, leftOf, lerp, quatYXZ, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../anatomy/proportions';
@@ -63,12 +63,12 @@ export const STANDING_REACH = 0.995;
  */
 const LEAN = { walk: 0.14, run: 0.15 }, LEANING = { accel: 1, speed: 0.1 }, BOWED = 0.15, LOWERED = 0.05;
 /** Tuned: how far it walks (0 … 1), blended into and out of walking at 6/s, decaying exactly at a finite step `dt`. */
-export const walking = (walk: number, speed: number, dt: number) => walk + (MathUtils.smoothstep(speed, 0.08, 0.6) - walk) * (1 - Math.exp(-dt * 6));
+export const walkBlend = (walk: number, speed: number, dt: number) => walk + (MathUtils.smoothstep(speed, 0.08, 0.6) - walk) * (1 - Math.exp(-dt * 6));
 /** the stride's phase (rad) run on at `rate` (rad/s) and pulled toward the feet's (`goal`) at `ENTRAIN` (1/s) */
 export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
 
 /** The trunk's posture for a sub-step: the chest's world rotation, the pelvis's and the thorax's turn with the stride. */
-export interface Trunk { chest: Quaternion; pelvisYaw: number; thoraxYaw: number }
+export interface TrunkPose { chest: Quaternion; pelvisYaw: number; thoraxYaw: number }
 
 /** The body upright over its legs: the root and the posture state the legs and `Posture` share. */
 export interface Upright {
@@ -97,7 +97,7 @@ interface Cycle { phase: number; bob: number; nod: number; compression: number; 
  * asked), the thorax counter-rotating and rolling with it, the trunk nodding and bowing, and leaning into the root's acceleration as
  * the body's `inertia` has it.
  */
-export class Posture {
+export class WalkPose {
   /** a runner's leg compression through stance (0 … 1) */
   private comp = 0;
   private readonly weight = new Vector3();
@@ -119,7 +119,7 @@ export class Posture {
 
   /** the pelvis's goal into `upright.pelvis` / `upright.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist`, `lean`
    * (rad, sideways: + its left side up) and the pelvis's turn off the facing (`hips`) as balance has them */
-  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: Trunk, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
+  carry(f: Pick<Frame, 'prev' | 'dt'>, upright: Upright, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: TrunkPose, life: Pick<Quiet, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
     const { lower, bow, twist, lean: bent, hips = 0 } = asks, { onto } = life, { p: proportions, walk, run } = upright, dt = f.dt;
     // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
     const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;

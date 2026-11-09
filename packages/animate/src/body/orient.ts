@@ -3,7 +3,8 @@ import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { within } from '../kernel/scene';
-import { orienters, resolve } from '../things/resolve';
+import { resolve } from '../things/resolve';
+import { orienters } from '../things/holder';
 import type { Self } from './self';
 
 /** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight — the elbow still

@@ -2,8 +2,8 @@
 import type { Proportions } from '../anatomy/proportions';
 import type { Gait } from '../../species/gait';
 import { powerGait, stanceOf } from '../../species/schedule';
-import type { Stepping } from '../../step/state';
-import { squatOf, STANDING_REACH } from './posture';
+import type { Stepping } from '../../step/steps';
+import { squatOf, STANDING_REACH } from './walk-pose';
 import { lerp } from '../../kernel/math';
 import { defaultStance } from '../anatomy/stance';
 import type { Stride } from '../anatomy/humanoid';
@@ -11,7 +11,7 @@ import { TUNED, type Individual } from './individual';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992); tuned: below 0.5 m/s the stride
  * shortens instead of its cadence slowing. */
-export const humanGait = (proportions: Proportions): Gait => powerGait({
+export const personGait = (proportions: Proportions): Gait => powerGait({
   height: proportions.hipHeight, slowest: 0.5, offsets: [0, 0.5], stride: 2.49,
   stance: stanceOf(0.79, 1, proportions.hipHeight), clearance: [0.013, 0.013],
 });
@@ -34,7 +34,7 @@ export const humanGait = (proportions: Proportions): Gait => powerGait({
  * 1991), its bob 3.5 cm, its knees a little softer, its side-steps at the walking cadence and no push-off: tuned to keep such a root's
  * steps clean; its `crouch` a player's crouch key's (0.37 m, the feet 4 cm wider), not a squat.
  */
-export const humanStepping = (proportions: Proportions, foreseen = true, style: Stride = {}, individual: Individual = TUNED): Stepping => {
+export const personStepping = (proportions: Proportions, foreseen = true, style: Stride = {}, individual: Individual = TUNED): Stepping => {
   const { cadence = 1, width = 1, bob = 1, toeOut = 1 } = style;
   const walker: Stepping = {
     scale: proportions.legs, offsets: [0, 0.5], toeOut: defaultStance(proportions).toeOut * toeOut, duty: { walk: 0.6, side: 0.5, run: 0.32 }, run: [2, 3],

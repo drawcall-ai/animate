@@ -2,30 +2,30 @@
 import { follow } from '../kernel/follow';
 import { MathUtils, Vector3 } from 'three';
 import { lerp, minimumJerk, softMin } from '../kernel/math';
-import { LOWEST, _v, type Now, type Steps } from './state';
-import { foldOf, hipOf, lengthOf, nominal, reach, travelOf } from './reach';
+import { LOWEST, _v, type StepInput, type Steps } from './steps';
+import { foldOf, hipOf, lengthOf, nominal, legReach, travelOf } from './leg-reach';
 import { swingPose } from './swing';
-import { RISE, stepping } from './way';
+import { RISE, stepping } from './swing-path';
 
 /**
  * The swinging ankles on their paths, the pelvis as high as the feet let it (in the air: where the root has it). In the air the pelvis'
  * own height eases back up to the gait's, the root's rise on it; heights are kept as if standing up: the crouch's own smooth lowering
  * and raising is followed at once.
  */
-export function placePelvis(steps: Steps, now: Now) {
-  const { st, legs, heights } = steps, s = st.scale, { f, dt, rise, airborne, standing, crouch: k } = now;
+export function placePelvis(steps: Steps, input: StepInput) {
+  const { st, legs, heights } = steps, s = st.scale, { f, dt, rise, airborne, standing, crouch: k } = input;
   const crouched = st.crouch.depth * s * k;
   // (followed up toward `to` within `LIFT`, braking as it comes: it arrives without a jolt, and a fall is turned back up within it too)
   const lifted = (to: number) => follow(heights[0], heights[1], to + crouched, LIFT, dt) - crouched;
-  const flying = now.flight
-    ? lifted(now.r.position.y + nominal(steps, now) - now.ground - rise)
-    : lifted(nominal(steps, now) - rise);
-  steps.poses = legs.map((leg) => leg.swing ? swingPose(steps, now, leg, leg.swing, flying) : null);
-  let y = airborne ? flying + rise : nominal(steps, now), stance = Infinity, arriving = Infinity;
+  const flying = input.flight
+    ? lifted(input.r.position.y + nominal(steps, input) - input.ground - rise)
+    : lifted(nominal(steps, input) - rise);
+  steps.poses = legs.map((leg) => leg.swing ? swingPose(steps, input, leg, leg.swing, flying) : null);
+  let y = airborne ? flying + rise : nominal(steps, input), stance = Infinity, arriving = Infinity;
   // (a swinging foot holds the pelvis down late in its swing, before its reach becomes a contact constraint)
   steps.held = y;
   if (!airborne) legs.forEach((leg, i) => {
-    const most = reach(steps, now, leg, steps.poses[i]?.ankle);
+    const most = legReach(steps, input, leg, steps.poses[i]?.ankle);
     y = softMin(y, most + (leg.swing ? LOWEST * s * (1 - minimumJerk((leg.swing.u - 0.5) / 0.3)) : 0), 0.004 * s);
     if (!leg.swing) {
       stance = Math.min(stance, most);
@@ -38,21 +38,21 @@ export function placePelvis(steps: Steps, now: Now) {
   if (!airborne) legs.forEach((leg) => {
     const w = leg.swing;
     const down = w ? stepping(steps, leg, w).down : 0;
-    if (!w || (!now.contact && down === 0)) return;
+    if (!w || (!input.contact && down === 0)) return;
     // (from where in the swing its landing first stood lower: a landing moved on over a tread's edge mid-swing lowers it from there)
     if (Number.isNaN(w.lowering)) w.lowering = w.u;
     const remaining = (1 - w.u) * w.T;
-    const travel = travelOf(now, remaining, _travel).sub(now.r.position);
+    const travel = travelOf(input, remaining, _travel).sub(input.r.position);
     const landing = steps.feet.ankle(leg.i, leg.anchor, leg.yaw, w.strike, _landing).sub(travel);
-    const most = reach(steps, now, leg, landing);
+    const most = legReach(steps, input, leg, landing);
     if (y > most) y = lerp(y, most, MathUtils.smoothstep(w.u, w.lowering, 1) * down);
-    if (now.contact) {
-      const hip = hipOf(steps, now, leg);
+    if (input.contact) {
+      const hip = hipOf(steps, input, leg);
       if (Math.hypot(landing.x - hip.x, landing.z - hip.z) <= st.reach * lengthOf(steps, leg)) {
         // Lower toward the next contact while the trailing foot clears its tread, not before it can leave.
         const descending = w.level - leg.anchor.y + steps.feet.ankleHeight > RISE;
         const share = descending ? minimumJerk((w.u - w.lowering) / (1 - w.lowering)) : 1;
-        arriving = Math.min(arriving, lerp(y, most - now.climb * remaining, share));
+        arriving = Math.min(arriving, lerp(y, most - input.climb * remaining, share));
       }
     }
   });
@@ -61,18 +61,18 @@ export function placePelvis(steps: Steps, now: Now) {
   // (no further than `LOWEST` below standing over the lowest floor a foot stands or lands on: down a stair, as far as the leg reaching
   // for the tread below needs)
   const lowest = Math.min(...legs.map((leg) => leg.anchor.y - steps.feet.ankleHeight));
-  const want = Math.min(Math.max(y - rise, standing - Math.max(0, now.ground - lowest) - LOWEST * s), arriving - rise);
+  const want = Math.min(Math.max(y - rise, standing - Math.max(0, input.ground - lowest) - LOWEST * s), arriving - rise);
   // (let down no further than the feet need: a quick drop is not carried on past it — the soldier's pelvis sank 3 cm more than its trailing
   // leg asked, a 6 cm bob a stride)
   let base = flying;
   if (!airborne) {
-    if (now.contact) {
+    if (input.contact) {
       const followed = lifted(want);
-      base = Math.max(Math.min(followed, stance - rise), foldOf(steps, now) - rise);
+      base = Math.max(Math.min(followed, stance - rise), foldOf(steps, input) - rise);
       // A geometric contact correction moves the history too; it does not launch the pelvis on the next tick.
       heights[1] += base - followed;
     } else {
-      base = Math.max(Math.min(want, lifted(want)), Math.min(want, heights[1] - crouched), foldOf(steps, now) - rise);
+      base = Math.max(Math.min(want, lifted(want)), Math.min(want, heights[1] - crouched), foldOf(steps, input) - rise);
     }
   }
   [heights[0], heights[1]] = [heights[1], base + crouched];

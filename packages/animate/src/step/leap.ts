@@ -1,6 +1,6 @@
 // A leap: the dip and push off, the flight and the landing the knees take.
 import { clamp, GRAVITY, quintic } from '../kernel/math';
-import type { Leap } from './state';
+import type { Leap } from './steps';
 
 /**
  * Tuned leap: the dip and push before take-off (s; recalled: games leave the floor within ~0.1 s of

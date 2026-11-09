@@ -2,10 +2,10 @@ import { Quaternion, Vector3 } from 'three';
 import { Skeleton, type SkeletonBone } from '../../kernel/skeleton';
 import { needing, type BoneNames, type Having, type Species } from '../../species/define';
 import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName, type ChildBone, type Side } from './bones';
-import { NECK_PITCH, ranges } from './limits';
+import { NECK_PITCH, ranges } from './ranges';
 import { derive, type Proportions } from './proportions';
 import { CHAINS, massFor, skeletonOf } from './skeleton';
-import { digitBonesOf } from '../../fingers/bones';
+import { digitBonesOf } from '../../fingers/digit-bones';
 
 /**
  * How a person strides, as multipliers on its defaults (1: as it is): its `cadence` (below 1 slower, so longer strides at a pace — its

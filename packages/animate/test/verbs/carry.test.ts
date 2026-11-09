@@ -81,7 +81,7 @@ describe('carry', () => {
         if (!Number.isNaN(held) && Number.isNaN(off)) {
           if (load.parent === room) {
             down = Math.max(down, hips - h.pose.position(0).y);
-            preparation = Math.max(preparation, h.poise.lower);
+            preparation = Math.max(preparation, h.asks.lower);
           } else off = time;
         }
         // (found by event while the grab lifts it clear, its hand the grab's: the load first up at its highest, then its lowest after)

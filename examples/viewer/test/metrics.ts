@@ -136,7 +136,7 @@ export function checks(m: Measured, limit: MetricsOptions): Check[] {
   add('leg-crossing frames', m.crossings, 'max', 0);
   // (what is held or tracked is judged: a head every frame it is asked, the palms on their grips most frames, out of reach only while walked to)
   if (limit.palm !== undefined) add('palm off the grip it holds (m)', m.targets.palm, 'max', limit.palm, m.targets.palmAt);
-  // (a tracked target is judged by its course — held, moving, within reach — not one fixed margin: `Targets.judge`)
+  // (a tracked target is judged by its path — held, moving, within reach — not one fixed margin: `Targets.judge`)
   if (m.targets.tracked.judged || m.targets.tracked.head) add(`tracked target past its course's bound (m): ${m.targets.over.what}`, m.targets.over.value, 'max', 0, m.targets.over.at);
   add('tracked wrists: frames judged (share of those asked)', m.targets.tracked.asked ? m.targets.tracked.judged / m.targets.tracked.asked : 1, 'min', TRACKED);
   // (the gaze target past the eyes' comfortable turn by more than 5° only for a moment — at most `GAZE.held` s on end — and never

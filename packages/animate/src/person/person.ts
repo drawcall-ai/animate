@@ -1,20 +1,21 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
-import { gazeAsks } from './hands/bend';
+import { gazeAsks } from './hands/shoulder';
 import { personHands } from './hands/handling';
 import type { Handling } from '../body/handling';
 import { looking } from '../look/gaze';
 import type { AnySpecies, Gazer } from '../species/define';
-import type { Carrier } from '../kernel/carrier';
+import type { MovingFrame } from '../kernel/moving-frame';
 import { solveChain } from '../kernel/chain';
 import { REACHED, type Goal } from '../kernel/goal';
-import { ChainTip } from '../kernel/tip';
+import { LimbMover } from '../kernel/limb';
 import { forwardOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
 import { Self, type Behaviours, type SelfOptions } from '../body/self';
 import type { Binding } from '../body/binding';
-import { resolve, type Hold } from '../things/resolve';
+import { resolve } from '../things/resolve';
+import type { Hold } from '../things/holder';
 import { bear, bodyOf, carryAlong, checkParents, inHand, move } from '../things/hold';
 import type { Thing } from '../things/thing';
 import { INDEX, SIDES, sideOf, type Side } from './anatomy/bones';
@@ -22,18 +23,18 @@ import type { Proportions } from './anatomy/proportions';
 import type { Stride } from './anatomy/humanoid';
 import { footRotation } from './legs/foot';
 import { legOf } from './legs/leg';
-import { STANDING_REACH } from './legs/posture';
+import { STANDING_REACH } from './legs/walk-pose';
 import { relaxedPose } from './anatomy/relaxed';
 import { standingFeet } from './anatomy/stance';
 import { driven } from './legs/balance';
-import { stride } from './legs/stride';
+import { walking } from './legs/walking';
 import { handStep, HOLD, placeArm } from './hands/arms';
-import { armClear } from './hands/trunk';
+import { armClear } from './hands/arm-clearance';
 import { hanging } from './hands/hang';
-import { steadied } from './hands/take';
+import { steadied } from './hands/plan';
 import { lookAround } from './look/around';
 import type { Floor } from '../step/floor';
-import type { ArmPosture } from '../kernel/poise';
+import type { ArmPosture } from '../kernel/asks';
 import { Impact } from './legs/impact';
 import { trunkOf } from './springs';
 import { rising, sitting } from './sit';
@@ -54,7 +55,7 @@ export class Person extends Self {
   seat: Seat | null = null;
   declare readonly gazer: Gazer;
   /** what its hands carry this sub-step and along which guide: fitted to the wrists after the hands */
-  readonly carrying = new Map<Object3D, Carrier>();
+  readonly carrying = new Map<Object3D, MovingFrame>();
   readonly proportions: Proportions;
   readonly stride: Stride;
   /** each arm's pose asked this sub-step (`pose`): the free arm's hang takes it, and clears it */
@@ -88,7 +89,7 @@ export class Person extends Self {
   }
 
   /** before the head aims at `point`: the body bows and lowers to see low down */
-  lead(pose: ReadonlyPose, point: Readonly<Vector3>): void {
+  gazeAsks(pose: ReadonlyPose, point: Readonly<Vector3>): void {
     gazeAsks(this, pose, point);
   }
 
@@ -111,10 +112,10 @@ export class Person extends Self {
 
   protected behave(): Behaviours {
     const seed = this.life.seed;
-    const arms = { left: new ChainTip('leftArm'), right: new ChainTip('rightArm') }, held = { left: keptOnBody(this, 'left'), right: keptOnBody(this, 'right') };
+    const arms = { left: new LimbMover('leftArm'), right: new LimbMover('rightArm') }, held = { left: keptOnBody(this, 'left'), right: keptOnBody(this, 'right') };
     const taking: Partial<Record<Side, readonly [Thing, string]>> = {}, noted = new WeakSet<object>();
     return {
-      balance: this.drive ? driven(this, seed) : stride(this, { seed }),
+      balance: this.drive ? driven(this, seed) : walking(this, { seed }),
       // (unseeded, glances vary with where the body was made, as its balance does: a crowd does not look aside in step)
       gaze: looking(this, lookAround(this, seed ?? seedOf('gaze', this.proportions.height, this.pose.position(0).x, this.pose.position(0).z))),
       hands: hanging(this),
@@ -125,11 +126,11 @@ export class Person extends Self {
         const thing = hold.thing;
         // (what hangs from the hand stays where the hand holds it on the body; what the body wears or carries in both hands the hands
         // follow; to keep a hand on what rests where it lies, or on another body, the body comes along — down to it, or after it)
-        if (inHand(this, thing)) return handStep(this, f, side, held[side](f), { ...HOLD, lead: false }, arms[side]);
+        if (inHand(this, thing)) return handStep(this, f, side, held[side](f), { ...HOLD, bodyFollows: false }, arms[side]);
         // (what both hands hold before the body goes with the chest they hang from, not the hips: the arms hang from the chest, so it stays
         // in the hands as the trunk bows or straightens)
         if (!this.carrying.has(thing.object)) carryAlong(this, f, thing.object, INDEX.chest);
-        handStep(this, f, side, steadied(this, side, hold), { on: this.track(thing.object), thing, ...HOLD, lead: bodyOf(thing.object) !== this }, arms[side]);
+        handStep(this, f, side, steadied(this, side, hold), { on: this.track(thing.object), thing, ...HOLD, bodyFollows: bodyOf(thing.object) !== this }, arms[side]);
       },
       things: (f) => {
         checkParents(this);

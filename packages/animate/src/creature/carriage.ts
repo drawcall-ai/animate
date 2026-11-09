@@ -5,7 +5,7 @@ import { clamp, GRAVITY, yawOf } from '../kernel/math';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
 import { irregular } from '../kernel/random';
 import { offsetAt, strideAt, type Carriage, type Gait } from '../species/gait';
-import type { LegChain } from '../species/leg';
+import type { LegChain } from '../species/leg-chain';
 
 /**
  * What of a species' skeleton its gait carries (`Species.legs.carriage`), by bone name — the legs ordered fore-left, fore-right,
@@ -189,7 +189,7 @@ const RISE_SAMPLES = 24;
 /**
  * How a running trunk rides its legs' push over a stride, as a rigid body would — the spring-mass of running, its flights ballistic:
  * each leg pushes up through its stance as a half sine [recalled: the vertical ground force of a galloping or trotting leg rises and
- * falls so, Walter & Carrier 2007, J Exp Biol 210:208; read: Hudson et al. 2012, J Exp Biol 215:2425, Fig. 5], the fore and the hind
+ * falls so, Walter & MovingFrame 2007, J Exp Biol 210:208; read: Hudson et al. 2012, J Exp Biol 215:2425, Fig. 5], the fore and the hind
  * pairs bearing the weight in the shares that leave the trunk no net turn over the stride (as their tops stand about its centre of mass:
  * a greyhound's fores bear 56% [read: Hudson et al. 2012]), the stride's whole push lifting its weight (∫F dt = m g T) — so between
  * pushes it falls as in flight, a push ahead of its centre of mass lifts its front and one behind it its croup, against its pitching

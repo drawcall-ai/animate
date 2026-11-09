@@ -1,13 +1,13 @@
 import { Quaternion, Vector3 } from 'three';
-import { Carrier } from '../../src/kernel/carrier';
+import { MovingFrame } from '../../src/kernel/moving-frame';
 import { describe, expect, it } from 'vitest';
 import { Body } from '../../src/index';
 import { species } from '../../src/species';
 import { selfOf } from '../../src/body';
-import { TrackedRotation } from '../../src/kernel/track';
+import { TrackedRotation } from '../../src/kernel/tracked';
 import { looking } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';
-import { ChainTip, reached } from '../../src/kernel/tip';
+import { LimbMover, reached } from '../../src/kernel/limb';
 import { claim, dt } from '../bodies';
 import { turn } from './rigs';
 import { poseOf } from '../../src/index';
@@ -29,7 +29,7 @@ const eyesOf = (body: Body) => poseOf(body).point(2, new Vector3(0, 0.05, 0.08),
 
 describe('chainTo', () => {
   it("moves a chain's tip on to its target, its joints braked to `turnAccel`, and gets there", () => {
-    const goal = new Vector3(0.25, 0.35, 0.3), body = leg(), tip = new ChainTip('leg');
+    const goal = new Vector3(0.25, 0.35, 0.3), body = leg(), tip = new LimbMover('leg');
     let ended = -1;
     claim(body, 'hand.leg', (f) => {
       if (ended < 0 && f.time > f.dt && reached(f, 3, { position: goal })) ended = f.time;
@@ -51,7 +51,7 @@ describe('chainTo', () => {
       const u = Math.max(0, Math.min(1, t));
       return u ** 3 * (10 - 15 * u + 6 * u * u);
     };
-    const body = leg(), tip = new ChainTip('leg');
+    const body = leg(), tip = new LimbMover('leg');
     claim(body, 'go', (f) => f.current.setRoot(new Vector3(0, 1.4 - ease((f.time - 1) * 2), 0)));
     claim(body, 'hand.leg', (f) => {
       const u = Math.max(0, Math.min(1, f.time - 1));
@@ -166,8 +166,8 @@ describe('reached', () => {
   });
 
   it('counts a tip riding a fast-turning carrier, judged over the same sub-steps as the carrier moved', () => {
-    // (a point 0.5 m out on a carrier turning 6 rad/s: 3 m/s, its velocity turning 0.1 rad a sub-step)
-    const on = new Carrier(new Vector3());
+    // (a point 0.5 m out on a moving frame turning 6 rad/s: 3 m/s, its velocity turning 0.1 rad a sub-step)
+    const on = new MovingFrame(new Vector3());
     const turned = (k: number) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), 6 * k * dt);
     for (let k = 1; k <= 2; k++) on.move(k * dt, new Vector3(), turned(k));
     const grip = { position: new Vector3(0.5, 0, 0) };

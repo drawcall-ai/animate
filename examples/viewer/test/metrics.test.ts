@@ -23,7 +23,7 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   // (setting off, the trunk leans ~7° forward between the first knee movement and the first heel strike, under a second — read:
   // Leteneur et al. 2013, PLoS ONE 8:e55256 — on top of the stride's own nod; tuned: its pitch up to 1.75× walking's peak, the pelvis's 1.25×)
   if (sc.id === 'stroll') { options.strides ??= { straight: 3, curve: 3 }; options.startStop = { trunk: 1.75, pelvis: 1.25 }; }
-  // Hands on what they hold and item clearance; neither has a built-in check. (Tracked targets are judged by their course in
+  // Hands on what they hold and item clearance; neither has a built-in check. (Tracked targets are judged by their path in
   // `Targets`, not by one fixed margin per scene.)
   if (sc.id === 'stable-morning') options.clearance = 0;
   if (sc.id === 'pickup-shelf') options.palm = 0.04;

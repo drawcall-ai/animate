@@ -3,7 +3,7 @@ import { selfOf, type Body } from './body';
 import type { Self } from './body/self';
 import type { HandPlacement } from './fingers/placement';
 import type { HandShape } from './fingers/shape';
-import { takingOf } from './person/hands/take';
+import { handPlanOf } from './person/hands/plan';
 import { Thing } from './things/thing';
 
 // For a body its app poses itself, its update stopped (what no verb does: sitting, climbing): where its hands go, and how its fingers shape.
@@ -20,7 +20,7 @@ export function placement(body: Body, side: 'left' | 'right', empty: Object3D): 
   if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
   const self = selfOf(body).person, kept = picked[side].get(empty);
   if (kept?.updates === self.updates && kept.self === self) return kept.placement;
-  const chosen = takingOf(self, side, Thing.of(thing), empty.name).placement;
+  const chosen = handPlanOf(self, side, Thing.of(thing), empty.name).placement;
   picked[side].set(empty, { self, updates: self.updates, placement: chosen });
   return chosen;
 }

@@ -2,7 +2,7 @@ import { Matrix4, Mesh, Quaternion, Ray, Vector3, type Object3D, type SkinnedMes
 import type { Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { surfaceOf, Triangles } from '../kernel/triangles';
-import { FLAT, type Joints } from './joints';
+import { FLAT_PAD, type Joints } from './joints';
 import { DIGITS, SPLAYED, type DigitName, type Shape } from './shape';
 
 /**
@@ -131,7 +131,7 @@ function opposite(hand: Closing, shape: Shape, line: Line): Shape['thumb'] {
   const { joints, near, world } = hand;
   const palm = joints.point('palm', shape);
   const at = palm.at.applyMatrix4(world), faces = palm.facing.transformDirection(world), axis = line.axis;
-  const thumb = joints.pad('thumb', shape, new Vector3(), _facing, FLAT).applyMatrix4(world);
+  const thumb = joints.pad('thumb', shape, new Vector3(), _facing, FLAT_PAD).applyMatrix4(world);
   // (how far the surface is from `from` along `way`: where a line in from `GIRTH` out first meets it)
   const out = (from: Vector3, way: Vector3) => {
     const hit = near.first(_ray.set(from.clone().addScaledVector(way, GIRTH), way.clone().negate()), GIRTH);
@@ -177,7 +177,7 @@ function reached(hand: Closing, shape: Shape, face: { way: Vector3; end: Vector3
     // metre off the face, how far off `WRAP`'s it is)
     let score = 1 + Math.hypot(curl - wrap.curl, oppose - wrap.oppose, spread - wrap.spread) / 100;
     if (face && into) {
-      const pad = joints.pad('thumb', tried, new Vector3(), _facing, FLAT).applyMatrix4(world);
+      const pad = joints.pad('thumb', tried, new Vector3(), _facing, FLAT_PAD).applyMatrix4(world);
       const hit = near.first(_ray.set(pad.clone().addScaledVector(face.way, GIRTH), into), 2 * GIRTH);
       if (hit !== null && pad.clone().addScaledVector(face.way, GIRTH - hit).distanceTo(face.end) <= face.width) {
         score = Math.abs(hit - GIRTH) + 0.01 * _facing.transformDirection(world).distanceTo(into);
@@ -213,7 +213,7 @@ function padsOn(at: Closing, shape: Shape): Vector3 {
   const tips = met.filter((digit) => touches(at, digit, shape, PAD_DEPTH).includes(2));
   const pressing = tips.length ? tips : met.length ? met : DIGITS;
   const sum = new Vector3();
-  for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, FLAT).applyMatrix4(world));
+  for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, FLAT_PAD).applyMatrix4(world));
   return sum.divideScalar(pressing.length);
 }
 

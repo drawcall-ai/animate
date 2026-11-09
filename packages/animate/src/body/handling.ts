@@ -2,7 +2,7 @@ import type { Object3D, Vector3 } from 'three';
 import type { NonReuseableTimeline } from '@pmndrs/timeline';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Motion, Placement } from '../kernel/goal';
-import type { Hold } from '../things/resolve';
+import type { Hold } from '../things/holder';
 import type { Request } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Until } from '../verbs/story';
@@ -26,8 +26,8 @@ export interface HandOptions {
   until?: Until;
 }
 
-/** where a carried course ends, followed as its frame moves it: a thing has come to rest there once within 5 mm of it (or as near as its
- * course asks) and moving with it to within 5 cm/s and turning with it to within 0.5 rad/s (5 cm/s a hand's breadth out), read as the
+/** where a carried path ends, followed as its frame moves it: a thing has come to rest there once within 5 mm of it (or as near as its
+ * path asks) and moving with it to within 5 cm/s and turning with it to within 0.5 rad/s (5 cm/s a hand's breadth out), read as the
  * thing and the end were a sub-step before */
 export const END = { distance: 0.005, speed: 0.05, spin: 0.5 };
 

@@ -1,14 +1,14 @@
 import { Quaternion, Vector3 } from 'three';
 import { clamp, forwardOf, leftOf, nearestBetween, wrapAngle } from '../kernel/math';
-import type { Frame, Step } from '../kernel/frame';
-import { Poise } from '../kernel/poise';
+import type { Frame, Behaviour } from '../kernel/frame';
+import { Asks } from '../kernel/asks';
 import { Pose } from '../kernel/pose';
 import { carriage, type Striding } from './carriage';
 import { seedOf } from '../kernel/random';
 import { ChainLeg, feetOf, steppingOf } from './feet';
 import { offTheWay, Planner, stanceYaw } from '../step/planner';
 import { Stepper } from '../step/stepper';
-import { type Steering } from '../step/state';
+import { type Steering } from '../step/steps';
 import { drivenRoot } from '../step/root';
 import { strideAt } from '../species/gait';
 import { Inertia } from '../kernel/inertia';
@@ -20,7 +20,7 @@ import type { Self } from '../body/self';
  * drives it; the stepper keeps its feet under it, its posture or carriage rides on the stride, and each leg is posed down to its foot.
  * Asked nothing, it stands. It keeps `locomotion` for walks and `arriving`.
  */
-export function creature(body: Self): Step {
+export function creature(body: Self): Behaviour {
   const kind = body.species.legs;
   if (!kind) throw new Error('creature: the species has no legs');
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);
@@ -51,7 +51,7 @@ export function creature(body: Self): Step {
   // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)
   const turning = Math.PI * strideAt(gait, gait.slowest, 0).frequency / HALF_TURN;
   const start = body.pose.position(0), seed = body.life.seed ?? seedOf(start.x, start.z);
-  const posture = kind.posture?.(body.pose, gait, seed), poise = new Poise();
+  const posture = kind.posture?.(body.pose, gait, seed), asks = new Asks();
   const carried = !posture && kind.carriage ? carriage(body.pose, kind.chains, kind.carriage, gait, seed) : null;
   const phases = kind.chains.map(() => ({ phase: 0 })), pitches: number[] = kind.chains.map(() => 0);
   let going = false, followed: Vector3 | null = null;
@@ -75,7 +75,7 @@ export function creature(body: Self): Step {
   } satisfies Striding;
   let facing = body.yaw;
   return (f) => {
-    body.poise.pass(poise);
+    body.asks.pass(asks);
     const locomotion = body.locomotion, asked0 = body.going, face = asked0?.face;
     // (a goal nowhere — not a finite point — it does not go for: it stands)
     const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
@@ -123,9 +123,9 @@ export function creature(body: Self): Step {
     // down about its hind girdle or its croup down about its fore girdle (arched: settling onto its haunches, as a lean back does), its
     // trunk turned and rolled about its legs' tops' middle — and, with no carriage to lean it, leaning into its root's acceleration so:
     // eased there and back, as far as `STOOPING` and `POSED` let it)
-    const posed = poise.posture, own = !carried && !posture ? inertia : null;
-    const tasked = Math.max(0, Math.min(poise.bow, poise.bowLimit)), bow = tasked + clamp(posed.bow + (own?.pitch ?? 0), -POSED.bow, POSED.bow);
-    lowering = ease(lowering, clamp(poise.lower + posed.lower, 0, STOOPING.lowest * feet.length), f.dt);
+    const posed = asks.posture, own = !carried && !posture ? inertia : null;
+    const tasked = Math.max(0, Math.min(asks.bow, asks.bowLimit)), bow = tasked + clamp(posed.bow + (own?.pitch ?? 0), -POSED.bow, POSED.bow);
+    lowering = ease(lowering, clamp(asks.lower + posed.lower, 0, STOOPING.lowest * feet.length), f.dt);
     bowing = ease(bowing, clamp(bow, -POSED.bow, Math.max(tasked, STOOPING.bow)), f.dt);
     twisting = ease(twisting, clamp(posed.twist, -POSED.twist, POSED.twist), f.dt);
     leaning = ease(leaning, clamp(posed.lean + (own?.roll ?? 0), -POSED.lean, POSED.lean), f.dt);

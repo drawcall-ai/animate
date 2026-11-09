@@ -1,29 +1,29 @@
 import type { Miss } from './requests';
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from './frame';
-import type { Carrier } from './carrier';
+import type { MovingFrame } from './moving-frame';
 import { solveChain } from './chain';
 import { follow, followRotation } from './follow';
 import { limited } from './limits';
 import { exp, log } from './rotation';
 import { REACHED, type Motion, type Trail, type Placement, type Goal } from './goal';
 import type { ReadonlyPose } from './pose';
-import { TrackedRotation } from './track';
+import { TrackedRotation } from './tracked';
 import { forwardOf, leftOf } from './math';
 
 /** How a chain's tip goes to its target. */
 interface TipOptions extends Motion {
   /** where a two-segment chain's middle joint bends toward (world) */
   pole?: Vector3;
-  /** the target is on this carrier, in its frame: the tip goes with it */
-  on?: Carrier;
+  /** the target is on this moving frame, in its frame: the tip goes with it */
+  on?: MovingFrame;
   /** a tip further out than all but the chain's full length as this sets off (an arm hanging all but straight) is not drawn in at once:
    * it is let out as far as it was, never further, until it comes in */
   letOut?: boolean;
   /** a two-segment chain that cannot fit its goal on the pole's side keeps the swivel and middle-bone twist it has, unless another fit
    * is clearly better (a hand holding something: the arm as it holds it, not chosen afresh as the goal moves on) */
   keep?: boolean;
-  /** Follow a contact from the actual pose, without extrapolating the IK goals back into its carrier. */
+  /** Follow a contact from the actual pose, without extrapolating the IK goals back into its moving frame. */
   contact?: boolean;
   /** after each solve, and again once its joints are braked (`braked`: where they have left the tip): puts the chain out of what it may
    * not pass through (its own body), the tip going to `tip` (world), re-solving it as it must; the intended path goes on as it was */
@@ -31,14 +31,14 @@ interface TipOptions extends Motion {
 }
 
 /** Follow a tip path, solve the chain, then brake its joints within limits. Projection and joint lag preserve intended velocity; another layer moving the tip restarts from the actual pose.
- * Keep one ChainTip per behaviour: it owns the joint goals and path history. */
-export class ChainTip {
+ * Keep one LimbMover per behaviour: it owns the joint goals and path history. */
+export class LimbMover {
   private readonly joints = new Map<number, TrackedRotation>();
   /** each joint contact or clearance moved after its brakes in its last call, and its step then as the brakes are to read it (a rotation vector, its
    * parent's frame) */
   private readonly nudged = new Map<number, Vector3>();
-  /** where it moved and turned the tip the last two sub-steps (world), where it left it, and when last; on a carrier, where it took the
-   * carrier to be then */
+  /** where it moved and turned the tip the last two sub-steps (world), where it left it, and when last; on a moving frame, where it took the
+   * moving frame to be then */
   private readonly moved = { before: new Vector3(), last: new Vector3(), turnedBefore: new Quaternion(), turned: new Quaternion(), placed: new Vector3(),
     placedTurn: new Quaternion(), time: NaN, frames: [0, 1].map(() => ({ position: new Vector3(), quaternion: new Quaternion() })) };
   /** the chain's joints as its last solve left them, before the brakes */
@@ -48,7 +48,7 @@ export class ChainTip {
   private resumes = false;
   /** how far out from the chain's base it let the tip go last (m) */
   private most = Infinity;
-  private on?: Carrier;
+  private on?: MovingFrame;
 
   constructor(readonly chain: string) {}
 
@@ -64,7 +64,7 @@ export class ChainTip {
     this.on = on;
     if (!own) this.joints.clear();
     const placed = on?.at(f.time);
-    // (the intended path on a carrier, moved with it from where it was foreseen to be to where it was: one worn by a body still posing
+    // (the intended path on a moving frame, moved with it from where it was foreseen to be to where it was: one worn by a body still posing
     // was carried on as it moved, its actual placement known only once it has moved)
     if (own && placed) for (const [point, turn, at, then] of [[moved.last, moved.turned, moved.frames[1], placed.prev], [moved.before, moved.turnedBefore, moved.frames[0], placed.prev2]] as const) {
       if (at.position.equals(then.position) && at.quaternion.equals(then.quaternion)) continue;
@@ -162,14 +162,14 @@ export class ChainTip {
 
 type TipPose = Pick<ReadonlyPose, 'position' | 'rotation'>;
 
-/** Judge the last final pose against the target one sub-step ago: carrier history or velocity extrapolation, within REACHED distance, angle and relative `speed`
+/** Judge the last final pose against the target one sub-step ago: moving frame history or velocity extrapolation, within REACHED distance, angle and relative `speed`
  * (a verb cut short by `until`, on its goal as that comes, needs none: `Infinity`); a turn only preferred, within REACHED angle or no longer turning (`TURNING`). */
-export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: Carrier, speed = REACHED.speed): boolean {
+export function reached(f: { prev2: TipPose; prev: TipPose; dt: number; time: number }, tip: number, target: Goal, on?: MovingFrame, speed = REACHED.speed): boolean {
   const { prev2, prev, dt } = f;
   const placed = on?.at(f.time);
   const then = _then, velocity = _velocity, moved = target.velocity ?? ZERO;
   if (on && placed) {
-    // (the target point as the carrier was placed `back` sub-steps before `time`)
+    // (the target point as the moving frame was placed `back` sub-steps before `time`)
     const was = (back: number, at: Placement, out: Vector3) => out.copy(target.position).addScaledVector(moved, -back * dt).applyQuaternion(at.quaternion).add(at.position);
     const goal = on.toWorld(target, _goal, f.time);
     then.copy(goal.position).addScaledVector(velocity.copy(moved).applyQuaternion(placed.current.quaternion).add(goal.velocity), -dt);
@@ -199,13 +199,13 @@ function turning(f: { prev2: TipPose; prev: TipPose; dt: number }, tip: number, 
 }
 
 /** whether a tip stopped this near a goal is there: as near as a verb's verdict on it counts, moving or not (`reached` also asks it be still and nearer) */
-export function closeTo(f: Frame, tip: number, target: Goal, on?: Carrier): boolean {
+export function closeTo(f: Frame, tip: number, target: Goal, on?: MovingFrame): boolean {
   const off = unmet(f, tip, target, on);
   return off.distance <= REACHED.close && off.angle <= REACHED.angle;
 }
 
 /** The unmet turn, in radians, as the last final pose has it. */
-function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: Carrier): number {
+function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: MovingFrame): number {
   if (!target.quaternion) return 0;
   const placed = on?.at(f.time);
   // (in the frame the target is given in)
@@ -214,7 +214,7 @@ function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip
 
 /** how far a tip is from its target as the last final pose has it: its distance (m) and the turn left (rad; none of a turn only
  * preferred: it goes as far as it may), the target's world point */
-export function unmet(f: Frame, tip: number, target: Goal, on?: Carrier): { distance: number; angle: number; at: Vector3 } {
+export function unmet(f: Frame, tip: number, target: Goal, on?: MovingFrame): { distance: number; angle: number; at: Vector3 } {
   const at = on ? on.toWorld(target, _goal, f.time).position : target.position;
   return { distance: f.prev.position(tip).distanceTo(at), angle: target.preferred ? 0 : angleOff(f, tip, target, on), at: _late.copy(at) };
 }
@@ -247,7 +247,7 @@ const STOPPED = { closer: 0.003, turned: 0.02, seconds: 0.5 };
  * A late reach's miss, if position or turn is unmet (position first, never a zero distance for a blocked turn): where the tip stopped in the
  * body's frame and, if `cause` says, what held it there.
  */
-export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: Carrier, cause?: (at: Vector3) => string | undefined): Miss | null {
+export function lateReach(f: Frame, tip: number, target: Goal, where: string, on?: MovingFrame, cause?: (at: Vector3) => string | undefined): Miss | null {
   const { distance, angle, at } = unmet(f, tip, target, on);
   const why = cause?.(at), held = why ? `: ${why}` : '';
   const off = _off.subVectors(f.prev.position(tip), at), facing = f.prev.facing;

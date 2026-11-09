@@ -2,7 +2,7 @@ import { MathUtils, Euler, Quaternion, Vector3 } from 'three';
 import { clamp, headingOf, wrapAngle, yawOf } from '../kernel/math';
 import { action } from '@pmndrs/timeline';
 import { during, type Request } from '../kernel/requests';
-import type { Frame, Step } from '../kernel/frame';
+import type { Frame, Behaviour } from '../kernel/frame';
 import { follow, followRotation } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
 import { limited } from '../kernel/limits';
@@ -44,7 +44,7 @@ const SHIFT = { turnAccel: 60, turnSpeed: 6 };
  * head turn uses headPace, capped by motion. `recentring`: the eyes re-centre in the head once the body is still under the look (a look
  * asked for; one borrowed by the hands, or idle, leaves the head where it is).
  */
-export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false, head }: { motion?: HeadMotion; recentring?: boolean; head?: number } = {}): Step {
+export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { motion = GLANCE, recentring = false, head }: { motion?: HeadMotion; recentring?: boolean; head?: number } = {}): Behaviour {
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   if (neck === undefined && head !== undefined) throw new Error('lookAt: a head share needs a neck to turn the head (its posture turns it)');
@@ -66,7 +66,7 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     const pose = f.current;
     const bones = pose.skeleton.chain(neck);
     const point = target(f);
-    self.lead?.(f.prev, point);
+    self.gazeAsks?.(f.prev, point);
     // (a target faster than JUMP jumped: the head shifts to it, it does not pursue it; a new sight starts a gaze shift)
     const jumped = (aimed?.distanceTo(point) ?? Infinity) > JUMP * f.dt;
     if (jumped) {
@@ -189,7 +189,7 @@ function shareOver(skeleton: Skeleton, bones: readonly number[], turn: Readonly<
 /** Upper-body aim, with the gait's counter-rotation and balance preserved: the trunk turned `share` of the bearing to `at` (at most 45°)
  * and pitched `PITCHED` × `share` of its pitch, a sub-step. Recalled: Epic Games, Unreal Engine “Aim Offset”: additive aim over the spine
  * and neck; the base shares it over spine/chest, gaze handles neck/head/eyes. */
-export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>, share: number): Step {
+export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>, share: number): Behaviour {
   if (!self.gazer) throw new Error('lookAt: the body has no gaze');
   return (f) => {
     const direction = at(f).clone().sub(self.headOffset.eyes(f.prev, new Vector3()));
@@ -197,7 +197,7 @@ export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>, share: n
     const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
     // (derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at once, as an aim offset follows the look:
     // the trunk's joints alone pace it, a player's flick turned within them, not at a squat's pace)
-    self.poise.add({ twist: clamp(share * yaw, -Math.PI / 4, Math.PI / 4), twistRate: Infinity, bow: PITCHED * share * pitch });
+    self.asks.add({ twist: clamp(share * yaw, -Math.PI / 4, Math.PI / 4), twistRate: Infinity, bow: PITCHED * share * pitch });
   };
 }
 

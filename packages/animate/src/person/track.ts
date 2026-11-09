@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { during, type Request } from '../kernel/requests';
-import { REACH } from '../kernel/tip';
+import { REACH } from '../kernel/limb';
 import { finder } from '../things/target';
 import type { Tracked } from '../verbs/track';
 import { INDEX, type Side } from './anatomy/bones';
@@ -26,7 +26,7 @@ export function* tracking(person: Person, request: Request, tracked: Tracked) {
   for (const side of ['left', 'right'] as const satisfies readonly Side[]) {
     const target = tracked[side];
     if (!target) continue;
-    const find = finder(person, target), keep = reaching(person, side, find, { ...HOLD, lead: false });
+    const find = finder(person, target), keep = reaching(person, side, find, { ...HOLD, bodyFollows: false });
     // (a hand `OFF.distance` off where its target was a sub-step before, the target past the arm held out straight from the shoulder, for
     // long enough of the last few seconds (`OFF`), is said once on the console: an aimer has no end to miss at; a hand lagging a target in
     // reach is not said)

@@ -1,29 +1,29 @@
 // A person's body over its root, whoever drives it: the core stepper keeps the legs under it; here the carriage, the leg chains and the human checks.
 import { MathUtils, Quaternion, Vector3 } from 'three';
-import type { Frame, Step } from '../../kernel/frame';
+import type { Frame, Behaviour } from '../../kernel/frame';
 import type { Dev } from '../../kernel/dev';
 import { solveChain } from '../../kernel/chain';
 import { follow } from '../../kernel/follow';
 import { clampRotation } from '../../kernel/limits';
 import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle, yawOf } from '../../kernel/math';
 import { Stepper } from '../../step/stepper';
-import { runs, type Feet, type Leg, type Steering, type Swing } from '../../step/state';
-import { TrackedPoint, TrackedRotation } from '../../kernel/track';
-import { Poise } from '../../kernel/poise';
+import { runs, type Feet, type Leg, type Steering, type Swing } from '../../step/steps';
+import { TrackedPoint, TrackedRotation } from '../../kernel/tracked';
+import { Asks } from '../../kernel/asks';
 import type { Go, Stance } from '../../step/go';
 import { seedOf } from '../../kernel/random';
 import { individualOf, type Individual } from './individual';
 import { Quiet } from './quiet';
 import { ankleFor, ballOf, footprint, footRotation, heelOf, heelSides } from './foot';
 import { kneePole, shankTilt } from './leg';
-import { LOWER, Posture, entrain, walking, type Trunk, type Upright } from './posture';
+import { LOWER, WalkPose, entrain, walkBlend, type TrunkPose, type Upright } from './walk-pose';
 import { armsHeld } from './turn';
 import { bears, hullOf, outside, xcomOf, xcomOfPoses } from '../../step/support';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { drivenRoot } from '../../step/root';
 import { solePoints } from '../anatomy/landmarks';
-import { humanStepping } from './stepping';
-import { KNEE_FLEXION } from '../anatomy/limits';
+import { personStepping } from './stepping';
+import { KNEE_FLEXION } from '../anatomy/ranges';
 import { defaultStance, standingFeet } from '../anatomy/stance';
 import type { Person } from '../person';
 
@@ -70,7 +70,7 @@ const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 
 const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 }, TURN = { accel: 60 };
-/** Tuned (rad/s²): the trunk's joints turning after a look taken up at once (`Poise.twistRate`), an aim tracking a turning view: at
+/** Tuned (rad/s²): the trunk's joints turning after a look taken up at once (`Asks.twistRate`), an aim tracking a turning view: at
  * `TURN`'s pace the chest would swing on past a quick turn that reverses, carrying what the body points with it off its line */
 const AIMING = { accel: 300 };
 
@@ -79,7 +79,7 @@ const AIMING = { accel: 300 };
  * capsule carries them: a leap it asks is taken as soon as the feet can, and `airborne` says when it is in the air; the body over it is
  * carried as a walker's is (`drivenBy`). Development checks: planted slide, touchdown speed, feet across; not its XCoM, which follows its input, not its balance.
  */
-export function driven(person: Person, seed?: number): Step {
+export function driven(person: Person, seed?: number): Behaviour {
   return drivenBy(person, drivenRoot(person), { individual: individualOf(seedFor(person, seed)), seed });
 }
 
@@ -92,13 +92,13 @@ export function seedFor(person: Pick<Person, 'proportions' | 'pose' | 'yaw'>, se
 
 /**
  * `driven`, the root read each sub-step from `rootOf` once what was asked is taken (a scene's; a planner's, toward where its legs are asked to go). Whoever
- * drives it, the body is carried over it one way, as `Posture` has it: the hips swaying and turning with the stride about the root
+ * drives it, the body is carried over it one way, as `WalkPose` has it: the hips swaying and turning with the stride about the root
  * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
  * to (`PACE`), nodding, bowed and twisted as asked, the thorax counter-rotating. Let down as asked (`lower`) or as the root crouches it,
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
  * less as it holds still (`steady`). It steps, swings its arms and sways as the `individual` it is.
  */
-export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise: Poise, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number; individual: Individual }): Step {
+export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, asks: Asks, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number; individual: Individual }): Behaviour {
   const individual = options.individual;
   const proportions = person.proportions, s = proportions.scale;
   const soles = SIDES.map((side, i) => [heelOf(proportions), ...[proportions.sole.bigToe, proportions.sole.smallToe]
@@ -137,10 +137,10 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     },
   };
   const stepperFor = (foreseen: boolean) =>
-    (person.stepper = new Stepper(humanStepping(proportions, foreseen, person.stride, individual), foreseen ? feet : pivoting, standing, person.yaw, person.floor));
+    (person.stepper = new Stepper(personStepping(proportions, foreseen, person.stride, individual), foreseen ? feet : pivoting, standing, person.yaw, person.floor));
   let stepper = stepperFor(true), first = true;
-  const { toeOut, crouch: crouching } = humanStepping(proportions, true, person.stride);
-  const poise = new Poise();
+  const { toeOut, crouch: crouching } = personStepping(proportions, true, person.stride);
+  const asks = new Asks();
   const base = { ...defaultStance(proportions), ...options.stance };
   const upright: Upright = {
     p: proportions, stride: person.stride, root: new Vector3(), velocity: new Vector3(), offset: new Vector3(), yaw: person.yaw, walk: 0, run: 0, moving: false, stance: base,
@@ -148,19 +148,19 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     feet: standing.map((foot) => ({ anchor: foot.position.clone() })),
     pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false, unloading: null,
   };
-  const posture = new Posture(person.species.inertia);
+  const walkPose = new WalkPose(person.species.inertia);
   const life = new Quiet(seedFor(person, options.seed), individual.sway);
-  const trunk: Trunk = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
+  const trunk: TrunkPose = { chest: new Quaternion(), pelvisYaw: 0, thoraxYaw: 0 };
   const asked = { lower: [0, 0], bow: [0, 0], twist: [0, 0], lean: [0, 0], hips: [0, 0] };
   const hips = new TrackedPoint(), rotation = new TrackedRotation(), back = [new TrackedRotation(), new TrackedRotation()], tilts = [new Quaternion(), new Quaternion()];
   let offsets: Vector3[] | null = null, pace: Vector3 | null = null, phase = 0;
   return (f) => {
     if (f.dev && f.time > f.dt) check(person, f, f.dev, stepper.legs);
-    person.poise.pass(poise);
+    person.asks.pass(asks);
     // (seated, the legs asked elsewhere stand it first; the seat's own height and bow over what the parts ask)
     const seat = person.seat?.step(f.dt, person.going) ?? null;
-    const dt = f.dt, go = seat ? null : person.going, root = rootOf(f, go, poise, stepper);
-    if (seat) [poise.lower, poise.posture.lower, poise.bow] = [lerp(poise.lower, seat.seating.lower, seat.share), poise.posture.lower * (1 - seat.share), Math.max(poise.bow, seat.bow)];
+    const dt = f.dt, go = seat ? null : person.going, root = rootOf(f, go, asks, stepper);
+    if (seat) [asks.lower, asks.posture.lower, asks.bow] = [lerp(asks.lower, seat.seating.lower, seat.share), asks.posture.lower * (1 - seat.share), Math.max(asks.bow, seat.bow)];
     if (first && !root.forecast) stepper = stepperFor(false);
     first = false;
     // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
@@ -171,7 +171,7 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     // the hips carried off the root: swaying and turning with the stride, off a centre of mass's as far as the mass leans ahead of them
     const speed = root.velocity.length();
     upright.stance = go?.stance ? { ...base, ...go.stance } : base;
-    upright.walk = walking(upright.walk, speed, dt);
+    upright.walk = walkBlend(upright.walk, speed, dt);
     upright.moving = root.underway ?? person.locomotion.moving;
     upright.yaw = stepper.yaw;
     upright.held = armsHeld(person);
@@ -187,24 +187,24 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     else pace.addScaledVector(change, most / change.length());
     upright.velocity.copy(pace);
     upright.run = stepper.run;
-    if (root.centre) upright.offset.copy(posture.center(f));
+    if (root.centre) upright.offset.copy(walkPose.center(f));
     // (its quiet life: motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
       f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
-    life.update(dt, life.quiet(go, poise, person), activity, poise.steady);
+    life.update(dt, life.quiet(go, asks, person), activity, asks.steady);
     // (lowered, bowed and bent sideways at a squat's pace, twisted at the asked rate, the story's posture added onto what the parts ask;
     // tiptoe waits for settled feet so landing cannot drop the pelvis)
-    const posed = poise.posture, twisting = poise.twistRate * dt, lower = poise.lower + posed.lower;
+    const posed = asks.posture, twisting = asks.twistRate * dt, lower = asks.lower + posed.lower;
     const twist = twisting > 0
-      ? asked.twist[1] + clamp(poise.twist + posed.twist - asked.twist[1], -twisting, twisting)
-      : follow(paced(asked.twist, BOW, dt), asked.twist[1], poise.twist + posed.twist, BOW, dt);
+      ? asked.twist[1] + clamp(asks.twist + posed.twist - asked.twist[1], -twisting, twisting)
+      : follow(paced(asked.twist, BOW, dt), asked.twist[1], asks.twist + posed.twist, BOW, dt);
     [asked.twist[0], asked.twist[1]] = [asked.twist[1], twist];
     // (the pelvis turned off the facing as asked, at the twist's rate; given up at balance's own pace)
-    const hipsTurn = twisting > 0 ? asked.hips[1] + clamp(poise.hips - asked.hips[1], -twisting, twisting) : follow(paced(asked.hips, BOW, dt), asked.hips[1], poise.hips, BOW, dt);
+    const hipsTurn = twisting > 0 ? asked.hips[1] + clamp(asks.hips - asked.hips[1], -twisting, twisting) : follow(paced(asked.hips, BOW, dt), asked.hips[1], asks.hips, BOW, dt);
     [asked.hips[0], asked.hips[1]] = [asked.hips[1], hipsTurn];
-    const bowed = Math.min(poise.bow + Math.min(posed.bow, WALKING_BOW + Math.PI * (1 - MathUtils.smoothstep(speed, 0.2, 0.8))), poise.bowLimit);
+    const bowed = Math.min(asks.bow + Math.min(posed.bow, WALKING_BOW + Math.PI * (1 - MathUtils.smoothstep(speed, 0.2, 0.8))), asks.bowLimit);
     // (bowed at the asked rate — a throw's — else at a squat's pace)
-    const bowing = poise.bowRate * dt, bow0 = asked.bow[1];
+    const bowing = asks.bowRate * dt, bow0 = asked.bow[1];
     const requested = {
       lower: followed(asked.lower, lower < 0 && !stepper.settled ? 0 : lower, LOWER, dt),
       bow: bowing > 0 ? (([asked.bow[0], asked.bow[1]] = [bow0, bow0 + clamp(bowed - bow0, -bowing, bowing)]), asked.bow[1]) : (asked.bow[0] = paced(asked.bow, BOW, dt), followed(asked.bow, bowed, BOW, dt)),
@@ -223,7 +223,7 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch * (1 - (seat?.share ?? 0));
     const cycle = { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle };
     const bow = requested.bow + stoop;
-    posture.carry(f, upright, { ...requested, bow }, trunk, life, cycle);
+    walkPose.carry(f, upright, { ...requested, bow }, trunk, life, cycle);
     const carried = upright.pelvis.clone().sub(upright.root).setY(0);
     if (seat) carried.lerp(_v.copy(seat.seating.hips).sub(upright.root).setY(0), seat.share);
     const offset = hips.follow(offsets[0], offsets[1], carried, PELVIS, dt, new Vector3());
@@ -231,14 +231,14 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     // (the pelvis's turn with the stride followed off the facing; running, the legs are told of it before they reach from its hips —
     // reversed, it swings the stance hip back off its foot; walking, they reach from a pelvis square to its facing, as a walker's do)
     const square = new Quaternion().setFromAxisAngle(UP, -upright.yaw).multiply(upright.pelvisRotation);
-    const tilt = rotation.follow(tilts[0], tilts[1], square, poise.hips !== 0 ? AIMING : TURN, dt, new Quaternion());
+    const tilt = rotation.follow(tilts[0], tilts[1], square, asks.hips !== 0 ? AIMING : TURN, dt, new Quaternion());
     [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
     stepper.turn = yawOf(tilt) * upright.run;
     // Rotate the hip offsets below the pelvis with its bow; lateral spacing and gait yaw remain the stepper's. Each hip's height takes the
     // pelvis's roll onto a foot as the weight shifts too: that hip rises and its leg must reach from there (else it stands over-reached,
     // its foot rolled up off its sole, and a foot stepped in place beside it lands on a straight knee that snaps bent). The walking list
     // turns the pelvis about the stance hip (recalled: Perry 1992, the swing side drops ~4°), where the stepper already plans the leg from.
-    const shift = quatYXZ(0, 0, posture.shiftRoll, _shift);
+    const shift = quatYXZ(0, 0, walkPose.shiftRoll, _shift);
     feet.legs.forEach((leg, i) => {
       const offset = proportions.offsets[`${SIDES[i]}UpperLeg`];
       const hip = offset.clone().setX(0).applyQuaternion(tilt).applyAxisAngle(UP, -stepper.turn);
@@ -262,13 +262,13 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
       }),
       // Remove the pelvis compensation from its offset: only the remaining sway and tracking lag displace the mass. The weight shifted onto a
       // foot standing, or off one to lift it, is a moment's: the feet step as from without it.
-      hips: offset.clone().sub(posture.shifted).add(behind),
-      shifted: posture.shifted,
-      com: root.centre ? offset.clone().sub(upright.offset).sub(posture.shifted).add(behind) : undefined,
+      hips: offset.clone().sub(walkPose.shifted).add(behind),
+      shifted: walkPose.shifted,
+      com: root.centre ? offset.clone().sub(upright.offset).sub(walkPose.shifted).add(behind) : undefined,
       crouch: Math.max(root.crouch ?? 0, Math.min(lowered, walkingMost)),
       tiptoe: Math.max(0, -requested.lower),
-      stagger: poise.stagger ?? undefined,
-      still: !!seat || (!upright.moving && Math.abs(requested.lower) > LOWERED * s && !poise.stagger),
+      stagger: asks.stagger ?? undefined,
+      still: !!seat || (!upright.moving && Math.abs(requested.lower) > LOWERED * s && !asks.stagger),
       seated: !!seat,
       xcom: xcomOfPoses(f.prev, f.prev2, dt, proportions.legLength, new Vector3()),
     });
@@ -288,7 +288,7 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
         prev2.multiply(impact.prev2.clone().invert());
         prev.multiply(impact.prev.clone().invert());
       }
-      const turned = back[k].follow(prev2, prev, local, poise.twistRate > 0 ? AIMING : TURN, dt, new Quaternion());
+      const turned = back[k].follow(prev2, prev, local, asks.twistRate > 0 ? AIMING : TURN, dt, new Quaternion());
       if (impact.active) turned.multiply(impact.rotation);
       // (within the joint's range however quickly it was followed there: an aim's quick turn on top of a throw's hips overshot it)
       if (limit) clampRotation(turned, limit);
@@ -365,7 +365,7 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, poise
     locomotion.velocity.copy(root.velocity).setY(0);
     locomotion.planted = locomotion.moving ? 0 : locomotion.planted + dt;
     locomotion.settled = stepper.settled && (!seat || seat.seated);
-    locomotion.quiet.copy(posture.quiet);
+    locomotion.quiet.copy(walkPose.quiet);
   };
 }
 

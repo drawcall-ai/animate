@@ -1,8 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { beyond } from '../../src/kernel/limits';
+import { pastLimit } from '../../src/kernel/limits';
 import { BONES, CHILD_BONES, INDEX } from '../../src/person/anatomy/bones';
-import { ranges } from '../../src/person/anatomy/limits';
+import { ranges } from '../../src/person/anatomy/ranges';
 import { relaxedPose } from '../../src/person/anatomy/relaxed';
 import { rng, turnUpTo } from '../random';
 
@@ -25,8 +25,8 @@ describe('ranges of motion', () => {
         const q = turnUpTo(rand, 2.4);
         // (the reflection across x)
         const mirrored = new Quaternion(q.x, -q.y, -q.z, q.w);
-        const b = beyond(q, of(left));
-        expect(beyond(mirrored, of(right)), left).toBeCloseTo(b, 9);
+        const b = pastLimit(q, of(left));
+        expect(pastLimit(mirrored, of(right)), left).toBeCloseTo(b, 9);
         if (b > 0) outside++;
       }
     }
@@ -39,7 +39,7 @@ describe('the relaxed pose', () => {
     const relaxed = relaxedPose();
     expect(relaxed.map((r) => r.bone)).toEqual(CHILD_BONES.map((b) => INDEX[b]));
     const pose = BONES.map((_, i) => relaxed.find((r) => r.bone === i)?.rotation ?? new Quaternion());
-    for (const r of ranges()) expect(beyond(pose[r.bone], r), BONES[r.bone]).toBe(0);
+    for (const r of ranges()) expect(pastLimit(pose[r.bone], r), BONES[r.bone]).toBe(0);
     // the upper arm hangs 8° out from the side; the foot's world rotation is the hips'
     for (const side of ['left', 'right'] as const) {
       const at = (b: string) => pose[BONES.findIndex((n) => n === `${side}${b}`)];

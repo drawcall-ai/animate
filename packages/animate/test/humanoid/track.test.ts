@@ -1,7 +1,7 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { track } from '../../src/index';
-import { beyond } from '../../src/kernel/limits';
+import { pastLimit } from '../../src/kernel/limits';
 import { INDEX } from '../../src/person/anatomy/bones';
 import type { Person } from '../../src/person/person';
 import { insides, person, play } from '../bodies';
@@ -15,7 +15,7 @@ function withinRanges(h: Person) {
   for (const bone of [INDEX.spine, INDEX.chest, INDEX.neck, INDEX.head]) {
     const limit = h.skeleton.limits[bone];
     if (!limit) throw new Error('no limit');
-    expect(beyond(h.pose.local(bone), limit)).toBeLessThan(1e-6);
+    expect(pastLimit(h.pose.local(bone), limit)).toBeLessThan(1e-6);
   }
 }
 

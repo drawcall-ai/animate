@@ -11,7 +11,7 @@ import { swing } from '../kernel/life';
 import type { Gait } from '../species/gait';
 import { carriage, type CarriedBones, type Striding } from './carriage';
 import type { JointCycle } from '../species/cycle';
-import type { LegChain } from '../species/leg';
+import type { LegChain } from '../species/leg-chain';
 import { powerGait, stanceOf } from '../species/schedule';
 import { gaitAt } from '../species/scaled';
 import { build, mirrored, needing, type Attention, type BoneNames, type Having, type LegRole, type Range, type Species, type Vec3 } from '../species/define';

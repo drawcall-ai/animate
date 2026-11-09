@@ -9,8 +9,8 @@ import { exp, log } from './rotation';
  * motion it has; given the goal's velocity, it follows a steadily moving goal exactly; and it never passes a still goal it moves
  * straight at (or starts still for) unless it is too fast to brake in time. Velocity across the line to the goal turns with what is
  * left of the acceleration and can carry it past the goal, by up to about 1.25 · v⊥² / accel. The history is read as taken `dt` apart:
- * step it evenly (a body's sub-steps are). On a carrier (`on`), the goal is in its frame and the history is read in its frame as it
- * was then: the value moves with the carrier, and toward the goal on it.
+ * step it evenly (a body's sub-steps are). On a moving frame (`on`), the goal is in its frame and the history is read in its frame as it
+ * was then: the value moves with the moving frame, and toward the goal on it.
  */
 export function follow(prev2: number, prev: number, target: number, options: Omit<FollowOptions<number>, 'on'>, dt: number): number;
 export function follow(prev2: Vector3, prev: Vector3, target: Vector3, options: FollowOptions<Vector3>, dt: number, out?: Vector3): Vector3;
@@ -65,7 +65,7 @@ export function followRotation(prev2: Quaternion, prev: Quaternion, target: Quat
   return on ? out.premultiply(on.current.quaternion) : out;
 }
 
-/** `world` into the frame of a carrier placed `at` */
+/** `world` into the frame of a moving frame placed `at` */
 export function toLocal(at: Placement, world: Vector3): Vector3 {
   return world.sub(at.position).applyQuaternion(_r.copy(at.quaternion).invert());
 }

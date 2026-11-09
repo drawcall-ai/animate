@@ -5,11 +5,11 @@ import { loadFactor } from '../../kernel/load';
 import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../kernel/math';
 import { Walk } from '../../step/walk';
 import { during, type Request } from '../../kernel/requests';
-import { ARM_REACH, PROTRACTION } from './bend';
-import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
+import { ARM_REACH, PROTRACTION } from './shoulder';
+import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { INDEX, type Side } from '../anatomy/bones';
-import { floorUnder } from '../legs/legged';
-import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../legs/posture';
+import { floorUnder } from '../legs/height';
+import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../legs/walk-pose';
 import { defaultStance } from '../anatomy/stance';
 import type { Person } from '../person';
 
@@ -37,11 +37,11 @@ const LOWERED_BELOW = 0.7;
 
 /** What a person stands to: grips to take (by the hand that takes each, where each is now, the heaviest load's mass), or a placing point. */
 type Stand =
-  | { grips: readonly { side: Side; at: Vector3 }[]; mass: number; things?: readonly Placed[] }
-  | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[]; things?: readonly Placed[] };
+  | { grips: readonly { side: Side; at: Vector3 }[]; mass: number; things?: readonly PlacedBounds[] }
+  | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[]; things?: readonly PlacedBounds[] };
 
 /** a thing's envelope (its own frame) where it is */
-interface Placed { bounds: Box3; position: Vector3; quaternion: Quaternion }
+interface PlacedBounds { bounds: Box3; position: Vector3; quaternion: Quaternion }
 
 /** A walk to where a person stands, and when it has arrived there. */
 export type WalkUp = Extract<ReturnType<typeof footing>, { walk: Walk }>;
@@ -206,7 +206,7 @@ export function footing(person: Person, to: Stand, step = true) {
 }
 
 /** a person's walk to where it stands (borrowed legs) until it has arrived, or stalled: its stall, if so; what it moves arriving `after` s later */
-export function* walking(request: Request, plan: WalkUp, after?: number) {
+export function* walkingUp(request: Request, plan: WalkUp, after?: number) {
   const { walk, arrived } = plan;
   yield* during(request, 'go', 'borrowed', (f) => {
     const go = walk.step(f);
@@ -249,7 +249,7 @@ function facingFor(person: Person, grips: { side?: Side; at: Vector3 }[]): numbe
 }
 
 /** how far back toward the body (against `forward`, from `middle`) the parts of `things` above `above` (m, world height) reach: -Infinity for none */
-function backOf(things: readonly Placed[], middle: Vector3, forward: Vector3, above: number): number {
+function backOf(things: readonly PlacedBounds[], middle: Vector3, forward: Vector3, above: number): number {
   let back = -Infinity;
   for (const { bounds, position, quaternion } of things) for (let k = 0; k < 8; k++) {
     const corner = _corner.set(k & 1 ? bounds.max.x : bounds.min.x, k & 2 ? bounds.max.y : bounds.min.y, k & 4 ? bounds.max.z : bounds.min.z)

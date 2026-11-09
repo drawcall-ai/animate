@@ -1,15 +1,15 @@
 import { MathUtils, Box3, Matrix4, Quaternion, Vector3 } from 'three';
-import type { Frame, Step } from '../../kernel/frame';
+import type { Frame, Behaviour } from '../../kernel/frame';
 import { limited } from '../../kernel/limits';
-import { TrackedRotation } from '../../kernel/track';
+import { TrackedRotation } from '../../kernel/tracked';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import type { Thing } from '../../things/thing';
 import { boneOf } from '../../things/hold';
-import { ArmClear, checkArms, keepArmOut, NUDGED } from './trunk';
+import { ArmClear, checkArms, keepArmOut, NUDGED } from './arm-clearance';
 import { clamp, leftOf, lerp, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../anatomy/proportions';
 import { palmOf } from '../anatomy/landmarks';
-import { bowAhead } from '../legs/posture';
+import { bowAhead } from '../legs/walk-pose';
 import type { Person } from '../person';
 
 // A free arm: it hangs from the shoulder, swings with the stride, turns back with the trunk's bow and is posed over that as asked.
@@ -57,7 +57,7 @@ export const SWING = { accel: 25, speed: 2.5 };
 const OVERRUN = Math.PI / 2;
 
 /** Free arms follow their own histories back into stride swing, posed over it as asked (`armPose`, cleared); holding hands keep their grips. */
-export function hanging(person: Person): Step {
+export function hanging(person: Person): Behaviour {
   const goals = new Map<number, TrackedRotation>(), seen = { left: new ArmClear(), right: new ArmClear() };
   /** whether each arm was another's (a hand verb's, or holding) the sub-step before: taken back, it is carried on no faster than it swings */
   const taken = { left: true, right: true };

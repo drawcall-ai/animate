@@ -4,7 +4,7 @@ import { STROLL, type Go, type Stance } from './go';
 import type { Miss, Request } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
-import { remaining, SETTLED_AFTER } from './state';
+import { remaining, SETTLED_AFTER } from './steps';
 import { FLAT } from './floor';
 import type { Self } from '../body/self';
 

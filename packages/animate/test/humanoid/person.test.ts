@@ -2,7 +2,7 @@ import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Pose } from '../../src/kernel/pose';
 import { solveChain } from '../../src/kernel/chain';
-import { beyond, clampRotation } from '../../src/kernel/limits';
+import { pastLimit, clampRotation } from '../../src/kernel/limits';
 import { CHAINS } from '../../src/person/anatomy/skeleton';
 import { relaxedPose } from '../../src/person/anatomy/relaxed';
 import { INDEX } from '../../src/person/anatomy/bones';
@@ -40,7 +40,7 @@ describe('a person', () => {
     for (const bone of [INDEX.rightUpperArm, INDEX.rightLowerArm]) {
       const limit = poseOf(body).skeleton.limits[bone];
       if (!limit) throw new Error('no limit');
-      expect(beyond(poseOf(body).local(bone), limit)).toBeLessThan(1e-9);
+      expect(pastLimit(poseOf(body).local(bone), limit)).toBeLessThan(1e-9);
     }
   });
 

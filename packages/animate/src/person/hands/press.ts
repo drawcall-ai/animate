@@ -2,13 +2,13 @@ import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Goal } from '../../kernel/goal';
 import { minimumJerk } from '../../kernel/math';
-import { course } from '../../kernel/course';
+import { timedPath } from '../../kernel/timed-path';
 import { SHAPING } from '../../fingers/shape';
 import type { GripOn } from '../../things/thing';
 import { worn } from '../../things/hold';
 import { INDEX } from '../anatomy/bones';
 import { HOLD, reaching } from './arms';
-import type { Taking } from './take';
+import type { HandPlan } from './plan';
 import type { Person } from '../person';
 
 /*
@@ -31,7 +31,7 @@ export const BACK = { distance: 0.07, seconds: 0.15 } as const;
 
 /** where a fingertip's way to its button turns in for its run (`RUN`, the thing's frame): out from its goal along the face's normal;
  * none: no fingertip's grip */
-export function runOf(person: Person, take: Taking): Vector3 | null {
+export function runOf(person: Person, take: HandPlan): Vector3 | null {
   const grip = take.thing.grip(take.grip);
   if (grip.point === 'palm' || !grip.facing) return null;
   return take.goal.position.clone().addScaledVector(grip.facing, -RUN * person.scale);
@@ -42,9 +42,9 @@ export function runOf(person: Person, take: Taking): Vector3 | null {
  * in to its grip (`points`), timed by one minimum-jerk profile over its length (it passes the run without stopping and comes to rest
  * only on the button), set off `after` s on; its index points before the way's run in (`FingerState.pointAt`, `POINTS`), frozen so
  */
-export function pressingIn(person: Person, hand: Taking & { from: Vector3; points: Vector3[]; lengths: number[]; seconds: number }, after: number) {
+export function pressingIn(person: Person, hand: HandPlan & { from: Vector3; points: Vector3[]; lengths: number[]; seconds: number }, after: number) {
   const total = hand.lengths.reduce((sum, length) => sum + length, 0) || 1, seconds = hand.seconds;
-  const path = course({ current: { position: hand.from, quaternion: IDENTITY } }, hand.points.map((position, k) => [seconds * hand.lengths[k] / total, { position }] as const), { delay: after });
+  const path = timedPath({ current: { position: hand.from, quaternion: IDENTITY } }, hand.points.map((position, k) => [seconds * hand.lengths[k] / total, { position }] as const), { delay: after });
   let began = NaN;
   const goal = (f: Frame): Goal => {
     if (Number.isNaN(began)) began = f.time;
@@ -53,16 +53,16 @@ export function pressingIn(person: Person, hand: Taking & { from: Vector3; point
     person.fingers?.pointAt(hand.side, Math.min(1, Math.max(0, (POINTS.from - left) / (POINTS.from - POINTS.to))));
     return { ...hand.goal, position: path.to(f).position };
   };
-  return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, lead: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
+  return reaching(person, hand.side, goal, { on: person.track(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
 }
 
 /** whether `take`'s grip is a fingertip's, and its pad is on its empty (`TOUCH`): a press ends there */
-export function touching(person: Person, take: Taking, f: Frame): boolean {
+export function touching(person: Person, take: HandPlan, f: Frame): boolean {
   return take.thing.grip(take.grip).point !== 'palm' && padOff(person, take, f) < TOUCH * person.scale;
 }
 
 /** how far (m) `take`'s pad is off its empty, each as it last stood */
-export function padOff(person: Person, take: Pick<Taking, 'side' | 'thing' | 'grip' | 'point'>, f: Frame): number {
+export function padOff(person: Person, take: Pick<HandPlan, 'side' | 'thing' | 'grip' | 'point'>, f: Frame): number {
   const bone = person.hands[take.side], pad = _pad.copy(take.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
   const { position, quaternion } = person.track(take.thing.object).at(f.time).prev;
   return pad.distanceTo(_empty.copy(take.thing.grip(take.grip).at.position).applyQuaternion(quaternion).add(position));

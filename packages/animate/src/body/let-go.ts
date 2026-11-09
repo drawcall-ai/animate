@@ -1,5 +1,5 @@
 import { Object3D, Vector3 } from 'three';
-import { STEP } from '../kernel/frame';
+import { SUBSTEP } from '../kernel/frame';
 import type { Miss } from '../kernel/requests';
 import { spinOf } from '../kernel/rotation';
 import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
@@ -9,7 +9,7 @@ import type { Self } from './self';
 
 /** how near an empty a thing put onto it must be (m): nearer, it is set exactly there — as near as a carry there leaves it at rest (`END`,
  * read a sub-step before), a sub-step on */
-const ONTO = END.distance + END.speed * STEP;
+const ONTO = END.distance + END.speed * SUBSTEP;
 
 /** How a thing was moving as it was let go (world): its velocity (m/s) and its spin (rad/s about the world's axes). */
 export interface Released {

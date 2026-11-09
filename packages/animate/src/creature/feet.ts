@@ -5,12 +5,12 @@ import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
 import { angleAt, type JointCycle } from '../species/cycle';
 import { offsetAt, strideAt, type Gait } from '../species/gait';
-import type { LegChain } from '../species/leg';
+import type { LegChain } from '../species/leg-chain';
 import { SINGULAR, Solver, type LegTarget } from './solve';
 import { GRAVITY, minimumJerk, wrapAngle } from '../kernel/math';
 import { followRotation } from '../kernel/follow';
 import { clampRotation } from '../kernel/limits';
-import type { Feet, FootPose, Stepping } from '../step/state';
+import type { Feet, FootPose, Stepping } from '../step/steps';
 import type { Spot } from '../step/support';
 import type { Floor } from '../step/floor';
 

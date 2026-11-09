@@ -1,9 +1,10 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Pose } from '../kernel/pose';
-import { Carrier } from '../kernel/carrier';
+import { MovingFrame } from '../kernel/moving-frame';
 import { follow } from '../kernel/follow';
-import { anchors, movers, resolve, written, type Hold, type Holder } from './resolve';
+import { resolve, written } from './resolve';
+import { anchors, movers, type Hold, type Holder } from './holder';
 import { Thing } from './thing';
 import type { Placement } from '../kernel/goal';
 
@@ -121,10 +122,10 @@ export function take(self: Holder, thing: Thing): void {
   attach(thing, self.boneNode(hands.length === 1 ? self.hands[hands[0]] : 0), self);
   if (hands.length === 1) return;
   const at = resolve(self, thing.object, { position: new Vector3(), quaternion: new Quaternion() });
-  const carrier = new Carrier(at.position, at.quaternion);
+  const movingFrame = new MovingFrame(at.position, at.quaternion);
   // (standing there as of the sub-step before: `move` moves it on in this one)
-  carrier.place(self.frame.time - self.frame.dt, at.position, at.quaternion);
-  self.carry(thing.object, carrier);
+  movingFrame.place(self.frame.time - self.frame.dt, at.position, at.quaternion);
+  self.carry(thing.object, movingFrame);
 }
 
 /**
@@ -133,7 +134,7 @@ export function take(self: Holder, thing: Thing): void {
  * along with the root bone; each written into its object relative to the bone it hangs from. A thing in one hand hangs from that hand's
  * bone as the hand took it: it goes and turns with the hand (a grasp fixes the hand on the thing), and a carry turns it by turning the hand.
  */
-export function move(self: Holder, f: Frame, guided: ReadonlyMap<Object3D, Carrier>): void {
+export function move(self: Holder, f: Frame, guided: ReadonlyMap<Object3D, MovingFrame>): void {
   for (const [object, carrier] of self.carried) {
     const guide = guided.get(object), hands = handsOn(self, Thing.of(object));
     if (guide && hands.length === 2) fit(self, f, guide, hands, carrier);
@@ -148,19 +149,19 @@ export function move(self: Holder, f: Frame, guided: ReadonlyMap<Object3D, Carri
  * which it overshot by the hands' whole reach of it
  */
 export function carryAlong(self: Holder, f: Frame, object: Object3D, bone = 0): void {
-  const carrier = self.carried.get(object);
-  if (carrier && !carrier.moved(f.time)) along(f, carrier, bone);
+  const movingFrame = self.carried.get(object);
+  if (movingFrame && !movingFrame.moved(f.time)) along(f, movingFrame, bone);
 }
 
 /** a carried thing nothing guides, moved with bone `bone` (the root's, unless the holder carries it by another) as it moved this sub-step */
-function along(f: Frame, carrier: Carrier, bone = 0): void {
+function along(f: Frame, movingFrame: MovingFrame, bone = 0): void {
   const turn = _turn.copy(f.current.rotation(bone)).multiply(_back.copy(f.prev.rotation(bone)).invert());
-  const at = _at.copy(carrier.current.position).sub(f.prev.position(bone)).applyQuaternion(turn).add(f.current.position(bone));
-  carrier.move(f.time, at, turn.multiply(carrier.current.quaternion));
+  const at = _at.copy(movingFrame.current.position).sub(f.prev.position(bone)).applyQuaternion(turn).add(f.current.position(bone));
+  movingFrame.move(f.time, at, turn.multiply(movingFrame.current.quaternion));
 }
 
 /** a thing in both hands where the wrists hold it: as `guide` has it, carried along with the wrists */
-function fit(self: Holder, f: Frame, guide: Carrier, hands: readonly string[], carrier: Carrier): void {
+function fit(self: Holder, f: Frame, guide: MovingFrame, hands: readonly string[], movingFrame: MovingFrame): void {
   const at = (hand: string, out: Vector3) => {
     const hold = self.holding[hand];
     if (!hold) throw new Error(`fit: the ${hand} hand holds nothing`);
@@ -172,7 +173,7 @@ function fit(self: Holder, f: Frame, guide: Carrier, hands: readonly string[], c
   const turn = _turn.setFromUnitVectors(grips, wrists);
   const middle = at(hands[0], _m).add(at(hands[1], _g1)).multiplyScalar(0.5);
   const between = wrist(hands[0], _h).add(wrist(hands[1], _w1)).multiplyScalar(0.5);
-  carrier.move(f.time, _at.subVectors(guide.current.position, middle).applyQuaternion(turn).add(between), _q.copy(turn).multiply(guide.current.quaternion));
+  movingFrame.move(f.time, _at.subVectors(guide.current.position, middle).applyQuaternion(turn).add(between), _q.copy(turn).multiply(guide.current.quaternion));
 }
 
 /** How much of a thing's weight a body bears: its share (0 … 1) now and the two sub-steps before, its mass borne (kg) and the bones it bears on. */

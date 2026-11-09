@@ -1,19 +1,19 @@
 import { Quaternion, Vector3 } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
-import type { Carrier } from '../../kernel/carrier';
+import type { MovingFrame } from '../../kernel/moving-frame';
 import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
-import { closeTo, lateReach, Progress, REACH, reached, unmet } from '../../kernel/tip';
+import { closeTo, lateReach, Progress, REACH, reached, unmet } from '../../kernel/limb';
 import { during, type Request } from '../../kernel/requests';
-import { PointVelocity } from '../../kernel/track';
+import { PointVelocity } from '../../kernel/tracked';
 import { CALM, HOLD, reaching } from './arms';
-import { armReaches, footing, walking } from './stand';
+import { armReaches, footing, walkingUp } from './standing-spot';
 import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { paceAt, type HandOptions } from '../../body/handling';
-import { BODY_RADIUS } from './clearance';
+import { BODY_RADIUS } from './load-clearance';
 import type { Person } from '../person';
 
 /**
@@ -107,7 +107,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
         yield* parallel<Frame>('all', action<Frame>({ until: setsOff }), function* () {
           if (!walkUp) return;
           yield* parallel<Frame>('race', function* () {
-            stalled = yield* walking(request, walkUp, Math.max(0, lasts - NEAR));
+            stalled = yield* walkingUp(request, walkUp, Math.max(0, lasts - NEAR));
           }, action<Frame>({ until: moved }));
         });
         if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = close || there(f)) });
@@ -129,7 +129,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
  * is off its goal. While the legs are still stepping or settling under the hands, each is watched afresh: the body carrying a hand past
  * its goal and back is not the hand's own lack of progress. Returns whether every hand has stopped as near as counts as there.
  */
-export function lateWatch(person: Person, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => Carrier; where: string }[]) {
+export function lateWatch(person: Person, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => MovingFrame; where: string }[]) {
   const progress = hands.map(() => new Progress());
   let late = false, close = false;
   const within = (f: Frame) => hands.every(({ side, goal, on }) => closeTo(f, person.hands[side], goal(f), on?.()));
