@@ -16,7 +16,7 @@ import { bringShoulder } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { approach } from './approach';
 import { loadLean } from '../legs/walk-pose';
-import { handsGoing } from './reach';
+import { handsGoing, withinArm } from './reach';
 import { emptyAt, gripAt, handPlanOf, holdOn, type HandPlan } from './plan';
 import { handsHolding } from './travel';
 import { CARRYING, guidesFor } from './guide';
@@ -49,7 +49,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
   }, step);
   if (plan !== 'there' && 'nowhere' in plan) {
     // (no stand in reach: the hands go as far as they can as the body stands, the eyes on them, for as long as a reach there takes, and it misses)
-    const going = handsGoing(person, takes.map((take) => ({ side: take.side, target: (f: Frame) => ({ position: gripAt(person, take, f, new Vector3()) }) })), motion?.speed);
+    const going = handsGoing(person, takes.map((take) => ({ side: take.side, target: (f: Frame) => withinArm(person, f, take.side, { position: gripAt(person, take, f, new Vector3()) }) })), motion?.speed);
     const until = person.frame.time + Math.max(...going.map((hand) => hand.lasts));
     yield* parallel<Frame>('race', noticing(person, request, middle), action<Frame>({ until: (f) => f.time >= until }), ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
     request.fail({ ...plan.nowhere, where: takes.map(({ thing, side, grip }) => `${thing.object.name} ${side} ${grip}`).join(', ') });

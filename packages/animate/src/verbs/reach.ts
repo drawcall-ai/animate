@@ -11,9 +11,9 @@ import type { HandOptions } from '../body/hand-staging';
  * going as it arrives (asked), the body turning, bowing, bending or rising on its toes for them. It picks where to stand as it starts, and
  * again whenever a target has moved about 10 cm from where it planned for. A mover, it ends once the hands are there and still, within 1 cm and 2° (or stopped within 1.5 cm: as near as the arm comes);
  * its hold ends with the verb, so `until: Infinity` (raced) stays there. If it can stand nowhere in reach (with `step: false`: it cannot reach
- * from where it stands), the arm goes as far as it can for as long as a reach there takes, the eyes on it, and it throws `Missed`, as it does if a
+ * from where it stands), the arm goes as far as it can at the pace of a reach that far (about a second or more; on a chain that is no person's, about a second for each metre off), the eyes on it, and it throws `Missed`, as it does if a
  * hand stops getting nearer its unmet position or turn once the planned reach is over (or is still off it four seconds on), balance-support steps
- * aside. Given `until`, a target on the move is followed on, however far off (one that has stood still for 2 s misses as above), and it returns `true` if the hands are on their targets as that ends, else `false`.
+ * aside. Given `until`, a target on the move is followed on, however far off (one that has stood still for 2 s, or never moved, misses as above), and it returns `true` if the hands are on their targets as that ends, else `false`.
  */
 export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Target>, options: HandOptions = {}): Verb {
   const named = Object.entries<Target | undefined>(targets).flatMap(([hand, target]) => target === undefined ? [] : [{ hand, target: handTarget(target, 'reach') }]);

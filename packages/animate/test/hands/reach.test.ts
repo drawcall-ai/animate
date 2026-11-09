@@ -124,6 +124,31 @@ it('does not borrow a driven creature’s legs for an unreachable point', () => 
   expect(walked).toBe(false);
 });
 
+// (no stand brings it there: the try is the arm's reach as it comes, not as hasty as the true way is long)
+describe('a try for what is out of reach', () => {
+  it.each([
+    ['1.72 m ahead', new Vector3(-.2, 1.2, 1.72), 'reach'],
+    ['2.5 m ahead', new Vector3(-.2, 1.2, 2.5), 'reach'],
+    ['1.72 m ahead', new Vector3(-.2, 1.2, 1.72), 'grab'],
+  ] as const)('goes for what is %s no faster than a person does, the weight barely shifted: %s', (_, target, verb) => {
+    const body = person({ dev: true }), room = roomOf(body), start = worldOf(body.bones.hips);
+    const asked = verb === 'reach'
+      ? reach(body, { right: target }, { step: false })
+      : grab(body, box(room, target, { size: new Vector3(.1, .1, .1), mass: 1 }), { right: 'right' }, { step: false });
+    let miss: Missed | null | undefined, last = worldOf(body.bones.rightHand), fastest = 0, travel = 0;
+    play(function* () { miss = yield* attempt(asked); }, [body], 6, () => {
+      const hand = worldOf(body.bones.rightHand), hips = worldOf(body.bones.hips);
+      if (miss === undefined) fastest = Math.max(fastest, hand.distanceTo(last) * 60);
+      travel = Math.max(travel, Math.hypot(hips.x - start.x, hips.z - start.z));
+      last = hand;
+      return miss !== undefined;
+    });
+    expect(miss).toBeInstanceOf(Missed);
+    expect(fastest).toBeLessThan(1.7);
+    expect(travel).toBeLessThan(.13);
+  });
+});
+
 // (a body its app drives cannot walk up: its hand stops at arm's length, and the reach misses as soon as it comes no nearer)
 it('fails a reach whose hand has stopped short at once, saying where it stopped and what held it', () => {
   const body = person({ dev: true, drive: () => ({ position: new Vector3(), yaw: 0 }) });

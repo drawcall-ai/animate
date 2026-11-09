@@ -134,7 +134,7 @@ If a carry misses `held off by a joint's range`, the wrist cannot turn that far 
 
 A part of a held thing (a lid, a pin) is a thing of its own with its own mass and grips, parented where it sits: the other hand grabs it, `carry` lifts it off, and `release` onto an empty puts it back. A hand holding something lets go of it when it grabs something else, and a thing both hands leave stays where it is, even in mid-air: put it down first, or if it rides on an empty under the body, aim it with `body.orient` each frame before `update`. Targets for what a person does about itself come from `body.armPoint`.
 
-A `grab` or `reach` that no stand brings there goes as far as the arm can for its time, the eyes on it, then misses: for a jar on too high a shelf, walk under it and `attempt` the reach, and the try shows.
+A `grab` or `reach` that no stand brings there goes as far as the arm can for its time, the eyes on it, then misses: for a jar on too high a shelf, walk under it and `attempt` the reach, and the try shows. That try costs its time: a `Missed` from out of reach takes about a second or more on a person and on a dog about a second for each metre off, and there is no instant test of whether something is in reach.
 
 To throw what one hand holds, turn the body toward the target first, `throwAt` it, and give its `released` motion to your physics. It goes either way; a target beyond its speed misses after the follow-through. No verb catches: raise the hand with `reach`, stop the thing yourself as it touches, then `grab` it.
 

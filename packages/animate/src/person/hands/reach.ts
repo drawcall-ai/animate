@@ -6,9 +6,10 @@ import { REACHED, REACHING, type Goal } from '../../kernel/goal';
 import { lerp, pointSegmentDistance } from '../../kernel/math';
 import { seeded, seedOf } from '../../kernel/random';
 import { closeTo, lateReach, Progress, REACH, reached, unmet } from '../../kernel/limb';
-import { during, type Request } from '../../kernel/requests';
+import { during, type Miss, type Request } from '../../kernel/requests';
 import { PointVelocity } from '../../kernel/follow';
 import { CALM, HOLD, reaching } from './arms';
+import { ARM_REACH } from './shoulder';
 import { armReaches, footing, walkingToReach } from './standing-spot';
 import { noticing } from '../../look/gaze';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
@@ -62,7 +63,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
   const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   // (the verdict as its story ends it, moving or not: as near as a stopped hand counts as there)
   request.there = () => targets.every(({ side, target }) => closeTo(person.frame, person.hands[side], target(person.frame)));
-  const going = handsGoing(person, targets, pace.speed), lasts = Math.max(...going.map((hand) => hand.lasts));
+  let going: ReturnType<typeof handsGoing> | null = null, lasts = 0, stalled: Miss | null = null;
   let setOff = NaN, stirred = -Infinity;
   // (given `until`, a target on the move is followed till then, as a walk's is: a hand behind it has failed nothing, one off a target that
   // has stood still this long has)
@@ -90,9 +91,14 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
       const held = targets.map(({ side }, i) => ({ side, at: planned[i].clone().sub(middle(person.frame)) }));
       const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
       const reachWalk = plan !== 'there' && 'walk' in plan ? plan : null;
-      let stalled = plan !== 'there' && 'nowhere' in plan ? plan.nowhere : null, arrived = false;
-      // (no stand in reach: the arm goes as far as it can as the body stands, the eyes on it, for as long as a reach there takes)
+      stalled = plan !== 'there' && 'nowhere' in plan ? plan.nowhere : null;
+      let arrived = false;
+      // (no stand in reach: the arm goes as far as it can as the body stands, the eyes on it, at the pace of a reach that far)
       if (stalled && Number.isNaN(setOff)) setOff = person.frame.time;
+      if (!going) {
+        going = handsGoing(person, targets.map(({ side, target }) => ({ side, target: (f: Frame) => stalled ? withinArm(person, f, side, target(f)) : target(f) })), pace.speed);
+        lasts = Math.max(...going.map((hand) => hand.lasts));
+      }
       const setsOff = (f: Frame) => {
         if (Number.isNaN(setOff) && (plan === 'there' || (reachWalk && reachWalk.walk.eta <= NEAR))) setOff = f.time;
         return !Number.isNaN(setOff);
@@ -114,8 +120,14 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
     }
   }, function* () {
     yield* action<Frame>({ until: () => !Number.isNaN(setOff) });
-    yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
+    yield* parallel<Frame>('all', ...(going ?? []).map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
   });
+}
+
+/** `goal`, if further from hand `side`'s shoulder than the arm holds out, as far as the arm goes along the way to it: where a hand trying for what is out of reach goes */
+export function withinArm(person: Person, f: Frame, side: Side, goal: Goal): Goal {
+  const shoulder = f.prev.position(INDEX[`${side}UpperArm`]), way = goal.position.clone().sub(shoulder), most = ARM_REACH * person.proportions.armLength;
+  return way.length() <= most ? goal : { ...goal, position: way.setLength(most).add(shoulder), velocity: undefined };
 }
 
 /** `targets`' hands going there at `speed` (none: as a calm reach that far), and how long each takes (s) */
