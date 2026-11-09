@@ -26,6 +26,7 @@ import { STANDING_REACH } from './legs/walk-pose';
 import { relaxedPose } from './anatomy/relaxed';
 import { standingFeet } from './anatomy/stance';
 import { driven } from './legs/balance';
+import type { Trunk } from './legs/trunk';
 import { walking } from './legs/walking';
 import { handStep, HOLD, placeArm } from './hands/arms';
 import { armClear } from './hands/arm-clearance';
@@ -42,9 +43,26 @@ import type { SelfOptions } from '../body/setup';
 /** an arm posed nowhere off its hang */
 const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0 });
 
+/** How a person's stride carries its trunk, as its arms and eyes follow it (`Trunk.settle`, each sub-step). */
+export interface GaitState {
+  /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
+  phase: number;
+  /** 0 standing … 1 walking, 0 walking … 1 running */
+  walk: number; run: number;
+  /** the pelvis's and the thorax's turn with the stride (rad, + to the left) */
+  pelvisYaw: number; thoraxYaw: number;
+  /** how far the trunk bows forward as the legs carry it (rad, + forward; − arched back): a story's, a reach's, a look's and a crouch's */
+  bow: number;
+  /** how far its arms swing walking, as its legs have it (1: as tuned) */
+  arms: number;
+}
+
 /** Humanoid balance, idle gaze and arms, and held-object fitting. */
 export class Person extends Self {
   readonly impact = new Impact();
+  readonly gaitState: GaitState = { phase: 0, walk: 0, run: 0, pelvisYaw: 0, thoraxYaw: 0, bow: 0, arms: 1 };
+  /** its trunk over its root, made with its balance */
+  trunk: Trunk | null = null;
   seat: Seat | null = null;
   declare readonly gazer: Gazer;
   /** what its hands carry this sub-step and along which guide: fitted to the wrists after the hands */

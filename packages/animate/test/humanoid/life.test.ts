@@ -20,8 +20,8 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
       x.push(h.pose.com(new Vector3()).x);
       pitch.push(pitchOf(h.pose.rotation(INDEX.chest)));
     });
-    const sign = Math.sign(h.locomotion.quiet.x);
-    expect(Math.abs(h.locomotion.quiet.x)).toBeGreaterThan(0.04);
+    const sign = Math.sign(h.trunk!.quiet.x);
+    expect(Math.abs(h.trunk!.quiet.x)).toBeGreaterThan(0.04);
     const loaded = sign > 0 ? 'left' : 'right', unloaded = sign > 0 ? 'right' : 'left';
     const hip = (side: Side) => h.pose.position(INDEX[`${side}UpperLeg`]).y;
     const knee = (side: Side) => h.pose.local(INDEX[`${side}LowerLeg`]).angleTo(new Quaternion());
@@ -29,7 +29,7 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
     expect(knee(unloaded)).toBeGreaterThan(0.2);
     expect(knee(unloaded)).toBeGreaterThan(knee(loaded));
     run(body, 3);
-    expect(h.locomotion.quiet.x * sign).toBeGreaterThan(0.04);
+    expect(h.trunk!.quiet.x * sign).toBeGreaterThan(0.04);
     expect(body.log).toEqual([]);
     return { x, pitch };
   };
@@ -112,7 +112,7 @@ it('keeps its sway and breathing after a loaded walk, without spontaneous weight
   run(body, 15, () => {
     sway.push(h.pose.com(new Vector3()).x);
     breath.push(pitchOf(h.pose.rotation(INDEX.chest)));
-    expect(h.locomotion.quiet.length()).toBeLessThan(0.02);
+    expect(h.trunk!.quiet.length()).toBeLessThan(0.02);
   });
   expect(body.holds(load)).toBe(true);
   expect(Math.max(...sway) - Math.min(...sway)).toBeGreaterThan(0.004);

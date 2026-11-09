@@ -48,7 +48,7 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
   const stepper = person.stepper = new Stepper(personStepping(proportions, foreseen, person.stride, variation), foreseen ? feet : pivotingFeet(proportions, feet), standing, person.yaw, person.floor, foreseen);
   const asks = new Asks();
   const depth = personStepping(proportions, true, person.stride).crouch.depth;
-  const trunk = new Trunk(person, stepper, variation.sway, seedFor(person, options.seed), depth, standing);
+  const trunk = person.trunk = new Trunk(person, stepper, variation, seedFor(person, options.seed), depth, standing);
   return (f) => {
     if (f.dev && f.time > f.dt) checkLegs(person, f, f.dev, stepper.legs);
     person.asks.pass(asks);
@@ -57,16 +57,12 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
     const go = seat ? null : asks.legGoal, root = rootOf(f, go, asks, stepper);
     if (seat) [asks.lower, asks.posture.lower, asks.bow] = [lerp(asks.lower, seat.seating.lower, seat.share), asks.posture.lower * (1 - seat.share), Math.max(asks.bow, seat.bow)];
     stepper.move(f, trunk.carry(f, root, go, asks, seat));
-    const { yaw, moving, run, legs } = stepper;
+    const { yaw, legs } = stepper;
     trunk.pose(f, asks, yaw);
     // the legs down to the feet
     legs.forEach((leg, i) => poseLeg(f, stepper, leg, i));
     const locomotion = person.locomotion, stepping = legs.some((leg) => leg.swing);
-    trunk.settle(legs, locomotion);
-    locomotion.phase = stepper.phase;
-    locomotion.arms = variation.arms;
-    locomotion.walk = moving;
-    locomotion.run = run;
+    trunk.settle(legs);
     locomotion.facing = wrapAngle(yaw);
     // (a walker's walk under way, as its planner says — its weight shifting over planted feet is none; a player's root moving)
     locomotion.moving = (root.underway ?? Math.hypot(root.velocity.x, root.velocity.z) > 0.05) || stepping;

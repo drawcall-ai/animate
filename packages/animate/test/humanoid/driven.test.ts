@@ -192,7 +192,7 @@ it.each([
   const pelvis: { phase: number; y: number }[] = [], thorax: { phase: number; y: number }[] = [];
   const { h } = drive(6, moving(0.3, 6, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h) => {
     if (t < 3) return;
-    const phase = h.locomotion.phase;
+    const phase = h.gaitState.phase;
     pelvis.push({ phase, y: yawOf(h.pose.rotation(0)) });
     thorax.push({ phase, y: yawOf(h.pose.rotation(INDEX.chest)) });
   });
@@ -204,7 +204,7 @@ it.each([
   expect(apart).toBeGreaterThanOrEqual(band.apart[0]);
   expect(apart).toBeLessThanOrEqual(band.apart[1]);
   // (the turn the body's own: the look and the free arms read it)
-  expect(h.locomotion.thoraxYaw).not.toBe(0);
+  expect(h.gaitState.thoraxYaw).not.toBe(0);
   expect(h.log).toEqual([]);
 });
 

@@ -6,7 +6,6 @@ import type { Frame } from '../../kernel/frame';
 import { clampRotation } from '../../kernel/limits';
 import { clamp, forwardOf, lerp, minimumJerk, quatYXZ, yawOf } from '../../kernel/math';
 import type { LegGoal } from '../../step/leg-goal';
-import type { Locomotion } from '../../step/locomotion';
 import type { Stepper } from '../../step/stepper';
 import { xcomOfPoses } from '../../step/support';
 import { INDEX, SIDES } from '../anatomy/bones';
@@ -80,7 +79,7 @@ export class Trunk {
   private bow = 0;
 
   constructor(
-    private readonly person: Person, private readonly stepper: Stepper, sway: Variation['sway'], seed: number,
+    private readonly person: Person, private readonly stepper: Stepper, private readonly variation: Variation, seed: number,
     /** the depth (× scale) a story's `lower` is a share of, as a walker crouches whoever drives it */
     private readonly depth: number,
     standing: readonly { position: Vector3 }[],
@@ -92,7 +91,7 @@ export class Trunk {
       pelvis: new Vector3(), pelvisRotation: new Quaternion(), held: false, unloading: null,
     };
     this.walkPose = new WalkPose(person.species.inertia);
-    this.life = new QuietStance(seed, sway);
+    this.life = new QuietStance(seed, variation.sway);
   }
 
   /** The body carried off `root` for this sub-step, its hips told to the feet: returns what the stepper moves on. */
@@ -196,14 +195,15 @@ export class Trunk {
     });
   }
 
-  /** Where the feet stand now, for the next sub-step's posture to shift the weight between; what the trunk reports of itself. */
-  settle(legs: readonly Leg[], locomotion: Locomotion): void {
+  /** Where the feet stand now, for the next sub-step's posture to shift the weight between; what the stride tells the arms and eyes. */
+  settle(legs: readonly Leg[]): void {
+    const { stepper, posedTrunk } = this;
     legs.forEach((leg, i) => this.state.feet[i].anchor.copy(leg.anchor));
-    locomotion.pelvisYaw = this.posedTrunk.pelvisYaw;
-    locomotion.thoraxYaw = this.posedTrunk.thoraxYaw;
-    locomotion.bow = this.bow;
-    locomotion.quiet.copy(this.walkPose.quiet);
+    Object.assign(this.person.gaitState, { phase: stepper.phase, walk: stepper.moving, run: stepper.run, pelvisYaw: posedTrunk.pelvisYaw, thoraxYaw: posedTrunk.thoraxYaw, bow: this.bow, arms: this.variation.arms });
   }
+
+  /** the requested quiet stance displacement from the centred stance (m, world) */
+  get quiet(): Readonly<Vector3> { return this.walkPose.quiet; }
 
   /** the pace the trunk carries itself at — leaning, running — that its legs could have taken it to, within `PACE`: a player's quicker root does not throw it; spawned on the move, at that pace */
   private paced(root: Steering, dt: number): Vector3 {

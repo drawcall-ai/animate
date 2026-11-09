@@ -61,20 +61,20 @@ export function hanging(person: Person): Behaviour {
   const goals = new Map<number, RotationFollower>(), seen = { left: new ArmClear(), right: new ArmClear() };
   /** whether each arm was another's (a hand verb's, or holding) the sub-step before: taken back, it is carried on no faster than it swings */
   const taken = { left: true, right: true };
-  let phase = person.locomotion.phase;
+  let phase = person.gaitState.phase;
   // (each arm's turn back with the bow (rad) and its rate, swaying after `drawnBack` as `SWAY` has it)
-  const start = drawnBack(person.proportions, person.locomotion.bow, 0);
+  const start = drawnBack(person.proportions, person.gaitState.bow, 0);
   const back = { left: { angle: start, rate: 0 }, right: { angle: start, rate: 0 } }, omega = 2 * Math.PI * SWAY.frequency;
   return (f) => {
     if (f.dev && f.time > f.dt) checkArms(f.prev, person.proportions, f.time - f.dt, f.dev);
-    const locomotion = person.locomotion;
+    const gait = person.gaitState;
     // Recalled pendulum floor: at least 0.25 s between arm reversals, including entrainment.
-    phase += clamp(wrapAngle(locomotion.phase - phase), 0, 4 * Math.PI * f.dt);
-    const armPhase = lerp(ARM_PHASE.walk, ARM_PHASE.run, locomotion.run);
+    phase += clamp(wrapAngle(gait.phase - phase), 0, 4 * Math.PI * f.dt);
+    const armPhase = lerp(ARM_PHASE.walk, ARM_PHASE.run, gait.run);
     const proportions = person.proportions;
     // (running, the arms hang and swing from the shoulders as the stride turns the thorax off the pelvis — not as an asked twist or
     // a turn's lead turns the chest; walking, that turn is small and the arms keep to the pelvis's facing)
-    const yaw = yawOf(_h.copy(f.current.local(0))) + locomotion.run * (locomotion.thoraxYaw - locomotion.pelvisYaw);
+    const yaw = yawOf(_h.copy(f.current.local(0))) + gait.run * (gait.thoraxYaw - gait.pelvisYaw);
     const hips = f.current.position(0);
     const left = leftOf(yaw, _left);
     SIDES.forEach((side, s) => {
@@ -85,10 +85,10 @@ export function hanging(person: Person): Behaviour {
       if (person.holding[side]) return;
       const sign = s === 0 ? 1 : -1;
       // (the left arm in front as the left foot lifts, the right behind; growing in as the walk does)
-      const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) * locomotion.arms + 0.02) * locomotion.walk;
+      const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, gait.run) * gait.arms + 0.02) * gait.walk;
       const a = swing(armPhase);
-      const walked = 0.25 + (0.18 + 0.5 * swing(armPhase + ARM_PHASE.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(armPhase + ARM_PHASE.forearm);
-      const flex = lerp(walked, ran, locomotion.run) * (1 - MathUtils.smoothstep(a, 0.6, 1.6)) + elbow;
+      const walked = 0.25 + (0.18 + 0.5 * swing(armPhase + ARM_PHASE.forearm)) * gait.walk, ran = 1.5 + 0.3 * swing(armPhase + ARM_PHASE.forearm);
+      const flex = lerp(walked, ran, gait.run) * (1 - MathUtils.smoothstep(a, 0.6, 1.6)) + elbow;
       // the arm hanging from the shoulder — plumb, but as far back as the bow carries it (held in as the other hand works) — out as far
       // as keeps the hand clear of the thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or
       // twists, swung forward about that frame's left; the forearm forward
@@ -102,8 +102,8 @@ export function hanging(person: Person): Behaviour {
       // (posed: swung forward, lifted out and twisted about its own length over that, as `ArmPosture` has them)
       const out = Math.max(ABDUCTION, Math.asin(clamp(clear, -1, 1))) + spread;
       const other = SIDES[1 - s], working = person.holding[other] !== null || person.claims.owner(`hand.${other}`) !== undefined;
-      const turn = back[side], held = working ? 1 - locomotion.walk : 0;
-      turn.rate += (omega ** 2 * (drawnBack(proportions, locomotion.bow, held) - turn.angle) - 2 * SWAY.damping * omega * turn.rate) * f.dt;
+      const turn = back[side], held = working ? 1 - gait.walk : 0;
+      turn.rate += (omega ** 2 * (drawnBack(proportions, gait.bow, held) - turn.angle) - 2 * SWAY.damping * omega * turn.rate) * f.dt;
       turn.angle += turn.rate * f.dt;
       const swung = _h.setFromAxisAngle(X, turn.angle - a - forward), lifted = _p.setFromAxisAngle(Z, -sign * (Math.PI / 2 - out));
       const hang = _q.setFromAxisAngle(Y, yaw).multiply(swung).multiply(lifted);
