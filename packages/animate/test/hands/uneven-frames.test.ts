@@ -44,12 +44,12 @@ const off = (a: Object3D, b: Object3D) => a.getWorldPosition(new Vector3()).dist
 
 describe('what a carry brings to an empty, however uneven the frames', () => {
   it.each([
-    ['in one hand', { left: 'top' }, new Vector3(0.2, 0.86, 0.42), new Vector3(0.05, 0.84, 0.6), (thing: Object3D) => void empty(thing, 'top', new Vector3(0, 0.05, 0)), 0.3],
-    ['in both hands', { left: 'left', right: 'right' }, new Vector3(0, 0.95, 0.42), new Vector3(0.05, 1, 0.5), (thing: Object3D) => {
+    ['in one hand', { left: 'top' }, new Vector3(0.2, 0.86, 0.42), new Vector3(0.05, 0.84, 0.6), (thing: Object3D): void => void empty(thing, 'top', new Vector3(0, 0.05, 0)), 0.3],
+    ['in both hands', { left: 'left', right: 'right' }, new Vector3(0, 0.95, 0.42), new Vector3(0.05, 1, 0.5), (thing: Object3D): void => {
       empty(thing, 'left', new Vector3(0.05, 0, 0));
       empty(thing, 'right', new Vector3(-0.05, 0, 0));
     }, 2],
-    ['by a fingertip', { right: 'pad' }, new Vector3(-0.2, 1, 0.42), new Vector3(-0.15, 1.05, 0.5), (thing: Object3D) => void empty(thing, 'pad', new Vector3(0, 0, -0.051), { point: 'index', facing: [0, 0, 1] }), 0.1],
+    ['by a fingertip', { right: 'pad' }, new Vector3(-0.2, 1, 0.42), new Vector3(-0.15, 1.05, 0.5), (thing: Object3D): void => void empty(thing, 'pad', new Vector3(0, 0, -0.051), { point: 'index', facing: [0, 0, 1] }), 0.1],
   ] as const)('is on it %s as the carry returns, and a release there sets it without a word', (_, hands, at, to, grips, mass) => {
     let worst = 0;
     for (let run = 1; run <= 40; run++) {
