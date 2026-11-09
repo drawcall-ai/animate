@@ -137,10 +137,10 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
       yield* travel(person, request, thing, [[LIFT, atBody]], guide, resting, { eta: onward, walks: true, armTurn: CARRYING.turnSpeed });
       lifted = true;
       yield* holdAlong(person, request, thing, guide.paced(1, undefined, CARRYING.turnSpeed), walked, near);
-      yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), guide, false, { grasp, walks: true });
-      // (come to rest on it once the body has come there, not merely passing within reach of it, or it is let go of past it — or stalled
-      // short of it, or late: a carry ends what it cannot finish)
-      yield* travel(person, request, thing, [[0, end]], guide, false, { walks: true, end: true, ready: () => approached });
+      // (raised onto it, to come to rest on it once the body has come there, not merely passing within reach of it, or it is let go of past
+      // it — or stalled short of it, or late: a carry ends what it cannot finish. The raise's own end: on it, the carry is there, not set
+      // out again for it in a leg of its own while the body's last step takes it off)
+      yield* travel(person, request, thing, way.points.map((point) => [RAISE / way.points.length, point]), guide, false, { grasp, walks: true, end: true, ready: () => approached });
     });
   });
 }

@@ -41,6 +41,10 @@ const WALKING = 0.3;
 const LEADING = 0.8;
 const AT_HORSE = -0.7;
 const LIFT_RISE = 0.01;
+// The saddle as near its place as a carry comes to rest within (m: the library's `END.distance`), and how soon after (s) it is set there
+// at most: a few sub-steps' settling (0.10–0.18 s at life seeds 0–7), not a step of the body's carrying it off and back (0.77 s, 26 mm).
+const ARRIVED = 0.005;
+const SETTLES = 0.3;
 const DEGREES = 180 / Math.PI;
 
 const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [['', undefined], [' on the soldier', SOLDIER]];
@@ -194,8 +198,16 @@ test(`saddle carry and placement clearance${on}`, () => {
   const rest = saddle.getWorldPosition(new Vector3()).y;
   let headGap = Infinity, torsoGap = Infinity, legGap = Infinity, barrelGap = Infinity, railGap = Infinity, footAcross = Infinity;
   const lifting: Quaternion[] = [], carried: { speed: number; height: number; placing: boolean }[] = [];
+  const place = sim.stage.scene.getObjectByName('saddled')!;
+  let onAt = NaN, setAt = NaN, drift = 0;
   while (sim.t < 25) {
     sim.step();
+    // (first held within ARRIVED of its place, then set there: the carry ends as it comes to rest on it, its release following at once,
+    // and the hands keep it there till then)
+    const off = saddle.getWorldPosition(new Vector3()).distanceTo(place.getWorldPosition(new Vector3()));
+    if (Number.isNaN(onAt) && handler.holds(saddle) && off < ARRIVED) onAt = sim.t;
+    if (Number.isNaN(setAt) && saddle.parent === place) setAt = sim.t;
+    if (!Number.isNaN(onAt) && Number.isNaN(setAt)) drift = Math.max(drift, off);
     const feet = atHandler('leftFoot').sub(atHandler('rightFoot'));
     const facing = person.locomotion.facing;
     footAcross = Math.min(footAcross, feet.x * Math.cos(facing) - feet.z * Math.sin(facing));
@@ -235,6 +247,8 @@ test(`saddle carry and placement clearance${on}`, () => {
   expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);
   expect(barrelGap).toBeGreaterThan(0);
+  expect(drift).toBeLessThan(ARRIVED);
+  expect(setAt - onAt).toBeLessThan(SETTLES);
 }, 30000);
 
 test(`gaze shifts between story tasks${on}`, () => {
