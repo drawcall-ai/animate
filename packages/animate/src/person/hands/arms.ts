@@ -283,15 +283,6 @@ export function broughtTurn(person: Person, pose: ReadonlyPose, side: Side, at: 
   return out.copy(scratch.rotation(hand));
 }
 
-/** for each body, poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
-const scratches = new WeakMap<Person, { brought: Pose; trial: Pose }>();
-export function scratch(person: Person): { brought: Pose; trial: Pose } {
-  let poses = scratches.get(person);
-  const skeleton = person.frame.prev.skeleton;
-  if (!poses) scratches.set(person, (poses = { brought: new Pose(skeleton), trial: new Pose(skeleton) }));
-  return poses;
-}
-
 const ARM = ['Shoulder', 'UpperArm', 'LowerArm', 'Hand'] as const;
 const ZERO = new Vector3(), IDENTITY = new Quaternion();
 const _q = new Quaternion(), _r = new Quaternion(), _c = new Quaternion(), _g = new Quaternion(), _frame = new Quaternion();
@@ -299,7 +290,6 @@ const _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vect
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
 const _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _along = new Vector3();
 const _tipGoal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
-const shoulders = new WeakMap<Person, Record<Side, MovingFrame>>();
 const _turnAt = new Quaternion(), _gliding = new Quaternion(), _wrist = new Vector3();
 const _world: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const _target: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
@@ -314,9 +304,7 @@ const _glided = { position: new Vector3(), velocity: new Vector3() };
  */
 function shoulderOf(person: Person, f: Frame, side: Side): MovingFrame {
   const bone = INDEX[`${side}Shoulder`], at = f.current.position(bone);
-  let carriers = shoulders.get(person);
-  if (!carriers) shoulders.set(person, (carriers = { left: new MovingFrame(at), right: new MovingFrame(at) }));
-  const shoulder = carriers[side];
+  const shoulder = (person.shoulders ??= { left: new MovingFrame(at), right: new MovingFrame(at) })[side];
   if (!shoulder.moved(f.time)) shoulder.trace(f.time, f.prev2.position(bone), f.prev.position(bone), at);
   return shoulder;
 }

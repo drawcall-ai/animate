@@ -300,6 +300,9 @@ export interface Swing {
   lowering: number;
   /** the floor's level its landing was first aimed onto (m; NaN until it is) */
   onto: number;
+  /** development's support check has seen it (`checkSupport`); lifted from under a still body's weight: its landing no support till it moves */
+  seen?: boolean;
+  borne?: boolean;
 }
 
 /** What a stepper keeps from one sub-step to the next: its legs, its gait's clock and the pelvis it carries. */

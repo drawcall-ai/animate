@@ -11,7 +11,7 @@ import type { GripOn, Thing } from '../../things/thing';
 import type { Hold } from '../../things/holder';
 import { INDEX, type Side } from '../anatomy/bones';
 import { palmOf } from '../anatomy/landmarks';
-import { broughtTurn, scratch } from './arms';
+import { broughtTurn } from './arms';
 import { padOff } from './press';
 import type { Person } from '../person';
 
@@ -47,7 +47,7 @@ function picked(person: Person, side: Side, thing: Thing, on: GripOn): HandPlace
   const up = new Vector3(0, 1, 0).applyQuaternion(placed.quaternion.clone().invert());
   const empty = on.at.position.clone().applyQuaternion(placed.quaternion).add(placed.position);
   const sunk = person.fingers?.sunk(side, thing.object), stood = stepped(person, side, empty);
-  const natural = broughtTurn(person, person.frame.prev, side, stood({ position: empty, quaternion: placed.quaternion }).position, scratch(person).brought, new Quaternion());
+  const natural = broughtTurn(person, person.frame.prev, side, stood({ position: empty, quaternion: placed.quaternion }).position, person.trials.brought, new Quaternion());
   const cost = (hand: Placement) => stood(toWorld(hand, placed)).quaternion.angleTo(natural) + (sunk ? SUNK * sunk({ position: hand.position, quaternion: hand.quaternion.clone().multiply(rest) }) : 0);
   // (`natural` as it would be where the body steps to — `stepped` brings that back to where it stands — in the thing's frame)
   const back = stood.turn.clone().invert().multiply(natural).premultiply(placed.quaternion.clone().invert());

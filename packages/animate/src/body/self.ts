@@ -87,10 +87,6 @@ export abstract class Self implements Holder {
   readonly asks = new Asks();
   /** its head turned over its gaze as its story asks (`pose`, `lookAt`'s roll and pitch), written after the eyes each sub-step */
   readonly headOffset: HeadOffset;
-  /** where the request that has its legs asks them to take it this sub-step (balance takes it at the start of the next) */
-  going: Go | null = null;
-  /** where the request that has its eyes asks them to look, for a species whose posture turns its head (it has no neck chain) */
-  look: Readonly<Vector3> | null = null;
   readonly locomotion: Locomotion;
   /** its stepping legs, made with its balance */
   stepper: Stepper | null = null;
@@ -482,8 +478,7 @@ export abstract class Self implements Holder {
         f.dev.append(f.time, { check: `request not renewed for ${STALE} s: its story stopped stepping (s)`, value: f.time - request.renewed, limit: STALE, where: request.label });
       }
     }
-    this.going = this.run('go', f) ?? null;
-    this.look = null;
+    this.asks.going = this.run('go', f) ?? null;
     behaviours.gaze?.(f);
     this.run('look', f);
     this.run('head', f);

@@ -76,7 +76,7 @@ export function creature(body: Self): Behaviour {
   let facing = body.yaw;
   return (f) => {
     body.asks.pass(asks);
-    const locomotion = body.locomotion, asked0 = body.going, face = asked0?.face;
+    const locomotion = body.locomotion, asked0 = asks.going, face = asked0?.face;
     // (a goal nowhere — not a finite point — it does not go for: it stands)
     const finite = !asked0 || [asked0.to.x, asked0.to.z, ...(asked0.velocity?.toArray() ?? [])].every(Number.isFinite);
     const go = finite ? asked0 : null;
@@ -117,7 +117,7 @@ export function creature(body: Self): Behaviour {
     });
     legs.height = f.current.position(0).y;
     [legs.stride.cycle, legs.stride.stance, legs.held] = [stepper.cycle, stepper.Ts, stepper.held];
-    posture?.prepare(f, legs, attention, body.look);
+    posture?.prepare(f, legs, attention, asks.look);
     if (carried) { carried.step(f, legs); carried.write(f); }
     // (let down, bowed, turned and bent sideways as its tasks and its story's posture ask — the body lower on its legs, its front tipped
     // down about its hind girdle or its croup down about its fore girdle (arched: settling onto its haunches, as a lean back does), its

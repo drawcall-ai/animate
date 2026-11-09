@@ -16,7 +16,6 @@ import { bringShoulder } from './shoulder';
 import { LimbMover } from '../../kernel/limb';
 import { following, LEADING, limitOf } from './reach';
 import { grasped, seat, shifts, type Regripping } from './grasp';
-import type { Hold } from '../../things/holder';
 import type { Guide, Guides } from './guide';
 import type { Person } from '../person';
 
@@ -172,19 +171,10 @@ export const closeOn = (at: Placement, position: Vector3, quaternion?: Quaternio
 
 const cm = (m: number) => (100 * m).toFixed(1);
 
-/** each hold's arm as a carry moves it: one through all the carry's stages and its keeping after, so its brakes and its fit carry on
- * across them rather than starting afresh at each */
-const tips = new WeakMap<Hold, LimbMover>();
-function tipOf(hold: Hold, hand: string): LimbMover {
-  let tip = tips.get(hold);
-  if (!tip) tips.set(hold, (tip = new LimbMover(`${hand}Arm`)));
-  return tip;
-}
-
 /** Keep each held grip on its own arm; a released or replaced hold stops participating. */
 export function holdAlong(person: Person, request: Request, thing: Thing, guide: Guide, to: Live<Goal>, until?: (f: Frame) => boolean, keep = false) {
   const hands = Object.entries(person.holding).flatMap(([hand, hold]) => hold?.thing === thing
-    ? [{ side: sideOf(hand), hold, tip: tipOf(hold, hand) }] : []);
+    ? [{ side: sideOf(hand), hold, tip: (hold.arm ??= new LimbMover(`${hand}Arm`)) }] : []);
   // (in one hand, it hangs from the hand as the hand grasps it: the hand goes where the thing is to go, turned with it)
   const single = hands.length === 1 ? grasped(person, hands[0].side, thing) : null;
   const step = ({ side, tip }: (typeof hands)[number]) => (f: Frame) => {

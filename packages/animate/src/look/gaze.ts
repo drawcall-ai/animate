@@ -48,7 +48,7 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
   const gazer = self.gazer, neck = gazer?.neck;
   if (!gazer) throw new Error('lookAt: the body has no gaze');
   if (neck === undefined && head !== undefined) throw new Error('lookAt: a head share needs a neck to turn the head (its posture turns it)');
-  if (neck === undefined) return (f) => void (self.look = target(f));
+  if (neck === undefined) return (f) => void (self.asks.look = target(f));
   let over: boolean | null = null;
   /** the gaze shift under way: the most the head has had to turn since it last settled (rad) */
   let shift = 0;

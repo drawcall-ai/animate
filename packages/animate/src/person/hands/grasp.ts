@@ -5,10 +5,10 @@ import { minimumJerk } from '../../kernel/math';
 import { digitsOf } from '../../fingers/placement';
 import { handsOn, inHand } from '../../things/hold';
 import { resolve } from '../../things/resolve';
-import type { Hold } from '../../things/holder';
+import type { Hold, Regrip } from '../../things/holder';
 import type { Thing } from '../../things/thing';
 import { sideOf, type Side } from '../anatomy/bones';
-import { broughtTurn, elbowPole, scratch } from './arms';
+import { broughtTurn, elbowPole } from './arms';
 import { holdsClear } from './arm-clearance';
 import { solveChain } from '../../kernel/chain';
 import { coordinates, coordinatesOf } from '../../kernel/limits';
@@ -53,18 +53,6 @@ type InHand = Placement;
 /** how long (s) the fingers take to seat a thing on the place a carry brings it to (`seat`): a few millimetres and degrees */
 const SEAT = 0.1;
 
-/** A hold's regrip under way: the hand's node turned in the thing from as it held it onto as planned, its palm's centre going from
- * `palm` to `onto` on the thing (the thing's frame; the same, turned about it), over `seconds` from `start` (s). */
-interface Regrip {
-  from: Quaternion;
-  to: Quaternion;
-  palm: Vector3;
-  onto: Vector3;
-  start: number;
-  seconds: number;
-}
-const regrips = new WeakMap<Hold, Regrip>();
-
 /** hand `side`'s node in `thing`'s frame as the body was last posed (into `out`) */
 function heldNow(person: Person, side: Side, thing: Thing, out: InHand): InHand {
   const hand = resolve(person, person.boneNode(person.hands[side]), out);
@@ -82,7 +70,7 @@ export function grasped(person: Person, side: Side, thing: Thing): (f: Frame) =>
   const bone = person.hands[side], rest = person.restOf(bone).clone().invert();
   const held = heldNow(person, side, thing, { position: new Vector3(), quaternion: new Quaternion() });
   return (f) => {
-    const hold = person.holding[side], regrip = hold && regrips.get(hold);
+    const hold = person.holding[side], regrip = hold?.regrip;
     if (regrip) regripped(person, side, thing, regrip, f.time, held);
     return { position: held.position.clone(), quaternion: held.quaternion.clone().multiply(rest) };
   };
@@ -116,7 +104,7 @@ function planGrasp(person: Person, side: Side, thing: Thing, hold: Hold, end: Re
   const turn = handTurn(person, side, from.quaternion);
   const palm = palmOn(person, side), inThing = palmIn(person, side, from, _palm);
   const at = _at.copy(inThing).applyQuaternion(end.quaternion).add(end.position);
-  const { brought: posed, trial } = scratch(person);
+  const { brought: posed, trial } = person.trials;
   const brought = broughtTurn(person, f.prev, side, at, posed, _brought);
   trial.copy(posed);
   const strain = (hand: Readonly<Quaternion>) => strainAt(person, posed, trial, side, at, hand);
@@ -141,7 +129,7 @@ function planGrasp(person: Person, side: Side, thing: Thing, hold: Hold, end: Re
   }
   if (!chosen) return false;
   const to = chosen.premultiply(_back.copy(end.quaternion).invert()).multiply(restOf);
-  regrips.set(hold, { from: from.quaternion, to, palm: inThing.clone(), onto: inThing.clone(), start: f.time, seconds: REGRIP });
+  hold.regrip = { from: from.quaternion, to, palm: inThing.clone(), onto: inThing.clone(), start: f.time, seconds: REGRIP };
   return false;
 }
 
@@ -214,13 +202,13 @@ export function seat(person: Person, side: Side, thing: Thing, at: Readonly<Plac
   const back = end.quaternion.clone().invert(), hand = from.position.clone().applyQuaternion(at.quaternion).add(at.position);
   const to: InHand = { position: hand.sub(end.position).applyQuaternion(back), quaternion: back.multiply(at.quaternion).multiply(from.quaternion) };
   const start = person.frame.time;
-  regrips.set(hold, { from: from.quaternion, to: to.quaternion, palm: palmIn(person, side, from, new Vector3()), onto: palmIn(person, side, to, new Vector3()), start, seconds: SEAT });
+  hold.regrip = { from: from.quaternion, to: to.quaternion, palm: palmIn(person, side, from, new Vector3()), onto: palmIn(person, side, to, new Vector3()), start, seconds: SEAT };
   return start + SEAT;
 }
 
 /** how hand `side` holds `thing` now: as its regrip has reached, else as the body was last posed */
 function inHandNow(person: Person, side: Side, thing: Thing, hold: Hold): InHand {
-  const from: InHand = { position: new Vector3(), quaternion: new Quaternion() }, prior = regrips.get(hold);
+  const from: InHand = { position: new Vector3(), quaternion: new Quaternion() }, prior = hold.regrip;
   if (prior) regripped(person, side, thing, prior, person.frame.time, from);
   else heldNow(person, side, thing, from);
   return from;

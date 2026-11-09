@@ -1,7 +1,8 @@
-import type { Matrix4, Object3D, Quaternion } from 'three';
+import type { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 import type { HandPlacement, HandPoint } from '../fingers/placement';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
+import type { LimbMover } from '../kernel/limb';
 import type { MovingFrame } from '../kernel/moving-frame';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Request } from '../kernel/requests';
@@ -18,6 +19,22 @@ export interface Hold {
   keep?: (f: Frame) => void;
   /** the request that took hold: what misses if the hand closes off its grip */
   by?: Request;
+  /** its regrip, a person's, once one has begun */
+  regrip?: Regrip;
+  /** the arm as a person's carry moves it: one through all the carry's stages and its keeping after, so its brakes and its fit carry on
+   * across them rather than starting afresh at each */
+  arm?: LimbMover;
+}
+
+/** A hold's regrip under way: the hand's node turned in the thing from as it held it onto as planned, its palm's centre going from
+ * `palm` to `onto` on the thing (the thing's frame; the same, turned about it), over `seconds` from `start` (s). */
+export interface Regrip {
+  from: Quaternion;
+  to: Quaternion;
+  palm: Vector3;
+  onto: Vector3;
+  start: number;
+  seconds: number;
 }
 
 /**

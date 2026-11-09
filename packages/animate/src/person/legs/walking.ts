@@ -41,7 +41,7 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
   };
   return drivenBy(person, (f, go, asks, stepper) => {
     // (a walker's balance is checked, not only noted as a player's is)
-    if (f.dev) checkSupport(person, f, f.dev);
+    if (f.dev) checkSupport(person, f, f.dev, asks.going);
     const dt = f.dt, asking = go?.face;
     if (!planner) {
       planner = new Planner(f.prev.com(new Vector3()), person.yaw, personGait(proportions), proportions.hipHalfWidth);

@@ -90,7 +90,7 @@ it('slows its walk under a load, counting a load held in both hands once', () =>
       yield* grab(body, load, both ? { left: 'left', right: 'right' } : { right: 'right' });
       yield* walkTo(body, new Vector3(0, 0, 3), { until: 0.3 });
     }, [body], 4, () => {
-      if (h.going && body.owners.go?.verb === 'walkTo') speed = h.going.speed;
+      if (h.asks.going && body.owners.go?.verb === 'walkTo') speed = h.asks.going.speed;
     });
     expect(body.log).toEqual([]);
     return speed;

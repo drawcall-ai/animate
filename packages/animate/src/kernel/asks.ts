@@ -1,3 +1,4 @@
+import type { Go } from '../step/go';
 import type { HandShape } from '../fingers/shape';
 import type { Vector3 } from 'three';
 
@@ -75,6 +76,10 @@ export class Asks {
   shift: Vector3 | null = null;
   /** hold still (0 at ease … 1 aiming): its quiet life — breathing, sway, weight shifts — fades by it */
   steady = 0;
+  /** where the request that has its legs asks them to take it */
+  going: Go | null = null;
+  /** where the request that has its eyes asks them to look, for a species whose posture turns its head (it has no neck chain) */
+  look: Readonly<Vector3> | null = null;
   /** the trunk posed as a story asks (`pose`), over all the rest */
   readonly posture: TrunkPosture = { bow: 0, twist: 0, lean: 0, lower: 0 };
 
@@ -96,9 +101,9 @@ export class Asks {
 
   /** what it holds, copied into `into`, and itself cleared */
   pass(into: Asks): Asks {
-    [into.lower, into.bow, into.bowLimit, into.bowRate, into.twist, into.twistRate, into.hips, into.stagger, into.shift, into.steady] =
-      [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady];
-    [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady] = [0, 0, Infinity, 0, 0, 0, 0, null, null, 0];
+    [into.lower, into.bow, into.bowLimit, into.bowRate, into.twist, into.twistRate, into.hips, into.stagger, into.shift, into.steady, into.going, into.look] =
+      [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady, this.going, this.look];
+    [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady, this.going, this.look] = [0, 0, Infinity, 0, 0, 0, 0, null, null, 0, null, null];
     for (const key of TRUNK) {
       into.posture[key] = this.posture[key];
       this.posture[key] = 0;

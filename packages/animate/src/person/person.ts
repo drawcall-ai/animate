@@ -63,6 +63,10 @@ export class Person extends Self {
   readonly drawingBack: Record<Side, number> = { left: -Infinity, right: -Infinity };
   /** a pose to try an arm on (`holds`) */
   private readonly scratch = new Pose(this.skeleton);
+  /** poses to try an arm on: as the arm brings the hand to a carry's end, and each grasp tried from there */
+  readonly trials = { brought: new Pose(this.skeleton), trial: new Pose(this.skeleton) };
+  /** where each arm hangs from as a frame its hand is carried in (`shoulderOf`): made when first read */
+  shoulders: Record<Side, MovingFrame> | null = null;
 
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
     const proportions = species.person;

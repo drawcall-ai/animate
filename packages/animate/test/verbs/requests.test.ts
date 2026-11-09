@@ -67,7 +67,7 @@ describe('requests', () => {
     run(body, 0.5);
     expect(runs.trunk).toEqual([0, 30]);
     expect(runs.go).toEqual([30, 30]);
-    expect(h.going?.to.z).toBe(1);
+    expect(h.asks.going?.to.z).toBe(1);
     asked();
     run(body, 0.5);
     expect(runs.trunk).toEqual([30, 30]);

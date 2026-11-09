@@ -7,7 +7,7 @@ import { follow } from '../../kernel/follow';
 import { clampRotation } from '../../kernel/limits';
 import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle, yawOf } from '../../kernel/math';
 import { Stepper } from '../../step/stepper';
-import { runs, type Feet, type Leg, type Steering, type Swing } from '../../step/steps';
+import { runs, type Feet, type Leg, type Steering } from '../../step/steps';
 import { TrackedPoint, TrackedRotation } from '../../kernel/tracked';
 import { Asks } from '../../kernel/asks';
 import type { Go, Stance } from '../../step/go';
@@ -158,8 +158,8 @@ export function drivenBy(person: Person, rootOf: (f: Frame, go: Go | null, asks:
     if (f.dev && f.time > f.dt) check(person, f, f.dev, stepper.legs);
     person.asks.pass(asks);
     // (seated, the legs asked elsewhere stand it first; the seat's own height and bow over what the parts ask)
-    const seat = person.seat?.step(f.dt, person.going) ?? null;
-    const dt = f.dt, go = seat ? null : person.going, root = rootOf(f, go, asks, stepper);
+    const seat = person.seat?.step(f.dt, asks.going) ?? null;
+    const dt = f.dt, go = seat ? null : asks.going, root = rootOf(f, go, asks, stepper);
     if (seat) [asks.lower, asks.posture.lower, asks.bow] = [lerp(asks.lower, seat.seating.lower, seat.share), asks.posture.lower * (1 - seat.share), Math.max(asks.bow, seat.bow)];
     if (first && !root.forecast) stepper = stepperFor(false);
     first = false;
@@ -413,7 +413,7 @@ function check(person: Person, f: Frame, dev: Dev, legs: readonly Leg[]) {
  * under a still body's weight (slower than `MOVING`, the weight on it: `bears`) till the body moves:
  * falling toward no landing, it stood on the other foot alone meanwhile. A planted sole supports as wide as its heel (`heelSides`).
  */
-export function checkSupport(person: Person, f: Frame, dev: Dev): void {
+export function checkSupport(person: Person, f: Frame, dev: Dev, going: Go | null): void {
   if (f.time <= f.dt) return;
   const com = f.prev.com(new Vector3());
   const velocity = com.clone().sub(f.prev2.com(new Vector3())).divideScalar(f.dt);
@@ -427,13 +427,13 @@ export function checkSupport(person: Person, f: Frame, dev: Dev): void {
   const moving = Math.hypot(velocity.x, velocity.z) >= MOVING * s;
   legs.forEach((leg, i) => {
     const w = leg.swing;
-    if (!w || seen.has(w)) return;
-    seen.add(w);
+    if (!w || w.seen) return;
+    w.seen = true;
     const planted = legs.flatMap((other, k) => other.swing ? [] : soles(k));
-    if (!moving && planted.length && bears(xcom, soles(i), planted, s)) borne.add(w);
+    if (!moving && planted.length && bears(xcom, soles(i), planted, s)) w.borne = true;
   });
-  for (const leg of legs) if (leg.swing && moving) borne.delete(leg.swing);
-  const support = legs.flatMap((leg, i) => leg.swing ? borne.has(leg.swing) ? [] : footprint(proportions, leg.anchor, leg.yaw) : soles(i)).concat(person.seat?.support ?? []);
+  for (const leg of legs) if (leg.swing && moving) leg.swing.borne = false;
+  const support = legs.flatMap((leg, i) => leg.swing ? leg.swing.borne ? [] : footprint(proportions, leg.anchor, leg.yaw) : soles(i)).concat(person.seat?.support ?? []);
   if (!support.length) return;
   const hull = hullOf(support);
   if (person.locomotion.settled && legs.every((leg) => !leg.swing) && Math.hypot(velocity.x, velocity.z) < 0.05) {
@@ -443,7 +443,7 @@ export function checkSupport(person: Person, f: Frame, dev: Dev): void {
   const value = outside(hull, xcom);
   // (none for a run, set off or brought to a stop: the reading is an inverted pendulum's standing on a centre of pressure (read: Hof et al.
   // 2005, its assumptions: constant length, a base of support); a flight has none)
-  if (value > LIMIT.xcom * s && !(person.stepper && runs(person.stepper.st, person.going?.speed ?? 0))) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: LIMIT.xcom * s, where: 'hips' });
+  if (value > LIMIT.xcom * s && !(person.stepper && runs(person.stepper.st, going?.speed ?? 0))) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: LIMIT.xcom * s, where: 'hips' });
 }
 
 /** where the feet's middle stands from the centre of mass (`OVER` behind it, facing as the stepper does; × `scale`) */
@@ -476,8 +476,6 @@ function crouchFor(share: number): number {
 const UP = new Vector3(0, 1, 0), ZERO = new Vector3(), _local = new Quaternion();
 const [_a, _b, _pole, _v, _lift] = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
 const _shift = new Quaternion(), _solved = new Quaternion(), _unclamped = new Quaternion(), _axis = new Vector3();
-/** the swings `checkSupport` has seen, and those lifted from under a still body's weight: their landings no support till it moves */
-const seen = new WeakSet<Swing>(), borne = new WeakSet<Swing>();
 /** Tuned (m/s, × scale): a body this slow is still (quiet stance sways a few mm/s — read: Winter 1995, Gait Posture 3:193) */
 const MOVING = 0.1;
 /** Tuned: a swinging foot more than this (rad) off its planned turn about the vertical, as its knee leaves it, is twisted the rest of the way */
