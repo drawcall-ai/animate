@@ -3,9 +3,8 @@ import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import type { ArmPosture, Posture } from '../kernel/poise';
 import { selfOf, type Body } from '../body';
-import { personOf } from '../person/person';
 import type { Self } from '../body/self';
-import { INDEX, SIDES } from '../person/anatomy/bones';
+import { comingToRest, STILL } from '../kernel/rest';
 import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';
 
@@ -56,7 +55,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
       coming(self, request, posture, hold),
       posed && during(request, 'trunk', 'asked', () => self.poise.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
-      ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))),
+      ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(self.person.armPose[side], arm))),
       ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));
   }, { until, aimer: true, meets: hold !== undefined });
 }
@@ -76,39 +75,21 @@ function add(to: Required<ArmPosture>, arm: Required<ArmPosture>): void {
   for (const key of ARM) to[key] += arm[key];
 }
 
+const SIDES = ['left', 'right'] as const;
 const ARM = ['shrug', 'forward', 'out', 'twist', 'elbow'] as const satisfies readonly (keyof ArmPosture)[];
 
-/** Tuned, over a person's and a dog's breathing and sway (at most 0.05 rad/s, 0.002 m/s): how still a posed part is once it has come (rad/s;
- * its height, m/s), for how long (s), and how soon that can be said, as a part sets off slowly (s; fingers, unseen, take this long) */
-const STILL = { turn: 0.15, height: 0.03, seconds: 0.1, soonest: 0.1, fingers: 0.25 };
 /** Tuned: the most a posture is waited for (s). Walking, the stride moves every part, so it is taken to have come by the time a walker's
  * bow and arms take at their paces; standing, another verb may keep a part moving for good. */
 const LONGEST = { walking: 1.2, standing: 3 };
-
-/** whether `parts` (bones) or the body's height moved last sub-step, more than idle life moves them */
-const moving = (f: Frame, parts: readonly number[]) => Math.abs(f.prev.position(0).y - f.prev2.position(0).y) > STILL.height * f.dt
-  || parts.some((part) => f.prev.rotation(part).angleTo(f.prev2.rotation(part)) > STILL.turn * f.dt);
-
-/** Until `parts` have been measured still (no sooner than `soonest` s, as a part sets off slowly), or have had `most` s to be: the last of a verb that ends once they are. */
-export function* comingToRest(parts: readonly number[], most: () => number, soonest: number = STILL.soonest) {
-  let elapsed = 0, still = 0;
-  yield* action<Frame>({
-    until: (f) => {
-      elapsed += f.dt;
-      still = moving(f, parts) ? 0 : still + f.dt;
-      return (still >= STILL.seconds && elapsed >= soonest) || elapsed >= most();
-    },
-  });
-}
 
 /** Met `hold` s after the parts `posture` poses have come to rest (`comingToRest`), however far they got. Given no `hold`, it keeps the pose on till its story ends it. */
 function* coming(self: Self, request: Request, posture: Posture, hold: number | undefined) {
   if (hold !== undefined) {
     const { head, arms, fingers, ...trunk } = posture, person = self.species.person !== undefined;
     yield* comingToRest([
-      ...(Object.keys(trunk).length ? [0, ...(person ? [INDEX.chest] : [])] : []),
+      ...(Object.keys(trunk).length ? [0, ...(person ? [self.skeleton.index('chest')] : [])] : []),
       ...(head && self.gazer ? [self.gazer.head] : []),
-      ...SIDES.flatMap((side) => arms?.[side] ? [INDEX[`${side}UpperArm`], INDEX[`${side}LowerArm`]] : []),
+      ...SIDES.flatMap((side) => arms?.[side] ? [self.skeleton.index(`${side}UpperArm`), self.skeleton.index(`${side}LowerArm`)] : []),
     ], () => self.locomotion.moving ? LONGEST.walking : LONGEST.standing, fingers ? STILL.fingers : STILL.soonest);
     let elapsed = 0;
     if (hold > 0) yield* action<Frame>({ until: (f) => { const over = elapsed >= hold - 1e-9; elapsed += f.dt; return over; } });

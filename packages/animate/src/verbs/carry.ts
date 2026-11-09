@@ -4,7 +4,7 @@ import { handsOn } from '../things/hold';
 import { Thing } from '../things/thing';
 import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
-import { finder, type Target } from './targets';
+import { finder, type Target } from '../things/target';
 import { verb, type Verb } from './story';
 import type { HandOptions } from '../body/handling';
 

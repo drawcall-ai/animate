@@ -48,6 +48,8 @@ export interface Holder {
   track(node: Object3D): Carrier;
   carry(node: Object3D, carrier: Carrier): void;
   leave(node: Object3D): void;
+  /** it deals with the body `other` is: each keeps clear of the other from now on */
+  meet(other: Holder): void;
   showPrev(): void;
 }
 

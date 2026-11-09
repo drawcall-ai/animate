@@ -1,6 +1,5 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { selfOf, type Body } from './body';
-import { personOf } from './person/person';
 import type { Self } from './body/self';
 import type { HandPlacement } from './fingers/placement';
 import type { HandShape } from './fingers/shape';
@@ -19,7 +18,7 @@ export type { HandPlacement };
 export function placement(body: Body, side: 'left' | 'right', empty: Object3D): HandPlacement {
   const thing = empty.parent;
   if (!thing) throw new Error(`placement: "${empty.name}" hangs from nothing`);
-  const self = personOf(selfOf(body)), kept = picked[side].get(empty);
+  const self = selfOf(body).person, kept = picked[side].get(empty);
   if (kept?.updates === self.updates && kept.self === self) return kept.placement;
   const chosen = takingOf(self, side, Thing.of(thing), empty.name).placement;
   picked[side].set(empty, { self, updates: self.updates, placement: chosen });

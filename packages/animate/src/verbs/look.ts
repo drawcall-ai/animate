@@ -5,7 +5,7 @@ import { Body, selfOf } from '../body';
 import type { Self } from '../body/self';
 import type { Frame } from '../kernel/frame';
 import { aiming, looking } from '../look/gaze';
-import { finder, type Target } from './targets';
+import { finder, type Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
 /** How a look goes: how much of it the head and the trunk take. To tilt or nod the head as it looks, `pose` its `head` beside it. */

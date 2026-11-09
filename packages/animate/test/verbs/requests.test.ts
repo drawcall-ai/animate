@@ -1,5 +1,5 @@
 import { Object3D, Vector3 } from 'three';
-import { finder } from '../../src/verbs/targets';
+import { finder } from '../../src/things/target';
 import { selfOf } from '../../src/body';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';

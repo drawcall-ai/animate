@@ -8,7 +8,6 @@ import { during, type Channel, type Tier } from '../src/kernel/requests';
 import type { Frame } from '../src/kernel/frame';
 import type { Go } from '../src/step/go';
 import type { Person } from '../src/person/person';
-import { personOf } from '../src/person/person';
 import { palmOf } from '../src/person/anatomy/landmarks';
 import type { Side } from '../src/person/anatomy/bones';
 import { PERSON } from '../skills/animate/references/person';
@@ -26,7 +25,7 @@ const scaled = (factor: number) => PERSON.map((bone) => ({ ...bone, position: [b
 export const feetOf = (h: Person) => (h.stepper?.legs ?? []).map((leg) => ({ position: leg.anchor, yaw: leg.yaw, phase: leg.swing ? 'swing' : 'planted' }));
 
 /** `body`'s runtime, as a person */
-export const insides = (body: Body): Person => personOf(selfOf(body));
+export const insides = (body: Body): Person => selfOf(body).person;
 
 /** where `side`'s palm is (world) as `h` is posed: where its hand holds a grip */
 export const palmAt = (h: Person, side: Side) => h.pose.point(h.hands[side], palmOf(h.proportions, side), new Vector3());

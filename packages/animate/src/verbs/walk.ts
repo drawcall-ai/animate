@@ -1,12 +1,11 @@
-import { during, type Miss, type Request } from '../kernel/requests';
+import { during } from '../kernel/requests';
 import { Body, selfOf } from '../body';
-import type { Self } from '../body/self';
 import type { Frame } from '../kernel/frame';
 import { OFF_FLOOR } from '../kernel/dev';
 import { bodyOf } from '../things/hold';
 import { headingOf, headingOfTurn } from '../kernel/math';
-import { Walk } from '../step/walk';
-import { finder, type Target } from './targets';
+import { stallOf, Walk } from '../step/walk';
+import { finder, type Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
 /** How a walk goes. */
@@ -98,10 +97,4 @@ export function arriving(body: Body, seconds: number): () => boolean {
   const self = selfOf(body), since = self.time;
   return () => self.lastMover >= since && self.requests.every((request) =>
     request.aimer || request.owned || request.filed < since || request.outcome !== 'running' || request.eta <= seconds);
-}
-
-/** what a walk of `request`'s stalled of: a newer verb taking the legs is why it got no nearer, whatever it looked like from here */
-export function stallOf(self: Self, request: Request, stall: Miss): Miss {
-  const over = self.owner('go')?.request;
-  return over && over !== request ? { ...stall, why: `${over.label} took the legs from it` } : stall;
 }

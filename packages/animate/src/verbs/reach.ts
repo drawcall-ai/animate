@@ -1,6 +1,6 @@
 import { selfOf, type Body, type ByHand } from '../body';
 import type { AnySpecies } from '../species/define';
-import { finder, handTarget, type Target } from './targets';
+import { finder, handTarget, type Target } from '../things/target';
 import { verb, type Verb } from './story';
 import type { HandOptions } from '../body/handling';
 

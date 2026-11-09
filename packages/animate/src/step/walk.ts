@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { STROLL, type Go, type Stance } from './go';
-import type { Miss } from '../kernel/requests';
+import type { Miss, Request } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
 import { remaining, SETTLED_AFTER } from './state';
@@ -261,3 +261,9 @@ const placeOf = (self: Self, f: Frame) => {
 };
 const _com = new Vector3(), _way = new Vector3();
 const _v = new Vector3();
+
+/** what a walk of `request`'s stalled of: a newer verb taking the legs is why it got no nearer, whatever it looked like from here */
+export function stallOf(self: Pick<Self, 'owner'>, request: Request, stall: Miss): Miss {
+  const over = self.owner('go')?.request;
+  return over && over !== request ? { ...stall, why: `${over.label} took the legs from it` } : stall;
+}

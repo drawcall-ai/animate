@@ -2,7 +2,7 @@
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { HumanoidBone } from '@drawcall/animate';
 import { selfOf } from '../../../packages/animate/src/body';
-import { personOf, type Person as Insides } from '../../../packages/animate/src/person/person';
+import type { Person as Insides } from '../../../packages/animate/src/person/person';
 import type { Person } from '../src/scenario';
 import { poseOf } from '@drawcall/animate';
 
@@ -30,7 +30,7 @@ export class Actor {
   private readonly points: Record<string, { bone: BoneName; at: Vector3 }>;
 
   constructor(readonly body: Person) {
-    this.insides = personOf(selfOf(body));
+    this.insides = selfOf(body).person;
     this.points = pointsOf(this.proportions);
   }
 

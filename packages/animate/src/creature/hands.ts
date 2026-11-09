@@ -220,6 +220,9 @@ export function creatureHands(self: Self): Handling {
         self.own('reach', '', (returning) => () => handingBack(self, returning, [hand], 'borrowed'));
       }
     },
+    away() {
+      return null;
+    },
     backOut(hands) {
       self.own('release', '', (request) => () => handingBack(self, request, hands, 'borrowed'));
     },

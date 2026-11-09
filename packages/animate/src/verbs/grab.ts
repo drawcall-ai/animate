@@ -5,7 +5,7 @@ import type { Holder } from '../things/resolve';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
-import { letGo } from './release';
+import { letGo } from '../body/letgo';
 import type { HandOptions } from '../body/handling';
 
 /**

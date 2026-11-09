@@ -8,6 +8,7 @@ import { grabbing, grabAtOnce } from './grab';
 import { carrying, liftingClear } from './carry';
 import { wayOf } from '../../things/route';
 import { reachingTo } from './reach';
+import { backOff } from './press';
 import { backingOut } from './release';
 import { settling, takingOf } from './take';
 import type { Person } from '../person';
@@ -49,6 +50,9 @@ export function personHands(person: Person): Handling {
     },
     bring: (request, thing, points, end, options) => carrying(person, request, thing, wayOf(person, thing, points, end), options),
     reach: (request, targets, options) => reachingTo(person, request, targets.map(({ hand, target }) => ({ side: sideOf(hand), target })), options),
+    away(hold, placed) {
+      return backOff(person, hold.thing.grip(hold.grip), placed);
+    },
     backOut(hands, away) {
       const sides = hands.map(sideOf);
       person.own('release', '', (request) => () => backingOut(person, request, sides.map((side) => ({ side, away: away[side] ?? null }))));

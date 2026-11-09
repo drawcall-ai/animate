@@ -27,6 +27,7 @@ import { FingerState } from '../fingers/state';
 import { Orient } from './orient';
 import { checkShear, massed, restPose } from './setup';
 import { Springs, type Trunk } from './springs';
+import type { Person } from '../person/person';
 
 /** How a body is made. */
 export interface SelfOptions {
@@ -180,6 +181,11 @@ export abstract class Self implements Holder {
   }
 
   private handled: Handling | null = null;
+
+  /** it as a person, for what only a person does */
+  get person(): Person {
+    throw new Error('not a person');
+  }
 
   /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now */
   abstract holds(f: Frame, hand: string, wrist: Goal): boolean;
