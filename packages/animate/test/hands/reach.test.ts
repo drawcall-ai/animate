@@ -233,3 +233,18 @@ it('a dog reaches an object’s orientation as well as its position', () => {
   expect(closest).toBeLessThan(0.05);
   expect(pet.log).toEqual([]);
 });
+
+it('out of reach and given `until`, the arm tries as far as it goes before it misses', () => {
+  const body = person(), room = roomOf(body), jar = empty(room, 'jar', new Vector3(0, 2.6, 0.6));
+  room.updateMatrixWorld(true);
+  let miss: Missed | null = null, top = 0, ended = false;
+  play(function* () {
+    miss = yield* attempt(reach(body, { right: jar }, { until: Infinity }));
+    ended = true;
+  }, [body], 5, () => {
+    top = Math.max(top, worldOf(body.bones.rightHand).y);
+    return ended;
+  });
+  expect(miss).toBeInstanceOf(Missed);
+  expect(top).toBeGreaterThan(1.9);
+});

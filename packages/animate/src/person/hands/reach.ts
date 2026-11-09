@@ -99,6 +99,8 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
       const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
       const reachWalk = plan !== 'there' && 'walk' in plan ? plan : null;
       let stalled = plan !== 'there' && 'nowhere' in plan ? plan.nowhere : null, arrived = false;
+      // (out of reach and given `until`: the arm goes as far as it can as the body stands, a try seen, till the target has stood still too long)
+      if (stalled && pace.until !== undefined && Number.isNaN(setOff)) setOff = person.frame.time;
       const setsOff = (f: Frame) => {
         if (Number.isNaN(setOff) && (plan === 'there' || (reachWalk && reachWalk.walk.eta <= NEAR))) setOff = f.time;
         return !Number.isNaN(setOff);
