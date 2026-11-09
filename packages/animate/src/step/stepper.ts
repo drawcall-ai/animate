@@ -174,7 +174,7 @@ export class Stepper extends Steps {
     for (const leg of legs) {
       // (with a foreseen root, a swinging foot as it is turned now: its landing foresees the whole turn, the hips do not yet; a planted foot
       // as far as it pivots, turned after the pelvis, `carry`)
-      const turned = leg.swing && r.forecast ? leg.swing.turn.x : leg.yaw, pivots = this.pivots(leg);
+      const turned = leg.swing && this.foreseen ? leg.swing.turn.x : leg.yaw, pivots = this.pivots(leg);
       const body = pivots ? this.pivotFrom(leg, yaws[1]) : yaws[1] + wrapAngle(turned - leg.sign * toeOut - yaws[1]), most = pivots ? PIVOTING : this.pelvisTurn;
       [low, high] = [Math.max(low, body - most), Math.min(high, body + most)];
     }
@@ -218,9 +218,9 @@ export class Stepper extends Steps {
   /** The furthest from under its hip a foot lands (m): the height a landing must hold the hip at, and how far out it may land so, as
    * the legs stand before they move this sub-step. */
   private landingReach(body: StepBody): { holding: number; reaches: number[] } {
-    const { st, feet, legs } = this, s = st.scale, { r, standing, moving } = body;
+    const { st, feet, legs } = this, s = st.scale, { standing, moving } = body;
     // A planned root can slow for a landing at its contact height; an externally driven one may need extra drop.
-    const holding = r.forecast
+    const holding = this.foreseen
       ? standing - (dropOf(st, body) + st.bob) * s * moving
       : Math.max(nominal(this, body) - LANDING.drop * s, standing - (LOWEST - LANDING.drop / 2) * s);
     const reaches = legs.map((leg) =>

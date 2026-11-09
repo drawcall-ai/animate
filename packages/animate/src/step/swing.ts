@@ -57,7 +57,7 @@ export function settle(steps: Steps, input: StepInput, leg: Leg, w: Swing, aimin
     }
   }
   // (a walker's — a foreseen root's — foot landing just behind its hip, squaring up, lands flat: toes first only stepping back)
-  const ahead = out.dot(forwardOf(leg.yaw)), aim = r.forecast && ahead < 0 ? Math.min(0, ahead + BACKSTEP * s) : ahead;
+  const ahead = out.dot(forwardOf(leg.yaw)), aim = steps.foreseen && ahead < 0 ? Math.min(0, ahead + BACKSTEP * s) : ahead;
   if (!aiming) return;
   // (stepping down onto a lower tread, toes first, the heel kept up over the edge it leaves; up onto a higher one, flat — recalled: stair
   // descent lands on the forefoot, ascent on the forefoot or the whole foot)
@@ -69,7 +69,7 @@ export function settle(steps: Steps, input: StepInput, leg: Leg, w: Swing, aimin
 
 /** A swing moved on a sub-step: re-aimed while it may be, landed once through. */
 export function swingOn(steps: Steps, input: StepInput, leg: Leg, w: Swing) {
-  const { st, feet, legs } = steps, s = st.scale, { r, dt, airborne, air, Tsw } = input;
+  const { st, feet, legs } = steps, s = st.scale, { dt, airborne, air, Tsw } = input;
   // (its pace kept to the gait's as the speed changes: quicker at once, slower gradually; in the air, landing as the body does)
   if (airborne) [w.rest, w.T] = [air + dt, (air + dt) / (1 - w.u)];
   else if (!leg.leapt) w.T = Math.min(Tsw, w.T + PACE * dt);
@@ -81,7 +81,7 @@ export function swingOn(steps: Steps, input: StepInput, leg: Leg, w: Swing) {
   if (input.contact && w.rel) touchdown(steps, input, leg, w, w.rel, input.contact);
   // (a walker's — a foreseen root's — landing moves no more once `AIMED` of the swing is gone: moved late, it reads as a stumble;
   // before, one that would leave the extrapolated centre of mass past the feet catches it instead)
-  const settling = r.forecast ? AIMED : SETTLE, capture = st.capture;
+  const settling = steps.foreseen ? AIMED : SETTLE, capture = st.capture;
   if (!leg.leapt && !w.capture && !airborne && capture !== undefined && w.u < settling) {
     const support = hullOf(legs.flatMap((other) => other === leg || !other.swing ? feet.print(other.i, other.anchor, other.yaw) : []));
     w.capture = outside(support, xcomAhead(steps, input, remaining(w), _c)) > capture * s;

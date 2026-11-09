@@ -80,7 +80,7 @@ export class Trunk {
   private bow = 0;
 
   constructor(
-    private readonly person: Person, sway: Variation['sway'], seed: number,
+    private readonly person: Person, private readonly stepper: Stepper, sway: Variation['sway'], seed: number,
     /** the depth (× scale) a story's `lower` is a share of, as a walker crouches whoever drives it */
     private readonly depth: number,
     private readonly stance: Stance, standing: readonly { position: Vector3 }[],
@@ -96,11 +96,11 @@ export class Trunk {
   }
 
   /** The body carried off `root` for this sub-step, its hips told to the feet: returns what the stepper moves on. */
-  carry(f: Frame, root: Steering, go: LegGoal | null, asks: Asks, seat: Seat | null, stepper: Stepper): Steering {
-    const { person, state, walkPose, life, posedTrunk, depth } = this, { proportions } = person, dt = f.dt, s = proportions.scale;
+  carry(f: Frame, root: Steering, go: LegGoal | null, asks: Asks, seat: Seat | null): Steering {
+    const { person, stepper, state, walkPose, life, posedTrunk, depth } = this, { proportions } = person, dt = f.dt, s = proportions.scale;
     // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
     if (!this.offsets) {
-      const from = root.centre ? f.prev.com(new Vector3()).setY(0) : root.position;
+      const from = stepper.foreseen ? f.prev.com(new Vector3()).setY(0) : root.position;
       this.offsets = [f.prev2.position(0).clone().sub(from).setY(0), f.prev.position(0).clone().sub(from).setY(0)];
     }
     const offsets = this.offsets;
@@ -116,7 +116,7 @@ export class Trunk {
     state.root.copy(root.position);
     state.velocity.copy(this.paced(root, dt));
     state.run = stepper.run;
-    if (root.centre) state.offset.copy(walkPose.center(f));
+    if (stepper.foreseen) state.offset.copy(walkPose.center(f));
     // (its quiet life: motion blends it out, the hands' too, as balance's: a quick turn of what they hold is not breathed through)
     const activity = Math.max(speed, ...[INDEX.leftHand, INDEX.rightHand].map((tip) =>
       f.prev.position(tip).distanceTo(f.prev2.position(tip)) / dt));
@@ -130,7 +130,7 @@ export class Trunk {
     const compression = Math.min(1, stepper.legs.reduce((sum, leg) => sum + compressed(leg), 0));
     // (crouched over a root at its hips — sitting back behind the feet, the mass not held over the root — the trunk bows over them by
     // `CROUCH_LEAN`, as the legs take the crouch; on a seat, its weight borne there, it sits up)
-    const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch * (1 - (seat?.share ?? 0));
+    const stoop = stepper.foreseen ? 0 : CROUCH_LEAN * stepper.crouch * (1 - (seat?.share ?? 0));
     const cycle = { phase: this.phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle };
     const bow = this.bow = requested.bow + stoop;
     walkPose.carry(f, state, { ...requested, bow }, posedTrunk, life, cycle);
@@ -145,10 +145,10 @@ export class Trunk {
     const tilt = this.tilt = this.rotation.follow(tilts[0], tilts[1], square, asks.hips !== 0 ? AIMING : TURN, dt, new Quaternion());
     [tilts[0], tilts[1]] = [tilts[1], tilt.clone()];
     stepper.turn = yawOf(tilt) * state.run;
-    this.toldHips(stepper, requested.hips);
+    this.toldHips(requested.hips);
     // (the stepper given the feet's middle — a centre of mass's `behind` it, the hips that far ahead of it again; let down as asked or
     // as the root crouches it, the feet staying put; balance read off the body as it last stood, as the checks read it)
-    const behind = root.centre ? feetBehind(stepper, s) : ZERO, forecast = root.forecast;
+    const behind = stepper.foreseen ? feetBehind(stepper, s) : ZERO, forecast = root.forecast;
     const lowered = crouchFor(requested.lower / (depth * s));
     const walkingMost = lerp(1, WALKING_CROUCH, MathUtils.smoothstep(speed, 0.2, 0.8));
     return {
@@ -162,7 +162,7 @@ export class Trunk {
       // foot standing, or off one to lift it, is a moment's: the feet step as from without it.
       hips: offset.clone().sub(walkPose.shifted).add(behind),
       shifted: walkPose.shifted,
-      com: root.centre ? offset.clone().sub(state.offset).sub(walkPose.shifted).add(behind) : undefined,
+      com: stepper.foreseen ? offset.clone().sub(state.offset).sub(walkPose.shifted).add(behind) : undefined,
       crouch: Math.max(root.crouch ?? 0, Math.min(lowered, walkingMost)),
       tiptoe: Math.max(0, -requested.lower),
       stagger: asks.stagger ?? undefined,
@@ -241,8 +241,8 @@ export class Trunk {
    * its foot rolled up off its sole, and a foot stepped in place beside it lands on a straight knee that snaps bent). The walking list
    * turns the pelvis about the stance hip (recalled: Perry 1992, the swing side drops ~4°), where the stepper already plans the leg from.
    */
-  private toldHips(stepper: Stepper, hipsTurn: number): void {
-    const { person: { proportions }, state, tilt } = this;
+  private toldHips(hipsTurn: number): void {
+    const { person: { proportions }, stepper, state, tilt } = this;
     const shift = quatYXZ(0, 0, this.walkPose.shiftRoll, _shift);
     stepper.feet.legs.forEach((leg, i) => {
       const offset = proportions.offsets[`${SIDES[i]}UpperLeg`];

@@ -122,8 +122,8 @@ export function walking(person: Person, options: { stance?: Partial<Stance>; see
     const planned = plan.step(f, goal, motion, stance, holds);
     const stopped = root.distanceTo(stop) < STOP.distance * s && planned.velocity.length() < STOP.speed;
     if (stopped && velocity.length() < STOP.goalSpeed && unturned < STOP.yaw) moving = false;
-    return { ...planned, centre: true, underway: moving, arriving: moving && !!go && go.settles !== false && velocity.length() < STOP.goalSpeed };
-  }, { ...options, variation });
+    return { ...planned, underway: moving, arriving: moving && !!go && go.settles !== false && velocity.length() < STOP.goalSpeed };
+  }, { ...options, foreseen: true, variation });
 }
 
 /**

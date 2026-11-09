@@ -101,7 +101,7 @@ function steady(steps: Steps, input: StepInput, leg: Leg, remaining: number, to:
   // and is, kept within `WIDE.within` of the feet: it shuffles rather than straddles — but not in under the body past where it would
   // stray from its hip, `WIDE.room` of that to spare: there it would step again at once, to the same place, beside a foot standing wide)
   const gap = _v.subVectors(to, other.anchor).dot(side) * leg.sign, most = WIDE.stances * 2 * st.width.stand;
-  if (r.forecast && !other.swing && speed < SHUFFLING * s && gap > most) {
+  if (steps.foreseen && !other.swing && speed < SHUFFLING * s && gap > most) {
     const room = WIDE.room * strayRoom(st, feet, leg, widthAt(steps, input, speed));
     const narrower = to.clone().addScaledVector(side, -leg.sign * Math.min(gap - most, room));
     const within = (c: Vector3) => outside(hullOf([...feet.print(leg.i, narrower, yawed), ...others]), c) <= WIDE.within * s;
@@ -128,7 +128,7 @@ export function uncross(steps: Steps, input: StepInput, leg: Leg, to: Vector3, s
     // (with a foreseen root, a foot landing a foot's length or more ahead of or behind the other need not land a full stance beside it:
     // the shanks pass apart — but never across the line between them: `PASSING` of the stance kept)
     const along = Math.abs(_v.subVectors(to, other.anchor).dot(_n.set(-axis.z, 0, axis.x)));
-    const apart = input.r.forecast ? lerp(PASSING, 1, 1 - MathUtils.smoothstep(along, SPAN * s, 2 * SPAN * s)) : 1;
+    const apart = steps.foreseen ? lerp(PASSING, 1, 1 - MathUtils.smoothstep(along, SPAN * s, 2 * SPAN * s)) : 1;
     const gap = _v.dot(axis) * leg.sign, narrowest = st.width.narrowest * s * apart;
     if (gap < narrowest) to.addScaledVector(axis, leg.sign * (narrowest - gap));
     across = Math.max(across, narrowest - gap);

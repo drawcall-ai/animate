@@ -74,11 +74,11 @@ export function liftFeet(steps: Steps, input: StepInput, prompts: Prompts) {
 
 /** whether `leg` lifts now, `other` the leg across from it (the weight already going off it: `unloading`) */
 function ready(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, other: Leg, unloading: boolean): boolean {
-  const { r, airborne } = input;
+  const { airborne } = input;
   const urgent = isUrgent(steps, input, prompts, leg, other);
   if (airborne && !urgent) return false;
   // A physical flight lands before stepping again; planned roots can also wait between ordinary strides.
-  if (leg.swing || (!airborne && leg.landed && (r.forecast || leg.leapt))) return false;
+  if (leg.swing || (!airborne && leg.landed && (steps.foreseen || leg.leapt))) return false;
   if (steps.clock?.holdsDown(leg, input)) return false;
   const due = urgent || lifts(steps, input, prompts, leg, other);
   // (nor, slow, one the weight is on: it goes onto the others first — an anticipatory shift — then the foot lifts, the shift once begun
@@ -92,10 +92,10 @@ function ready(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, other
 
 /** whether a foot that need not step at once lifts now: it wants to, bearing weight a while since it landed, in its turn after the other */
 function lifts(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, other: Leg): boolean {
-  const { r, C, Ts } = input;
+  const { C, Ts } = input;
   // (nor, unless it must, a walker's foot just put down: it bears weight before it is wanted again — one landed ahead of its hip on the
   // tread below stepped again the next sub-step, the pelvis bouncing up 14 cm)
-  if (leg.landed || (r.forecast && leg.planted < SETTLING * C) || !wants(steps, input, prompts, leg)) return false;
+  if (leg.landed || (steps.foreseen && leg.planted < SETTLING * C) || !wants(steps, input, prompts, leg)) return false;
   // alternate: lift once the other foot has stood (walking) or before it lands (running, a flight)
   const otherLands = other.swing ? remaining(other.swing) : -other.planted;
   const alternates = !!steps.clock || otherLands + Ts - C * steps.apart[leg.i] <= 1e-9;
@@ -104,7 +104,7 @@ function lifts(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, other
 
 /** whether a foot steps at once, the other in the air or not: about to be out of reach, under the body, catching a fall */
 function isUrgent(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, other: Leg): boolean {
-  const { st, feet } = steps, s = st.scale, { r, airborne, air, vy, yaw, most } = input;
+  const { st, feet } = steps, s = st.scale, { airborne, air, vy, yaw, most } = input;
   // (leaping, the feet leave the floor as the body does: the legs pushed off during the launch)
   if (airborne) return !leg.swing && air > 0;
   // (a planned walk keeps its supporting foot down even when short of reach; so does a walking landing while its knees recover, and a foot
@@ -113,10 +113,10 @@ function isUrgent(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, ot
   const recovering = !!input.contact && input.run === 0 && (steps.jumping.phase === 'down' || steps.jumping.phase === 'up');
   const pivoting = leg.pivot !== undefined || (input.spinning && steps.pivots(leg));
   const flies = runs(steps.st, input.v) && leg.planted >= input.Ts;
-  if (other.swing && ((r.forecast && !flies) || recovering || pivoting) && !steps.clock) return false;
+  if (other.swing && ((steps.foreseen && !flies) || recovering || pivoting) && !steps.clock) return false;
   // A lower leading foot takes the weight as the pelvis descends. A foot already home cannot improve its reach by stepping in place.
   const ahead = aheadOf(steps, input, leg) < 0;
-  const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (!!r.forecast && leg.planted < SETTLING * input.C));
+  const down = ahead && (steps.legs.some((o) => o !== leg && !o.swing && o.anchor.y > leg.anchor.y + RISE) || (steps.foreseen && leg.planted < SETTLING * input.C));
   if (!down && legReach(steps, input, leg) < nominal(steps, input) + Math.max(0, vy) * RISING - THRESHOLDS.short * s
     && offHome(steps, input, leg, input.landAhead) > THRESHOLDS.still * s) return true;
   if (leg.landed) return false;
@@ -145,13 +145,13 @@ function loaded(steps: Steps, input: StepInput, leg: Leg): boolean {
  * landing; a followed root's feet keep up with it as it goes
  */
 function slow(steps: Steps, input: StepInput): boolean {
-  return !input.airborne && !!input.r.forecast && steps.st.capture !== undefined && input.v < UNLOADED * steps.st.scale;
+  return !input.airborne && steps.foreseen && steps.st.capture !== undefined && input.v < UNLOADED * steps.st.scale;
 }
 
 /** whether a foot that would step lets `other`, standing, step first: the two ways of stepping part here */
 function yields(steps: Steps, input: StepInput, prompts: Prompts, leg: Leg, other: Leg): boolean {
   if (other.swing) return false;
-  return input.r.forecast ? walkerYields(steps, input, prompts, leg, other) : followerYields(steps, input, leg, other);
+  return steps.foreseen ? walkerYields(steps, input, prompts, leg, other) : followerYields(steps, input, leg, other);
 }
 
 /**

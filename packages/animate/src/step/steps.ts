@@ -141,8 +141,12 @@ export class Steps {
   /** the ground its pelvis stands over: the floor under its way, smoothed over its stride */
   readonly ground: Ground;
 
-  /** `floor`: what the feet stand on, each landing fitted onto one level of it */
-  constructor(readonly st: Stepping, readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number, readonly floor: Floor) {
+  /**
+   * `floor`: what the feet stand on, each landing fitted onto one level of it. `foreseen`: its root says where it goes (`Steering.forecast`:
+   * a walker's, a planner's — a person's root then at its centre of mass, the hips holding it there and the feet's middle a little behind it)
+   * or does not (a player's, followed — a person's root at its hips, the feet under them)
+   */
+  constructor(readonly st: Stepping, readonly feet: Feet, at: readonly { position: Vector3; yaw: number }[], yaw: number, readonly floor: Floor, readonly foreseen: boolean) {
     this.ground = new Ground(floor, feet.length);
     this.legs = at.map((foot, i) => ({
       i, sign: feet.legs[i].sign, anchor: foothold(floor, feet, i, foot.position.clone(), foot.yaw), yaw: foot.yaw, pitch: 0, heel: true, free: true,
@@ -156,7 +160,7 @@ export class Steps {
     this.apart = st.offsets.map((o, i) => mod(o - st.offsets[this.pair[i]]));
     this.yaw = this.rootYaw = yaw;
     this.yaws = [yaw, yaw];
-    if (st.gait) this.pace = this.clock = new GaitClock(st.gait, st.offsets, feet, this.legs);
+    if (st.gait) this.pace = this.clock = new GaitClock(st.gait, st.offsets, feet, this.legs, foreseen);
     else [this.pace, this.clock] = [new Cadence(st), null];
   }
 

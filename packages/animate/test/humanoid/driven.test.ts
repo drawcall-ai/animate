@@ -207,3 +207,18 @@ it.each([
   expect(h.locomotion.thoraxYaw).not.toBe(0);
   expect(h.log).toEqual([]);
 });
+
+it('a leap asked on the very first sub-step is taken', () => {
+  let asked = false;
+  const body = person({ drive: () => {
+    const jump = asked ? undefined : 2.5;
+    asked = true;
+    return { position: new Vector3(), velocity: new Vector3(), yaw: 0, jump };
+  } }), h = insides(body);
+  let highest = 0;
+  for (let t = 0; t < 1; t += dt) {
+    body.update(dt);
+    highest = Math.max(highest, h.pose.position(0).y);
+  }
+  expect(highest).toBeGreaterThan(h.proportions.hipHeight + 0.1);
+});

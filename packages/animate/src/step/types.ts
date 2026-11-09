@@ -42,9 +42,6 @@ export interface Steering {
   forecast?: (ahead: number) => { position: Vector3; yaw: number };
   /** how it would be going, its turn (rad/s) and velocity (m/s), if its legs kept up, when they hold it back (a planner's): a gait's feet step to make way for it */
   wanted?: { angular: number; velocity: Vector3 };
-  /** a person's: the root at its centre of mass, the hips holding it there and the feet's middle a little behind it (a planner's); else at
-   * the hips, the feet under them (a scene's) */
-  centre?: boolean;
   /** a person's: whether a walk is under way on it (a planner's, from its start till it stops); none, as the body moves */
   underway?: boolean;
   /** a walker's: its walk ends on a still goal it comes to rest on (its closing step lands where the body can stop over it); not one it

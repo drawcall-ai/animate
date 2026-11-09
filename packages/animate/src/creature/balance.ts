@@ -32,7 +32,7 @@ export function creature(body: Self): Behaviour {
   const record = steppingOf(gait, feet, turn, ball);
   checkLegsFit(kind.chains, feet, rest, record.drop.walk);
   const standing = kind.chains.map((chain) => ({ position: body.pose.position(chain.joints[chain.joints.length - 1].bone).clone(), yaw: body.yaw }));
-  const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw, body.floor));
+  const stepper = (body.stepper = new Stepper(record, feet, standing, body.yaw, body.floor, !driven));
   const radius = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
   const planner = new Planner(body.pose.position(0).clone().setY(0), body.yaw, gait, radius);
   // (on the spot it turns half round in `HALF_TURN` strides at its slowest walk's rhythm, its feet stepping as quickly as the turn needs)

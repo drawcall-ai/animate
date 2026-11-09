@@ -71,7 +71,7 @@ export class GaitClock {
   /** which soles were off the floor in the last final pose `check` read */
   private aloft: boolean[] | null = null;
 
-  constructor(private readonly gait: Gait, offsets: readonly number[], feet: Feet, private readonly legs: readonly Leg[]) {
+  constructor(private readonly gait: Gait, offsets: readonly number[], feet: Feet, private readonly legs: readonly Leg[], private readonly foreseen: boolean) {
     this.footfalls = [...offsets];
     const strays = feet.legs.map((leg) => leg.stray);
     const furthest = Math.max(...feet.legs.map((leg) => Math.hypot(leg.hip ?? feet.hip, leg.ahead ?? 0)));
@@ -91,7 +91,7 @@ export class GaitClock {
    */
   coming(root: Reading): number {
     const { r, v } = root;
-    if (!r.forecast) return v;
+    if (!this.foreseen) return v;
     const goes = r.wanted?.velocity.length() ?? 0, hurried = goes > STROLL.speed + 1e-6 && !this.walking;
     return Math.max(v, hurried ? goes : velocityAhead(root, PACING, _ahead).length());
   }

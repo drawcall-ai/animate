@@ -22,7 +22,7 @@ import type { Steering } from '../../step/types';
  * carried as a walker's is (`balancing`). Development checks: planted slide, touchdown speed, feet across; not its XCoM, which follows its input, not its balance.
  */
 export function driven(person: Person, seed?: number): Behaviour {
-  return balancing(person, drivenRoot(person), { variation: variationOf(seedFor(person, seed)), seed });
+  return balancing(person, drivenRoot(person), { foreseen: false, variation: variationOf(seedFor(person, seed)), seed });
 }
 
 /** the seed a person's life and variation are drawn from: `seed` if given, else one from its build and where it was made */
@@ -38,20 +38,17 @@ export function seedFor(person: Pick<Person, 'proportions' | 'pose' | 'yaw'>, se
  * (off a centre of mass's as far as the body's mass leans ahead of them), the trunk leaning with the pace its legs could have taken it
  * to (`PACE`), nodding, bowed and twisted as asked, the thorax counter-rotating. Let down as asked (`lower`) or as the root crouches it,
  * the legs crouch (below none: up on the toes). Standing, it breathes, sways and shifts its weight now and then (seeded by `seed`),
- * less as it holds still (`steady`). It steps, swings its arms and sways as the `variation` it is.
+ * less as it holds still (`steady`). It steps, swings its arms and sways as the `variation` it is; `foreseen`: `Steps.foreseen`.
  */
-export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null, asks: Asks, stepper: Stepper) => Steering, options: { stance?: Partial<Stance>; seed?: number; variation: Variation }): Behaviour {
-  const variation = options.variation, proportions = person.proportions;
+export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null, asks: Asks, stepper: Stepper) => Steering, options: { foreseen: boolean; stance?: Partial<Stance>; seed?: number; variation: Variation }): Behaviour {
+  const { foreseen, variation } = options, proportions = person.proportions;
   const feet = personFeet(proportions);
-  // (a person's stepping, as its root foresees where it goes or not — told by the root it is first given)
   // (the feet where they stand as it is made: in its stance under it)
   const standing = standingFeet(proportions, person.pose.position(0).x, person.pose.position(0).z, person.yaw);
-  const stepperFor = (foreseen: boolean) =>
-    (person.stepper = new Stepper(personStepping(proportions, foreseen, person.stride, variation), foreseen ? feet : pivotingFeet(proportions, feet), standing, person.yaw, person.floor));
-  let stepper = stepperFor(true), first = true;
+  const stepper = person.stepper = new Stepper(personStepping(proportions, foreseen, person.stride, variation), foreseen ? feet : pivotingFeet(proportions, feet), standing, person.yaw, person.floor, foreseen);
   const asks = new Asks();
   const depth = personStepping(proportions, true, person.stride).crouch.depth;
-  const trunk = new Trunk(person, variation.sway, seedFor(person, options.seed), depth, { ...defaultStance(proportions), ...options.stance }, standing);
+  const trunk = new Trunk(person, stepper, variation.sway, seedFor(person, options.seed), depth, { ...defaultStance(proportions), ...options.stance }, standing);
   return (f) => {
     if (f.dev && f.time > f.dt) checkLegs(person, f, f.dev, stepper.legs);
     person.asks.pass(asks);
@@ -59,9 +56,7 @@ export function balancing(person: Person, rootOf: (f: Frame, go: LegGoal | null,
     const seat = person.seat?.step(f.dt, asks.legGoal) ?? null;
     const go = seat ? null : asks.legGoal, root = rootOf(f, go, asks, stepper);
     if (seat) [asks.lower, asks.posture.lower, asks.bow] = [lerp(asks.lower, seat.seating.lower, seat.share), asks.posture.lower * (1 - seat.share), Math.max(asks.bow, seat.bow)];
-    if (first && !root.forecast) stepper = stepperFor(false);
-    first = false;
-    stepper.move(f, trunk.carry(f, root, go, asks, seat, stepper));
+    stepper.move(f, trunk.carry(f, root, go, asks, seat));
     const { yaw, moving, run, legs } = stepper;
     trunk.pose(f, asks, yaw);
     // the legs down to the feet
