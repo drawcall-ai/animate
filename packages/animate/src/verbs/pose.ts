@@ -32,7 +32,7 @@ export interface PoseOptions {
  * posture with a trunk field (taking the trunk from a `lookAt` given a `trunk` share, or giving it up to a newer one), for the head's
  * turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
  * (a skeleton with finger bones) take each hand's shape as asked rather than adding onto anything, easing in within about a quarter
- * second and back to relaxed once the pose ends; a hand holding something keeps its grasp, and a `grab` begun after the pose takes the fingers until its hand lets go. A person's `stagger` has its feet step apart
+ * second and back to relaxed once the pose ends; a hand holding something keeps its grasp, and a `grab` begun after the pose takes the fingers until its hand lets go, preshaping from the shape the pose gave the hand (begun the same frame as the pose, it finds the hand not yet shaped and sets out from it as it is; the pose's shape comes once the grab lets go). A person's `stagger` has its feet step apart
  * fore and aft, and hold there until the pose ends, then square up as a cut-off walk does (a step or a few, in up to about 3 s); `hold` then counts from their settling.
  */
 export function pose(body: Body, posture: Posture, options: PoseOptions = {}): Verb {
@@ -52,8 +52,6 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   if (until !== undefined && hold !== undefined) throw new Error('pose: give `until` or `hold`, not both');
   if (hold !== undefined && !(hold >= 0 && hold < Infinity)) throw new Error(`pose: a hold of ${hold} s`);
   return verb(body, 'pose', (request) => function* () {
-    // (the fingers asked at once, as it begins: a grab begun with it sets the hand out from its shape)
-    for (const { side, shape, state } of shapes) state.ask(side, shape);
     const posedArms = armPose ? SIDES.flatMap((side) => {
       const arm = arms?.[side];
       return arm ? [{ side, into: armPose[side], arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];

@@ -289,12 +289,11 @@ describe('fingers', () => {
     expect(under.near).toBeLessThan(1);
     expect(under.after).toBeGreaterThan(1.5);
     expect(over.near).toBeGreaterThan(1.5);
-    // (begun with the grab, the pose listed first sets the shape the hand sets out in, as one begun before it does: not relaxed, 0.6)
+    // (a pose begun before it sets the hand out in its shape; one begun with it has not shaped the hand yet, which sets out as it is, not
+    // closing toward the pose's 1.75 only to open again as it comes near, and takes the pose's shape once it lets go)
     expect(under.early).toBeGreaterThan(1.2);
-    expect(together.early).toBeGreaterThan(1.2);
-    // (and opened from it by the grab's preshape as the hand comes near: less far along than a pose begun 0.6 s before, 0.84–1.00 rad at
-    // life seed offsets 0–7, the pose's own 1.75 untouched)
-    expect(together.near).toBeLessThan(1.2);
+    expect(together.early).toBeLessThan(1);
+    expect(together.near).toBeLessThan(1);
     expect(together.after).toBeGreaterThan(1.5);
   });
 
