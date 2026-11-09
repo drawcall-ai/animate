@@ -210,4 +210,23 @@ describe('a person on a floor', () => {
     expect(body.position.y).toBeCloseTo(0.6, 9);
     expect(body.log).toEqual([]);
   });
+
+  // (as the throne room's Leia comes to Han: from a metre back on the dais, across it and round to face down the flight, onto a mark 0.2 m
+  // from its edge — a closing step put down a tread below, past the mark, is further below the hip held over the top than the leg reaches)
+  it('walks onto a mark near the top of a flight, facing down it, every step on the top', () => {
+    const top = THRONE.start + (THRONE.count - 1) * THRONE.tread, height = THRONE.count * THRONE.rise;
+    const body = person({ dev: true, floor: flight, at: new Vector3(0, height, top + 1), face: 0.68 }), h = insides(body);
+    let done = false, lowest = Infinity;
+    play(function* () {
+      done = yield* walkTo(body, new Vector3(0.6, height, top + 0.2), { face: Math.PI, speed: 0.7 });
+    }, [body], 8, () => {
+      h.stepper?.legs.forEach((leg, i) => {
+        if (leg.landed) for (const p of solePoints(h.proportions, h.pose, SIDES[i])) lowest = Math.min(lowest, flight(p.x, p.z));
+      });
+      return done && body.settled;
+    });
+    expect(done).toBe(true);
+    expect(lowest).toBe(height);
+    expect(body.log).toEqual([]);
+  });
 });

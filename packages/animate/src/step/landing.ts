@@ -47,9 +47,15 @@ export function landing(stepper: Stepper, leg: Leg, remaining: number): [Vector3
   steady(stepper, leg, remaining, to, turned, side, speed);
   const yaw = heading + leg.sign * toeOut, across = uncross(stepper, leg, to, side);
   const w = leg.swing, balance = stepper.floor === FLAT ? undefined : balanced(stepper, leg, remaining, yaw), { contact } = input;
-  const keeps = contact
-    ? (at: Readonly<Vector3>) => inRange(stepper, leg, contact, stepper.floor(at.x, at.z) + feet.ankleHeight) && (!balance || balance(at))
-    : balance;
+  // (and within its leg's reach: on physics' support, of the range it has from there; in physics' flight, which holds the hip, anywhere;
+  // else of the hip held as a landing holds it, gone on as the ground climbs — kept by balance alone, a closing step on a dais was put down
+  // off its edge, 0.3 m past its mark onto the tread below, 16 cm further below the hip than the leg reaches)
+  const reaches = (at: Readonly<Vector3>) => {
+    const ankle = stepper.floor(at.x, at.z) + feet.ankleHeight;
+    if (contact) return inRange(stepper, leg, contact, ankle);
+    return input.flight || stepper.holding + input.climb * remaining + (feet.legs[leg.i].up ?? 0) - ankle <= st.reach * lengthOf(stepper, leg);
+  };
+  const keeps = (at: Readonly<Vector3>) => reaches(at) && (!balance || balance(at));
   const { onto, stays } = keptTo(input, w);
   return [foothold(stepper.floor, feet, leg.i, to, yaw, keeps, onto, stays), yaw, across];
 }
