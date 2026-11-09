@@ -1,6 +1,6 @@
 import type { LogEntry } from '@drawcall/animate';
 import { SCENARIOS } from '../src/scenarios/index';
-import { knownFailure, run, seeded } from './run';
+import { run, seeded } from './run';
 
 /** Prints the scenario's log (and those of `vary` seeded variations of its people), its worst problems first. */
 export function main(id: string, options: { vary: number; json: boolean }): boolean {
@@ -11,8 +11,8 @@ export function main(id: string, options: { vary: number; json: boolean }): bool
   if (options.json) console.log(JSON.stringify(logs));
   else logs.forEach((log, i) => {
     console.log(`${id}${i ? ` #${i}` : ''}: ${log.length ? `${log.length} entries` : 'clean log'}`);
-    for (const e of [...log].sort((a, b) => score(b) - score(a))) console.log(`  ${e.check}${knownFailure(e) ? ' (known)' : ''}: ${e.worst.toPrecision(3)} > ${e.limit} @${e.time.toFixed(2)}s ${e.where} [${e.beat || 'unlabelled'}] (${e.count})`);
+    for (const e of [...log].sort((a, b) => score(b) - score(a))) console.log(`  ${e.check}: ${e.worst.toPrecision(3)} > ${e.limit} @${e.time.toFixed(2)}s ${e.where} [${e.beat || 'unlabelled'}] (${e.count})`);
   });
-  return logs.some((log) => log.some((entry) => !knownFailure(entry)));
+  return logs.some((log) => log.length > 0);
 }
 const score = (e: LogEntry) => e.worst / Math.max(e.limit, 1e-3);

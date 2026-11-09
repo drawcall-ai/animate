@@ -163,7 +163,7 @@ describe('a person on a floor', () => {
   const walkedFlight = (way: string) => `climbs the throne room stairs ${way} at a stair pace: soles on the treads, toes over the nosings, a smooth rise`;
   const walkedAt = (speed: number) => `climbs them at ${speed} m/s asked too, a walk no faster than a stair pace on them`;
   // (marginal at this life seed: a touchdown at 0.1005 m/s, max 0.1)
-  const test = cases([[walkedFlight('down'), [3]], [walkedAt(1.3), [3]]]);
+  const test = cases([[walkedFlight('down'), /touchdown vertical speed/, [3]], [walkedAt(1.3), /touchdown vertical speed/, [3]]]);
   for (const [way, from, to] of [['up', 0, 6], ['down', 6, 0]] as const) test(walkedFlight(way), () => {
     const body = person({ dev: true, floor: flight, at: on(flight, from), face: from < to ? 0 : Math.PI });
     const walk = walked(body, flight, on(flight, to));

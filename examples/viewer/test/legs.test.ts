@@ -48,16 +48,17 @@ it('plays back creatures on driven roots, no person among them', () => {
 // joints no faster than a snap, a horse's walk in its lateral sequence, every foot down at the end and the dev log empty.
 const person = (brake: number) => { const body: Body = new Body(humanoid(PERSON), { dev: true, drive: scripted({ pace: 1.3, start: 1, brake }, () => body) }); return body; };
 const horseOn = (gait: 'walk' | 'trot', route: Route) => { const body: Body = new Body(horse(HORSE, gait), { dev: true, drive: scripted(route, () => body) }); return body; };
-/**
- * Open: a person's leg joints at 1.3 m/s reach a p99 of ~610 °/s (~600 stopping hard) against a ceiling of 500 (the gait's swing is
- * 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise.
- */
-const test = cases(['a person walking', 'a person stopping hard']
-  .map((name) => `${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`));
+const title = (name: string) => `${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`;
+const test = cases([
+  // Its leg joints reach a p99 of 573 °/s, ceiling 500 (the gait's swing is 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise.
+  [title('a person walking'), /joint speed/],
+  // A landing moves 7 mm past mid-swing as the root brakes in 0.5 s; it expects a landing frozen from there on.
+  [title('a person stopping hard'), /landing past mid-swing/],
+]);
 for (const [name, make] of [['a person walking', () => person(3)], ['a person stopping hard', () => person(0.5)], ['a horse walking', () => horseOn('walk', { pace: 1.6 })],
   ['a horse trotting, braking in 2 s', () => horseOn('trot', { pace: 3.7 })], ['a horse trotting, braking in 3 s', () => horseOn('trot', { pace: 3.7, brake: 3 })],
   ['a horse walking a 3 m turn', () => horseOn('walk', { pace: 1.6, radius: 3 })]] as const) {
-  test(`${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`, () => {
+  test(title(name), () => {
     const body = make(), chains = body.species.legs?.chains, proportions = body.species.person;
     const sole = (leg: number) => proportions ? solePoints(proportions, poseOf(body), leg ? 'right' : 'left')
       : [chains![leg].heel, chains![leg].toe].map((at) => poseOf(body).point(chains![leg].joints[chains![leg].joints.length - 1].bone, at, new Vector3()));
@@ -86,11 +87,11 @@ for (const [name, make] of [['a person walking', () => person(3)], ['a person st
     expect(ground).toBeLessThan(1e-5);
     // (a person's planted foot stays put; a hoof pivots in place as the body turns — the user's decision, 2026-10-20 — by under a mm a sub-step)
     expect(pivot).toBeLessThan(proportions ? 1e-5 : 1e-3);
-    expect(drift).toBe(0);
+    expect(drift, 'landing past mid-swing').toBe(0);
     expect(outOfRange).toBeLessThan(1e-6);
     expect(landings.length).toBeGreaterThan(10);
     expect(legsOf(body).every((leg) => !leg.swing)).toBe(true);
-    expect(speeds[Math.floor(speeds.length * 0.99)]).toBeLessThan(proportions ? 500 : 800);
+    expect(speeds[Math.floor(speeds.length * 0.99)], 'p99 joint speed').toBeLessThan(proportions ? 500 : 800);
     expect(body.log).toEqual([]);
     // (Hildebrand's lateral sequence: left hind, left fore, right hind, right fore — the chains fore-left, fore-right, hind-left, hind-right)
     if (name === 'a horse walking') {

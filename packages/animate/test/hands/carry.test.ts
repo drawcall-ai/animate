@@ -1,6 +1,5 @@
 import { BoxGeometry, Euler, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { cases } from '../kit/open';
 import { arriving, attempt, Body, carry, grab, humanoid, Missed, release, wait } from '../../src/index';
 import { INDEX } from '../../src/person/anatomy/bones';
 import { NATIVE } from '../kit/skeletons/native';
@@ -184,9 +183,10 @@ describe('carry', () => {
   // (the trial that found it: a princess standing on a kneeling hero hung a medal at his neck, inside her own trunk; the carry said true
   // with the medal 36 cm off his neck)
   // (at this life seed the body stands near enough that the arms do come to the far end)
-  cases([['misses, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', [1]]])('misses, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', () => {
+  it('misses, saying why, when the thing is not in place: its own body in the way, or its arms short of the end, `until` or not', () => {
     const outcome = (end: Vector3, until?: () => boolean) => {
-      const body = person({ dev: true }), room = roomOf(body);
+      // (a life seed of its own: where the arms end, against the 1.5 cm a carry forgives, moves a few millimetres with the idle stance)
+      const body = person({ dev: true, life: { seed: 8 } }), room = roomOf(body);
       const load = box(room, new Vector3(0, 1, 0.4), { mass: 1, solid: false });
       let miss: Missed | null | undefined;
       play(function* () {

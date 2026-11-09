@@ -24,8 +24,3 @@ export function run(scenario: Scenario, cast: CastOptions = {}): LogEntry[] {
   if (!sim.stage.done()) log.push({ time: sim.t, check: `${scenario.id}: scenario unfinished`, worst: 1, count: 1, limit: 0, where: scenario.id });
   return log;
 }
-
-/** VR's side-step is known not to finish: the body turns to walk rather than strafe, and comes under the head late. */
-export function knownFailure(entry: LogEntry): boolean {
-  return entry.check === 'vr: scenario unfinished';
-}

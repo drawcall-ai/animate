@@ -34,10 +34,15 @@ function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   expect(fails, fails.join('\n')).toEqual([]);
 }
 
-// VR still misses its controller targets; variation grids are exercised by dev.test.ts.
-const check = cases(['vr',
-  // (marginal at this life seed: arm swing peak acceleration 2.14 × the sinusoid's, max 2; step length asymmetry 0.08, max 0.05; the pelvis 2.006 cm off the feet's midpoint, max 2)
-  ['stroll', [3]], ['knight-arming', [3]], ['idle-life', [3]]]);
+// (variation grids are exercised by dev.test.ts)
+const check = cases([
+  // In the side-step the body turns to walk rather than strafe and comes under the headset late: 0.3 m past the lag its course allows at 12 s; it expects none past it.
+  ['vr', /head lag/],
+  // (marginal at this life seed: each past a bound it expects kept, by what it says)
+  ['stroll', /arm swing peak acceleration/, [3]], // 2.14 × the sinusoid's, max 2
+  ['knight-arming', /step length asymmetry/, [3]], // 0.08, max 0.05
+  ['idle-life', /pelvis off the feet/, [3]], // 2.006 cm off their midpoint, max 2
+]);
 for (const sc of SCENARIOS.filter((s) => !['legs-biped', 'legs-horse', 'dog-fetch', 'lion-run'].includes(s.id))) {
   check(sc.id, () => judged(sc));
 }

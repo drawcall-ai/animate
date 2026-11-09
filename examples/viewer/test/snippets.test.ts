@@ -47,7 +47,7 @@ function compiled(): Map<string, string[]> {
 const errors = compiled();
 for (const [name, found] of errors) it(`${name} compiles`, () => expect(found).toEqual([]), 120_000);
 
-cases([['runs the skill story headlessly to its checked ending', [2]]])('runs the skill story headlessly to its checked ending', () => { // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: 0.14 m at this life seed)
+cases([['runs the skill story headlessly to its checked ending', /XCoM/, [2]]])('runs the skill story headlessly to its checked ending', () => { // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: 0.14 m at this life seed)
   const main = blocks().find(({ code }) => code.includes('play(['));
   if (!main) throw new Error('The animate skill has no runnable example');
   const modules: Record<string, unknown> = {
