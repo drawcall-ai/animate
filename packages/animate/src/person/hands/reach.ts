@@ -59,7 +59,10 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
       return { ...goal, preferred: goal.quaternion !== undefined, velocity: goal.velocity ?? velocity };
     } };
   });
-  const middle = (f: Frame) => targets.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(targets.length);
+  const middleOf = (some: typeof targets) => (f: Frame) => some.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(some.length);
+  const middle = middleOf(targets);
+  // (the eyes on what does not ride with the body)
+  const seen = targets.filter(({ target }) => target(person.frame).carriedBy !== person), eyes = () => noticing(person, request, middleOf(seen), { own: !seen.length });
   const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   // (the verdict as its story ends it, moving or not: as near as a stopped hand counts as there)
   request.there = () => targets.every(({ side, target }) => closeTo(person.frame, person.hands[side], target(person.frame)));
@@ -103,7 +106,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
         if (Number.isNaN(setOff) && (plan === 'there' || (reachWalk && reachWalk.walk.eta <= NEAR))) setOff = f.time;
         return !Number.isNaN(setOff);
       };
-      if (!stalled) yield* parallel<Frame>('race', noticing(person, request, middle), function* () {
+      if (!stalled) yield* parallel<Frame>('race', eyes(), function* () {
         yield* parallel<Frame>('all', action<Frame>({ until: setsOff }), function* () {
           if (!reachWalk) return;
           yield* parallel<Frame>('race', function* () {
@@ -116,7 +119,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
       stuck(person.frame);
       if (arrived) request.met();
       if (arrived) yield* action<Frame>({ until: moved });
-      else if (stalled) yield* parallel<Frame>('race', noticing(person, request, middle), action<Frame>({ update: stuck, until: moved }));
+      else if (stalled) yield* parallel<Frame>('race', eyes(), action<Frame>({ update: stuck, until: moved }));
     }
   }, function* () {
     yield* action<Frame>({ until: () => !Number.isNaN(setOff) });

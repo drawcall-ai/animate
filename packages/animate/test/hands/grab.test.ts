@@ -338,3 +338,17 @@ describe('grip', () => {
     expect(body.holds(rod)).toBe(true);
   });
 });
+
+it('borrows no eyes for a thing on its own head', () => {
+  const body = person({ dev: true }), head = body.bones.head, hat = empty(head, 'hat', new Vector3(-0.15, 0.05, 0.1));
+  hat.userData.mass = 0.1;
+  grip(hat, 'brim', new Vector3(), {});
+  const start = head.getWorldQuaternion(new Quaternion());
+  let result: boolean | undefined, turned = 0;
+  play(function* () { result = yield* grab(body, hat, { right: 'brim' }); }, [body], 6, () => {
+    turned = Math.max(turned, head.getWorldQuaternion(new Quaternion()).angleTo(start));
+    return result !== undefined;
+  });
+  expect(result).toBe(true);
+  expect(turned).toBeLessThan(0.2);
+});

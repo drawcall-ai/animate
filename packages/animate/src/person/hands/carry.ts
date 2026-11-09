@@ -66,10 +66,9 @@ export function* carrying(person: Person, request: Request, thing: Thing, path: 
   // (the hands as brisk as the way is quick, in turning it as in moving it: `CARRYING` is a calm carry's, along its way at `ALONG.speed`)
   const brisk = paceAt(options.speed, { speed: ALONG.speed, accel: CARRYING.accel }).accel / CARRYING.accel;
   const guides = guidesFor(person, thing, { ...CARRYING, accel: CARRYING.accel * brisk, turnAccel: CARRYING.turnAccel * brisk, turnSpeed: CARRYING.turnSpeed * Math.sqrt(brisk) }, way.clear);
-  // (brought to a place on its own body, the eyes are not borrowed for it: that place rides with the body — a spot before the chest stood
-  // behind the eyes of a body bowed over what it lifts, the head turned back over its shoulder for it — and one on the head moves with them)
   const moving = () => along(person, request, thing, way, guides, resting, grasp, options.speed);
-  if (plan === 'there') yield* way.own ? moving() : parallel<Frame>('race', noticing(person, request, (f) => end(f).position), moving());
+  // (a spot before the chest stood behind the eyes of a body bowed over what it lifts, the head turned back over its shoulder for it: `noticing`'s `own`)
+  if (plan === 'there') yield* parallel<Frame>('race', noticing(person, request, (f) => end(f).position, { own: way.own }), moving());
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   passed.forEach((nearest, k) => {
     if (nearest > PASSED * person.scale) person.warn(`passed ${thing.object.name} ${way.names[k]}`, `a carry of "${thing.object.name}" came no nearer its ${way.names[k]} than ${(100 * nearest).toFixed(0)} cm, as far as the arms took it, and went on: if it must go that way, stand nearer first`);

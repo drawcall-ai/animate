@@ -22,9 +22,12 @@ export function inView(self: Self, point: Readonly<Vector3>, f: Frame): boolean 
   return Math.abs(wrapAngle(headingOf(point.x - com.x, point.z - com.z) - self.locomotion.facing)) < IN_VIEW;
 }
 
-/** Borrow gaze only once `seen` (default: target) is visible, unless `anyway` permits it sooner. */
-export function* noticing(self: Self, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean } = {}) {
-  yield* action<Frame>({ until: (f) => anyway?.() || inView(self, seen(f), f) });
+/**
+ * Borrow gaze only once `seen` (default: target) is visible, unless `anyway` permits it sooner — and never for a place on the body itself
+ * (`own`): that rides with the body, and one on the head moves as the head turns to it, so the look chases what it moves and the hands' goal with it.
+ */
+export function* noticing(self: Self, request: Request, target: (f: Frame) => Readonly<Vector3>, { seen = target, anyway, own = false }: { seen?: (f: Frame) => Readonly<Vector3>; anyway?: () => boolean; own?: boolean } = {}) {
+  yield* action<Frame>({ until: (f) => !own && (anyway?.() || inView(self, seen(f), f)) });
   yield* during(request, 'look', 'borrowed', looking(self, target, { motion: SHIFT }));
 }
 

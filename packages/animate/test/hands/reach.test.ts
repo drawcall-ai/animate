@@ -307,3 +307,16 @@ describe('what no stand reaches', () => {
     expect(top).toBeGreaterThan(jaw.y + 0.05);
   });
 });
+
+it('borrows no eyes for a place on its own head: the head stays, the hand gets there', () => {
+  const body = person({ dev: true }), head = body.bones.head, spot = empty(head, 'spot', new Vector3(-0.25, 0.05, 0.1));
+  const start = head.getWorldQuaternion(new Quaternion());
+  let result: boolean | undefined, turned = 0;
+  play(function* () { result = yield* reach(body, { right: spot }, { step: false }); }, [body], 6, () => {
+    turned = Math.max(turned, head.getWorldQuaternion(new Quaternion()).angleTo(start));
+    return result !== undefined;
+  });
+  expect(result).toBe(true);
+  expect(turned).toBeLessThan(0.2);
+  expect(body.log).toEqual([]);
+});
