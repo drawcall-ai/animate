@@ -69,7 +69,7 @@ describe('a hand on what a grip declares', () => {
     const from = new Quaternion();
     let carrying = false, most = 0, turned = 0;
     play(function* () {
-      yield* grab(body, rod, { left: 'grip' }, { step: false, speed: Infinity });
+      yield* grab(body, rod, { left: 'grip' }, { already: true });
       yield* wait(1);
       if (later) digit();
       from.copy(turnIn());
@@ -152,7 +152,7 @@ describe('a hand on what a grip declares', () => {
     const from = new Quaternion();
     let carrying = false, carried = false, most = 0, turned = 0, off = Infinity;
     play(function* () {
-      yield* grab(body, rod, { left: 'grip' }, { step: false, speed: Infinity });
+      yield* grab(body, rod, { left: 'grip' }, { already: true });
       yield* wait(1);
       from.copy(rod.quaternion);
       carrying = true;

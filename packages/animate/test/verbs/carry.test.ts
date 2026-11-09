@@ -250,7 +250,7 @@ describe('release', () => {
     for (const [name, x] of [['left', 0.2], ['right', -0.2]] as const) Object.assign(empty(rail, name, new Vector3(x, 0, 0)).userData, { handle: [1, 0, 0], radius: 0.02 });
     room.updateMatrixWorld(true);
     play(function* () {
-      yield* grab(body, rail, BOTH, { step: false, speed: Infinity });
+      yield* grab(body, rail, BOTH, { already: true });
       yield* wait(0.5);
       release(body, { left: rail });
     }, [body], 1);

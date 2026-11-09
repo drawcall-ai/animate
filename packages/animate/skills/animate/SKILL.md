@@ -68,7 +68,7 @@ if (giver.log.length || receiver.log.length) throw new Error(JSON.stringify([...
 
 In an app the story runs on `runTimeline` instead, its step called each frame before each body's `update`; `play` is that loop headless, for verification.
 
-Write each beat as a `function* (…): Verb` that takes the bodies and things it acts on, and work out marks that depend on where bodies stand when the beat reaches them. `parallel('race', …)` returns what the winning branch returned and `'all'` returns `false` if any branch did; a `Missed` in a branch ends the `parallel`, so `attempt` takes one round it too. To start a beat already holding something, `grab` it with `speed: Infinity` as the story starts.
+Write each beat as a `function* (…): Verb` that takes the bodies and things it acts on, and work out marks that depend on where bodies stand when the beat reaches them. `parallel('race', …)` returns what the winning branch returned and `'all'` returns `false` if any branch did; a `Missed` in a branch ends the `parallel`, so `attempt` takes one round it too. To start a beat already holding something, `grab` it with `already: true` as the story starts.
 
 ## Choosing a verb
 

@@ -105,12 +105,12 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
 }
 
 /**
- * The hands on their grips at once, as the body starts (`grab`'s `speed: Infinity`): each arm posed onto its grip as if it had always
+ * The hands on their grips at once, as the body starts (`grab`'s `already`): each arm posed onto its grip as if it had always
  * held it — its history the same, so nothing reads the jump as motion — and a loose thing with a mass taken up where it is. A grip beyond
  * the arm's reach from where the body stands fails it.
  */
 export function* grabAtOnce(person: Person, request: Request, takes: readonly HandPlan[]) {
-  if (person.updates > 0) throw new Error('grab: `speed: Infinity` takes hold at once only as a body starts (in its first update): a body already shown reaches for it');
+  if (person.updates > 0) throw new Error('grab: `already` holds it only as a body starts (in its first update): a body already shown reaches for it');
   const f = person.frame, reach = ARM_REACH * person.proportions.armLength;
   for (const take of takes) {
     const short = person.pose.position(INDEX[`${take.side}UpperArm`]).distanceTo(gripAt(person, take, f)) - reach;

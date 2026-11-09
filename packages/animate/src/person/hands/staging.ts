@@ -29,7 +29,7 @@ export function personHands(person: Person): HandStaging {
         person.fingers?.toward(take.side, take.placement);
       }
       try {
-        if (options.speed === Infinity) {
+        if (options.already) {
           yield* grabAtOnce(person, request, takes);
           return request.met();
         }

@@ -13,9 +13,7 @@ export interface HandOptions {
    * how fast (m/s): `grab` and `reach`, the hands' top speed (default the time a calm reach that far takes, Fitts'); `carry`, the thing's
    * mean speed along its way (default a calm 0.5; a transfer walked somewhere goes at the walk's pace). Faster than calm (a person's hand
    * 1.5, a carry 0.5, a creature's 1), the movement is the calm one sped up, its acceleration growing with the speed squared; slower, it
-   * sets off and stops as briskly as a calm one. `grab` alone takes `Infinity`: the hands there at once, for a person that starts a story
-   * already holding the thing — only in the body's first update (the arms posed as if they had always held it, which a body already shown
-   * cannot be: later it throws), the grips within its arms' reach from where it stands
+   * sets off and stops as briskly as a calm one
    */
   speed?: number;
   /** whether the body may walk up to stand in reach (default true); false keeps its feet where they stand, turning, bowing, crouching and
@@ -24,6 +22,13 @@ export interface HandOptions {
   /** ends on this instead of arriving (`grab`: instead of holding), `true` if there as it ends, else `false`; a target that moves is
    * followed until then. What cannot get there still throws `Missed`: a hand off a target standing still, a carry held off its end */
   until?: Until;
+}
+
+/** How a `grab` goes. */
+export interface GrabOptions extends HandOptions {
+  /** a person starts its story already holding the thing, the hands there at once, not a `speed`: only in the body's first update (the arms
+   * posed as if they had always held it, which a body already shown cannot be: later it throws), the grips within its arms' reach from where it stands */
+  already?: boolean;
 }
 
 /** where a carried path ends, followed as its frame moves it: a thing has come to rest there once within 5 mm of it (or as near as its
@@ -51,7 +56,7 @@ type Handwork = NonReuseableTimeline<Frame>;
 /** Species-specific hand staging for the shared verbs. */
 export interface HandStaging {
   /** each named hand takes hold of `thing` by its grip, the body walking up for them if it must and may; a loose thing with a mass is lifted clear */
-  take(request: Request, thing: Thing, grips: readonly { hand: string; grip: string }[], options: HandOptions): Handwork;
+  take(request: Request, thing: Thing, grips: readonly { hand: string; grip: string }[], options: GrabOptions): Handwork;
   /** the hands holding `thing` bring it through `points` (each a sub-step at a time; the last sets its turn), in to `end` (an empty) by its approach, and keep it there */
   bring(request: Request, thing: Thing, points: readonly ((f: Frame) => Goal)[], end: Object3D | null, options: HandOptions): Handwork;
   /** each named hand reaches its target, taking nothing, and stays on it */

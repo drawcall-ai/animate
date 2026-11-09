@@ -6,7 +6,8 @@ import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
 import { letGo } from '../body/let-go';
-import type { HandOptions } from '../body/hand-staging';
+import type { GrabOptions } from '../body/hand-staging';
+import { personOf } from './person-of';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
@@ -21,13 +22,14 @@ import type { HandOptions } from '../body/hand-staging';
  * once the planned reach is over (or is still off it four seconds on), or if a pad a facing fixes has not come within 1 cm of its grip by the
  * time its turn is made up (up to 0.4 s after it touches: the grab waits for that). What each empty asks of the hand (`grip`) is fixed as the
  * grab starts, within what its grip leaves free, from where the body stands, and the hand keeps it on the thing while it holds it. Given
- * `until`, it returns `true` if every hand holds its grip as that ends, else `false`.
+ * `until`, it returns `true` if every hand holds its grip as that ends, else `false`. With `already`, a person's story starts holding it (`GrabOptions`).
  */
-export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: HandOptions = {}): Verb {
+export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
   if (!named.length) throw new Error('grab: name a grip for a hand');
-  if (options.speed !== undefined && !(options.speed > 0)) throw new Error(`grab: a speed of ${options.speed}`);
-  if (options.speed === Infinity && !body.species.person) throw new Error('grab: `speed: Infinity` is a person’s');
+  if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`grab: a speed of ${options.speed}`);
+  if (options.already && options.speed !== undefined) throw new Error('grab: already holding it, the hands have no way to go at a `speed`: give one or the other');
+  if (options.already) personOf(body, 'grab already');
   return verb(body, 'grab', (request) => function* () {
     const self = selfOf(body), held = Thing.of(thing), on = bodyOf(thing), hands = Object.keys(self.hands);
     for (const { hand } of named) if (!hands.includes(hand)) throw new Error(`grab: a ${body.species.name ?? 'custom species'} has no hand "${hand}", only ${hands.join(', ') || 'none'}`);

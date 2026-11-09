@@ -227,7 +227,7 @@ it('a reach takes an object\'s turn only as far as the wrist goes, and is there;
 });
 
 // (the trial that asked for it: a bearer who had to be seen picking both medals up, 9 s of the beat, to start it holding them)
-describe('grab at once (speed: Infinity)', () => {
+describe('grab already', () => {
   const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
 
   it.each(BODIES)('starts the body holding a cushion before it in both hands, as if it always had: %s', (_name, make) => {
@@ -237,7 +237,7 @@ describe('grab at once (speed: Infinity)', () => {
     const cushion = box(room, at, { size: new Vector3(0.36, 0.06, 0.24).multiplyScalar(scale), mass: 0.5, name: 'cushion' });
     let took: boolean | null = null, first = NaN, fastest = 0, last: Vector3 | null = null;
     play(function* () {
-      took = yield* grab(body, cushion, BOTH, { speed: Infinity });
+      took = yield* grab(body, cushion, BOTH, { already: true });
       yield* wait(3);
     }, [body], 3, (time) => {
       if (Number.isNaN(first) && body.holds(cushion)) first = time;
@@ -261,7 +261,7 @@ describe('grab at once (speed: Infinity)', () => {
     room.add(thing);
     room.updateMatrixWorld(true);
     let took: boolean | null = null;
-    const step = runTimeline(function* () { took = yield* grab(body, thing, { right: 'right' }, { speed: Infinity }); });
+    const step = runTimeline(function* () { took = yield* grab(body, thing, { right: 'right' }, { already: true }); });
     for (let k = 0; k < 12; k++) {
       const seconds = k === 0 ? first : dt;
       step(undefined, seconds);
@@ -274,13 +274,16 @@ describe('grab at once (speed: Infinity)', () => {
     const far = person({ dev: true }), room = roomOf(far);
     const thing = box(room, new Vector3(0, 1, 1.5), { mass: 0.5 });
     let miss: Missed | null = null;
-    play(function* () { miss = yield* attempt(grab(far, thing, BOTH, { speed: Infinity })); }, [far], 0.5);
+    play(function* () { miss = yield* attempt(grab(far, thing, BOTH, { already: true })); }, [far], 0.5);
     expect(miss).toMatchObject({ verb: 'grab', why: expect.stringContaining('beyond the arm\'s reach') });
     const shown = person(), near = box(roomOf(shown), new Vector3(0, 1, 0.35), { mass: 0.5 });
     run(shown, 0.1);
-    expect(() => play(function* () { yield* grab(shown, near, BOTH, { speed: Infinity }); }, [shown], 0.1)).toThrow('only as a body starts');
+    expect(() => play(function* () { yield* grab(shown, near, BOTH, { already: true }); }, [shown], 0.1)).toThrow('only as a body starts');
     const pup = new Body(dog(DOG));
-    expect(() => grab(pup, near, { jaw: 'left' }, { speed: Infinity })).toThrow('a person’s');
+    expect(() => grab(pup, near, { jaw: 'left' }, { already: true })).toThrow(/^grab already: for a person/);
+    // (a speed is no way of saying it, and none goes with it)
+    expect(() => grab(shown, near, BOTH, { speed: Infinity })).toThrow('grab: a speed of Infinity');
+    expect(() => grab(shown, near, BOTH, { already: true, speed: 2 })).toThrow('give one or the other');
   });
 });
 
