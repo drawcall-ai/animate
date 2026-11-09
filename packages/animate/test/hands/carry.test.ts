@@ -1,5 +1,5 @@
 import { parallel } from '@pmndrs/timeline';
-import { Body, dog, arriving, attempt, carry, grab, grip, humanoid, lookAt, Missed, release, sit, stand, wait, reach } from '../../src/index';
+import { Body, dog, arriving, attempt, carry, grab, grip, humanoid, lookAt, Missed, release, sit, stand, wait, reach, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { BoxGeometry, Group, Mesh, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
@@ -96,6 +96,19 @@ describe('carry', () => {
 });
 
 describe('release', () => {
+  it('leaves what a body in no scene lifted under what it was lifted from, not riding the body', () => {
+    const body = person(), table = new Group(), load = box(table, new Vector3(0, 1, 0.42), { solid: false, name: 'load' });
+    let left = new Vector3();
+    play(function* () {
+      yield* grab(body, load, BOTH);
+      release(body, load);
+      left = worldOf(load);
+      yield* walkTo(body, new Vector3(0, 0, -3));
+    }, [body], 10);
+    expect(load.parent).toBe(table);
+    expect(worldOf(load).distanceTo(left)).toBeLessThan(1e-6);
+  });
+
   it('leaves a fixed rail where it is as one of the hands on it lets go', () => {
     const body = person({ dev: true }), room = roomOf(body), rail = new Group();
     rail.position.set(0, 1, 0.35);

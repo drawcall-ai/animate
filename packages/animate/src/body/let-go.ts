@@ -47,9 +47,10 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
     if (carried) take(self, thing);
   } else if (holder) take(holder, thing);
   else {
-    // (a thing lifted is left in the world where it is, under the scene's root; one never lifted — a button, a part still in its place —
-    // stays where it is)
-    if (thing.lifted) attach(thing, topOf(object));
+    // (a thing lifted is left in the world where it is, under the scene's root — a body in no scene is its own root: under what it was lifted
+    // from, or it would ride the body; one never lifted — a button, a part still in its place — stays where it is)
+    const room = topOf(object);
+    if (thing.lifted) attach(thing, room === self.object ? thing.liftedFrom ?? room : room);
     if (!bodyOf(object)) thing.lifted = false;
   }
   return { motion, miss: null };

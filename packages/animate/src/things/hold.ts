@@ -141,6 +141,7 @@ function placeUnder(reader: Self, object: Object3D, parent: Object3D, position: 
 export function lift(self: Self, thing: Thing): void {
   // (its motion tracked from where it stood, before it hangs from the hand)
   if (thing.object.parent && !thing.lifted) self.movingFrameOf(thing.object);
+  if (!thing.lifted) thing.liftedFrom = thing.object.parent;
   thing.lifted = true;
   take(self, thing);
 }
