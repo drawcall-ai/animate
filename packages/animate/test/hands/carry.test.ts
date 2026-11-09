@@ -274,7 +274,7 @@ it('walks on with what the arm cannot hold at its carrying place, and ends', () 
 
 describe('set down low', () => {
   // (from a stand with its knees let down as far as they need to, its bow capped by what it holds; a grab of the same place had always reached it)
-  it.each<[number, number, number]>([[2, 0.3, 0.45], [2, 0.2, 0.45], [2, 0.05, 0.45], [8, 0.3, 1.5], [8, 0.05, 1.5]])('%f kg in both hands to %f m up, %f m ahead', (mass, y, z) => {
+  it.each<[number, number, number]>([[2, 0.3, 0.45], [2, 0.2, 0.45], [2, 0.05, 0.45], [8, 0.3, 1.5], [8, 0.05, 1.5], [5, 0.3, 3], [12, 0.3, 0.6], [25, 0.5, 3]])('%f kg in both hands to %f m up, %f m ahead', (mass, y, z) => {
     const body = person(), room = roomOf(body), load = box(room, new Vector3(0, 1, 0.4), { mass, solid: false }), spot = empty(room, 'spot', new Vector3(0, y, z));
     let carried: boolean | null = null;
     play(function* () {
