@@ -42,7 +42,7 @@ export function landing(stepper: Stepper, leg: Leg, remaining: number): [Vector3
   const to = chord && past
     ? new Vector3().copy(r.position).add(chord).addScaledVector(forward, Math.max(0, past.dot(forward)))
     : new Vector3().copy(r.position).addScaledVector(r.velocity, remaining + landAhead);
-  to.addScaledVector(side, leg.sign * widthAt(stepper, input, speed)).addScaledVector(forward, sitting + homeOf(stepper, leg));
+  to.addScaledVector(side, leg.sign * widthAt(stepper, input, speed)).addScaledVector(forward, sitting + homeOf(stepper, leg, to, forward));
   if (forecast && then) bend(stepper, forecast, remaining + landAhead, then.position, to);
   steady(stepper, leg, remaining, to, turned, side, speed);
   const yaw = heading + leg.sign * toeOut, across = uncross(stepper, leg, to, side);

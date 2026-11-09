@@ -28,13 +28,20 @@ export function legReach(stepper: Stepper, leg: Leg, given?: Vector3): number {
 }
 
 export function lengthOf(stepper: Stepper, leg: Leg): number { return stepper.feet.legs[leg.i].length ?? stepper.feet.length; }
-export function homeOf(stepper: Stepper, leg: Leg): number { return (stepper.feet.legs[leg.i].home ?? 0) + (stepper.stagger?.[leg.i] ?? 0); }
+/** how far ahead along `forward` of root `at` a foot's home is, past its `sitting` (m): its build's, put ahead as staggered — standing,
+ * about where the feet stood as the stagger began, not about the root settling over them */
+export function homeOf(stepper: Stepper, leg: Leg, at: Readonly<Vector3>, forward: Readonly<Vector3>): number {
+  const { staggeredAt, feet } = stepper, home = (i: number) => feet.legs[i].home ?? 0;
+  const about = staggeredAt ? _h.subVectors(staggeredAt, at).setY(0).dot(forward) - stepper.input.sitting - feet.legs.reduce((sum, _, i) => sum + home(i), 0) / feet.legs.length : 0;
+  return home(leg.i) + (stepper.stagger?.[leg.i] ?? 0) + about;
+}
 
 /** a foot's home `ahead` s on: where its leg sets it off the root as the root goes, the stance's width out */
 export function home(stepper: Stepper, leg: Leg, ahead: number, out: Vector3): Vector3 {
   const { r, yaw, width, sitting } = stepper.input;
   const root = r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead);
-  return root.addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forwardOf(yaw), sitting + homeOf(stepper, leg)).setY(stepper.feet.ankleHeight);
+  const forward = forwardOf(yaw, _hf);
+  return root.addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forward, sitting + homeOf(stepper, leg, root, forward)).setY(stepper.feet.ankleHeight);
 }
 
 /** how far a foot is from its home `ahead` s on (m): on a floor that is not level, from where that home fits onto it (a foot that cannot go
@@ -64,7 +71,7 @@ export function staysOn(stepper: Stepper, level: number, ahead: number): boolean
 }
 /** Tuned (m, default body): a root going no further than this as a foot lands steps it where it stands (a stair's tread is ~0.25–0.45) */
 const IN_PLACE = 0.15;
-const _stay = new Vector3();
+const _stay = new Vector3(), _h = new Vector3(), _hf = new Vector3();
 
 /** a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends */
 function rolled(stepper: Stepper, leg: Leg): number {
