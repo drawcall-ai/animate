@@ -237,6 +237,22 @@ describe('a target taken out of the scene', () => {
     expect(load.getWorldPosition(new Vector3()).distanceTo(new Vector3(0, 1.2, 0.5))).toBeLessThan(0.02);
   });
 
+  it('off what it hangs from, the body in no scene: said once, and walked to where it last was', () => {
+    const body = person(), furniture = new Group();
+    furniture.position.set(3, 0, 0);
+    const spot = empty(furniture, 'spot', new Vector3(0, 0, 3));
+    let ended: boolean | null = null;
+    const lines = told(() => play(body, function* () {
+      yield* parallel('all', function* () { ended = yield* walkTo(body, spot); }, function* () {
+        yield* wait(1);
+        furniture.remove(spot);
+      });
+    }, { limit: 12 }));
+    expect(lines).toEqual([expect.stringMatching(/target "spot" was taken out of the scene/)]);
+    expect(ended).toBe(true);
+    expect(body.position.distanceTo(new Vector3(3, 0, 3))).toBeLessThan(0.05);
+  });
+
   it('a release onto one left outside the scene says the thing went with it', () => {
     const { body, load, furniture, spot } = inGroup();
     const lines = told(() => play(body, function* () {
