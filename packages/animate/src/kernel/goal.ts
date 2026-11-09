@@ -43,8 +43,8 @@ export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
 
 /** how long after a hand's planned arrival an unmet position or turn misses (s) */
 export const REACHING = 4;
-/** what reaching a goal allows: m, rad, m/s */
-export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };
+/** what reaching a goal allows: m, rad, m/s; and how near a tip that has stopped short counts as there (m: on a goal riding a swaying body it never stands still within `distance`), past which it missed */
+export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05, close: 0.015 };
 
 /** a point moving with bone `bone` of a body (`offset` from it, turned by `turn`), its velocity read off where it was a sub-step before */
 export function movingPoint(person: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Goal, turn: () => Quaternion) {

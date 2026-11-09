@@ -10,7 +10,7 @@ const test = cases([
   ['stable-morning on the soldier: final-pose dev checks', [1]], // XCoM 0.107 m for a sub-step as the carry's trailing foot lifts.
   'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
   // XCoM 0.104–0.110 m for a moment walking at 1.56 m/s: no speed-up clears it at every seed (at speed-ups of 1.2, 1.31, 1.45, 1.6, 1.73 m/s²: seed 2 over at 1.45, seed 0 at 1.6).
-  ['reach: faster final-pose dev checks', [0, 2]],
+  ['reach: faster final-pose dev checks', [2]],
 ]);
 for (const scenario of SCENARIOS) {
   const bodies = [{ on: '', skeleton: undefined },

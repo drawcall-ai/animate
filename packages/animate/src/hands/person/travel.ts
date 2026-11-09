@@ -3,7 +3,7 @@ import type { Placement } from '../../kernel/goal';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { Carrier } from '../../kernel/carrier';
-import { type Live, type Goal } from '../../kernel/goal';
+import { REACHED, type Live, type Goal } from '../../kernel/goal';
 import { loadFactor } from '../../kernel/load';
 import { course, type Waypoint } from '../../kernel/course';
 import { during, type Request } from '../../kernel/requests';
@@ -25,7 +25,7 @@ import type { Guide, Guides } from './guide';
 /** the longest a carried thing takes to come to rest at its course's end once it is over, unless told (s) */
 const RESTING = 2;
 /** how long a carried thing stands still (within `moved`, m) short of its end to be as near as the arms take it, and how near it then is there (`close`, m) */
-export const STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: 0.015, turn: 0.15 };
+export const STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: REACHED.close, turn: 0.15 };
 /** how far off its place (m) the fingers seat a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
  * push or draw what they hold without the hand moving */
 const SEATS = 0.03;

@@ -40,8 +40,7 @@ export function* approach(person: Reacher, request: Request, takes: readonly Tak
   })));
   const until = (ready: (f: Frame) => boolean) => (f: Frame) => {
     request.eta = Math.max(0, ends - f.time);
-    if (ready(f)) return true;
-    late(f, ends);
+    if (ready(f) || late(f, ends)) return true;
     // (a wrist on its goal, its pad still off the grip: nothing `late` judges)
     const off = f.time > ends + REACHING ? takes.find((take) => exact(take) && !touching(person, take, f)) : undefined;
     if (off) {

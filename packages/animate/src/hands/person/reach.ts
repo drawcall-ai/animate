@@ -78,6 +78,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
     if (targets.some(({ target }) => target(f).velocity!.length() > REACHED.speed)) stirred = f.time;
     return f.time - stirred < STILL;
   };
+  let close = false;
   const late = lateWatch(person, request, targets.map(({ side, target }) => ({ side, goal: target, where: side })));
   const eta = (f: Frame) => {
     // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
@@ -85,7 +86,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
     if (stepping(person)) setOff += f.dt;
     request.eta = Math.max(0, setOff + lasts - f.time);
     moving(f);
-    late(f, Math.max(setOff, stirred) + lasts);
+    close = late(f, Math.max(setOff, stirred) + lasts);
   };
   yield* parallel<Frame>('all', function* () {
     for (;;) {
@@ -107,7 +108,7 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
             stalled = yield* walking(request, walkUp, Math.max(0, lasts - NEAR));
           }, action<Frame>({ until: moved }));
         });
-        if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = there(f)) });
+        if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = close || there(f)) });
       });
       const stuck = (f: Frame) => { if (stalled && !moving(f)) request.fail(stalled); };
       stuck(person.frame);
@@ -124,24 +125,30 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
  * A reach's lateness, watched each sub-step against when it was planned to end (`ends`, s): past it, a hand off its goal that has
  * stopped closing on it makes the reach late at once, one still moving `REACHING` s on — the reach missed if a hand
  * is off its goal. While the legs are still stepping or settling under the hands, each is watched afresh: the body carrying a hand past
- * its goal and back is not the hand's own lack of progress.
+ * its goal and back is not the hand's own lack of progress. Returns whether every hand has stopped as near as counts as there.
  */
 export function lateWatch(person: Reacher, request: Request, hands: readonly { side: Side; goal: (f: Frame) => Goal; on?: () => Carrier; where: string }[]) {
   const progress = hands.map(() => new Progress());
-  let late = false;
-  return (f: Frame, ends: number) => {
+  let late = false, close = false;
+  const within = (f: Frame) => hands.every(({ side, goal, on }) => {
+    const off = unmet(f, person.hands[side], goal(f), on?.());
+    return off.distance <= REACHED.close && off.angle <= REACHED.angle;
+  });
+  return (f: Frame, ends: number): boolean => {
+    if (close) return within(f);
     if (!person.locomotion.settled) progress.forEach((hand) => hand.reset());
-    if (late || f.time <= ends) return;
+    if (late || f.time <= ends) return false;
     const stopped = hands.some(({ side, goal, on }, k) => {
       const off = unmet(f, person.hands[side], goal(f), on?.());
       return (off.distance > REACHED.distance || off.angle > REACHED.angle) && progress[k].stopped(f, off);
     });
-    if (!stopped && f.time <= ends + REACHING) return;
+    if (!stopped && f.time <= ends + REACHING) return false;
     late = true;
     for (const { side, goal, on, where } of hands) {
       const miss = lateReach(f, person.hands[side], goal(f), where, on?.(), limitOf(person, side));
       if (miss) request.fail(miss);
     }
+    return close = stopped && within(f);
   };
 }
 
