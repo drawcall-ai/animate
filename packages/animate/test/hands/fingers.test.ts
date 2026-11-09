@@ -1,5 +1,6 @@
 import { Bone, BoxGeometry, CylinderGeometry, Float32BufferAttribute, InstancedMesh, Line3, Matrix4, Mesh, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, TorusGeometry, Uint16BufferAttribute, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
+import { parallel } from '@pmndrs/timeline';
 import { attempt, Body, carry, grab, humanoid, Missed, pose, release, wait } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { FINGERED } from '../kit/skeletons/fingered';
@@ -249,6 +250,41 @@ describe('fingers', () => {
     expect(fisted).toBeGreaterThan(1.4);
     expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.8);
     expect(bent(body, 'leftIndexIntermediate')).toBeLessThan(0.8);
+  });
+
+  it('rest as a pose asks under a story, a grab pre-shaping over it and giving the hand back as it lets go; a pose begun after the grab keeps it', () => {
+    /** the index's bend as the wrist comes within 22 cm of the rod (`first`: which of the grab and the pose begins first), and 1 s after letting go */
+    const run = (first: 'pose' | 'grab') => {
+      const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+      const rod = new Mesh(new CylinderGeometry(0.025, 0.025, 0.3, 16));
+      rod.name = 'rod';
+      rod.userData.mass = 0.2;
+      rod.position.set(-0.25, 0.95, 0.35);
+      rod.rotation.x = Math.PI / 2;
+      Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [1, 0, 0] });
+      room.add(rod);
+      const resting = () => pose(body, { fingers: { right: { index: { curl: 0.9, hook: 0.5 } } } });
+      const take = function* () { if (!(yield* grab(body, rod, { right: 'grip' }, { step: false }))) throw new Error('not taken'); };
+      let near = NaN, after = 0, going = false;
+      play(function* () {
+        const taking = function* () {
+          going = true;
+          yield* take();
+          going = false;
+          release(body, rod);
+          yield* wait(1);
+          after = bent(body, 'rightIndexIntermediate');
+        };
+        yield* first === 'pose' ? parallel('race', resting(), function* () { yield* wait(0.6); yield* taking(); }) : parallel('race', function* () { yield* taking(); }, resting());
+      }, [body], 5, () => {
+        if (going && Number.isNaN(near) && body.bones.rightHand.getWorldPosition(new Vector3()).distanceTo(rod.position) < 0.22) near = bent(body, 'rightIndexIntermediate');
+      });
+      return { near, after };
+    };
+    const under = run('pose'), over = run('grab');
+    expect(under.near).toBeLessThan(1);
+    expect(under.after).toBeGreaterThan(1.5);
+    expect(over.near).toBeGreaterThan(1.5);
   });
 
   /** how far a finger lifts past straight, as `pose` takes it */

@@ -23,7 +23,7 @@ export interface Thumb {
   spread?: number;
 }
 
-/** A hand's fingers, each digit as `Finger` or `Thumb` has it, a digit left out as relaxed (`RELAXED`). */
+/** A hand's fingers, each digit as `Finger` or `Thumb` has it, a digit left out as relaxed. */
 export interface Fingers {
   thumb?: Thumb;
   index?: Finger;

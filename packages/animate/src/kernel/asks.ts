@@ -22,7 +22,8 @@ export interface Posture {
   head?: { pitch?: number; yaw?: number; roll?: number };
   /** a person's arms posed over their hang and swing, each its own (`ArmPosture`) */
   arms?: { left?: ArmPosture; right?: ArmPosture };
-  /** a person's fingers, each hand's shape: not added onto anything but taken as asked, by a hand holding nothing */
+  /** a person's fingers, each hand's shape: not added onto anything but taken as asked, by a hand holding nothing and no older than a
+   * `grab` bringing it (a pose running under a story is how its hands rest: a grab takes them from it, and they go back to it as they let go) */
   fingers?: { left?: HandShape; right?: HandShape };
 }
 

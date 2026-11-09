@@ -31,7 +31,7 @@ export interface PoseOptions {
  * posture with a trunk field (taking the trunk from a `lookAt` given a `trunk` share, or giving it up to a newer one), for the head's
  * turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
  * (a skeleton with finger bones) take each hand's shape as asked rather than adding onto anything, easing in within about a quarter
- * second and back to relaxed once the pose ends; a hand holding something keeps its grasp.
+ * second and back to relaxed once the pose ends; a hand holding something keeps its grasp, and a `grab` begun after the pose takes the fingers until its hand lets go.
  */
 export function pose(body: Body, posture: Posture, options: PoseOptions = {}): Verb {
   const { head, arms, fingers, ...trunk } = posture;

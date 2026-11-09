@@ -23,11 +23,13 @@ export function personHands(person: Person): HandStaging {
       const loose = thing.massive && !bodyOf(thing.object);
       // (each hand's placement picked as the grab starts, from where the body stands, and kept on the thing while it holds it)
       const takes = grips.map(({ hand, grip }) => handPlanOf(person, sideOf(hand), thing, grip));
-      // (each hand on its way to its take, its fingers shaping for its placement as it comes, until it holds it)
-      for (const take of takes) {
+      // (each hand on its way to its take, its fingers shaping for its placement as it comes, until it holds it: taken from a pose begun
+      // before it, a newer one keeping them)
+      const shaping = takes.map((take) => {
         person.coming[take.side] = take;
         person.fingers?.toward(take.side, take.placement);
-      }
+        return request.claim(`fingers.${take.side}`, 'asked', () => {});
+      });
       try {
         const motion = options.speed === undefined ? undefined : paceAt(options.speed, CALM);
         if (!(yield* grabbing(person, request, takes, options.step ?? true, motion))) return;
@@ -44,6 +46,7 @@ export function personHands(person: Person): HandStaging {
           person.coming[side] = null;
           person.fingers?.toward(side, null);
         }
+        for (const free of shaping) free();
       }
     },
     bring: (request, thing, points, end, options) => carrying(person, request, thing, carryPathOf(person, thing, points, end), options),
