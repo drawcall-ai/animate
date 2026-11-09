@@ -1,6 +1,6 @@
 import { Object3D, Vector3 } from 'three';
 import { finder } from '../../src/verbs/targets';
-import { selfOf } from '../../src/body/body';
+import { selfOf } from '../../src/body';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
 import { attempt, Body, dog, grab, lookAt, Missed, reach, wait, walkTo } from '../../src/index';

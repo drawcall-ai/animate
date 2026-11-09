@@ -2,7 +2,7 @@
 import { setImmediate } from 'node:timers/promises';
 import { Vector3 } from 'three';
 import { afterEach, expect, it, vi } from 'vitest';
-import { SCENARIOS } from '../src/scenarios';
+import { SCENARIOS } from '../src/scenarios/index';
 import { stroll } from '../src/scenarios/stroll';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';

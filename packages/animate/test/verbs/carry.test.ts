@@ -2,7 +2,7 @@ import { BoxGeometry, Euler, Group, Mesh, Object3D, Quaternion, Vector3 } from '
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
 import { arriving, attempt, Body, carry, grab, humanoid, Missed, release, wait } from '../../src/index';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { NATIVE } from '../skeletons/native';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';

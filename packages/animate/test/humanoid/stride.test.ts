@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Body, humanoid, walkTo, type Stride } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { insides, play } from '../bodies';
-import { individualOf } from '../../src/legs/person/individual';
+import { individualOf } from '../../src/person/legs/individual';
 
 // A person's cadence is dynamically similar to its legs' length, and its stride can be styled.
 

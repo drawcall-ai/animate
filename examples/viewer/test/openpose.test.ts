@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Group, OrthographicCamera, Vector3 } from 'three';
 import { Body, humanoid } from '@drawcall/animate';
 import { Joints } from '../src/joints';
-import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, drawOpenPose2D, OpenPoseSkeleton, projectBody25, toBody25, type Context2D } from '../src/openpose';
-import { PERSON } from '../src/skeletons';
+import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, drawOpenPose2D, OpenPoseSkeleton, projectBody25, toBody25, type Context2D } from '../src/openpose/index';
+import { PERSON } from '../src/skeletons/index';
 import { poseOf } from '@drawcall/animate';
 
 /** OpenPose's own BODY_25 part names, in its order (poseParameters.cpp) */

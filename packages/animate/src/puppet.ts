@@ -1,10 +1,10 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
-import { selfOf, type Body } from './body/body';
-import { personOf } from './body/person';
-import type { Self } from './body/runtime';
+import { selfOf, type Body } from './body';
+import { personOf } from './person/person';
+import type { Self } from './body/self';
 import type { HandPlacement } from './fingers/placement';
 import type { HandShape } from './fingers/shape';
-import { takingOf } from './hands/person/take';
+import { takingOf } from './person/hands/take';
 import { Thing } from './things/thing';
 
 // For a body its app poses itself, its update stopped (what no verb does: sitting, climbing): where its hands go, and how its fingers shape.

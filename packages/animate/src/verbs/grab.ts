@@ -1,12 +1,12 @@
 import { Vector3, type Object3D } from 'three';
-import { selfOf, type Body, type ByHand } from '../body/body';
+import { selfOf, type Body, type ByHand } from '../body';
 import { bodyOf } from '../things/hold';
 import type { Holder } from '../things/resolve';
 import { Thing } from '../things/thing';
 import type { AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
 import { letGo } from './release';
-import type { HandOptions } from '../hands/handling';
+import type { HandOptions } from '../body/handling';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its

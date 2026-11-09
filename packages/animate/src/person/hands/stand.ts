@@ -1,0 +1,265 @@
+import { type Box3, Quaternion, Vector3 } from 'three';
+import type { Frame } from '../../kernel/frame';
+import type { Goal } from '../../kernel/goal';
+import { loadFactor } from '../../kernel/load';
+import { forwardOf, headingOf, leftOf, pointSegmentDistance, wrapAngle } from '../../kernel/math';
+import { Walk } from '../../step/walk';
+import { during, type Request } from '../../kernel/requests';
+import { ARM_REACH, PROTRACTION } from './bend';
+import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
+import { INDEX, type Side } from '../anatomy/bones';
+import { floorUnder } from '../legs/legged';
+import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../legs/posture';
+import { defaultStance } from '../anatomy/stance';
+import type { Person } from '../person';
+
+/** Comfortable stand distance as a share of arm length. */
+const WITHIN = 0.8;
+/** Tuned: the stand distance for two hands low down (× the arm's length), leaving room to bend */
+const LOW_STAND = 1.05;
+/** in reach without a step: each grip this near its shoulder on the floor's plane (× the arm's length: lower down, the body bows for it),
+ * the body facing within SQUARE (rad) of the way asked for two */
+const IN_REACH = 0.65, SQUARE = 0.3;
+/** arrived where it stands to take something: this near (m, default body), and come to rest or stood still this long (s) */
+const ARRIVED = 0.12;
+/** how far round what it takes the body walks when the way passes it (m, default body): past a stand's foot */
+const ROUND = 0.5;
+// Tuned progress around a support before the final leg (share of ROUND).
+const ON = 0.5;
+// Tuned frontal approach cone: lateral offset at most half the forward distance to the target.
+const ROUND_ASIDE = 0.5;
+// Proxy radius for other bodies’ low segments, not measured (m).
+const SEGMENT_RADIUS = 0.06;
+/** Tuned: both hands low down, how far (× the arm's length) beyond its toes the grips' middle is as it stands to take them, or to set down what they hold */
+const LOW_AHEAD = 0.3, LOW_SETTING = 0.2;
+/** Tuned: a placing point lower than this share of the arm's reach below the shoulders, the body lowers and bows for */
+const LOWERED_BELOW = 0.7;
+
+/** What a person stands to: grips to take (by the hand that takes each, where each is now, the heaviest load's mass), or a placing point. */
+type Stand =
+  | { grips: readonly { side: Side; at: Vector3 }[]; mass: number; things?: readonly Placed[] }
+  | { place: (f: Frame) => Goal; held: readonly { side: Side; at: Vector3 }[]; things?: readonly Placed[] };
+
+/** a thing's envelope (its own frame) where it is */
+interface Placed { bounds: Box3; position: Vector3; quaternion: Quaternion }
+
+/** A walk to where a person stands, and when it has arrived there. */
+export type WalkUp = Extract<ReturnType<typeof footing>, { walk: Walk }>;
+
+/** Test reach from standing shoulder height, including free-hand trunk rotation. */
+export function armReaches(person: Person, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
+  // (seated, its shoulders as far down as the seat lets them)
+  const down = person.seat && !person.seat.rising ? person.seat.seating.lower : 0;
+  const proportions = person.proportions, shoulder = shoulderOf(person, side).setY(floorUnder(person) + proportions.shoulderHeight - down);
+  const reach = ARM_REACH * proportions.armLength;
+  if (!free || !side) return shoulder.distanceTo(at) < reach;
+  // (the trunk turned toward it, as far as a hand held off its goal turns it (45°: the thoracolumbar spine's, AAOS; recalled), carries the
+  // shoulder round the spine, and the clavicle draws it on toward the hand: as near as that brings it, within `TURNED` of it — the turn and
+  // the draw are not all had at once — and a target straight overhead or ahead comes no nearer for the turn)
+  // (from the shoulder as it stands square to the body's facing: one already turned toward an earlier target turns no further for it)
+  const middle = shoulderOf(person).setY(shoulder.y), drawn = TURNED * (reach + PROTRACTION * proportions.height);
+  const arm = leftOf(person.locomotion.facing, _arm).multiplyScalar((side === 'left' ? 1 : -1) * proportions.shoulderHalfWidth);
+  for (let k = -TURNS; k <= TURNS; k++) {
+    const turned = _turned.copy(arm).applyAxisAngle(_up, (k / TURNS) * TRUNK_TURN).add(middle);
+    if (turned.distanceTo(at) < drawn) return true;
+  }
+  return false;
+}
+/** how far the trunk turns a shoulder toward a free hand's target (rad), read at `TURNS` angles each way */
+const TRUNK_TURN = Math.PI / 4, TURNS = 6;
+/** a free hand's reach with the trunk turned and the shoulder drawn is checked within this share of it: across the body the joints'
+ * ranges hold the hand a few centimetres short of the arm's full length */
+const TURNED = 0.95;
+const _arm = new Vector3(), _turned = new Vector3(), _up = new Vector3(0, 1, 0);
+
+function shoulderOf(person: Person, side?: Side): Vector3 {
+  return side
+    ? person.pose.position(INDEX[`${side}UpperArm`]).clone()
+    : person.pose.position(INDEX.leftUpperArm).clone().add(person.pose.position(INDEX.rightUpperArm)).multiplyScalar(0.5);
+}
+
+/**
+ * Find a comfortable stand clear of bodies and support: there already, nowhere it could (and why), or a walk there. Without `step`, the
+ * feet stay where they stand: there if the hands reach from it (`planted`), else nowhere.
+ */
+export function footing(person: Person, to: Stand, step = true) {
+  const f0 = person.frame, point = 'place' in to;
+  const start = point ? to.place(f0) : null;
+  if (start?.carriedBy === person) return 'there' as const;
+  const grips: { side?: Side; at: Vector3 }[] = [];
+  if (!point) grips.push(...to.grips.map((grip) => ({ side: grip.side, at: grip.at.clone() })));
+  else if (start) {
+    const quaternion = start.quaternion;
+    if (quaternion) for (const { side, at } of to.held) grips.push({ side, at: at.clone().applyQuaternion(quaternion).add(start.position) });
+    if (!grips.length) grips.push({ at: start.position.clone() });
+  }
+  // (seated, what the arms reach from the seat keeps it there; beyond them it stands, and stands to it as anyone does)
+  if (person.seat && !person.seat.rising && grips.every(({ side, at }) => armReaches(person, at, side, true))) return 'there' as const;
+  let face = facingFor(person, grips);
+  const proportions = person.proportions;
+  // (heights over the floor under the grips: the body stands on it there to take them)
+  const middle = grips.reduce((sum, grip) => sum.add(grip.at), new Vector3()).divideScalar(grips.length), floor = person.floor(middle.x, middle.z);
+  const height = grips.reduce((sum, grip) => sum + grip.at.y, 0) / grips.length - floor;
+  const standing = proportions.shoulderHeight;
+  const reach = ARM_REACH * proportions.armLength;
+  const { drop, forward } = point ? stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach)) : { drop: 0, forward: 0 };
+  const shoulders = standing - drop + (point ? Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing)) : 0);
+  // (a point taken in one hand, faced: its shoulder stands its half width aside of the line to it)
+  const aside = point && grips.length === 1 && grips[0].side ? proportions.shoulderHalfWidth : 0;
+  const available = point ? Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2 - aside ** 2)) + forward : Infinity;
+  // Tuned: bring heavier low grips closer as the load strategy caps trunk bow.
+  const distance = !point && grips.length === 2 && height < proportions.hipHeight ? LOW_STAND / Math.sqrt(loadFactor('mass' in to ? to.mass : 0)) : WITHIN;
+  const low = grips.length === 2 && height < proportions.hipHeight - proportions.thigh / 2;
+  const beyond = Math.max(0, height - proportions.ankleHeight), up = low ? Math.min(beyond, (point ? LOW_SETTING : LOW_AHEAD) * proportions.armLength) : beyond;
+  // (two grips taken: no further than the arms reach them with `TURNED` to spare, as far as the body bows and lowers, since a walk may
+  // arrive a little short of its stand)
+  const bowed = stoop(proportions, Math.max(0, standing - height)), spare = TURNED * reach;
+  const both = !point && grips.length === 2 ? Math.sqrt(Math.max(0, spare ** 2 - (height - standing + bowed.drop) ** 2)) + bowed.forward : Infinity;
+  // (what the hands take stands clear of the trunk: the body no nearer it than its envelope's back reaches toward the body, but for what
+  // lies below the hips, which the trunk bows over)
+  const clearOf = point && !to.things ? 0 : backOf(to.things ?? [], middle, forwardOf(face), floor + proportions.hipHeight);
+  const trunk = clearOf > -Infinity ? clearOf + BODY_RADIUS * proportions.height + LOAD_RESERVE * proportions.scale : 0;
+  let ahead = Math.max(trunk, Math.min(distance * proportions.armLength, available, proportions.toeFront + up, both));
+  const nowhere = (why: string, off: number, limit = reach) => ({ nowhere: { where: `${grips.length} grips`, off, limit, why } });
+  if (point && Math.abs(height - shoulders) > reach) return nowhere(`the placing point is ${Math.abs(height - shoulders).toFixed(2)} m from the shoulders, lowered and bowed: no stand reaches it`, Math.abs(height - shoulders));
+  const above = point ? 0 : Math.max(...grips.map((grip) => grip.at.y)) - floor - (standing + TIPTOE * proportions.scale);
+  if (above > reach) return nowhere(`the grip is ${above.toFixed(2)} m above the shoulders on tiptoe: no stand reaches it`, above);
+  if (person.drive) return 'there' as const;
+  if (!step) {
+    const short = Math.max(...grips.map((grip) => planted(person, grip)));
+    return short > 0 ? nowhere(`beyond reach with the feet planted, ${short.toFixed(2)} m short: let it step, or start nearer`, short, 0) : 'there' as const;
+  }
+  const at = middle.clone(), there = new Vector3();
+  // (the feet stand as far out as the stance has them, or the hips: a foot, not the root, keeps clear of another body's legs)
+  const feetOut = Math.max(proportions.hipHalfWidth, defaultStance(proportions).width);
+  const clear = (spot = there) => [...person.near].every((other) => {
+    const pose = other.posesFor(person)[0];
+    return pose.skeleton.bones.every((bone, b) => {
+      if (!b) return true;
+      const a = pose.position(bone.parent), end = pose.position(b);
+      // Low segments, including any crouched trunk, bound the space occupied near the feet.
+      return Math.min(a.y, end.y) > floor + proportions.hipHeight || pointSegmentDistance(spot, a, end) >= feetOut + proportions.toeFront + SEGMENT_RADIUS;
+    });
+  });
+  // If a single hand's comfortable stand crowds another body, use its remaining reach before giving up.
+  let clearYaw: number | undefined;
+  const reserve = stoop(proportions, Math.max(0, standing - height));
+  const extended = Math.sqrt(Math.max(0, reach ** 2 - (height - standing + reserve.drop) ** 2)) + reserve.forward;
+  const distances = grips.length === 1 ? [ahead, Math.max(ahead, extended)] : [ahead];
+  for (const distance of distances) {
+    ahead = distance;
+    for (let i = 0; i <= 32 && clearYaw === undefined; i++) {
+      const yaw = face + Math.ceil(i / 2) * (i % 2 ? 1 : -1) * Math.PI / 16;
+      there.copy(at).addScaledVector(forwardOf(yaw), -ahead);
+      if (clear()) clearYaw = yaw;
+    }
+    if (clearYaw !== undefined) break;
+  }
+  if (clearYaw === undefined) return nowhere('no stand clear of the bodies beside it', 1, 0);
+  face = clearYaw;
+  const turned = (yaw = face) => Math.abs(wrapAngle(yaw - person.locomotion.facing)) < SQUARE;
+  const near = flat(person.pose.com(_com), middle) < ahead + ARRIVED * proportions.scale;
+  if (near && (grips.length === 1 || turned()) && grips.every(({ side, at }) => flat(shoulderOf(person, side), at) < IN_REACH * proportions.armLength)) return 'there' as const;
+  if (point && grips.every(({ side, at }) => armReaches(person, at, side, false))) return 'there' as const;
+  if (turned() && flat(person.pose.com(_com), there) < ARRIVED * proportions.scale) return 'there' as const;
+  const rotation = (f: Frame) => {
+    const current = point ? to.place(f) : null;
+    return start?.quaternion && current?.quaternion ? current.quaternion.clone().multiply(start.quaternion.clone().invert()) : new Quaternion();
+  };
+  const facing = (f: Frame) => {
+    const ahead = forwardOf(face).applyQuaternion(rotation(f));
+    return headingOf(ahead.x, ahead.z);
+  };
+  const moved = (spot: Vector3, f: Frame) => point && start ? spot.clone().sub(start.position).applyQuaternion(rotation(f)).add(to.place(f).position) : spot;
+  const destination = (f: Frame) => moved(at, f);
+  const body = person.pose.com(new Vector3()).setY(0);
+  const way = there.clone().sub(body).setY(0);
+  const length = way.length();
+  const along = length > 0 ? middle.clone().sub(body).setY(0).dot(way) / length : 0;
+  const nearest = body.clone().addScaledVector(way, along / Math.max(length, Number.EPSILON));
+  const offset = body.clone().sub(there);
+  const lateral = offset.dot(leftOf(face));
+  const frontal = Math.abs(offset.dot(forwardOf(face)));
+  // A rigid two-hand destination fixes the load's facing; otherwise route round support anywhere along the straight approach,
+  // including within ROUND of the destination.
+  const entry = point && grips.length > 1 && Math.abs(lateral) > Math.max(ROUND * proportions.scale, ROUND_ASIDE * frontal);
+  const blocked = along > 0 && along < length && flat(nearest, middle) < ROUND * proportions.scale;
+  const via: ((f: Frame) => Vector3)[] = [];
+  if (entry || blocked) {
+    const yaw = entry ? face : headingOf(way.x, way.z);
+    const anchor = entry ? there : middle.clone().addScaledVector(way, ON * ROUND * proportions.scale / length);
+    const side = Math.sign(body.clone().sub(anchor).dot(leftOf(yaw))) || 1;
+    const beside = anchor.clone().addScaledVector(leftOf(yaw), side * ROUND * proportions.scale);
+    // (out from what it faces until the feet passing there are clear of another body's legs, as the stand is: beside a horse's flank,
+    // off its hind legs)
+    for (let k = 0; k < 8 && !clear(beside); k++) beside.addScaledVector(forwardOf(yaw), -ROUND / 4 * proportions.scale);
+    via.push((f) => moved(beside, f));
+  }
+  const walk = new Walk(person, { to: destination, face: facing, within: ahead, via });
+  return {
+    walk,
+    arrived: (f: Frame) => {
+      const spot = destination(f).clone().addScaledVector(forwardOf(facing(f)), -ahead);
+      return turned(facing(f)) && flat(f.prev.com(_com), spot) < ARRIVED * proportions.scale && !person.locomotion.moving && (person.stepper?.legs.some((leg) => !leg.swing) ?? true);
+    },
+  };
+}
+
+/** a person's walk to where it stands (borrowed legs) until it has arrived, or stalled: its stall, if so; what it moves arriving `after` s later */
+export function* walking(request: Request, plan: WalkUp, after?: number) {
+  const { walk, arrived } = plan;
+  yield* during(request, 'go', 'borrowed', (f) => {
+    const go = walk.step(f);
+    if (after !== undefined) request.eta = walk.eta + after;
+    return go;
+  }, (f, _, time) => time > 0 && (walk.stall !== null || arrived(f)));
+  return walk.stall;
+}
+
+/**
+ * how far (m) a grip is beyond the hand's reach from where the body stands (≤ 0: within it): from its shoulder (the shoulders' middle for
+ * a placing point) as it comes down, bowed and crouched, for a grip lower than `LOWERED_BELOW` of the reach below it, or up on its toes for
+ * one above, the trunk turning that shoulder up to its half-width further toward it and the clavicle drawing it out (`PROTRACTION`) — as
+ * `footing` judges a placing point's reach
+ */
+function planted(person: Person, grip: { side?: Side; at: Vector3 }): number {
+  const proportions = person.proportions, reach = ARM_REACH * proportions.armLength;
+  const standing = floorUnder(person) + proportions.shoulderHeight, height = grip.at.y;
+  const { drop, forward } = stoop(proportions, Math.max(0, standing - height - LOWERED_BELOW * reach));
+  const shoulders = standing - drop + Math.min(TIPTOE * proportions.scale, Math.max(0, height - standing));
+  const across = Math.sqrt(Math.max(0, reach ** 2 - (height - shoulders) ** 2)) + forward + proportions.shoulderHalfWidth + PROTRACTION * proportions.height;
+  return Math.max(Math.abs(height - shoulders) - reach, flat(shoulderOf(person, grip.side), grip.at) - across);
+}
+
+/** how far (m) the shoulders come down, and on, lowered and bowed for `want` (m) down: as far as a squat and the deepest bow let them */
+function stoop(proportions: Person['proportions'], want: number): { drop: number; forward: number } {
+  const lever = bowLever(proportions, proportions.shoulderHeight), most = squatOf(proportions) + lever * (1 - Math.cos(MOST_BOW));
+  const drop = Math.min(want, most), { bow } = lowering(proportions, { drop, ahead: 0, height: proportions.shoulderHeight });
+  return { drop, forward: lever * Math.sin(bow) };
+}
+
+/** the facing to take grips `grips` with: the left hand's to the left of the right's, or toward a single one from where the body stands */
+function facingFor(person: Person, grips: { side?: Side; at: Vector3 }[]): number {
+  const left = grips.find((grip) => grip.side === 'left');
+  const right = grips.find((grip) => grip.side === 'right');
+  if (left && right) return Math.atan2(-(left.at.z - right.at.z), left.at.x - right.at.x);
+  const at = grips[0].at;
+  const body = person.pose.com(_com);
+  return headingOf(at.x - body.x, at.z - body.z);
+}
+
+/** how far back toward the body (against `forward`, from `middle`) the parts of `things` above `above` (m, world height) reach: -Infinity for none */
+function backOf(things: readonly Placed[], middle: Vector3, forward: Vector3, above: number): number {
+  let back = -Infinity;
+  for (const { bounds, position, quaternion } of things) for (let k = 0; k < 8; k++) {
+    const corner = _corner.set(k & 1 ? bounds.max.x : bounds.min.x, k & 2 ? bounds.max.y : bounds.min.y, k & 4 ? bounds.max.z : bounds.min.z)
+      .applyQuaternion(quaternion).add(position);
+    if (corner.y > above) back = Math.max(back, -_corner.sub(middle).setY(0).dot(forward));
+  }
+  return back;
+}
+
+/** the distance between `a` and `b` on the floor's plane */
+export const flat = (a: Readonly<Vector3>, b: Readonly<Vector3>) => Math.hypot(a.x - b.x, a.z - b.z);
+
+const _com = new Vector3(), _corner = new Vector3();

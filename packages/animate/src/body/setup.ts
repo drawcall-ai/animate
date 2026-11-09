@@ -2,8 +2,8 @@ import { Matrix4, Quaternion, Vector3 } from 'three';
 import { Pose } from '../kernel/pose';
 import { Skeleton, type SkinVolume } from '../kernel/skeleton';
 import type { AnySpecies } from '../species/define';
-import type { Floor } from '../legs/floor';
-import type { Binding } from './model';
+import type { Floor } from '../step/floor';
+import type { Binding } from './binding';
 
 // What a body is made from: its skeleton massed as asked, the pose it starts in, and the check of the model it poses.
 

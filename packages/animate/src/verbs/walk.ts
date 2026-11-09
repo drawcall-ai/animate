@@ -1,11 +1,11 @@
 import { during, type Miss, type Request } from '../kernel/requests';
-import { Body, selfOf } from '../body/body';
-import type { Self } from '../body/runtime';
+import { Body, selfOf } from '../body';
+import type { Self } from '../body/self';
 import type { Frame } from '../kernel/frame';
 import { OFF_FLOOR } from '../kernel/dev';
 import { bodyOf } from '../things/hold';
 import { headingOf, headingOfTurn } from '../kernel/math';
-import { Walk } from '../legs/walk';
+import { Walk } from '../step/walk';
 import { finder, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 

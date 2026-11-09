@@ -3,14 +3,14 @@ import { Vector3 } from 'three';
 import { during } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import { forwardOf, headingOf, headingOfTurn, leftOf } from '../kernel/math';
-import { Body, selfOf } from '../body/body';
-import { personOf } from '../body/person';
-import { Walk } from '../legs/walk';
-import { Seat, seating } from '../legs/person/seat';
+import { Body, selfOf } from '../body';
+import { personOf } from '../person/person';
+import { Walk } from '../step/walk';
+import { Seat, seating } from '../person/legs/seat';
 import { finder, type Target } from './targets';
 import { comingToRest } from './pose';
 import { stallOf } from './walk';
-import { INDEX } from '../species/humanoid/bones';
+import { INDEX } from '../person/anatomy/bones';
 import { verb, type Until, type Verb } from './story';
 
 /** Tuned: the most (s) a sit or a stand waits on the trunk once the hips are there: its bow gives back in about this, and another verb may keep it moving */

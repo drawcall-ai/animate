@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { descent } from '../../src/legs/step/stepper';
+import { descent } from '../../src/step/stepper';
 
 const forward = (speed = 3.5) => new Vector3(0, 0, speed);
 

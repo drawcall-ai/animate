@@ -1,7 +1,7 @@
 import { Bone, BoxGeometry, CylinderGeometry, Float32BufferAttribute, InstancedMesh, Line3, Matrix4, Mesh, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, TorusGeometry, Uint16BufferAttribute, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { attempt, Body, carry, grab, humanoid, Missed, pose, release, wait } from '../../src/index';
-import { selfOf } from '../../src/body/body';
+import { selfOf } from '../../src/body';
 import { PERSON } from '../../skills/animate/references/person';
 import { FINGERED } from '../skeletons/fingered';
 import { LIFTED } from '../../src/fingers/shape';

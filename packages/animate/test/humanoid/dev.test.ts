@@ -1,9 +1,9 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { lookAt } from '../../src/index';
-import { selfOf } from '../../src/body/body';
+import { selfOf } from '../../src/body';
 import { Pose } from '../../src/kernel/pose';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { claim, dt, insides, person, play, run } from '../bodies';
 import { poseOf } from '../../src/index';
 

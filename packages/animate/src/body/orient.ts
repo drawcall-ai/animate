@@ -4,7 +4,7 @@ import type { Goal, Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { within } from '../kernel/scene';
 import { orienters, resolve } from '../things/resolve';
-import type { Self } from './runtime';
+import type { Self } from './self';
 
 /** how far out of a chain's full length a hand's grip on what its body turns is kept: just short of the arm straight — the elbow still
  * bent some 20°, so the arm can follow what it holds as it turns rather than being pulled off it at full stretch */

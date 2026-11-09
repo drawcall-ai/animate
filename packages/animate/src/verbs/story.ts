@@ -1,7 +1,7 @@
 import { action, type TimelineYield } from '@pmndrs/timeline';
-import { selfOf, type Body } from '../body/body';
+import { selfOf, type Body } from '../body';
 import type { Miss, Staging } from '../kernel/requests';
-import type { Self } from '../body/runtime';
+import type { Self } from '../body/self';
 
 /** When something ends: after this many seconds of the story's time, once a condition holds, or never (`Infinity`). */
 export type Until = number | (() => boolean);

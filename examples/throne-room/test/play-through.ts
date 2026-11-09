@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { Beat } from '../src/beats';
+import type { Beat } from '../src/beats/index';
 import { runBeat } from './run';
 
 /** a test that `beat` plays to its end state within its duration, and no body's dev checks complain */

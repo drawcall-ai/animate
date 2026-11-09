@@ -2,10 +2,10 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Body, dog, grab, humanoid, lookAt, reach, walkTo } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
-import { INDEX, SIDES, type Side } from '../../src/species/humanoid/bones';
+import { INDEX, SIDES, type Side } from '../../src/person/anatomy/bones';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { TROOPER } from '../skeletons/trooper';
-import { Quiet } from '../../src/legs/person/quiet';
+import { Quiet } from '../../src/person/legs/quiet';
 import { insides, person, play, run } from '../bodies';
 import { box, roomOf } from '../things';
 

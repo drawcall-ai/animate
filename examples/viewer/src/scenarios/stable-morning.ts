@@ -2,7 +2,7 @@ import { BufferGeometry, Group, Line, LineBasicMaterial, Vector3, type Object3D 
 import { action, parallel } from '@pmndrs/timeline';
 import { arriving, carry, grab, horse, lookAt, reach, release, wait, walkTo, grip } from '@drawcall/animate';
 import type { Scenario, Solid } from '../scenario';
-import { HORSE } from '../skeletons';
+import { HORSE } from '../skeletons/index';
 import { Rope } from '../stage/rope';
 import { box } from '../things';
 

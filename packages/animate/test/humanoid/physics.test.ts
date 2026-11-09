@@ -1,7 +1,7 @@
 import { Object3D, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { track, type Floor, type Root } from '../../src/index';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { dt, insides, person, run, scene, airborne } from '../bodies';
 import { poseOf } from '../../src/index';
 

@@ -1,8 +1,8 @@
 import { Vector3, type Object3D } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { during } from '../kernel/requests';
-import { Body, selfOf } from '../body/body';
-import type { Self } from '../body/runtime';
+import { Body, selfOf } from '../body';
+import type { Self } from '../body/self';
 import type { Frame } from '../kernel/frame';
 import { aiming, looking } from '../look/gaze';
 import { finder, type Target } from './targets';

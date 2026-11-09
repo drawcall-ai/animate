@@ -1,12 +1,12 @@
 import { Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { during } from '../kernel/requests';
-import { selfOf, type Body } from '../body/body';
-import { personOf } from '../body/person';
-import { heading } from '../look/head';
-import { HOLD, reaching } from '../hands/person/arms';
+import { selfOf, type Body } from '../body';
+import { personOf } from '../person/person';
+import { heading } from '../person/look/head';
+import { HOLD, reaching } from '../person/hands/arms';
 import { REACH } from '../kernel/tip';
-import { INDEX, type Side } from '../species/humanoid/bones';
+import { INDEX, type Side } from '../person/anatomy/bones';
 import { finder, handTarget, type Target } from './targets';
 import { verb, type Until, type Verb } from './story';
 

@@ -1,6 +1,6 @@
 import { ACESFilmicToneMapping, AudioListener, BackSide, BufferAttribute, Clock, Color, DirectionalLight, FogExp2, HemisphereLight, Mesh, MeshBasicMaterial, PCFSoftShadowMap, PerspectiveCamera, PMREMGenerator, Scene, SphereGeometry, SRGBColorSpace, WebGLRenderer } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { BEATS } from './beats';
+import { BEATS } from './beats/index';
 import { createHall, DAIS, HALL, SUN } from './hall';
 import { loadWardrobe } from './models';
 import { play, type Playing, type View } from './play';

@@ -4,7 +4,7 @@ import type { LegChain } from './leg';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton } from '../kernel/skeleton';
 import type { Species } from './define';
-import { STIFFNESS, type Spring } from '../springs';
+import { STIFFNESS, type Spring } from './spring';
 
 /**
  * `species` at `size` times its size: its bones, its feet and its eyes `size` times as far apart, each bone `size`³ as heavy, and its

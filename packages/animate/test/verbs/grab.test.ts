@@ -6,8 +6,8 @@ import { attempt, Body, dog, grab, humanoid, Missed, reach, release, wait } from
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
 import { run } from '../bodies';
-import { INDEX, type Side } from '../../src/species/humanoid/bones';
-import type { Person } from '../../src/body/person';
+import { INDEX, type Side } from '../../src/person/anatomy/bones';
+import type { Person } from '../../src/person/person';
 import { dt, insides, palmAt, person, play, feetOf, gazeOff } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
 import { handSpeeds } from '../hands';

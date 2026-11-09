@@ -1,10 +1,10 @@
-export { Body, poseOf, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
-export type { Root } from './legs/legged';
-export type { Floor } from './legs/floor';
+export { Body, poseOf, type BodyOptions, type Foot, type Owner, type Owners } from './body';
+export type { Root } from './step/root';
+export type { Floor } from './step/floor';
 export type { LogEntry } from './kernel/dev';
-export { humanoid, type HumanoidBone, type Stride } from './species/humanoid/humanoid';
-export { horse } from './species/horse';
-export { dog } from './species/dog';
+export { humanoid, type HumanoidBone, type Stride } from './person/anatomy/humanoid';
+export { horse } from './creature/horse';
+export { dog } from './creature/dog';
 export type { Species } from './species/define';
 export { walkTo, arriving } from './verbs/walk';
 export { lookAt } from './verbs/look';

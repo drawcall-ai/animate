@@ -11,7 +11,7 @@ import type { ReadonlyPose } from '../kernel/pose';
 import type { Skeleton } from '../kernel/skeleton';
 import type { Gazer } from '../species/define';
 import { EYES, EYES_MOST, EyePitch } from './eyes';
-import type { Self } from '../body/runtime';
+import type { Self } from '../body/self';
 
 /** Horizontal view cone (rad, ~80° each side): neck and head turn ~75°, with the eyes taking the rest. */
 const IN_VIEW = 1.4;

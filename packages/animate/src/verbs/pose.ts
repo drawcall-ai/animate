@@ -2,10 +2,10 @@ import { action, parallel } from '@pmndrs/timeline';
 import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import type { ArmPosture, Posture } from '../kernel/poise';
-import { selfOf, type Body } from '../body/body';
-import { personOf } from '../body/person';
-import type { Self } from '../body/runtime';
-import { INDEX, SIDES } from '../species/humanoid/bones';
+import { selfOf, type Body } from '../body';
+import { personOf } from '../person/person';
+import type { Self } from '../body/self';
+import { INDEX, SIDES } from '../person/anatomy/bones';
 import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';
 

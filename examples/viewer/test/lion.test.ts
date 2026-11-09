@@ -1,6 +1,6 @@
 import { Euler, Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import { lionRun } from '../src/scenarios/lion';
 import { Simulation } from '../src/simulation';
 import { poseOf } from '@drawcall/animate';

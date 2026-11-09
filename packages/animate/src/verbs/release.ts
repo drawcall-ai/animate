@@ -1,12 +1,12 @@
 import { Object3D, Vector3 } from 'three';
-import { selfOf, type Body, type ByHand } from '../body/body';
+import { selfOf, type Body, type ByHand } from '../body';
 import type { AnySpecies } from '../species/define';
 import { attach, bodyOf, carriedBy, grasp, handsOn, take } from '../things/hold';
-import { backOff } from '../hands/person/press';
-import { END } from '../hands/person/travel';
+import { backOff } from '../person/hands/press';
+import { END } from '../person/hands/travel';
 import { STEP } from '../kernel/frame';
-import { personOf } from '../body/person';
-import type { Self } from '../body/runtime';
+import { personOf } from '../person/person';
+import type { Self } from '../body/self';
 import { Thing } from '../things/thing';
 import { spinOf } from '../kernel/rotation';
 import type { Miss } from '../kernel/requests';

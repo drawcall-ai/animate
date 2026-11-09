@@ -1,15 +1,15 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Inertial } from '../kernel/inertia';
 import type { Gait } from './gait';
-import type { CarriedBones, Striding } from './carriage';
+import type { CarriedBones, Striding } from '../creature/carriage';
 import type { LegChain } from './leg';
 import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
 import { Skeleton, type BoneDef, type Limit, type SkeletonBone } from '../kernel/skeleton';
-import type { Proportions } from './humanoid/proportions';
-import type { Stride } from './humanoid/humanoid';
+import type { Proportions } from '../person/anatomy/proportions';
+import type { Stride } from '../person/anatomy/humanoid';
 import type { DigitBones } from '../fingers/bones';
-import type { Spring } from '../springs';
+import type { Spring } from './spring';
 
 /** What looks: a chain of the skeleton from the neck's base up to the head, and where its eyes are. */
 export interface Gazer {

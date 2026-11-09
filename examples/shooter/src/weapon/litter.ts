@@ -1,6 +1,6 @@
 import { BoxCollider, RigidBody } from '@drawcall/physics';
 import { BufferGeometry, Mesh, Object3D, Vector3 } from 'three';
-import { RIFLE } from '.';
+import { RIFLE } from './index';
 
 /** A magazine's body as it collides (m, its frame): its 2.8 cm thick, 15.5 cm long, 8 cm deep curved box, squared off. */
 const BODY = { size: [0.028, 0.155, 0.08] as const, at: new Vector3(0, -0.004, -0.005) };

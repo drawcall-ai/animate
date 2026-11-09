@@ -3,7 +3,7 @@ import { parallel, runTimeline } from '@pmndrs/timeline';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { attempt, Body, carry, dog, grab, grip, humanoid, lookAt, Missed, play, pose, reach, release, wait, walkTo } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
-import { selfOf } from '../../src/body/body';
+import { selfOf } from '../../src/body';
 import { DOG } from '../../skills/animate/references/dog';
 import { person } from '../bodies';
 import { box, roomOf } from '../things';

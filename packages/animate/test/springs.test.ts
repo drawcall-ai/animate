@@ -2,8 +2,8 @@ import { Quaternion, Vector3 } from 'three';
 import { expect, test } from 'vitest';
 import { Body, humanoid } from '../src/index';
 import { species, type Spring } from '../src/species';
-import { Binding } from '../src/body/model';
-import { Springs } from '../src/springs';
+import { Binding } from '../src/body/binding';
+import { Springs } from '../src/body/springs';
 import { PERSON } from '../skills/animate/references/person';
 
 const CHAIN = [
@@ -15,7 +15,7 @@ const CHAIN = [
 
 function chain(settings: Spring = {}) {
   const kind = species(CHAIN, {}, { masses: { root: 1 }, springs: { braid: settings } });
-  const binding = new Binding(kind), springs = new Springs(kind, binding);
+  const binding = new Binding(kind), springs = new Springs(kind, binding, null);
   const step = () => { springs.restore(); springs.step(1 / 60); };
   return { binding, springs, step, bones: binding.bones };
 }
@@ -92,7 +92,7 @@ test('branch joints keep their pose while each child chain swings', () => {
     { name: 'lockTip', parent: 'lock', position: [0.1, 0.7, 0] },
   ] as const;
   const kind = species(skeleton, {}, { masses: { root: 1 }, springs: { braid: {} } });
-  const binding = new Binding(kind), springs = new Springs(kind, binding);
+  const binding = new Binding(kind), springs = new Springs(kind, binding, null);
   binding.bones.root.position.x = 0.15;
   for (let i = 0; i < 3; i++) { springs.restore(); springs.step(1 / 60); }
   expect(binding.bones.braid.quaternion.angleTo(new Quaternion())).toBe(0);

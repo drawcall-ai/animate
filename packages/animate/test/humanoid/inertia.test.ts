@@ -2,7 +2,7 @@ import { Euler, Vector3 } from 'three';
 import { runTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Body, humanoid, walkTo } from '../../src/index';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { leftOf } from '../../src/kernel/math';
 import { dt, insides, person } from '../bodies';
 import { PERSON } from '../../skills/animate/references/person';

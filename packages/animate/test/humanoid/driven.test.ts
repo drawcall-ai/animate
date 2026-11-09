@@ -1,9 +1,9 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import type { Body, Root } from '../../src/index';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { forwardOf, leftOf, wrapAngle, yawOf } from '../../src/kernel/math';
-import type { Person } from '../../src/body/person';
+import type { Person } from '../../src/person/person';
 import { dt, insides, person, feetOf, airborne } from '../bodies';
 
 /** a driven root, as a player's controller writes it */

@@ -36,3 +36,11 @@ export function within(object: Object3D, node: Object3D): boolean {
   for (let at: Object3D | null = object; at; at = at.parent) if (at === node) return true;
   return false;
 }
+
+/** `value` as a vector: a `Vector3` or [x, y, z]; none, the zero vector; anything else a misuse, said at once (`what`: what gave it) */
+export function vectorOf(value: unknown, what: string): Vector3 {
+  if (value === undefined) return new Vector3();
+  if (value instanceof Vector3) return value.clone();
+  if (Array.isArray(value) && value.length === 3 && value.every((x) => typeof x === 'number' && Number.isFinite(x))) return new Vector3(value[0], value[1], value[2]);
+  throw new Error(`${what} is neither a Vector3 nor [x, y, z]`);
+}

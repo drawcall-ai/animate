@@ -1,7 +1,7 @@
 import { MathUtils, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
 import type { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
-import { inFrame, placedOf, toWorld, within, worldOf, type Placed } from '../kernel/scene';
+import { inFrame, placedOf, toWorld, within, worldOf, type Placed, vectorOf } from '../kernel/scene';
 import type { Hold } from '../things/resolve';
 import type { DigitBones } from './bones';
 import { closedOn, PAD_DEPTH } from './closing';
@@ -10,7 +10,6 @@ import { Guard, nearHand } from './guard';
 import { digitsOf, handOn, type HandPart, type HandPlacement, type HandPoint } from './placement';
 import { Joints, FLAT } from './joints';
 import { blendShape, digitOf, DIGITS, POINT, RELAXED, shapeOf, withValues, type Digit, type HandShape, type Shape } from './shape';
-import { vectorOf } from '../things/thing';
 
 /** A placement as a hand takes it: the shape its fingers close to there and the thing's triangles about it (the thing's frame), worked
  * out once, as it is first asked for; and the digits it puts apart (a hold's read from its grip every update). */

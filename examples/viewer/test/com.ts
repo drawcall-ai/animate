@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { massFor } from '../../../packages/animate/src/species/humanoid/skeleton';
+import { massFor } from '../../../packages/animate/src/person/anatomy/skeleton';
 import { jointOf, type Actor } from './actor';
 
 /** the body's joints by name */

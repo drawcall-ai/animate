@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { dt, person, run } from '../bodies';
 import { poseOf } from '../../src/index';
 

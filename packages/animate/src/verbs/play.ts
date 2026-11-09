@@ -1,5 +1,5 @@
 import { runTimeline, type NonReuseableTimeline, type ReusableTimeline } from '@pmndrs/timeline';
-import { selfOf, Body } from '../body/body';
+import { selfOf, Body } from '../body';
 
 /**
  * Runs `story` headless to its end as an app would, frame by frame (`dt`, s): the story, then each of `bodies`. Returns what it returned and

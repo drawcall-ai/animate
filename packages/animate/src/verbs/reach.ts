@@ -1,8 +1,8 @@
-import { selfOf, type Body, type ByHand } from '../body/body';
+import { selfOf, type Body, type ByHand } from '../body';
 import type { AnySpecies } from '../species/define';
 import { finder, handTarget, type Target } from './targets';
 import { verb, type Verb } from './story';
-import type { HandOptions } from '../hands/handling';
+import type { HandOptions } from '../body/handling';
 
 /**
  * Reaches each hand named to its target (an `Object3D` turns a person's hand toward its turn as far as the wrist goes, a creature's exactly; `track` holds a person's hand exactly so), taking nothing: from where it stands if

@@ -1,5 +1,5 @@
 import type { LogEntry } from '@drawcall/animate';
-import { SCENARIOS } from '../src/scenarios';
+import { SCENARIOS } from '../src/scenarios/index';
 import { knownFailure, run, seeded } from './run';
 
 /** Prints the scenario's log (and those of `vary` seeded variations of its people), its worst problems first. */

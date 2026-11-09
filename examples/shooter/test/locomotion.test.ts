@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { box, DT, node, ramp, soldierOn, soles } from './course';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import type { Body } from '@drawcall/animate';
 
 const airborne = (body: Body) => selfOf(body).stepper?.airborne ?? false;

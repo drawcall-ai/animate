@@ -1,9 +1,9 @@
 import { Euler, Group, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Body, dog, grab, walkTo } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import { play } from '../../../packages/animate/test/bodies';
-import { DOG } from '../src/skeletons';
+import { DOG } from '../src/skeletons/index';
 import { dogFetch } from '../src/scenarios/dog';
 import { Simulation } from '../src/simulation';
 import { ball } from '../src/things';

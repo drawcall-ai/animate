@@ -3,7 +3,7 @@ import { Carrier } from '../../src/kernel/carrier';
 import { describe, expect, it } from 'vitest';
 import { Body } from '../../src/index';
 import { species } from '../../src/species';
-import { selfOf } from '../../src/body/body';
+import { selfOf } from '../../src/body';
 import { TrackedRotation } from '../../src/kernel/track';
 import { looking } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';

@@ -3,7 +3,7 @@ import { stroll } from '../src/scenarios/stroll';
 import { legsBiped } from '../src/scenarios/legs';
 import type { Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
-import { OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from '../src/skeletons';
+import { OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from '../src/skeletons/index';
 import { failed, measure, walkingForm } from './metrics';
 import { frames } from './frame';
 import { cases } from '../../../packages/animate/test/open';

@@ -1,7 +1,7 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
 import { sameThree } from '../kernel/math';
 import type { Frame } from '../kernel/frame';
-import type { Self } from '../body/runtime';
+import type { Self } from '../body/self';
 import type { Goal } from '../kernel/goal';
 import { bodyOf, boneOf } from '../things/hold';
 import { resolve } from '../things/resolve';

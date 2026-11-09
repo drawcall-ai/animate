@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Body, dog, humanoid, lookAt } from '../../src/index';
-import { INDEX } from '../../src/species/humanoid/bones';
+import { INDEX } from '../../src/person/anatomy/bones';
 import { gazeOff, insides, person, play } from '../bodies';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';

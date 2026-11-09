@@ -1,8 +1,8 @@
 // Pose metrics use public bones, proportions and feet. Grip ownership, borne loads and quiet-stance intent still need the runtime.
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { HumanoidBone } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
-import { personOf, type Person as Insides } from '../../../packages/animate/src/body/person';
+import { selfOf } from '../../../packages/animate/src/body';
+import { personOf, type Person as Insides } from '../../../packages/animate/src/person/person';
 import type { Person } from '../src/scenario';
 import { poseOf } from '@drawcall/animate';
 

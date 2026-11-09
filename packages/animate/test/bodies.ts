@@ -3,14 +3,14 @@ import { runTimeline, type ReusableTimeline } from '@pmndrs/timeline';
 import type { ReadonlyPose } from '../src/kernel/pose';
 import type { Gazer } from '../src/species/define';
 import { Body, humanoid, type BodyOptions } from '../src/index';
-import { selfOf } from '../src/body/body';
+import { selfOf } from '../src/body';
 import { during, type Channel, type Tier } from '../src/kernel/requests';
 import type { Frame } from '../src/kernel/frame';
-import type { Go } from '../src/kernel/go';
-import type { Person } from '../src/body/person';
-import { personOf } from '../src/body/person';
-import { palmOf } from '../src/species/humanoid/landmarks';
-import type { Side } from '../src/species/humanoid/bones';
+import type { Go } from '../src/step/go';
+import type { Person } from '../src/person/person';
+import { personOf } from '../src/person/person';
+import { palmOf } from '../src/person/anatomy/landmarks';
+import type { Side } from '../src/person/anatomy/bones';
 import { PERSON } from '../skills/animate/references/person';
 
 /** the sub-step (s) */

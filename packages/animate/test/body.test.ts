@@ -2,7 +2,7 @@ import { Bone, Group, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { bone, type SkeletonBone } from '@drawcall/rig';
 import { Body, dog, horse, humanoid } from '../src/index';
-import { BONES, INDEX } from '../src/species/humanoid/bones';
+import { BONES, INDEX } from '../src/person/anatomy/bones';
 import { claim, dt, insides, person, run } from './bodies';
 import { rng } from './random';
 import { resolve } from '../src/things/resolve';

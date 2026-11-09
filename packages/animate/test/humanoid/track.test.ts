@@ -2,8 +2,8 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { track } from '../../src/index';
 import { beyond } from '../../src/kernel/limits';
-import { INDEX } from '../../src/species/humanoid/bones';
-import type { Person } from '../../src/body/person';
+import { INDEX } from '../../src/person/anatomy/bones';
+import type { Person } from '../../src/person/person';
 import { insides, person, play } from '../bodies';
 import { poseOf } from '../../src/index';
 

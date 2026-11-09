@@ -1,15 +1,15 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Body, horse, humanoid, walkTo } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import { clampRotation } from '../../../packages/animate/src/kernel/limits';
-import { INDEX } from '../../../packages/animate/src/species/humanoid/bones';
-import { solePoints } from '../../../packages/animate/src/species/humanoid/landmarks';
+import { INDEX } from '../../../packages/animate/src/person/anatomy/bones';
+import { solePoints } from '../../../packages/animate/src/person/anatomy/landmarks';
 import { cases } from '../../../packages/animate/test/open';
 import { play } from '../../../packages/animate/test/bodies';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
-import { HORSE, PERSON } from '../src/skeletons';
+import { HORSE, PERSON } from '../src/skeletons/index';
 import { legsHorse, scripted, type Route } from '../src/scenarios/legs';
 import { poseOf } from '@drawcall/animate';
 

@@ -1,6 +1,6 @@
 import { TimelineRunner, action, type ReusableTimeline, type TimelineClock, type UntilCondition } from '@pmndrs/timeline';
 import type { Frame } from './frame';
-import type { Go } from './go';
+import type { Go } from '../step/go';
 
 /** `asked` serves the verb directly; `borrowed` recruits supporting parts. Both override holding and idle behaviour. */
 export type Tier = 'borrowed' | 'asked';

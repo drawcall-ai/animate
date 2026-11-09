@@ -1,5 +1,5 @@
 import { Vector3 } from 'three';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import { jointOf } from './actor';
 import { FIXED_DT } from '../src/scenario';
 import { comOf } from './com';

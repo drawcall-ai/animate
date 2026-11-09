@@ -1,4 +1,4 @@
-import type { Beat } from '../src/beats';
+import type { Beat } from '../src/beats/index';
 import { play, type Playing } from '../src/play';
 
 /**

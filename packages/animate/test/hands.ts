@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
-import type { Person } from '../src/body/person';
-import type { Side } from '../src/species/humanoid/bones';
+import type { Person } from '../src/person/person';
+import type { Side } from '../src/person/anatomy/bones';
 import { dt } from './bodies';
 
 /** each hand's speed (m/s) each frame from when `going()` turns true */

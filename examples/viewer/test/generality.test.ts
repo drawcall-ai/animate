@@ -2,9 +2,9 @@ import { Group, Object3D, Vector3 } from 'three';
 import { action, parallel, runTimeline, type NonReuseableTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, wait, walkTo, type Species, attempt, Missed, grip, poseOf } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import { cases } from '../../../packages/animate/test/open';
-import { DOG, HORSE, PERSON, scaled } from '../src/skeletons';
+import { DOG, HORSE, PERSON, scaled } from '../src/skeletons/index';
 import { ball, box, cylinder } from '../src/things';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, things high and low. Every run must
