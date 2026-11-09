@@ -104,12 +104,9 @@ function* transferring(person: Person, request: Request, thing: Thing, way: Carr
   const end = way.points[way.points.length - 1];
   const movingFrame = person.movingFrameOf(thing.object);
   const from = movingFrame.current.position.y, watched = movingFrame.current.position.clone();
-  // (in both hands, squared to the body, whichever way round keeps each hand on its own side: a box taken by grips the other way round —
-  // a hand-over's — would have the arms cross; in one, turned with the body as it was taken: a bucket by its handle, squared, would turn
-  // the hand half round)
-  const single = handsOn(person, thing).length === 1, { left, right } = person.holding;
-  const crossing = !single && left && right && thing.grip(left.grip).at.position.x < thing.grip(right.grip).at.position.x;
-  const atBody = carried(person, single ? movingFrame.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing)) : crossing ? ABOUT : IDENTITY);
+  // (upright, keeping the turn from the body's facing that it has now: a box taken by grips the other way round — a hand-over's — has its arms as they are)
+  const turn = movingFrame.current.quaternion.clone().premultiply(new Quaternion().setFromAxisAngle(UP, -person.locomotion.facing));
+  const atBody = carried(person, turn.set(0, turn.y, 0, turn.w).normalize());
   const rise = atBody(person.frame).position.y - from;
   let lifted = rise <= 0, approached = false;
   // (raised onto its place as the body comes there turned as it stands: begun before it has turned, the load would turn to its place's
@@ -244,4 +241,4 @@ function inReach(person: Person, thing: Thing, wideOnly = false): number {
 /** Tuned carry staging (m at default stature): how far ahead of the hips a load is carried, clear of the thighs with room for two hands,
  * and how far above standing hip height, independent of the pelvis's squat */
 const CARRY_AHEAD = 0.35, CARRY_HEIGHT = 0.12;
-const UP = new Vector3(0, 1, 0), IDENTITY = new Quaternion(), ABOUT = new Quaternion(0, 1, 0, 0), _v = new Vector3();
+const UP = new Vector3(0, 1, 0), _v = new Vector3();

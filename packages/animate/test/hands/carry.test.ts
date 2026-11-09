@@ -261,7 +261,7 @@ it('walks on with what the arm cannot hold at its carrying place, and ends', () 
 
 describe('a thing in both hands', () => {
   // (a hand-over's taker holds it by grips the other way round from the body's own axes)
-  it('walked to a point keeps each hand on its own side, its turn squared to the body', () => {
+  it('walked to a point keeps each hand on its own side, keeping its turn from the body', () => {
     const body = person({ dev: true }), room = roomOf(body);
     const load = box(room, new Vector3(0, 1, 0.4), { turn: Math.PI, solid: false });
     let most = -Infinity, carried: boolean | null = null, walking = false;
@@ -278,6 +278,30 @@ describe('a thing in both hands', () => {
     expect(most).toBeLessThan(0);
     expect(load.getWorldQuaternion(new Quaternion()).angleTo(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI))).toBeLessThan(0.1);
     expect(body.log).toEqual([]);
+  });
+
+  // (the trial that found it: a sign read off the grips' sides flipped the walk's turn on 1 mm: −9° with the arms crossed 23 cm, or 169°)
+  it.each([0, 0.001, -0.001])('grips fore and aft, %f off the line: it stays as it was taken, the arms as they were', (aside) => {
+    const body = person({ dev: true }), room = roomOf(body), pole = empty(room, 'pole', new Vector3(0, 1, 0.4));
+    pole.userData.mass = 2;
+    empty(pole, 'L', new Vector3(aside, 0, 0.15));
+    empty(pole, 'R', new Vector3(-aside, 0, -0.15));
+    room.updateMatrixWorld(true);
+    let turn = new Quaternion(), facing = 0, drift = 0, carried: boolean | null = null, walking = false;
+    const relative = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -body.facing).multiply(pole.getWorldQuaternion(new Quaternion()));
+    play(function* () {
+      yield* grab(body, pole, { left: 'L', right: 'R' });
+      turn = relative();
+      facing = body.facing;
+      walking = true;
+      carried = yield* carry(body, pole, new Vector3(0, 1.05, 3));
+    }, [body], 15, () => {
+      if (walking && body.feet.every((foot) => foot.planted)) drift = Math.max(drift, relative().angleTo(turn));
+      return carried !== null;
+    });
+    expect(carried).toBe(true);
+    expect(Math.abs(body.facing - facing)).toBeGreaterThan(0.5);
+    expect(drift).toBeLessThan(0.45);
   });
 
   it('turned by its target so the arms cross, says so in the dev log', () => {
