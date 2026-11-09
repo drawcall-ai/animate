@@ -49,7 +49,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
     else (made = new MovingFrame(placed.position, placed.quaternion)).place(time, placed.position, placed.quaternion);
     return made;
   };
-  let time = NaN;
+  let time = NaN, parented: Object3D | null = null;
   return (f) => {
     if (time === f.time) return found;
     time = f.time;
@@ -58,6 +58,14 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
       if (![at.x, at.y, at.z].every(Number.isFinite)) throw new Error(`a target that is no point: (${at.x}, ${at.y}, ${at.z})`);
       return Object.assign(found, { position: found.position.copy(at), quaternion: undefined, velocity: undefined, object: undefined, carriedBy: undefined });
     }
+    // (taken out of the scene while still a target: its numbers now mean nowhere, so it stands where it was last, said once; put back, it goes on)
+    if (parented === at && !at.parent) {
+      self.warn(`target gone ${at.uuid}`, `the target "${at.name}" was taken out of the scene while a verb still goes to it, or a hand it brought something to still keeps to it: it stays where it was. Remove it after the next verb on that hand has ended`);
+      found.velocity = undefined;
+      found.carriedBy = undefined;
+      return found;
+    }
+    parented = at.parent ? at : null;
     const on = bodyOf(at);
     if (on) self.meet(on);
     const frame = typeof target === 'function' ? fresh(at, f.time) : self.movingFrameOf(at);

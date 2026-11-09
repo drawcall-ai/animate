@@ -154,11 +154,11 @@ function* sip(body: Body, cup: Object3D, rim: Object3D): Verb {
   lips.quaternion.copy(tilt);
   lips.position.set(0, head.nose.y - 0.03, head.nose.z + 0.12).sub(rim.position.clone().applyQuaternion(tilt));
   body.bones.head.add(lips);
-  const done = yield* carry(body, cup, lips);
-  lips.removeFromParent();
-  return done;
+  return yield* carry(body, cup, lips);
 }
 ```
+
+A carry to an empty on the body leaves the hand keeping to that empty, moving with it, until the next hand verb: so leave the empty there at least until then.
 
 ## Walking and running
 
