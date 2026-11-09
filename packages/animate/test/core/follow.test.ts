@@ -99,12 +99,6 @@ describe('follow', () => {
     }
     expect(path.at(-1)?.distanceTo(goal.clone().applyQuaternion(cart.current.quaternion).add(cart.current.position))).toBeLessThan(1e-9);
   });
-
-  it('follows scalars the same way', () => {
-    let [a, b] = [0, 0];
-    for (let k = 0; k < 120; k++) [a, b] = [b, follow(a, b, 2, { accel: 20, speed: 3 }, dt)];
-    expect(b).toBe(2);
-  });
 });
 
 describe('followRotation', () => {

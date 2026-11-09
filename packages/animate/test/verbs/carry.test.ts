@@ -1,7 +1,8 @@
-import { BoxGeometry, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
+import { BoxGeometry, Euler, Group, Mesh, Object3D, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
 import { arriving, Body, carry, grab, humanoid, release, wait } from '../../src/index';
+import { INDEX } from '../../src/species/humanoid/bones';
 import { NATIVE } from '../skeletons/native';
 import { insides, palmAt, person, play } from '../bodies';
 import { box, empty, roomOf, worldOf, named } from '../things';
@@ -66,17 +67,23 @@ describe('carry', () => {
     expect(body.log).toEqual([]);
   });
 
-  it('lifts a heavy load slower than a light one, and dips with it as it takes its weight', () => {
+  it('prepares a heavy lift before its support leaves it, lifts it slower than a light one, and dips with it as it takes its weight', () => {
     const lift = (mass: number) => {
-      const body = person({ dev: true }), room = roomOf(body);
+      const body = person({ dev: true }), h = insides(body), room = roomOf(body);
       const load = box(room, new Vector3(-0.15, 1, 0.35), { mass, solid: false });
-      let taken = NaN, end = NaN, top = -Infinity, dip = 0;
+      let held = NaN, off = NaN, end = NaN, top = -Infinity, dip = 0, down = 0, preparation = 0, hips = NaN;
       play(function* () {
         yield* grab(body, load, { right: 'right' });
         yield* carry(body, load, new Vector3(-0.15, 1.25, 0.35));
-        end = insides(body).frame.time;
+        end = h.frame.time;
       }, [body], 8, (time) => {
-        if (Number.isNaN(taken) && body.holds(load)) taken = time;
+        if (Number.isNaN(held) && body.holds(load)) [held, hips] = [time, h.pose.position(0).y];
+        if (!Number.isNaN(held) && Number.isNaN(off)) {
+          if (load.parent === room) {
+            down = Math.max(down, hips - h.pose.position(0).y);
+            preparation = Math.max(preparation, h.poise.lower);
+          } else off = time;
+        }
         // (found by event while the grab lifts it clear, its hand the grab's: the load first up at its highest, then its lowest after)
         const y = worldOf(load).y;
         if (y > top) top = y;
@@ -85,11 +92,17 @@ describe('carry', () => {
       });
       expect(body.log).toEqual([]);
       expect(worldOf(load).distanceTo(new Vector3(-0.15, 1.25, 0.35))).toBeLessThan(0.006);
-      return { seconds: end - taken, dip };
+      return { delay: off - held, down, preparation, dip, seconds: end - held, pitch: new Euler().setFromQuaternion(h.pose.rotation(INDEX.chest), 'YXZ').x };
     };
     const light = lift(0.5), heavy = lift(8);
+    // (an anticipatory dip of 100 ms and 5 mm before a heavy load leaves its support; a light one is just taken)
+    expect(heavy.delay - light.delay).toBeGreaterThanOrEqual(0.05);
+    expect(heavy.delay - light.delay).toBeLessThanOrEqual(0.15);
+    expect(heavy.preparation).toBeGreaterThanOrEqual(0.005);
+    expect(heavy.down).toBeLessThan(0.01);
     // (from taking hold to the load at rest up there)
     expect(heavy.seconds).toBeGreaterThan(light.seconds + 0.5);
+    expect(heavy.pitch).toBeLessThan(light.pitch - 0.01);
     // (its weight is taken in the grab's 3 cm lift clear of the floor's support, where the library's tuned compliance dips an 8 kg load
     // 8 mm and a 0.5 kg one under 1 mm: the heavy one dips at least half that difference more than the light)
     expect(heavy.dip).toBeGreaterThan(light.dip + 0.004);

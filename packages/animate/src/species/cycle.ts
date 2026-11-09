@@ -1,7 +1,6 @@
 // Reference curves: a value over one gait cycle, read off published plots as keyframes.
 
-/** degrees to radians */
-export const DEG = Math.PI / 180;
+const DEG = Math.PI / 180;
 
 /**
  * A value over one cycle of a leg: keyframes `[u, value]` (u in [0, 1), rising), periodic, a

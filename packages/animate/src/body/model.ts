@@ -1,5 +1,5 @@
 import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
-import type { SkeletonBone } from '@drawcall/rig';
+import type { SkeletonBone } from '../kernel/skeleton';
 import type { AnySpecies } from '../species/define';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { Floor } from '../legs/floor';

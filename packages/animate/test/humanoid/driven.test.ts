@@ -131,32 +131,28 @@ it('walks a curve while turning, then stops and turns back in place', () => {
   expect(Math.abs(h.locomotion.facing + 0.6)).toBeLessThan(0.01);
 });
 
-it('crouches as asked: the pelvis let down smoothly, feet wider, steps still clean crouch-walking', () => {
-  let low = Infinity, standing = 0;
-  const { h } = drive(6, moving(2, 4.5, forwardOf(0).multiplyScalar(0.8)), () => 0, (t, root, h) => {
-    root.crouch = Math.min(1, Math.max(0, (t - 0.5) / 0.25), Math.max(0, (5.25 - t) / 0.25));
-    if (t < 0.5) standing = h.pose.position(0).y;
-    if (t > 1 && t < 5) low = Math.min(low, h.pose.position(0).y);
-  });
-  expect(standing - low).toBeGreaterThan(0.33);
-  expect(standing - low).toBeLessThan(0.42);
-  expect(h.log).toEqual([]);
-});
-
 // (a player's crouch key is a step in the root's crouch: the legs take it at their own pace, the feet on the floor going down and coming up)
 it('crouches on a key press and stands on its release, the feet kept to the floor', () => {
   const { h } = drive(4, () => new Vector3(), () => 0, (t, root) => { root.crouch = t > 0.5 && t < 2.5 ? 1 : 0; });
   expect(h.log).toEqual([]);
   expect(h.stepper?.crouch).toBe(0);
 });
-// (crouched: turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does)
+// (crouched: a crouch-walk, turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does)
 it.each([
-  ['a quarter turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? Math.PI / 2 : 0],
-  ['a half turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? 0.95 * Math.PI : 0],
-  ['a walk back', moving(1, 4, forwardOf(0).multiplyScalar(-0.8)), () => 0],
-  ['a strafe', moving(1, 4, leftOf(0).multiplyScalar(0.8)), () => 0],
-] as const)('crouched, %s: clean', (_, velocity, yaw) => {
-  const { h } = drive(6, velocity, yaw, (t, root) => { root.crouch = Math.min(1, Math.max(0, (t - 0.3) / 0.25), Math.max(0, (5 - t) / 0.25)); });
+  ['a walk ahead', moving(2, 4.5, forwardOf(0).multiplyScalar(0.8)), () => 0, 0.5, 5.25],
+  ['a quarter turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? Math.PI / 2 : 0, 0.3, 5],
+  ['a half turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? 0.95 * Math.PI : 0, 0.3, 5],
+  ['a walk back', moving(1, 4, forwardOf(0).multiplyScalar(-0.8)), () => 0, 0.3, 5],
+  ['a strafe', moving(1, 4, leftOf(0).multiplyScalar(0.8)), () => 0, 0.3, 5],
+] as const)('crouched, %s: the pelvis let down smoothly, steps still clean', (_, velocity, yaw, down, up) => {
+  let low = Infinity, standing = 0;
+  const { h } = drive(6, velocity, yaw, (t, root, h) => {
+    root.crouch = Math.min(1, Math.max(0, (t - down) / 0.25), Math.max(0, (up - t) / 0.25));
+    if (t < down) standing = h.pose.position(0).y;
+    if (t > down + 0.5 && t < up - 0.25) low = Math.min(low, h.pose.position(0).y);
+  });
+  expect(standing - low).toBeGreaterThan(0.33);
+  expect(standing - low).toBeLessThan(0.45);
   expect(h.log).toEqual([]);
 });
 // (a driven body's balance is its player's: its XCoM past its feet is a note, recorded only when asked for)

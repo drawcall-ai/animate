@@ -20,8 +20,6 @@ export interface Goal {
   spin?: Vector3;
   /** the body whose bone carries it: that body letting itself down or bowing carries it down too */
   carriedBy?: object;
-  /** the tip may roll freely about this line (a hand round a bar, a palm on a face; in the frame the target is in): of the rotations so, the one nearest it is */
-  axis?: Vector3;
   /** `quaternion` only preferred: the tip turned toward it as far as its last joint goes, the bend kept on the pole's plane for it, and
    * met there once it no longer turns, however far short (a handle's palm: the hand round the handle as the wrist lets it) */
   preferred?: boolean;

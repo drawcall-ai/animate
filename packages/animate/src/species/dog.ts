@@ -1,6 +1,6 @@
 // A dog: a Labrador of ~30 kg, 0.54 m at the withers (the breed's 54–57 cm: read, FCI standard 122), standing square (+Y up, facing +Z,
 // its left +X).
-import type { SkeletonBone } from '@drawcall/rig';
+import type { SkeletonBone } from '../kernel/skeleton';
 import type { JointCycle } from './cycle';
 import { powerGait } from './schedule';
 import { gaitAt } from './scaled';
@@ -8,7 +8,7 @@ import { swing } from '../kernel/life';
 import { build, needing, type BoneNames, type Having, type LegRole, type Range, type Species } from './define';
 
 /** the bones a dog's skeleton names: each leg's four joints top to paw (`leftFore0` … `leftFore3`, and so on), its trunk, head and tail */
-export type DogBone = 'trunk' | 'pelvis' | 'neck' | 'head' | 'jaw' | 'tail' | `${'left' | 'right'}${'Fore' | 'Hind'}${0 | 1 | 2 | 3}`;
+type DogBone = 'trunk' | 'pelvis' | 'neck' | 'head' | 'jaw' | 'tail' | `${'left' | 'right'}${'Fore' | 'Hind'}${0 | 1 | 2 | 3}`;
 
 /**
  * A dog of a skeleton (as rigged with @drawcall/rig, `as const`), its bones named as `DogBone`: it trots (diagonal pairs), its whole body

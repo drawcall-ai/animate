@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Frame, Step } from '../../kernel/frame';
 import { Carrier } from '../../kernel/carrier';
 import { followRotation, toLocal } from '../../kernel/follow';
@@ -16,7 +16,6 @@ import { boneOf, onBody } from '../../things/hold';
 import { bringShoulder, liftFor, twistToward } from './bend';
 import { clearWrist, keepArmOut, NUDGED, SOLVED, waitingFor } from './trunk';
 import { followJoint } from './hang';
-import { smoothstep } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 import { palmOf } from '../../species/humanoid/landmarks';
 
@@ -69,7 +68,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     if (!goal.quaternion) return goal;
     const placed = on?.at(f.time), off = f.prev.position(bone).distanceTo(at);
     setOff ??= { off, turn: placed ? placed.prev.quaternion.clone().invert().multiply(f.prev.rotation(bone)) : f.prev.rotation(bone).clone() };
-    const share = setOff.off > 1e-6 ? smoothstep(0, 1, 1 - off / setOff.off) : 1;
+    const share = setOff.off > 1e-6 ? MathUtils.smoothstep(1 - off / setOff.off, 0, 1) : 1;
     return { ...goal, quaternion: _gliding.copy(setOff.turn).slerp(goal.quaternion, share) };
   };
   return (f) => {
@@ -98,9 +97,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
     const on = options.on;
     const own = options.thing && onBody(person, options.thing) ? on : undefined;
     const placed = own?.at(f.time);
-    const world = on
-      ? { ...on.toWorld(goal, _world, f.time), axis: goal.axis && _axis.copy(goal.axis).applyQuaternion(on.current.quaternion) }
-      : { ...goal, velocity: goal.velocity ?? ZERO };
+    const world = on ? on.toWorld(goal, _world, f.time) : { ...goal, velocity: goal.velocity ?? ZERO };
     const aim = placed ? { ...goal, velocity: goal.velocity ?? ZERO } : world;
     const from = _from.copy(f.prev.position(bone)), was = _was.copy(f.prev2.position(bone));
     if (placed) {
@@ -138,7 +135,7 @@ export function reaching(person: Reacher, side: Side, target: Live<Goal>, option
         off: _glided.position.distanceTo(aim.position),
       };
     }
-    const share = start.off > 1e-6 ? smoothstep(0, 1, 1 - _glided.position.distanceTo(aim.position) / start.off) : 1;
+    const share = start.off > 1e-6 ? MathUtils.smoothstep(1 - _glided.position.distanceTo(aim.position) / start.off, 0, 1) : 1;
     const bent = _bend.copy(start.elbow).applyQuaternion(chest).add(shoulder);
     // (onto a thing, the elbow set off as it stood keeps the hand on a grip moving fast; to a point, the elbow goes as a reach there
     // bends it, since an elbow held to where it set off cannot follow a hand swept across the body within the shoulder's range)
@@ -300,7 +297,7 @@ const ZERO = new Vector3(), IDENTITY = new Quaternion();
 const _q = new Quaternion(), _r = new Quaternion(), _c = new Quaternion(), _g = new Quaternion(), _frame = new Quaternion();
 const _s = new Vector3(), _d = new Vector3(), _w = new Vector3(), _up = new Vector3(), _rest = new Vector3(), _pole = new Vector3();
 const _cleared = new Vector3(), _spare = new Vector3(), _end = new Vector3(), _bend = new Vector3(), _m = new Vector3(), _line = new Vector3();
-const _axis = new Vector3(), _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _along = new Vector3();
+const _from = new Vector3(), _was = new Vector3(), _wait = new Vector3(), _along = new Vector3();
 const _tipGoal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };
 const shoulders = new WeakMap<Reacher, Record<Side, Carrier>>();
 const _turnAt = new Quaternion(), _gliding = new Quaternion(), _wrist = new Vector3();

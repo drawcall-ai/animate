@@ -1,9 +1,9 @@
-import { Box3, Quaternion, Ray, Vector3 } from 'three';
+import { MathUtils, Box3, Quaternion, Ray, Vector3 } from 'three';
 import { grasp, held as heldThings, lift, onBody } from '../../things/hold';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
-import { leftOf, smoothstep } from '../../kernel/math';
+import { leftOf } from '../../kernel/math';
 import type { Walk } from '../../legs/walk';
 import { during, type Request } from '../../kernel/requests';
 import { placeArm, reaching } from './arms';
@@ -53,7 +53,7 @@ export function* grabbing(person: Reacher, request: Request, takes: readonly Tak
   // (the body bows and bends for the grips under their load: walking up, from the last landing on; from where it stands, as far as each
   // hand has come toward its grip, so that the hands lead it and it does not bow before they set off)
   const from = takes.map((take) => person.pose.position(person.hands[take.side]).distanceTo(gripAt(person, take, person.frame)));
-  const share = (f: Frame, k: number) => walk ? 1 : smoothstep(0, 1, 1 - f.prev.position(person.hands[takes[k].side]).distanceTo(gripAt(person, takes[k], f, _grip)) / Math.max(from[k], 1e-6));
+  const share = (f: Frame, k: number) => walk ? 1 : MathUtils.smoothstep(1 - f.prev.position(person.hands[takes[k].side]).distanceTo(gripAt(person, takes[k], f, _grip)) / Math.max(from[k], 1e-6), 0, 1);
   const com = new Vector3(), ahead = new Vector3();
   let noticed = NaN, returning = false;
   const gaze = (f: Frame) => {

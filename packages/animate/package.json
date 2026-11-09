@@ -34,14 +34,12 @@
     "test": "vitest run",
     "prepack": "pnpm build"
   },
-  "dependencies": {
-    "@drawcall/rig": "^0.5.0"
-  },
   "peerDependencies": {
     "@pmndrs/timeline": "^0.5.0",
     "three": ">=0.170.0"
   },
   "devDependencies": {
+    "@drawcall/rig": "^0.5.0",
     "@pmndrs/timeline": "^0.5.0",
     "@types/three": "^0.180.0",
     "three": "^0.180.0",

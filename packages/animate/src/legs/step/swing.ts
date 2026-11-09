@@ -1,6 +1,6 @@
 // A foot in the air: where it lands, how it is aimed there and how it swings.
-import { Quaternion, Vector3 } from 'three';
-import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, smoothstep, softplus, wrapAngle, yawOf } from '../../kernel/math';
+import { MathUtils, Quaternion, Vector3 } from 'three';
+import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, softplus, wrapAngle, yawOf } from '../../kernel/math';
 import { hullOf, outside } from '../support';
 import { AIMED, PASSING, PIVOTED, PIVOTING, SETTLE, SHUFFLING, STEP, TURN, strayRoom, turnTo, _a, _b, _c, _f, _hipAt, _hipThen, _l, _m, _n, _o, _v, _w, _x, beyond, remaining, type FootPose, type Leg, type Now, type Steps, type Swing } from './state';
 import { foldLength, hipOf, home, homeOf, lengthOf, pace, shankLean, staysOn, travelOf, widthAt, xcomAhead } from './reach';
@@ -25,7 +25,7 @@ export function landing(steps: Steps, now: Now, leg: Leg, remaining: number): [V
   const heading = steps.clocked ? yaws[1] + spin * remaining : turned;
   const side = leftOf(turned, new Vector3());
   // (as wide as the speed it will land at: a stopping step lands in the standing stance)
-  const landed = pace(steps, now, remaining, _w), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
+  const landed = pace(now, remaining, _w), speed = landed.dot(r.velocity) > 0 ? Math.hypot(landed.x, landed.z) : 0;
   // (along the way it will go, round its curve, but as far as it goes now: a stop is caught by a foot further on — ahead only: one
   // stopping a step aside or back lands where the body stops, beside it. Arriving on a still mark, no further on than the extrapolated
   // centre of mass as it lands, braking where it brakes: carried on at the speed it went, a closing step landed 9–13 cm past the mark and
@@ -79,7 +79,7 @@ function balanced(steps: Steps, now: Now, leg: Leg, remaining: number, yaw: numb
  * the extrapolated centre of mass runs out from it — its speed × turn rate (the sideways acceleration) × l/g, halved: Hof's √(l/g) ahead
  * along the tangent, off the arc by its square over twice the radius.
  */
-export function bend(steps: Steps, forecast: (ahead: number) => { position: Vector3 }, t: number, at: Vector3, to: Vector3) {
+function bend(steps: Steps, forecast: (ahead: number) => { position: Vector3 }, t: number, at: Vector3, to: Vector3) {
   const before = forecast(Math.max(0, t - BEND_SPAN)).position, after = forecast(t + BEND_SPAN).position;
   const turn = wrapAngle(Math.atan2(after.x - at.x, after.z - at.z) - Math.atan2(at.x - before.x, at.z - before.z));
   const speed = after.distanceTo(before) / (2 * BEND_SPAN);
@@ -97,7 +97,7 @@ function steady(steps: Steps, now: Now, leg: Leg, remaining: number, to: Vector3
   const yawed = turned + leg.sign * st.toeOut, others = other.swing ? [] : feet.print(other.i, other.anchor, other.yaw);
   const past = (at: Vector3, centre: Vector3, margin = capture) => outside(hullOf([...feet.print(leg.i, at, yawed), ...others]), centre) > margin * s;
   // (as it will be: carried toward the landing foot as far as the pelvis sways over it beyond the midline — a wide stride's)
-  const centre = xcomAhead(steps, now, remaining, new Vector3()).addScaledVector(side, leg.sign * (st.width.sway ?? 0) * s * smoothstep(0, 1, speed));
+  const centre = xcomAhead(steps, now, remaining, new Vector3()).addScaledVector(side, leg.sign * (st.width.sway ?? 0) * s * MathUtils.smoothstep(speed, 0, 1));
   const under = (c: Vector3) => c.clone().addScaledVector(side, leg.sign * st.width.narrowest * s / 2);
   const present = r.xcom;
   // (a walker's slow step lands no further aside of the other foot than `WIDE.stances`, its extrapolated centre of mass, as it will be
@@ -132,7 +132,7 @@ function uncross(steps: Steps, now: Now, leg: Leg, to: Vector3, side: Vector3): 
     // (with a foreseen root, a foot landing a foot's length or more ahead of or behind the other need not land a full stance beside it:
     // the shanks pass apart — but never across the line between them: `PASSING` of the stance kept)
     const along = Math.abs(_v.subVectors(to, other.anchor).dot(_n.set(-axis.z, 0, axis.x)));
-    const apart = now.r.forecast ? lerp(PASSING, 1, 1 - smoothstep(SPAN * s, 2 * SPAN * s, along)) : 1;
+    const apart = now.r.forecast ? lerp(PASSING, 1, 1 - MathUtils.smoothstep(along, SPAN * s, 2 * SPAN * s)) : 1;
     const gap = _v.dot(axis) * leg.sign, narrowest = st.width.narrowest * s * apart;
     if (gap < narrowest) to.addScaledVector(axis, leg.sign * (narrowest - gap));
     across = Math.max(across, narrowest - gap);
@@ -156,7 +156,7 @@ function keptTo(now: Now, w: Swing | null): { onto: number | undefined; stays: b
 export function settle(steps: Steps, now: Now, leg: Leg, w: Swing, aiming = true) {
   const { st, feet } = steps, s = st.scale, { r, yaw, spin, run, holding, reaches } = now, build = feet.legs[leg.i];
   const { onto, stays } = keptTo(now, w);
-  const rest = remaining(w), through = travelOf(steps, now, rest, _v).add(steps.hips);
+  const rest = remaining(w), through = travelOf(now, rest, _v).add(steps.hips);
   const hipAt = (facing: number, root: Vector3, out: Vector3) =>
     out.copy(root).addScaledVector(leftOf(facing, _l), leg.sign * (build.hip ?? feet.hip)).addScaledVector(forwardOf(facing, _o), build.ahead ?? 0);
   // The capsule may stop below a future tread. Landings must fit the legs while standing on its actual support.
@@ -366,7 +366,7 @@ export function swingPose(steps: Steps, now: Now, leg: Leg, w: Swing, flying: nu
     if (!rel) throw new Error('a swing in the air without its leap');
     const pelvisY = flying + rise;
     if (now.flight) {
-      const tucked = minimumJerk(steps.jumping.since / TUCK.seconds) * (vy < 0 ? smoothstep(TUCK.low * s, TUCK.high * s, now.clearance) : 1);
+      const tucked = minimumJerk(steps.jumping.since / TUCK.seconds) * (vy < 0 ? MathUtils.smoothstep(now.clearance, TUCK.low * s, TUCK.high * s) : 1);
       const length = steps.stand - feet.ankleHeight - st.crouch.depth * s * now.crouch - st.lift.jump * s * tucked;
       [rel.x, rel.v, rel.a] = quintic(rel.x, rel.v, rel.a, length, 0, now.Tsw, dt);
       ankle.set(pelvis.x + w.x.x, pelvisY - rel.x, pelvis.z + w.x.z);

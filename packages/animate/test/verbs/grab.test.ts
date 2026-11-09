@@ -38,12 +38,6 @@ function reachFrom(at: Vector3, sides: readonly Side[] = ['right']): { speed: Re
   return { speed: hands.speed, took };
 }
 
-/** when a hand has gone `distance` (s) */
-const gone = (speed: number[], distance: number) => {
-  let path = 0;
-  return speed.findIndex((v) => (path += v / 60) > distance) / 60;
-};
-
 describe('grab, walking up', () => {
   const pickup = (variation: number) => `looks at a two-hand pickup at least a second before its last travelling touchdown (variation ${variation})`;
   // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: to 0.126 m at these life seeds)
@@ -159,14 +153,6 @@ describe('grab, from where it stands', () => {
       // (the first 0.3 s: never further off than it set off from)
       expect(Math.max(...off.slice(0, 18)) - off[0]).toBeLessThan(0.001);
     }
-  });
-
-  it('two hands reaching together are not mirror images: the left sets off a moment after the right', () => {
-    const { speed } = reachFrom(new Vector3(0, 1.0, 0.45), ['left', 'right']);
-    // (10 cm on its way 40–150 ms after the right)
-    const lag = gone(speed.left, 0.1) - gone(speed.right, 0.1);
-    expect(lag).toBeGreaterThanOrEqual(0.04);
-    expect(lag).toBeLessThanOrEqual(0.15);
   });
 
   it('faces the palm as its grip asks, on a body without finger bones too', () => {

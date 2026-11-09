@@ -1,9 +1,8 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three';
-import type { SkinReport } from '@drawcall/rig';
 import { Pose, type ReadonlyPose } from '../kernel/pose';
 import { STEP, type Frame, type Step } from '../kernel/frame';
 import { Dev, OFF_FLOOR, type LogEntry } from '../kernel/dev';
-import { Skeleton } from '../kernel/skeleton';
+import { Skeleton, type SkinVolume } from '../kernel/skeleton';
 import { checkLimits } from '../kernel/limits';
 import { SnapChecks } from '../kernel/rotation';
 import { Poise } from '../kernel/poise';
@@ -61,7 +60,7 @@ export interface SelfOptions {
    * what it weighs (kg), or a closed mesh's volume as @drawcall/rig's skin report gives it (at 1000 kg/m³, within half and twice its
    * species' mass: development says when it is held so, or the mesh is open and the species' mass is taken); default its species'
    */
-  mass?: number | Pick<SkinReport, 'closed' | 'volume'>;
+  mass?: number | SkinVolume;
   /** the container its mesh was rigged in with @drawcall/rig (`skin(model, skeleton)`): the body poses its bones; without it, the body is bare */
   model?: Object3D;
   /** checks final poses and records problems in `log`; `{ notes: true }` also records what is only reported (a player-driven body's balance) */

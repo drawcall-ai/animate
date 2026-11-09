@@ -16,7 +16,7 @@ import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';
 
 /** How a pose goes. */
-export interface PoseOptions {
+interface PoseOptions {
   /** ends on this; without it, it holds the posture until its story moves on */
   until?: Until;
 }

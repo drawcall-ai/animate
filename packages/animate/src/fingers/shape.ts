@@ -67,13 +67,13 @@ export const PINCH = {
   thumb: { curl: 0.35, oppose: 0.6, spread: 0.5 }, index: digit(0.45, 0.25), middle: digit(0.6, 0.2), ring: digit(0.7, 0.2), little: digit(0.8, 0.2),
 } as const satisfies Shape;
 
-/** `fingers` over `base`: each value given replaces `base`'s (see `valuesOf`) */
-export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
+/** `fingers` over `RELAXED`: each value given replaces `RELAXED`'s (see `valuesOf`) */
+export function shapeOf(fingers: Fingers): Shape {
   for (const [name, values] of Object.entries(fingers)) valuesOf(digitOf(name, 'fingers'), values);
   return {
-    thumb: { ...base.thumb, ...fingers.thumb },
-    index: { ...base.index, ...fingers.index }, middle: { ...base.middle, ...fingers.middle },
-    ring: { ...base.ring, ...fingers.ring }, little: { ...base.little, ...fingers.little },
+    thumb: { ...RELAXED.thumb, ...fingers.thumb },
+    index: { ...RELAXED.index, ...fingers.index }, middle: { ...RELAXED.middle, ...fingers.middle },
+    ring: { ...RELAXED.ring, ...fingers.ring }, little: { ...RELAXED.little, ...fingers.little },
   };
 }
 

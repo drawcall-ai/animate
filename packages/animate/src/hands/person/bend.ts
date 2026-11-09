@@ -1,7 +1,7 @@
-import { Vector3 } from 'three';
+import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
-import { forwardOf, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
+import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
 import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../../legs/person/posture';
 import { INDEX, type Side } from '../../species/humanoid/bones';
 import type { Reacher } from './reacher';
@@ -19,7 +19,7 @@ export const PROTRACTION = 0.035;
 /** how far above the shoulder joint at rest the clavicle aims it for a hand `above` (m) the joint at rest: from none for a hand at the
  * shoulder to a clavicle's length for one 0.6 of the arm above it */
 export const liftFor = (proportions: Proportions, side: Side, above: number) =>
-  smoothstep(-0.05, 0.6, above / proportions.armLength) * proportions.offsets[`${side}UpperArm`].length();
+  MathUtils.smoothstep(above / proportions.armLength, -0.05, 0.6) * proportions.offsets[`${side}UpperArm`].length();
 /** how far the clavicle has lifted the shoulder joint for a hand `height` up (m, on the floor): aimed `liftFor` up, it swings up round
  * the clavicle's length */
 const elevationFor = (proportions: Proportions, side: Side, height: number) => {
@@ -36,7 +36,7 @@ export function twistToward(person: Reacher, pose: ReadonlyPose, point: Readonly
   const station = pose.com(_station);
   const bearing = wrapAngle(Math.atan2(point.x - station.x, point.z - station.z) - person.locomotion.facing);
   const distance = Math.hypot(point.x - station.x, point.z - station.z);
-  share *= smoothstep(person.proportions.shoulderHalfWidth, person.proportions.armLength, distance);
+  share *= MathUtils.smoothstep(distance, person.proportions.shoulderHalfWidth, person.proportions.armLength);
   const twisted = carried && held > 0 ? Math.max(0, Math.sign(bearing) * wrapAngle(yawOf(pose.rotation(INDEX.chest)) - person.locomotion.facing)) : 0;
   const turn = Math.max(Math.min(TWIST.most, TWIST.share * Math.max(0, Math.abs(bearing) - TWIST.start)), Math.min(TWIST.held, twisted + held / person.proportions.shoulderHalfWidth));
   const twist = Math.sign(bearing) * turn * share;

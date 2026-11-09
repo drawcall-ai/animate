@@ -49,9 +49,9 @@ export function bears(centre: Readonly<Vector3>, sole: readonly Spot[], others: 
 /** Tuned (m, default body): how much nearer one foot than the others a still body's centre of mass is with its weight on that foot */
 const BORNE = 0.05;
 
-/** how far `q` (x, z) lies outside the convex polygon `hull` (0 inside); `away` gets the unit direction out toward `q` */
-export function outside(hull: readonly Spot[], q: Readonly<Vector3>, away?: Vector3): number {
-  return Math.max(0, past(hull, q, away));
+/** how far `q` (x, z) lies outside the convex polygon `hull` (0 inside) */
+export function outside(hull: readonly Spot[], q: Readonly<Vector3>): number {
+  return Math.max(0, past(hull, q));
 }
 
 /**

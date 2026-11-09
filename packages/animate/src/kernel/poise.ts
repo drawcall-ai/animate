@@ -42,7 +42,7 @@ export interface ArmPosture {
 }
 
 /** A `Posture`'s trunk, each field given. */
-export type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
+type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
 
 /** What a body is asked to do with its stance this sub-step (see `Poise`), each field as it combines with the others asked. */
 export type Asked = Partial<Pick<Poise, 'lower' | 'bow' | 'bowLimit' | 'bowRate' | 'twist' | 'twistRate' | 'hips' | 'stagger' | 'shift' | 'steady'>> & { posture?: TrunkPosture };

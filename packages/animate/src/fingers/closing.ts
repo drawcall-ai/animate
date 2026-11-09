@@ -40,7 +40,7 @@ const REACHING = 8;
 const SUNK = 0.001, WEB = 4;
 
 /** A grasp's line through what it holds, toward the thumb, and a point on it (the world). */
-export interface Line {
+interface Line {
   at: Vector3;
   axis: Vector3;
 }

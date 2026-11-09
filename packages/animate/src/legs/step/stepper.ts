@@ -2,10 +2,10 @@
 // Recalled: the procedural stepping of games (e.g. Rain World, Overgrowth, Unreal "Control Rig"
 // foot placement): each foot has a home off the root; it steps when it falls too far from it,
 // landing where the home will be.
-import { Matrix4, Vector3 } from 'three';
+import { MathUtils, Matrix4, Vector3 } from 'three';
 import { STEP as SUB_STEP, type Frame } from '../../kernel/frame';
 import { follow } from '../../kernel/follow';
-import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, smoothstep, wrapAngle } from '../../kernel/math';
+import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, quintic, wrapAngle } from '../../kernel/math';
 import { hullOf, outside, xcomOf } from '../support';
 import { strideAt } from '../../species/gait';
 import {
@@ -72,7 +72,7 @@ export class Stepper extends Steps {
     // (first moved: standing as high over the ground as it stands)
     if (Number.isNaN(this.stand)) this.stand = this.heights[1] - ground;
     const body: Body = {
-      ...timed, yaw, width: widthAt(this, timed, v), moving: smoothstep(0, 1, v), ground, climb,
+      ...timed, yaw, width: widthAt(this, timed, v), moving: MathUtils.smoothstep(v, 0, 1), ground, climb,
       standing: ground + this.stand - st.crouch.depth * s * k + tiptoe, over: _over.copy(r.com ?? ZERO).setY(0),
     };
     const now: Now = { ...body, ...this.landingReach(body) };
@@ -139,7 +139,7 @@ export class Stepper extends Steps {
     this.shifted.copy(r.shifted ?? ZERO);
     this.pelvis.copy(r.position).add(hips).add(this.shifted);
     // (the pelvis' own rise and fall: a leap's dip, flight and landing)
-    const run = smoothstep(st.run[0], st.run[1], v);
+    const run = MathUtils.smoothstep(v, st.run[0], st.run[1]);
     if (!physics.physical) leap(jump, this.asked, run, s, dt);
     else drivenLeap(jump, !physics.flight, r.vertical ?? 0, run, s, dt);
     this.asked = undefined;
@@ -180,11 +180,11 @@ export class Stepper extends Steps {
     const { st, yaws } = this, s = st.scale, { r, v, run, crouch: k, pressed, wanted } = root;
     const forward = forwardOf(yaws[1]), left = leftOf(yaws[1]);
     // (a gait's cadence as fast as it will be going by mid-stance: setting off, it steps as quickly as it is about to go, not as it stood)
-    const coming = this.clocked && r.forecast ? Math.max(v, pace(this, root, PACING, _x).length()) : v;
+    const coming = this.clocked && r.forecast ? Math.max(v, pace(root, PACING, _x).length()) : v;
     const pacing = Math.max(coming, TURNING * s * (Math.abs(pressed) + Math.abs(wanted - yaws[1]))), stride = st.gait && strideAt(st.gait, pacing, 0);
     const along = v > 1e-6 ? r.velocity.dot(forward) / v : 1, across = v > 1e-6 ? r.velocity.dot(left) / v : 0;
     // (side-stepping, quicker: short open-and-close steps rather than long straddles)
-    const sideways = Math.abs(across) * smoothstep(0, SIDE_SPEED * s, v);
+    const sideways = Math.abs(across) * MathUtils.smoothstep(v, 0, SIDE_SPEED * s);
     let C = 1 / (stride ? stride.frequency : st.cadence(pacing, sideways, root.f.time));
     const duty = stride ? stride.duty : lerp(lerp(st.duty.walk, st.duty.side, Math.abs(across)), st.duty.run, run);
     const travel = along > 0 ? lerp(st.travel.forward, st.travel.run, run) : st.travel.back;

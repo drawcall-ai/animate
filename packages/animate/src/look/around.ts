@@ -1,10 +1,10 @@
-import { Vector3 } from 'three';
+import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { seeded } from '../kernel/random';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { PersonLegged } from '../legs/person/legged';
 
-import { forwardOf, lerp, smoothstep } from '../kernel/math';
+import { forwardOf, lerp } from '../kernel/math';
 import { steadiness } from '../species/define';
 
 /** a person as its idle eyes see it: how it walks, its proportions, the floor it walks on and how still its life holds it */
@@ -38,7 +38,7 @@ export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3
       up = (2 * rand() - 1) * GLANCES.pitch;
     }
     const glance = f.time < until ? 1 - steadiness(person.life, f.time) : 0;
-    const w = smoothstep(0.1, 0.6, locomotion.walk);
+    const w = MathUtils.smoothstep(locomotion.walk, 0.1, 0.6);
     const distance = lerp(AHEAD.stand.distance, AHEAD.walk.distance, w);
     const height = lerp(AHEAD.stand.height, AHEAD.walk.height, w) * proportions.height + glance * up * distance;
     const yaw = (locomotion.facingAhead ?? locomotion.facing) + HEAD_SHARE * locomotion.thoraxYaw + glance * aside;

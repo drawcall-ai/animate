@@ -18,7 +18,7 @@ const OFF = { distance: 0.02, reach: REACH, seconds: 0.5, window: 3 };
 const SHORT = OFF.window * (1 - Math.exp(-OFF.seconds / OFF.window));
 
 /** What a tracked person follows: its head (the eyes' middle, turned as the head is) and its hands (the wrists), each a target. */
-export type Tracked = Partial<Record<'head' | Side, Target>>;
+type Tracked = Partial<Record<'head' | Side, Target>>;
 
 /**
  * A person following tracked poses (a headset and controllers, `Object3D`s as XR gives them, or any targets): the head goes where its

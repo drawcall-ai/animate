@@ -1,7 +1,7 @@
 // The pelvis placed as high as the feet hold it.
 import { follow } from '../../kernel/follow';
-import { Vector3 } from 'three';
-import { lerp, minimumJerk, smoothstep, softMin } from '../../kernel/math';
+import { MathUtils, Vector3 } from 'three';
+import { lerp, minimumJerk, softMin } from '../../kernel/math';
 import { LOWEST, _v, type Now, type Steps } from './state';
 import { foldOf, hipOf, lengthOf, nominal, reach, travelOf } from './reach';
 import { swingPose } from './swing';
@@ -42,10 +42,10 @@ export function placePelvis(steps: Steps, now: Now) {
     // (from where in the swing its landing first stood lower: a landing moved on over a tread's edge mid-swing lowers it from there)
     if (Number.isNaN(w.lowering)) w.lowering = w.u;
     const remaining = (1 - w.u) * w.T;
-    const travel = travelOf(steps, now, remaining, _travel).sub(now.r.position);
+    const travel = travelOf(now, remaining, _travel).sub(now.r.position);
     const landing = steps.feet.ankle(leg.i, leg.anchor, leg.yaw, w.strike, _landing).sub(travel);
     const most = reach(steps, now, leg, landing);
-    if (y > most) y = lerp(y, most, smoothstep(w.lowering, 1, w.u) * down);
+    if (y > most) y = lerp(y, most, MathUtils.smoothstep(w.u, w.lowering, 1) * down);
     if (now.contact) {
       const hip = hipOf(steps, now, leg);
       if (Math.hypot(landing.x - hip.x, landing.z - hip.z) <= st.reach * lengthOf(steps, leg)) {

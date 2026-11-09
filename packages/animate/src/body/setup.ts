@@ -1,8 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
-import type { SkinReport } from '@drawcall/rig';
 import { Pose } from '../kernel/pose';
 import type { Dev } from '../kernel/dev';
-import { Skeleton } from '../kernel/skeleton';
+import { Skeleton, type SkinVolume } from '../kernel/skeleton';
 import type { AnySpecies } from '../species/define';
 import type { Floor } from '../legs/floor';
 import type { Binding } from './model';
@@ -10,7 +9,7 @@ import type { Binding } from './model';
 // What a body is made from: its skeleton massed as asked, the pose it starts in, and development's check of the model it poses.
 
 /** the species' skeleton, its masses for a body of `mass` kg (a skin report's closed volume at 1000 kg/m³, kept within a sane range) */
-export function massed(species: AnySpecies, mass: number | Pick<SkinReport, 'closed' | 'volume'> | undefined, dev?: Dev): Skeleton {
+export function massed(species: AnySpecies, mass: number | SkinVolume | undefined, dev?: Dev): Skeleton {
   if (mass === undefined) return species.skeleton;
   const total = typeof mass === 'number' ? mass : volumeMass(species, mass, dev);
   if (!(total > 0 && Number.isFinite(total))) throw new Error(`a body of ${total} kg`);
@@ -21,7 +20,7 @@ export function massed(species: AnySpecies, mass: number | Pick<SkinReport, 'clo
 }
 
 /** a body's mass from a mesh's volume as `SelfOptions.mass` takes it */
-function volumeMass(species: AnySpecies, report: Pick<SkinReport, 'closed' | 'volume'>, dev?: Dev): number {
+function volumeMass(species: AnySpecies, report: SkinVolume, dev?: Dev): number {
   if (!report.closed || report.volume === null) {
     dev?.append(0, { check: "an open mesh's volume (its species' mass taken, kg)", value: species.mass, limit: 0, where: 'mass' });
     return species.mass;

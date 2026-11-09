@@ -1,5 +1,6 @@
 // When a foot steps: what prompts it, the gait's clock and which foot goes first.
-import { clamp, forwardOf, leftOf, lerp, smoothstep, wrapAngle } from '../../kernel/math';
+import { MathUtils } from 'three';
+import { clamp, forwardOf, leftOf, lerp, wrapAngle } from '../../kernel/math';
 import { bears, hullOf, outside } from '../support';
 import { offsetAt, strideAt } from '../../species/gait';
 import { SETTLING, SHUFFLING, STANDING, STEP, TOGETHER, _b, _centre, _f, _v, mod, remaining, strayed, type Leg, type Now, type Steps, type Timing } from './state';
@@ -12,7 +13,7 @@ export function cue(steps: Steps, now: Now): Cues {
   const { st } = steps, { r, v, spin, Tsw, yaw } = now;
   const catcher = catcherOf(steps, now);
   // (still and no longer turned, the feet square up closer to the facing)
-  const turning = lerp(STEP.squared, STEP.turn, smoothstep(0, 0.3, v + Math.abs(spin)));
+  const turning = lerp(STEP.squared, STEP.turn, MathUtils.smoothstep(v + Math.abs(spin), 0, 0.3));
   const turn = st.twist === undefined ? turning : Math.min(turning, st.twist / 2);
   // (a walker's foot turned toward the facing foreseen a swing on is where the body is turning, not off it: stepping it again would
   // leave the one turned behind waiting: that one steps first)
@@ -68,7 +69,7 @@ export function keepTime(steps: Steps, now: Now, cues: Cues) {
   steps.since += dt / C;
   for (const leg of legs) {
     const passed = was[leg.i] && mod(steps.clock - steps.lifts[leg.i]) >= SLOT;
-    if (!leg.swing && passed && stood(steps, now, leg) && moving > 0) steps.owed[leg.i] = true;
+    if (!leg.swing && passed && stood(now, leg) && moving > 0) steps.owed[leg.i] = true;
   }
 }
 
@@ -222,7 +223,7 @@ function behind(steps: Steps, now: Now, other: Leg, leg: Leg): boolean {
 export function wants(steps: Steps, now: Now, cues: Cues, leg: Leg): boolean {
   const s = steps.st.scale, { r, v, spin, held, lead, most, Ts, crouch: k } = now;
   if (r.still && !staggered(steps, now, leg)) return false;
-  if (steps.clocked && !stood(steps, now, leg)) return false;
+  if (steps.clocked && !stood(now, leg)) return false;
   const off = offHome(steps, now, leg, lead);
   if (steps.clocked) {
     const far = off > (v > 0 || spin !== 0 ? STEP.distance : STEP.still) * s;
@@ -261,7 +262,7 @@ export function together(steps: Steps, a: Leg, b: Leg): boolean {
 }
 
 /** whether a foot has stood `SLOT` of a cycle, or half the gait's stance if that is shorter (a gallop's) */
-function stood(steps: Steps, now: Now, leg: Leg): boolean {
+function stood(now: Now, leg: Leg): boolean {
   return leg.planted >= Math.min(SLOT, now.duty / 2) * now.C;
 }
 

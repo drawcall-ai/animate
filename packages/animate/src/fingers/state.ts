@@ -1,5 +1,4 @@
-import { Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
-import { smoothstep } from '../kernel/math';
+import { MathUtils, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
 import type { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import { inFrame, placedOf, toWorld, within, worldOf, type Placed } from '../kernel/scene';
@@ -274,7 +273,7 @@ export class FingerState {
       return hand.pointing === null || hand.pointing >= 1 ? open : blendShape(pad === 'thumb' ? open : { ...open, [pad]: open.middle }, open, hand.pointing);
     }
     const closed = goalOf(taken);
-    if (distance > ARRIVED) return blendShape(hand.from ?? RELAXED, preshaped(closed), 1 - smoothstep(NEAR, NEARING, distance));
+    if (distance > ARRIVED) return blendShape(hand.from ?? RELAXED, preshaped(closed), 1 - MathUtils.smoothstep(distance, NEAR, NEARING));
     return closed;
   }
 

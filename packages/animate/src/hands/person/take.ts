@@ -1,7 +1,7 @@
-import { Quaternion, Vector3, type Object3D } from 'three';
+import { MathUtils, Quaternion, Vector3, type Object3D } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Goal, Placement } from '../../kernel/goal';
-import { headingOf, smoothstep, turnOnto } from '../../kernel/math';
+import { headingOf, turnOnto } from '../../kernel/math';
 import { toWorld } from '../../kernel/scene';
 import { digitsOf, handOn, type HandPart, type HandPlacement, type HandPoint } from '../../fingers/placement';
 import { POINT, shapeOf, type Shape } from '../../fingers/shape';
@@ -134,7 +134,7 @@ export function holdOn(person: Reacher, take: Taking): Hold {
   if (!fixes(take.thing.grip(take.grip))) return { ...held, goal: take.goal };
   const { position, quaternion } = handOn(take.point, take.placement), began = person.frame.time, from = turnIn(person, take.side, take.thing, new Quaternion());
   const turn = new Quaternion();
-  const goal = { position, get quaternion() { return turn.slerpQuaternions(from, quaternion, smoothstep(0, SETTLING, person.frame.time - began)); } };
+  const goal = { position, get quaternion() { return turn.slerpQuaternions(from, quaternion, MathUtils.smoothstep(person.frame.time - began, 0, SETTLING)); } };
   return { ...held, goal, settles: take.thing.grip(take.grip).point !== 'palm' ? began + SETTLING : undefined };
 }
 
@@ -154,9 +154,9 @@ export function gripAt(person: Reacher, take: Pick<Taking, 'thing' | 'goal'>, f:
 }
 
 /** where a grip's empty is in the world this sub-step, as the person tracks its thing */
-export function emptyAt(person: Reacher, take: Pick<Taking, 'thing' | 'grip'>, f: Frame, out = new Vector3()): Vector3 {
+export function emptyAt(person: Reacher, take: Pick<Taking, 'thing' | 'grip'>, f: Frame): Vector3 {
   const frame = person.track(take.thing.object).at(f.time).current;
-  return out.copy(take.thing.grip(take.grip).at.position).applyQuaternion(frame.quaternion).add(frame.position);
+  return take.thing.grip(take.grip).at.position.clone().applyQuaternion(frame.quaternion).add(frame.position);
 }
 
 /**

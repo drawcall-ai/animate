@@ -1,6 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
-import type { SkeletonBone } from '@drawcall/rig';
-import { Skeleton } from '../../kernel/skeleton';
+import { Skeleton, type SkeletonBone } from '../../kernel/skeleton';
 import { needing, type BoneNames, type Having, type Species } from '../define';
 import { BONES, CHILD_BONES, INDEX, PARENT, createRest, perBone, type BoneName, type ChildBone, type Side } from './bones';
 import { NECK_PITCH, ranges } from './limits';

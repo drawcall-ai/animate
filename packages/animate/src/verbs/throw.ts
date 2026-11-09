@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three';
+import { MathUtils, Object3D, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { selfOf, type Body } from '../body/body';
 import { personOf, type Person } from '../body/person';
@@ -15,7 +15,7 @@ import type { Asked } from '../kernel/poise';
 import { letGo, type Released } from './release';
 import { verb, type Verb } from './story';
 import type { Target } from './targets';
-import { lerp, smoothstep } from '../kernel/math';
+import { lerp } from '../kernel/math';
 
 /** How a throw goes. */
 export interface ThrowOptions {
@@ -107,7 +107,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
   // (the hand eased through the windup and the cock from how it held the thing, turned with the body, to straight on the forearm, the
   // turn the whip takes it in, not snapped there in a sub-step)
   const forearm = INDEX[`${side}LowerArm`], held = facing().invert().multiply(person.pose.rotation(bone));
-  const wrist = (f: Frame) => _held.copy(held).premultiply(facing()).slerp(f.prev.rotation(forearm), smoothstep(0, TIMES.windup + TIMES.cocked, since(f))).clone();
+  const wrist = (f: Frame) => _held.copy(held).premultiply(facing()).slerp(f.prev.rotation(forearm), MathUtils.smoothstep(since(f), 0, TIMES.windup + TIMES.cocked)).clone();
   const through = () => ({ position: new Vector3(x * THROUGH.direction.x, THROUGH.direction.y, THROUGH.direction.z).multiplyScalar(THROUGH.share * person.proportions.armLength)
     .applyQuaternion(facing()).add(person.pose.position(INDEX[`${side}UpperArm`])) });
   const elbow = () => person.pose.position(INDEX[`${side}UpperArm`]).clone().add(new Vector3(x * ELBOW.x, ELBOW.y, ELBOW.z).applyQuaternion(facing()));
@@ -121,7 +121,7 @@ function* throwing(person: Person, request: Request, thing: Thing, side: Side, t
     // (uncoiled along a smooth ramp, the hips a moment ahead of the chest, not asked all at once: at the trunk's top rate all the way, it
     // stopped dead at the end of its turn, a jolt the hand carried into the whip)
     const ask = uncoiled(f) ? UNCOILED : COILED, from = TIMES.windup + TIMES.cocked - TIMES.lead;
-    const turn = (lead: number) => smoothstep(from - lead - UNCOILING / 5, from - lead + UNCOILING * 4 / 5, since(f));
+    const turn = (lead: number) => MathUtils.smoothstep(since(f), from - lead - UNCOILING / 5, from - lead + UNCOILING * 4 / 5);
     const twist = lerp(COILED.twist, UNCOILED.twist, turn(0)), hips = lerp(COILED.hips, UNCOILED.hips, turn(HIPS_LEAD));
     // (bowed into the throw as the hand lets go, not before, so the head does not run on past the hand)
     return {

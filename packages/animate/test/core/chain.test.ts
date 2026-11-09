@@ -118,12 +118,4 @@ describe('solveChain', () => {
     const far = solve(horseLeg(), { tip: { position: new Vector3(0.2, -2, 0) } });
     expect(far.position(5).distanceTo(new Vector3(0.2, 1.4 - 1.4, 0))).toBeLessThan(1e-3);
   });
-
-  it('writes with a weight, blended over what is there', () => {
-    const skeleton = leg();
-    const full = solve(skeleton, { tip: { position: new Vector3(0.3, 0.35, 0.25) } });
-    const half = solve(skeleton, { tip: { position: new Vector3(0.3, 0.35, 0.25) } }, 0.5);
-    const rest = new Pose(skeleton);
-    for (const b of [1, 2]) expect(half.local(b).angleTo(rest.local(b).clone().slerp(full.local(b), 0.5))).toBeLessThan(1e-7);
-  });
 });

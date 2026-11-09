@@ -1,11 +1,11 @@
 // A person's body over its root, whoever drives it: the core stepper keeps the legs under it; here the carriage, the leg chains and the human checks.
-import { Quaternion, Vector3 } from 'three';
+import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Frame, Step } from '../../kernel/frame';
 import type { Dev } from '../../kernel/dev';
 import { solveChain } from '../../kernel/chain';
 import { follow } from '../../kernel/follow';
 import { clampRotation } from '../../kernel/limits';
-import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
+import { clamp, forwardOf, lerp, minimumJerk, pointSegmentDistance, quatYXZ, wrapAngle, yawOf } from '../../kernel/math';
 import { Stepper } from '../step/stepper';
 import { type Feet, type Leg, type Steering, type Swing } from '../step/state';
 import { TrackedPoint, TrackedRotation } from '../../kernel/track';
@@ -199,7 +199,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     // (the pelvis turned off the facing as asked, at the twist's rate; given up at balance's own pace)
     const hipsTurn = twisting > 0 ? asked.hips[1] + clamp(poise.hips - asked.hips[1], -twisting, twisting) : follow(paced(asked.hips, BOW, dt), asked.hips[1], poise.hips, BOW, dt);
     [asked.hips[0], asked.hips[1]] = [asked.hips[1], hipsTurn];
-    const bowed = Math.min(poise.bow + Math.min(posed.bow, WALKING_BOW + Math.PI * (1 - smoothstep(0.2, 0.8, speed))), poise.bowLimit);
+    const bowed = Math.min(poise.bow + Math.min(posed.bow, WALKING_BOW + Math.PI * (1 - MathUtils.smoothstep(speed, 0.2, 0.8))), poise.bowLimit);
     // (bowed at the asked rate — a throw's — else at a squat's pace)
     const bowing = poise.bowRate * dt, bow0 = asked.bow[1];
     const requested = {
@@ -247,7 +247,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     // as the root crouches it, the feet staying put; balance read off the body as it last stood, as the checks read it)
     const behind = root.centre ? feetBehind(stepper, s) : ZERO, forecast = root.forecast;
     const lowered = crouchFor(requested.lower / (crouching.depth * s));
-    const walkingMost = lerp(1, WALKING_CROUCH, smoothstep(0.2, 0.8, speed));
+    const walkingMost = lerp(1, WALKING_CROUCH, MathUtils.smoothstep(speed, 0.2, 0.8));
     stepper.move(f, {
       ...root,
       position: root.position.clone().sub(behind),

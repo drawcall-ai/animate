@@ -8,9 +8,6 @@ import { minimumJerk } from './math';
  * place. `still` pauses at the preceding place. */
 export type Waypoint = [seconds: number, to: Goal | ((f: Frame, start: Placement, last: Placement) => Goal)];
 
-/** A course an item is carried along: where it is at a sub-step (`to`), and whether it has gone all its way (`over`). */
-export type Course = ReturnType<typeof course>;
-
 /**
  * A course (world) from where `item` is when it is first read, through its waypoints' placements as one smooth curve (centripetal
  * Catmull–Rom, the rotation turned along it), timed by one minimum-jerk profile over its whole length that takes as long as its

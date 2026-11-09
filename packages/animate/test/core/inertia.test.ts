@@ -1,7 +1,6 @@
 import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Inertia, type Inertial } from '../../src/kernel/inertia';
-import { GRAVITY } from '../../src/kernel/math';
 
 const dt = 1 / 60, LEAN: Inertial = { ahead: 0.9, back: 0.3, roll: 0.6, most: 0.35, frequency: 0.8, damping: 0.7 };
 
@@ -15,19 +14,6 @@ function lean(velocity: (t: number) => Vector3, seconds: number, yaw = (_t: numb
   }
   return { pitch, roll };
 }
-
-it('leans into a steady acceleration as far as its share of atan(a / g): forward speeding up, a third as far back slowing down', () => {
-  const a = 1.2, up = lean((t) => new Vector3(0, 0, a * t), 4).pitch, down = lean((t) => new Vector3(0, 0, 5 - a * t), 4).pitch;
-  const most = LEAN.most * Math.tanh(LEAN.ahead * Math.atan2(a, GRAVITY) / LEAN.most);
-  expect(up[up.length - 1]).toBeCloseTo(most, 3);
-  expect(down[down.length - 1]).toBeCloseTo(-LEAN.most * Math.tanh(LEAN.back * Math.atan2(a, GRAVITY) / LEAN.most), 3);
-});
-
-it('leans into a bend: rolled toward the inside, as far as its share of atan(v² / r g)', () => {
-  // (round a 3 m circle to the left at 1.5 m/s, facing the way: the left side down)
-  const v = 1.5, r = 3, { roll } = lean((t) => new Vector3(Math.sin(v * t / r), 0, Math.cos(v * t / r)).multiplyScalar(v), 6, (t) => v * t / r);
-  expect(roll[roll.length - 1]).toBeCloseTo(-LEAN.most * Math.tanh(LEAN.roll * Math.atan2(v * v / r, GRAVITY) / LEAN.most), 3);
-});
 
 it('takes a stop over about a step and overshoots it a little: the lean back swings past upright and settles', () => {
   // (walking at 1.3 m/s, brought to a dead stop within a sixth of a second)

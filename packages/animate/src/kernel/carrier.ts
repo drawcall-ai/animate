@@ -95,7 +95,6 @@ export class Carrier implements Trail {
     const r = _r.subVectors(world.position, position);
     out.position.copy(r).applyQuaternion(inverse);
     out.quaternion = world.quaternion && (out.quaternion ?? new Quaternion()).copy(inverse).multiply(world.quaternion);
-    out.axis = world.axis && (out.axis ?? new Vector3()).copy(world.axis).applyQuaternion(inverse);
     const spin = spinOf(prev.quaternion, quaternion, STEP, _s);
     // (the world's velocity less the frame's at the point, v + ω × r, then turned into it)
     out.velocity.subVectors(position, prev.position).divideScalar(STEP).add(_v.crossVectors(spin, r)).negate();

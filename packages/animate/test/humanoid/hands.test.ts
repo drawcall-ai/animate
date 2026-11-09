@@ -1,7 +1,7 @@
 import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { carry, grab, lookAt, reach } from '../../src/index';
+import { carry, grab, lookAt, reach, wait } from '../../src/index';
 import { INDEX, type Side } from '../../src/species/humanoid/bones';
 import { clearBody } from '../../src/hands/person/clearance';
 import { grasp } from '../../src/things/hold';
@@ -42,7 +42,25 @@ describe('two hands', () => {
     expect(Math.max(...hands.speed.left.slice(0, under))).toBeLessThan(0.1);
   });
 
-  it('carrying a thing in each hand: the left sets off a moment after the right', () => {
+  it('reaching and carrying together are not mirror images: the left sets off a moment after the right', () => {
+    const reaching = person(), held = box(roomOf(reaching), new Vector3(0, 1.0, 0.45), { mass: null, solid: false });
+    let going = false;
+    const hands = handSpeeds(insides(reaching), () => going);
+    play(function* () {
+      yield* wait(1);
+      going = true;
+      yield* grab(reaching, held, BOTH);
+    }, [reaching], 4, () => void hands.sample());
+    /** when a hand has gone `distance` (s) */
+    const gone = (speed: number[], distance: number) => {
+      let path = 0;
+      return speed.findIndex((v) => (path += v / 60) > distance) / 60;
+    };
+    // (reaching: 10 cm on its way 40–150 ms after the right)
+    const lag = gone(hands.speed.left, 0.1) - gone(hands.speed.right, 0.1);
+    expect(lag).toBeGreaterThanOrEqual(0.04);
+    expect(lag).toBeLessThanOrEqual(0.15);
+
     const body = person(), room = roomOf(body);
     const left = box(room, new Vector3(0.2, 1.0, 0.35), { name: 'left box', mass: null, solid: false });
     const right = box(room, new Vector3(-0.2, 1.0, 0.35), { name: 'right box', mass: null, solid: false });

@@ -11,7 +11,6 @@ export interface Individual {
   cadenceAt(time: number): number;
   /** how far its arms swing walking */
   arms: number;
-  /** how much it sways standing */
   sway: number;
   /** how long after a walk is asked it sets off (s) */
   delay: number;

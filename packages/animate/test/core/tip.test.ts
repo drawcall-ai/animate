@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Body, species } from '../../src/index';
 import { selfOf } from '../../src/body/body';
 import { TrackedRotation } from '../../src/kernel/track';
-import { looking, SHIFT } from '../../src/look/gaze';
+import { looking } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';
 import { ChainTip, reached } from '../../src/kernel/tip';
 import { claim, dt } from '../bodies';
@@ -129,7 +129,7 @@ describe('looking', () => {
     const look = (yaw: number) => {
       const eyes = new Vector3(0, 1.65, 0.08);
       const body = gazing(), point = eyes.clone().add(new Vector3(Math.sin(yaw), 0, Math.cos(yaw)).multiplyScalar(3));
-      claim(body, 'look', looking(selfOf(body), () => point, { motion: SHIFT }));
+      claim(body, 'look', looking(selfOf(body), () => point, { motion: { turnAccel: 60, turnSpeed: 6 } }));
       const speeds: number[] = [];
       let last = new Quaternion();
       for (let k = 0; k < 180; k++) {
@@ -142,7 +142,7 @@ describe('looking', () => {
     const small = look(0.35);
     const large = look(1.4);
     const peak = (s: number[]) => Math.max(...s);
-    // (100°/s + 2.3°/s per degree turned at the peak: the large shift's head about twice as fast, neither at SHIFT's 6 rad/s)
+    // (100°/s + 2.3°/s per degree turned at the peak: the large shift's head about twice as fast, neither at its 6 rad/s)
     expect(peak(large.speeds) / peak(small.speeds)).toBeGreaterThan(1.8);
     expect(peak(large.speeds)).toBeLessThan(1.75 + 2.5 * large.turned);
     expect(peak(small.speeds)).toBeLessThan(1.75 + 2.5 * small.turned);

@@ -17,7 +17,6 @@ export class Thing {
   taken: Vector3 | null = null;
   /** the parent the library last gave it: another (a stray `scene.add`, a physics sync) under a holding hand is a problem */
   parent: Object3D | null = null;
-  /** the bodies whose hands hold it */
   readonly holders = new Set<Holder>();
 
   private constructor(readonly object: Object3D) {
@@ -110,7 +109,7 @@ export type Grip = ReturnType<Thing['grip']>;
 const things = new WeakMap<Object3D, Thing>(), _size = new Vector3();
 
 /** `object`'s own meshes a hand can touch: the shown ones, not those of things attached to it (their own `userData.mass`) */
-export function meshesOf(object: Object3D): Mesh[] {
+function meshesOf(object: Object3D): Mesh[] {
   const meshes: Mesh[] = [];
   const visit = (node: Object3D) => {
     if (node !== object && node.userData.mass !== undefined) return;
@@ -180,7 +179,7 @@ function find(root: Object3D, name: string): Object3D | undefined {
 }
 
 /** `node` in `ancestor`'s frame (its scale left out: a body's frames are metres) */
-export function localOf(node: Object3D, ancestor: Object3D): Placement {
+function localOf(node: Object3D, ancestor: Object3D): Placement {
   const matrix = new Matrix4();
   for (let at: Object3D | null = node; at && at !== ancestor; at = at.parent) {
     if (!at.parent) throw new Error(`"${node.name}" is not under "${ancestor.name}"`);

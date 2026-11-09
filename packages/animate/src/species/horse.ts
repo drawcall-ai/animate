@@ -2,7 +2,7 @@
 // (the trunk) on the spine under the saddle. Recalled: all dimensions, masses and ROM below are approximate warmblood data; sources
 // accompany each block.
 import { Euler, Quaternion, Vector3 } from 'three';
-import type { SkeletonBone } from '@drawcall/rig';
+import type { SkeletonBone } from '../kernel/skeleton';
 import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
 import { clamp, minimumJerk, yawOf } from '../kernel/math';
@@ -17,7 +17,7 @@ import { gaitAt } from './scaled';
 import { build, mirrored, needing, type Attention, type BoneNames, type Having, type LegRole, type Range, type Species, type Vec3 } from './define';
 
 /** the bones a horse's skeleton names (each leg's, `left`/`right` before each) */
-export type HorseBone = (typeof HORSE_BONES)[number];
+type HorseBone = (typeof HORSE_BONES)[number];
 
 /**
  * A horse of a skeleton (as rigged with @drawcall/rig, `as const`), its bones named as `HorseBone`: its walk (or `'trot'`), its posture
@@ -181,7 +181,7 @@ const INERTIA = { ahead: 0.25, back: 0.2, roll: 0.9, most: 0.3, frequency: 0.7, 
 // 1.6/3.7 m/s. Derived: 5 cm proxy-hoof clearance in both gaits keeps the early sole-height peak above the passive fold.
 const walk = powerGait({ height: 1.2, slowest: 0.8, offsets: [0.25, 0.75, 0, 0.5], stride: 2.3, stance: stanceOf(0.68, 1.6, 1.2), clearance: [0.05, 0.05, 0.05, 0.05] });
 /** a warmblood's walk */
-export const HORSE_WALK: Gait = {
+const HORSE_WALK: Gait = {
   ...walk, referenceSpeed: 1.6, referenceBlend: 1,
   // Dunbar ranges read via summary; landmark/hip phase derived after solving. Derived: the croup's rise × 1.1 since the pelvis
   // moved 9 cm back: the trunk pitching ~6° over a back that much longer (read: Dunbar et al. 2008, withers 7 ± 1 cm, head 12–15 cm, its

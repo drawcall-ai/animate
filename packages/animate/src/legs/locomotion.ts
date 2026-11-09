@@ -1,6 +1,6 @@
 import { Vector3 } from 'three';
 
-/** Walk state, of any legs: the legs report the motion; walkTo publishes and clears its arrival estimate. */
+/** Walk state, of any legs: the legs report the motion. */
 export interface Locomotion {
   /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
   phase: number;
@@ -11,8 +11,6 @@ export interface Locomotion {
   /** the heading it will walk with half a second ahead (rad), for the eyes to lead */
   facingAhead?: number;
   velocity: Vector3;
-  /** seconds until the walk now running arrives; Infinity when no walk is running; published and cleared by walkTo */
-  eta: number;
   /** a walk is under way */
   moving: boolean;
   /** come to rest: no walk under way, both feet planted a while and none wanting to step */
@@ -33,6 +31,6 @@ export interface Locomotion {
 }
 
 export const createLocomotion = (facing: number): Locomotion => ({
-  eta: Infinity, phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0,
+  phase: 0, walk: 0, run: 0, facing, velocity: new Vector3(), moving: false, settled: true, there: false, planted: 0,
   pelvisYaw: 0, thoraxYaw: 0, bow: 0, quiet: new Vector3(), arms: 1,
 });

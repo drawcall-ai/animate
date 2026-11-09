@@ -5,5 +5,3 @@ Procedural motion for three.js characters and creatures rigged with [@drawcall/r
 Install with `pnpm add @drawcall/animate @drawcall/rig @pmndrs/timeline three`.
 
 The shipped [animate skill](skills/animate/SKILL.md) includes a runnable example, skeletons and authoring patterns. Import bodies, verbs and custom-species helpers from `@drawcall/animate`.
-
-Hair, tails and other bone chains can swing as spring bones under gravity and the body's motion, set by a species' `springs`.

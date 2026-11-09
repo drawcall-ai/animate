@@ -6,12 +6,6 @@ export const GRAVITY = 9.81;
 export const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** 0 below `e0`, 1 above `e1`, smooth between */
-export function smoothstep(e0: number, e1: number, x: number): number {
-  const t = clamp((x - e0) / (e1 - e0), 0, 1);
-  return t * t * (3 - 2 * t);
-}
-
 /** Flash & Hogan's minimum-jerk position profile, `t` in [0, 1] */
 export function minimumJerk(t: number): number {
   const s = clamp(t, 0, 1);

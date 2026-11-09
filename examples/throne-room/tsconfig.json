@@ -1,5 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
+  // (no `source` condition: the scene uses the built package, `dist`, as an npm user would; after a library change, run
+  // `pnpm -F @drawcall/animate build` from the repository root)
   "compilerOptions": { "customConditions": [], "types": ["vite/client", "node"] },
   "include": ["src", "test", "vite.config.ts"]
 }

@@ -225,7 +225,7 @@ function bearers(self: Holder, thing: Thing): number[] {
 }
 
 /** what `self` bears loaded onto its bones in `pose`, each thing's at its centre of mass */
-export function load(self: Holder, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): void {
+function load(self: Holder, pose: Pose, borne: ReadonlyMap<Thing, Bearing>): void {
   const mass = new Map<number, number>(), moment = new Map<number, Vector3>();
   for (const [thing, bearing] of borne) {
     const placed = self.track(thing.object).at(self.frame.time).current;

@@ -1,7 +1,10 @@
 import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { cases } from '../open';
-import { reach, walkTo, type Body } from '../../src/index';
+import { Body, dog, horse, reach, walkTo, type BodyOptions } from '../../src/index';
+import { selfOf } from '../../src/body/body';
+import { HORSE } from '../../skills/animate/references/horse';
+import { DOG } from '../../skills/animate/references/dog';
 import { solePoints } from '../../src/species/humanoid/landmarks';
 import { SIDES } from '../../src/species/humanoid/bones';
 import { xcomOfPoses, hullOf, outside } from '../../src/legs/support';
@@ -16,6 +19,20 @@ const THRONE = { start: 2, count: 5, rise: 0.2, tread: 0.45 };
 const flight = stairs(THRONE.start, THRONE.count, THRONE.rise, THRONE.tread);
 /** the treads' front edges (z) */
 const NOSINGS = Array.from({ length: THRONE.count }, (_, k) => THRONE.start + k * THRONE.tread);
+
+/** a person and the creatures, each as a floor test makes one, and how fast it is asked to walk over a step (none: as it goes) */
+const KINDS: [name: string, make: (options: BodyOptions) => Body, speed: number | undefined][] = [
+  ['person', (options) => person(options), undefined],
+  ['horse', (options) => new Body(horse(HORSE), options), 0.8],
+  ['dog', (options) => new Body(dog(DOG), options), 0.8],
+];
+
+/** each sole's points of foot `i` of `body` as it stands: a person's measured sole, a creature's heel and toe */
+function solesOf(body: Body, i: number): Vector3[] {
+  if (body.species.person) return solePoints(insides(body).proportions, body.pose, SIDES[i]);
+  const chain = (body.species.legs?.chains ?? [])[i], bone = chain.joints[chain.joints.length - 1].bone;
+  return [chain.heel, chain.toe].map((p) => body.pose.point(bone, p, new Vector3()));
+}
 
 /** What a walk over a floor did to the feet and the body, read off every final pose. */
 interface Walked {
@@ -40,12 +57,12 @@ function on(floor: (x: number, z: number) => number, z: number): Vector3 {
 
 /** `body` walked to `to` on `floor`, read every frame (the walk given `speed`, else as it goes) */
 function walked(body: Body, floor: (x: number, z: number) => number, to: Vector3, speed?: number): Walked {
-  const h = insides(body), out: Walked = { sunk: 0, raised: 0, touchdowns: 0, straddled: 0, swing: Infinity, nosing: Infinity, up: 0, down: 0, pelvis: 0, xcom: 0, seat: Infinity };
+  const self = selfOf(body), h = body.species.person ? insides(body) : null, out: Walked = { sunk: 0, raised: 0, touchdowns: 0, straddled: 0, swing: Infinity, nosing: Infinity, up: 0, down: 0, pelvis: 0, xcom: 0, seat: Infinity };
   const coms: number[] = [], hips: number[] = [], last: (Vector3[] | null)[] = [null, null];
   let arrived = false;
   play(function* () { arrived = yield* walkTo(body, to, { speed }); }, [body], 20, () => {
-    h.stepper?.legs.forEach((leg, i) => {
-      const soles = solePoints(h.proportions, h.pose, SIDES[i]), above = soles.map((p) => p.y - floor(p.x, p.z));
+    self.stepper?.legs.forEach((leg, i) => {
+      const soles = solesOf(body, i), above = soles.map((p) => p.y - floor(p.x, p.z));
       if (leg.swing) {
         out.swing = Math.min(out.swing, ...above);
         // (each toe tip as it crossed the nosing of a tread other than the one it left, between the two frames: up a flight, over the
@@ -69,10 +86,11 @@ function walked(body: Body, floor: (x: number, z: number) => number, to: Vector3
       }
       last[i] = leg.swing ? soles : null;
     });
+    coms.push(body.pose.com(new Vector3()).y);
+    hips.push(body.pose.position(0).y);
+    if (!h) return arrived && body.settled;
     const levels = (h.stepper?.legs ?? []).flatMap((leg) => leg.swing ? [] : [leg.anchor.y - h.proportions.ankleHeight]);
     if (levels.length) out.seat = Math.min(out.seat, h.pose.position(0).y - Math.max(...levels));
-    coms.push(h.pose.com(new Vector3()).y);
-    hips.push(h.pose.position(0).y);
     out.xcom = Math.max(out.xcom, xcomPast(h));
     return arrived && body.settled;
   });
@@ -103,13 +121,20 @@ function expectClean(body: Body, walk: Walked) {
 }
 
 describe('a person on a floor', () => {
-  it('stands on a raised floor as on the ground: posed as it would be a metre lower, its position on it, its hands reaching from it', () => {
-    const body = person({ dev: true, floor: () => 1, at: new Vector3(0, 1, 0) }), flat = person();
+  it.each(KINDS)('a %s stands on a raised floor as on the ground: posed as it would be a metre lower, its position on it', (_, make) => {
+    const body = make({ dev: true, floor: () => 1, at: new Vector3(0, 1, 0) }), flat = make({ at: new Vector3() });
     run(body, 3);
     run(flat, 3);
     expect(body.position.y).toBe(1);
+    expect(flat.position.y).toBe(0);
     expect(body.object.position.y).toBe(1);
     body.pose.skeleton.bones.forEach((_, b) => expect(body.pose.position(b).clone().setY(body.pose.position(b).y - 1).distanceTo(flat.pose.position(b))).toBeLessThan(1e-6));
+    expect(body.log).toEqual([]);
+  });
+
+  it('reaches from a raised floor', () => {
+    const body = person({ dev: true, floor: () => 1, at: new Vector3(0, 1, 0) });
+    run(body, 3);
     let reached = false;
     play(function* () { reached = yield* reach(body, { right: new Vector3(-0.2, 2.2, 0.35) }); }, [body], 4, () => reached);
     expect(reached).toBe(true);
@@ -122,6 +147,15 @@ describe('a person on a floor', () => {
     expectClean(body, walk);
     expect(walk.touchdowns).toBeGreaterThan(8);
     expect(walk.xcom).toBeLessThan(0.1);
+  });
+
+  it.each(KINDS.slice(1))('a %s walks up a 0.15 m step and on, its soles on each level and never in it', (_, make, speed) => {
+    const floor = (_x: number, z: number) => z < 2 ? 0 : 0.15;
+    const body = make({ dev: true, floor }), walk = walked(body, floor, on(floor, 5), speed);
+    expect(body.position.y).toBe(0.15);
+    expect(walk.sunk).toBeLessThan(1e-3);
+    expect(walk.raised).toBeLessThan(1e-3);
+    expect(body.log).toEqual([]);
   });
 
   // (recalled: the centre of mass rises through the stride climbing stairs, ~0.4–0.5 m/s at its most on ordinary stairs)

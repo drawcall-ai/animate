@@ -1,8 +1,8 @@
 import type { Go } from '../../kernel/go';
 import type { Poise } from '../../kernel/poise';
 import type { PersonLegged } from './legged';
-import { Vector3 } from 'three';
-import { lerp, smoothstep } from '../../kernel/math';
+import { MathUtils, Vector3 } from 'three';
+import { lerp } from '../../kernel/math';
 import { irregular, seeded, seedOf } from '../../kernel/random';
 import { Life as Rhythms, type Rhythm } from '../../kernel/life';
 import type { Side } from '../../species/humanoid/bones';
@@ -63,6 +63,6 @@ export class Quiet {
     const noise = (a: number, b: number, c: number) => irregular(t, phase, a * this.tempo[0], b * this.tempo[1], c * this.tempo[2]);
     this.drift.set(0.007 * noise(0.79, 1.37, 2.11), 0, 0.009 * noise(0.93, 1.61, 2.47)).multiplyScalar(this.amount * this.sway);
     // Recalled: breathing 12–20/min (PMC5973601). Tuned: 1° active, 1.5° after 1–2 s quiet.
-    this.breath = Math.sin(2 * Math.PI * 0.25 * t + phase) * (1 + 0.5 * smoothstep(1, 2, this.quietTime)) * Math.PI / 180 * this.amount;
+    this.breath = Math.sin(2 * Math.PI * 0.25 * t + phase) * (1 + 0.5 * MathUtils.smoothstep(this.quietTime, 1, 2)) * Math.PI / 180 * this.amount;
   }
 }

@@ -12,6 +12,9 @@ import { DODONNA } from './skeletons/dodonna';
 import { floorAt, type Marks } from './hall';
 import { createArtoo } from './droids/artoo';
 
+// The named characters, each on the skeleton measured for its own model (skeletons/, models under public/models/); Han swaggers and
+// Chewbacca lumbers (`stride`). R2-D2 is a creature of its own (droids/).
+
 /**
  * How the viewer puts a rigged model on a body: a fresh copy of the mesh rigged on `skeleton`, or none (the body stays bare).
  * Headless runs pass nothing, so every body is bare.

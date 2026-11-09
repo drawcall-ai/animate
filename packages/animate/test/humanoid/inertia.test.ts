@@ -3,6 +3,7 @@ import { runTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
 import { Body, humanoid, walkTo } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
+import { leftOf } from '../../src/kernel/math';
 import { dt, insides, person } from '../bodies';
 import { PERSON } from '../../skills/animate/references/person';
 
@@ -82,4 +83,30 @@ it('a player setting off and stopping quickly leans no quicker nor further than 
   const lean = Math.max(...pitch.slice(60, 150)) - pitch[59];
   expect(lean / DEG).toBeGreaterThan(4);
   expect(lean / DEG).toBeLessThan(12);
+});
+
+/** a player's body rounding a 3 m circle to the left at 1.5 m/s, facing its way, after a run-up: its trunk's lean to its left each sub-step (rad, hips → neck) */
+function bend(leaning: boolean) {
+  const species = humanoid(PERSON), root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 }, v = 1.5, r = 3;
+  const body = new Body(leaning ? species : { ...species, inertia: undefined }, { drive: () => root }), lean: number[] = [];
+  for (let t = dt; t < 10; t += dt) {
+    const speed = Math.min(v, 2 * t), turning = t > 2 ? v * (t - 2) / r : 0;
+    root.yaw = turning;
+    root.velocity.set(Math.sin(turning), 0, Math.cos(turning)).multiplyScalar(speed);
+    root.position.addScaledVector(root.velocity, dt);
+    body.update(dt);
+    const trunk = body.pose.position(INDEX.neck).clone().sub(body.pose.position(INDEX.hips));
+    lean.push(Math.atan2(trunk.dot(leftOf(turning)), trunk.y));
+  }
+  return lean;
+}
+
+// (round the bend the root accelerates toward its centre, v² / r: 0.75 m/s², asking 4.4° of a lean; a person takes 0.6 of it, 2.6°, at the
+// chest: the hips → neck line, which the pelvis does not roll with, shows part of that; measured against the same bend without the lean)
+it('leans into a bend: its left side down round a left bend, no further than its share of atan(v² / r g)', () => {
+  const leaning = bend(true), upright = bend(false);
+  const mean = (x: number[]) => x.reduce((a, b) => a + b, 0) / x.length;
+  const lean = mean(leaning.slice(300)) - mean(upright.slice(300));
+  expect(lean / DEG).toBeGreaterThan(1);
+  expect(lean / DEG).toBeLessThan(2.6);
 });

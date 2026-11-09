@@ -1,6 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Pose } from '../../src/kernel/pose';
+import { solveChain } from '../../src/kernel/chain';
 import { leg, turn } from './rigs';
 
 describe('Pose', () => {
@@ -17,7 +18,7 @@ describe('Pose', () => {
     expect(pose.point(3, new Vector3(0, 0, 0.1), new Vector3()).distanceTo(new Vector3(1 - 0.4, 2 - 0.45 - 0.1, 3 - 0.1))).toBeLessThan(1e-12);
   });
 
-  it('blends a weighted write from what is there', () => {
+  it('blends a weighted write from what is there, a solved chain\'s too', () => {
     const pose = new Pose(leg());
     const bent = turn(1, 0, 0, 1);
     pose.setLocal(2, bent, 0.25);
@@ -25,5 +26,12 @@ describe('Pose', () => {
     pose.setRoot(new Vector3(0, 0, 0), 0.5);
     expect(pose.position(0).y).toBeCloseTo(0.5, 12);
     expect(() => pose.setLocal(2, new Quaternion(), 1.5)).toThrow(/weight/);
+    const solved = (weight?: number) => {
+      const chain = new Pose(leg());
+      solveChain({ current: chain }, 'leg', { tip: { position: new Vector3(0.3, 0.35, 0.25) } }, weight);
+      return chain;
+    };
+    const full = solved(), half = solved(0.5), rest = new Pose(leg());
+    for (const b of [1, 2]) expect(half.local(b).angleTo(rest.local(b).clone().slerp(full.local(b), 0.5))).toBeLessThan(1e-7);
   });
 });

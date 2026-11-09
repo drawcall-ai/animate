@@ -28,7 +28,7 @@ const LEADING_TURN = 2;
 const STAIRS = { pace: 0.7, ahead: 1.5, behind: 1, rise: 0.05, reads: 20 };
 
 /** Where a walk goes, a sub-step at a time. */
-export interface Route {
+interface Route {
   /** where to go, on the floor (default: where it stands when it sets off: a turn in place) */
   to?: (f: Frame) => Readonly<Vector3>;
   /** the facing to arrive with (rad; null: the way it arrives, or toward `to` with `within`) */

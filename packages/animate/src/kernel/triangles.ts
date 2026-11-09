@@ -1,7 +1,7 @@
 import { InstancedMesh, Matrix4, Ray, SkinnedMesh, Triangle, Vector3, type BufferGeometry, type Mesh } from 'three';
 
 /** A geometry and the matrix that takes its positions into the frame its triangles are gathered in. */
-export interface PlacedGeometry {
+interface PlacedGeometry {
   geometry: BufferGeometry;
   matrix: Matrix4;
   /** a vertex as it stands now (posed, morphed), where not the geometry's own */

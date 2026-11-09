@@ -76,7 +76,6 @@ export class ChainTip {
     let quaternion: Quaternion | undefined;
     if (target.quaternion) {
       if (turnAccel === undefined) throw new Error(`chain "${chain}": a target rotation needs a turnAccel`);
-      const goal = target.axis ? rolled(target.quaternion, target.axis, near(f.prev.rotation(tip), placed)) : target.quaternion;
       // (a fit kept (`keep`) turns on along its intended turn, as the tip's position path does, while the tip is turned as it was left:
       // read back from the tip as the limits and brakes left it, a hand held short of its turn was asked only a sub-step's turn on from
       // there each time, never enough for the fit to give way (`HELD`, chain.ts) to one that turns it there — a bucket by its handle set
@@ -89,7 +88,7 @@ export class ChainTip {
       // the precision near zero, ~1e-8 rad.)
       const resumed = own && this.resumes && (options.keep === true || target.preferred === true) && 1 - Math.abs(moved.placedTurn.dot(f.prev.rotation(tip))) < 1e-12;
       const before = resumed ? moved.turnedBefore : f.prev2.rotation(tip), last = resumed ? moved.turned : f.prev.rotation(tip);
-      quaternion = followRotation(before, last, goal, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
+      quaternion = followRotation(before, last, target.quaternion, { accel: turnAccel, speed: turnSpeed, velocity: target.spin, on: placed }, f.dt, _quaternion);
       moved.turnedBefore.copy(last);
       moved.turned.copy(quaternion);
     }
@@ -198,13 +197,12 @@ function turning(f: { prev2: TipPose; prev: TipPose; dt: number }, tip: number, 
   return near(f.prev.rotation(tip), placed && { current: placed.prev }).angleTo(was) / f.dt;
 }
 
-/** The unmet turn, in radians, allowing the target’s free roll, as the last final pose has it. */
+/** The unmet turn, in radians, as the last final pose has it. */
 function angleOff(f: { prev: Pick<ReadonlyPose, 'rotation'>; time: number }, tip: number, target: Goal, on?: Carrier): number {
   if (!target.quaternion) return 0;
   const placed = on?.at(f.time);
-  // (in the frame the target is given in, rolled about its axis as near the tip as it may be)
-  const turned = near(f.prev.rotation(tip), placed && { current: placed.prev });
-  return (target.axis ? rolled(target.quaternion, target.axis, turned) : target.quaternion).angleTo(turned);
+  // (in the frame the target is given in)
+  return target.quaternion.angleTo(near(f.prev.rotation(tip), placed && { current: placed.prev }));
 }
 
 /** how far a tip is from its target as the last final pose has it: its distance (m) and the turn left (rad; none of a turn only
@@ -264,18 +262,9 @@ function near(world: Readonly<Quaternion>, on?: Pick<Trail, 'current'>): Quatern
   return on ? _near.copy(on.current.quaternion).invert().multiply(world) : _near.copy(world);
 }
 
-/** of `q` rolled about `axis` (both in one frame), the rotation nearest `near` (in it too), into a shared quaternion */
-function rolled(q: Quaternion, axis: Vector3, near: Readonly<Quaternion>): Quaternion {
-  const a = _axis.copy(axis).normalize();
-  // the turn from q to `near`, its part about the axis
-  const d = _d.copy(near).multiply(_roll.copy(q).invert());
-  const angle = 2 * Math.atan2(d.x * a.x + d.y * a.y + d.z * a.z, d.w);
-  return _roll.setFromAxisAngle(a, angle).multiply(q);
-}
-
 /** the share of a chain's length its tip is moved out to at most: as far as a limb reaches, all but straight */
 export const REACH = 0.98;
 const ZERO = new Vector3(), _turnedBefore = new Quaternion();
 const [_position, _braked, _v, _axis, _velocity, _then, _was, _was2, _late, _off] = Array.from({ length: 10 }, () => new Vector3());
-const [_turned, _before, _quaternion, _joint, _r, _d, _roll, _near] = Array.from({ length: 8 }, () => new Quaternion());
+const [_turned, _before, _quaternion, _joint, _r, _near] = Array.from({ length: 6 }, () => new Quaternion());
 const _goal: Goal & { velocity: Vector3; spin: Vector3 } = { position: new Vector3(), velocity: new Vector3(), spin: new Vector3() };

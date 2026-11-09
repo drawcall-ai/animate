@@ -1,11 +1,11 @@
 // The body over its feet: the gait's oscillations.
-import { Quaternion, Vector3 } from 'three';
+import { MathUtils, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyPose } from '../../kernel/pose';
 import type { Quiet } from './quiet';
 import { TRUNK_PITCH } from '../../species/humanoid/limits';
 import { INDEX } from '../../species/humanoid/bones';
-import { clamp, forwardOf, leftOf, lerp, quatYXZ, smoothstep, wrapAngle } from '../../kernel/math';
+import { clamp, forwardOf, leftOf, lerp, quatYXZ, wrapAngle } from '../../kernel/math';
 import { DEFAULT_HEIGHT, proportionsFor, type Proportions } from '../../species/humanoid/proportions';
 import type { Stance } from '../../kernel/go';
 import type { Stride } from '../../species/humanoid/humanoid';
@@ -63,7 +63,7 @@ export const STANDING_REACH = 0.995;
  */
 const LEAN = { walk: 0.14, run: 0.15 }, LEANING = { accel: 1, speed: 0.1 }, BOWED = 0.15, LOWERED = 0.05;
 /** Tuned: how far it walks (0 … 1), blended into and out of walking at 6/s, decaying exactly at a finite step `dt`. */
-export const walking = (walk: number, speed: number, dt: number) => walk + (smoothstep(0.08, 0.6, speed) - walk) * (1 - Math.exp(-dt * 6));
+export const walking = (walk: number, speed: number, dt: number) => walk + (MathUtils.smoothstep(speed, 0.08, 0.6) - walk) * (1 - Math.exp(-dt * 6));
 /** the stride's phase (rad) run on at `rate` (rad/s) and pulled toward the feet's (`goal`) at `ENTRAIN` (1/s) */
 export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
 
@@ -165,11 +165,11 @@ export class Posture {
     const shifted = this.shifted.dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
     this.shiftRoll = SHIFT.roll * shifted;
     roll += this.shiftRoll;
-    const onward = smoothstep(0, 1, Math.max(0, upright.velocity.dot(fwd)));
+    const onward = MathUtils.smoothstep(Math.max(0, upright.velocity.dot(fwd)), 0, 1);
     const pace = follow(this.leans[0], this.leans[1], lerp(LEAN.walk * walk, LEAN.run, run) * onward, LEANING, dt);
     [this.leans[0], this.leans[1]] = [this.leans[1], pace];
     // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
-    const forward = pace * (1 - smoothstep(0, BOWED, bow)) * (1 - smoothstep(0, LOWERED * H, lower));
+    const forward = pace * (1 - MathUtils.smoothstep(bow, 0, BOWED)) * (1 - MathUtils.smoothstep(lower, 0, LOWERED * H));
     // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
     const tilt = 0.5 * nod + pelvisTilt(proportions, lower, bow) + TILT * run;
     quatYXZ(upright.yaw + pelvisYaw + upright.stance.blade + hips, tilt, roll, upright.pelvisRotation);
@@ -194,7 +194,7 @@ export class Posture {
 }
 
 /** Recalled staging: tuck the pelvis under in a deep squat, leaving hip flexion for the knees; the lumbar and thoracic joints take the bow. */
-const hingeOf = (proportions: Proportions, lower: number) => lerp(HINGE, -0.2, smoothstep(0, squatOf(proportions), lower));
+const hingeOf = (proportions: Proportions, lower: number) => lerp(HINGE, -0.2, MathUtils.smoothstep(lower, 0, squatOf(proportions)));
 /** how far (rad, + forward) the pelvis tips for a bow of `bow` let down `lower` (m) */
 const pelvisTilt = (proportions: Proportions, lower: number, bow: number) => bow < 0
   ? Math.max(hingeOf(proportions, lower) * bow, -ARCHED)
@@ -251,7 +251,7 @@ export function lowering(proportions: Proportions, request: { drop: number; ahea
 function lowered(proportions: Proportions, lever: number, drop: number, aheadBow: number) {
   const deepBow = Math.acos(1 - clamp((drop - squatOf(proportions)) / lever, 0, 1));
   // A small vertical reach recruits bow before the knees reach their deep-squat reserve.
-  const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * smoothstep(0, squatOf(proportions), drop)));
+  const bow = Math.min(MOST_BOW, Math.max(aheadBow, deepBow, 0.05 * MathUtils.smoothstep(drop, 0, squatOf(proportions))));
   const lower = clamp(drop - lever * (1 - Math.cos(bow)), 0, squatOf(proportions));
   // Discard the sub-ulp residual from inverse trig followed by its forward projection.
   return { lower: drop < 0 ? Math.max(drop, -TIPTOE * proportions.scale) : lower <= Number.EPSILON * proportions.height ? 0 : lower, bow };

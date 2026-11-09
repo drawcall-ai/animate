@@ -305,7 +305,7 @@ const excursion = (samples: number[]) => Math.max(...samples) - Math.min(...samp
 const CROUP = new Vector3(0, 0.03, 0.09);
 const pitchOf = (q: Readonly<Quaternion>) => new Euler().setFromQuaternion(q, 'YXZ').x;
 
-it.each([['walk', 1.6], ['trot', 3.7]] as const)('%s: final body excursions and contact phase match research §5', (gait, speed) => {
+it.each([['walk', 1.6], ['trot', 3.7]] as const)('walk and trot excursions stay in the measured range (%s)', (gait, speed) => {
   const { body, step, phase: phaseOf } = movingHorse(gait, speed);
   const poll: number[] = [], withers: number[] = [], croup: number[] = [], trunk: number[] = [], head: number[] = [];
   const back: number[] = [], roll: number[] = [], pelvis: number[] = [], tail: number[] = [];

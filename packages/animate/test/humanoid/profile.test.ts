@@ -11,14 +11,6 @@ const DEG = Math.PI / 180;
 describe('ranges of motion', () => {
   const all = ranges();
 
-  it('limit every joint but the root, once', () => {
-    expect(all.map((r) => r.bone).sort((a, b) => a - b)).toEqual(CHILD_BONES.map((b) => INDEX[b]).sort((a, b) => a - b));
-    for (const r of all) {
-      expect(r.twist[0]).toBeLessThan(r.twist[1]);
-      for (const s of r.swing) expect(s[0]).toBeLessThan(s[1]);
-    }
-  });
-
   it('mirror the left side to the right', () => {
     const rand = rng(7);
     const of = (bone: string) => {

@@ -1,7 +1,7 @@
-import { Quaternion, Vector3, type Object3D } from 'three';
+import { MathUtils, Quaternion, Vector3, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import type { Goal, Placement } from '../kernel/goal';
-import { bisect, smoothstep } from '../kernel/math';
+import { bisect } from '../kernel/math';
 import { within } from '../kernel/scene';
 import { orienters, resolve } from '../things/resolve';
 import type { Self } from './runtime';
@@ -74,7 +74,7 @@ export class Orient {
       const axis = _axis.crossVectors(out, toward);
       if (axis.lengthSq() < 1e-12) continue;
       const off = grip.held ? 0 : _off.addVectors(out, pivot).distanceTo(f.current.position(bones[bones.length - 1])) / self.scale;
-      turned.premultiply(_q.setFromAxisAngle(axis.normalize(), (out.angleTo(toward) - wanted) * (1 - smoothstep(COMING.near, COMING.far, off))));
+      turned.premultiply(_q.setFromAxisAngle(axis.normalize(), (out.angleTo(toward) - wanted) * (1 - MathUtils.smoothstep(off, COMING.near, COMING.far))));
       this.turned.get(node)?.copy(turned);
     }
     this.held(f, node, turned);

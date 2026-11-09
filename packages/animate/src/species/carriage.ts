@@ -228,7 +228,6 @@ function ride(out: Riding, gait: Gait, speed: number, stride: { cycle: number; s
 }
 /** Tuned: how early in a stride (cycles) a leg's landing may come and still find its top no higher than the legs hold it */
 const EARLY = 0.05;
-/** a stride's ride (`ride`) */
 interface Riding { rise: Float64Array; pitch: Float64Array; low: number }
 /** how finely a stride's ride is worked out */
 const RIDE_SAMPLES = 64;
@@ -238,5 +237,5 @@ function ridden(of: Float64Array, u: number): number {
   return of[k] + (of[(k + 1) % RIDE_SAMPLES] - of[k]) * t;
 }
 const STILL: Carriage = { withers: 0, croup: [0, 0], spine: 0, spinePhase: 0, roll: 0, yaw: 0, headPitch: 0, headRise: 0, headWithers: 0 };
-const turn = (x = 0, y = 0, z = 0, out = _t) => out.setFromEuler(_e2.set(x, y, z, 'YXZ'));
+const turn = (x = 0, y = 0, z = 0) => _t.setFromEuler(_e2.set(x, y, z, 'YXZ'));
 const _t = new Quaternion(), _v = new Vector3(), _e = new Euler(), _e2 = new Euler();

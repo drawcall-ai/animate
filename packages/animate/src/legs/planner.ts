@@ -1,9 +1,9 @@
 // The root planner: a root stream toward a goal — the same a player's input makes — for a stepper to follow.
-import { Quaternion, Vector3 } from 'three';
+import { MathUtils, Quaternion, Vector3 } from 'three';
 import { STEP, type Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
-import { clamp, lerp, smoothstep, wrapAngle, yawOf } from '../kernel/math';
+import { clamp, lerp, wrapAngle, yawOf } from '../kernel/math';
 import { strideAt, type Gait } from '../species/gait';
 import type { Steering } from './step/state';
 
@@ -131,8 +131,8 @@ function rootPlan(
     // Keep translating until the remaining turn can finish, rather than exhaust the approach first (derived).
     // (never held still to turn first: a goal far off the facing — further than it may face off its way, `sidelong`: near a still goal,
     // any way — is walked to more and more slowly, then turned to first)
-    const sidelong = keeps ? Math.PI : lerp(Math.PI, SIDELONG, Math.max(smoothstep(ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance, distance), smoothstep(STILL, 2 * STILL, goalSpeed)));
-    const first = 1 - smoothstep(TURN_FIRST[0], TURN_FIRST[1], Math.abs(wrapAngle(heading - yaw)) - sidelong + SIDELONG);
+    const sidelong = keeps ? Math.PI : lerp(Math.PI, SIDELONG, Math.max(MathUtils.smoothstep(distance, ARRIVAL_TURN[0] * midstance, ARRIVAL_TURN[1] * midstance), MathUtils.smoothstep(goalSpeed, STILL, 2 * STILL)));
+    const first = 1 - MathUtils.smoothstep(Math.abs(wrapAngle(heading - yaw)) - sidelong + SIDELONG, TURN_FIRST[0], TURN_FIRST[1]);
     const off = keeps ? Math.cos(wrapAngle(heading - yaw)) : 1;
     const paced = speed * (off >= 0 ? lerp(KEPT.aside, 1, off) : lerp(KEPT.aside, KEPT.back, -off));
     const closing = (arrival > 0 && untilFacing > 0 ? Math.min(paced, distance / untilFacing) : paced) * first;
@@ -143,7 +143,7 @@ function rootPlan(
     const travelYaw = v > 1e-4 ? Math.atan2(next.x, next.z) : facing ? heading : yaw;
     const goalAngle = facing ? wrapAngle(facingYaw - travelYaw) : 0, direction = Math.sign(goalAngle);
     // (the body faces the way it goes, as people do, until it arrives; only arriving does it hold what it has turned)
-    const holding = smoothstep(0, ARRIVING, arrival);
+    const holding = MathUtils.smoothstep(arrival, 0, ARRIVING);
     const progress = Math.max(Math.abs(goalAngle) * arrival, holding * direction * wrapAngle(stanceYaw - travelYaw), holding * direction * wrapAngle(yaw - travelYaw));
     // (and turns from the way it goes no further than `sidelong`: nobody walks off sideways or backward but for the last steps)
     const bearing = keeps ? facingYaw : facing ? travelYaw + direction * Math.min(Math.abs(goalAngle), progress, sidelong) : travelYaw;

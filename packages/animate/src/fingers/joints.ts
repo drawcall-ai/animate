@@ -72,7 +72,8 @@ const FLEXING = 15;
 const BRAKING = 6;
 /** how far off its length toward its palm side the point of a fingertip that touches is: pressing a button nearly end on (`TIP`), and
  * pressing with the flat of the pad on what the hand holds (`FLAT`) (rad) */
-export const TIP = (25 * Math.PI) / 180, FLAT = (70 * Math.PI) / 180;
+const TIP = (25 * Math.PI) / 180;
+export const FLAT = (70 * Math.PI) / 180;
 /** without a skin to measure: a digit's palm side from its bone as a share of its first segment's length, and the palm's from the
  * knuckles' bones as a share of the wrist-to-knuckle length */
 const THICK = { finger: 0.2, thumb: 0.24, palm: 0.3 } as const;

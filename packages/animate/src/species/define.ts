@@ -1,12 +1,11 @@
 import { Quaternion, Vector3 } from 'three';
-import type { SkeletonBone } from '@drawcall/rig';
 import type { Inertial } from '../kernel/inertia';
 import type { Gait } from './gait';
 import type { CarriedBones, Striding } from './carriage';
 import type { LegChain } from './leg';
 import type { Frame } from '../kernel/frame';
 import type { ReadonlyPose } from '../kernel/pose';
-import { Skeleton, type BoneDef, type Limit } from '../kernel/skeleton';
+import { Skeleton, type BoneDef, type Limit, type SkeletonBone } from '../kernel/skeleton';
 import type { Proportions } from './humanoid/proportions';
 import type { Stride } from './humanoid/humanoid';
 import type { DigitBones } from '../fingers/bones';
@@ -103,7 +102,7 @@ export function steadiness(life: Temperament, time: number): number {
 }
 
 /** A species' posture over its legs, written each sub-step before the legs step, its head toward `look` (what `lookAt` asks) if any. */
-export interface Posture { prepare(f: Frame, legs: Striding, attention: Attention, look: Readonly<Vector3> | null): void }
+interface Posture { prepare(f: Frame, legs: Striding, attention: Attention, look: Readonly<Vector3> | null): void }
 
 /** A joint's range of motion, as `Limit` has it, for a bone named so: without a `neutral`, measured from the rest pose, so a joint bent at
  * rest needs range to straighten. A + turn about +X (the body's left) swings a leg bone's lower end back: a knee flexes +, a hip −. */

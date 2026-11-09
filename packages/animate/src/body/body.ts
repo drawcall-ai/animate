@@ -23,7 +23,7 @@ type BoneOf<S extends AnySpecies> = S extends Species<infer Bone, string> ? Bone
 export type ByHand<S extends AnySpecies, T> = S extends Species<string, infer Hand> ? [Hand] extends [never] ? never : Partial<Record<Hand, T>> : never;
 
 /** What holds one of a body's parts: the verb, where the story asked for it and how firmly (borrowed: needed, not asked). */
-export interface Owner {
+interface Owner {
   verb: string;
   site: string;
   tier: Tier;
@@ -31,7 +31,7 @@ export interface Owner {
 
 /** What each of a body's parts is doing, by part: the legs (`go`), the eyes (`look`), the trunk's posture (`trunk`), the head's turn over
  * the eyes (`head`) and each hand. */
-export interface Owners {
+interface Owners {
   go?: Owner;
   look?: Owner;
   trunk?: Owner;
@@ -41,7 +41,7 @@ export interface Owners {
 
 /** A foot as it stands or, swinging, where it lands. A planted foot turning on the spot pivots about its sole's middle, between heel and
  * toe, so its ankle shifts a little. */
-export interface Foot {
+interface Foot {
   /** its ankle, standing flat on the floor there */
   position: Vector3;
   /** which way it points (rad about +Y) */

@@ -17,7 +17,9 @@ import type { Beat } from './index';
 
 // The whole scene as one film, as the last scene of A New Hope plays it: the doors open, the trio walks up the aisle between the troops
 // at attention and climbs to Leia, who hangs Luke's medal and then Han's (Luke bows, Han winks, Chewbacca roars); the droids react
-// throughout, and the trio turns to the hall as the troops applaud. The camera and the sound are steps of the same story.
+// throughout, and the trio turns to the hall as the troops applaud. The camera (film/camera.ts) and the sound (film/sound.ts) are steps of
+// the same story. It is the viewer's default beat, and waits for a click on "Play with sound", since browsers start audio only after one;
+// "Orbit" looks around the hall from wherever the story camera is, and "Story camera" goes back to it.
 //
 // It composes the other beats rather than rewriting them: the procession, the medal moment's gestures and the finale are each staged into
 // this one setting and their stories run in turn, the next one's preparation starting before the last ends; the droids' moods and the

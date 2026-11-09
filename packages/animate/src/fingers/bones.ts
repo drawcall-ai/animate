@@ -1,5 +1,5 @@
 import type { Vector3 } from 'three';
-import type { SkeletonBone } from '@drawcall/rig';
+import type { SkeletonBone } from '../kernel/skeleton';
 import type { DigitName } from './shape';
 
 /** A hand's finger bones by digit, each from the palm out: the thumb's metacarpal, proximal and distal; a finger's proximal, intermediate and distal. */

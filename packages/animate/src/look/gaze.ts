@@ -1,5 +1,5 @@
-import { Euler, Quaternion, Vector3 } from 'three';
-import { clamp, headingOf, wrapAngle, smoothstep, yawOf } from '../kernel/math';
+import { MathUtils, Euler, Quaternion, Vector3 } from 'three';
+import { clamp, headingOf, wrapAngle, yawOf } from '../kernel/math';
 import { action } from '@pmndrs/timeline';
 import { during, type Request } from '../kernel/requests';
 import type { Frame, Step } from '../kernel/frame';
@@ -51,7 +51,7 @@ const GLANCE = { turnAccel: 40, turnSpeed: 6 };
  * the most a head turns to what the hands go for (rad/s², rad/s): a large brisk gaze shift's head, ~3400°/s² and ~340°/s at its peak
  * (recalled from Guitton & Volle 1987, J Neurophysiol 58:427, not checked against the paper)
  */
-export const SHIFT = { turnAccel: 60, turnSpeed: 6 };
+const SHIFT = { turnAccel: 60, turnSpeed: 6 };
 
 /** Keep the eyes on a world target (rest: +Z forward, +Y up), sharing the braked head turn over the neck chain within joint limits (`shareOver`); EYES
  * takes the remainder — or, given `head`, all of a turn aside but that share, as far as the eyes' comfortable range. The history-followed
@@ -115,7 +115,7 @@ export function looking(self: Looker, target: (f: Frame) => Readonly<Vector3>, {
     const ways = (line: Vector3) => {
       // (as far as the line itself has a heading: one passing straight down under the eyes swings its heading round in a moment, and
       // the eyes' own pitch, reset at each new sight, would make it jump too: judged by either, a squat over a box snapped the head ~450°/s)
-      const vertical = smoothstep(0.1, 0.35, Math.hypot(line.x, line.z));
+      const vertical = MathUtils.smoothstep(Math.hypot(line.x, line.z), 0.1, 0.35);
       const toward = wrapAngle(Math.atan2(line.x, line.z) - facing);
       upright(line, facing + toward * vertical, _q);
       upright(line, facing + wrapAngle(toward + Math.PI) * vertical, _o);
@@ -266,7 +266,7 @@ function strain(gazer: Gazer, pose: ReadonlyPose, bones: readonly number[], pare
 /** how far (0–1) a head turned `q` (world) looks level enough to be followed in its own angles (`LEVEL`) */
 function levelness(q: Readonly<Quaternion>): number {
   const line = _tl.set(0, 0, 1).applyQuaternion(q);
-  return smoothstep(LEVEL[0], LEVEL[1], Math.hypot(line.x, line.z));
+  return MathUtils.smoothstep(Math.hypot(line.x, line.z), LEVEL[0], LEVEL[1]);
 }
 
 /** how much of a line of sight is horizontal (the cosine of its pitch) where a head is followed in its own angles, from none to all:

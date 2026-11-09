@@ -1,4 +1,4 @@
-import { Box3, Matrix4, Quaternion, Vector3 } from 'three';
+import { MathUtils, Box3, Matrix4, Quaternion, Vector3 } from 'three';
 import type { Frame, Step } from '../../kernel/frame';
 import { limited } from '../../kernel/limits';
 import { TrackedRotation } from '../../kernel/track';
@@ -7,7 +7,7 @@ import type { Reacher } from './reacher';
 import type { Thing } from '../../things/thing';
 import { boneOf } from '../../things/hold';
 import { ArmClear, checkArms, keepArmOut, NUDGED } from './trunk';
-import { clamp, leftOf, lerp, smoothstep, wrapAngle, yawOf } from '../../kernel/math';
+import { clamp, leftOf, lerp, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../../species/humanoid/proportions';
 import { palmOf } from '../../species/humanoid/landmarks';
 import { bowAhead } from '../../legs/person/posture';
@@ -43,7 +43,7 @@ const SWAY = { frequency: 1.5, damping: 0.7 };
 function drawnBack(proportions: Proportions, bow: number, held: number): number {
   const reach = proportions.armLength + palmOf(proportions, 'left').length();
   const beside = Math.asin(clamp((1 - DRAPED) * bowAhead(proportions, 0, bow, 'shoulder') / reach, -1, 1));
-  return beside * (1 - (1 - held) * smoothstep(STOOP.from, STOOP.to, Math.abs(bow)));
+  return beside * (1 - (1 - held) * MathUtils.smoothstep(Math.abs(bow), STOOP.from, STOOP.to));
 }
 
 /** how far a hanging hand keeps out past the thigh beside it, from axis to axis (× height): the thigh's and the hand's thickness
@@ -88,7 +88,7 @@ export function hanging(person: Reacher): Step {
       const swing = (at: number) => (sign * Math.cos(phase + Math.PI * at) * lerp(0.33, 0.42, locomotion.run) * locomotion.arms + 0.02) * locomotion.walk;
       const a = swing(lead);
       const walked = 0.25 + (0.18 + 0.5 * swing(lead + LEAD.forearm)) * locomotion.walk, ran = 1.5 + 0.3 * swing(lead + LEAD.forearm);
-      const flex = lerp(walked, ran, locomotion.run) * (1 - smoothstep(0.6, 1.6, a)) + elbow;
+      const flex = lerp(walked, ran, locomotion.run) * (1 - MathUtils.smoothstep(a, 0.6, 1.6)) + elbow;
       // the arm hanging from the shoulder — plumb, but as far back as the bow carries it (held in as the other hand works) — out as far
       // as keeps the hand clear of the thigh beside it (the hip's or the knee's, as the legs stand now) however the trunk bows, leans or
       // twists, swung forward about that frame's left; the forearm forward

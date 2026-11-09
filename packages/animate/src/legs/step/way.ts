@@ -1,6 +1,6 @@
 // A swing's way over a floor that is not level: up a stair the foot rises before it swings on, down one it comes over the tread first.
-import { Vector3 } from 'three';
-import { lerp, minimumJerk, quintic, smoothstep, wrapAngle } from '../../kernel/math';
+import { MathUtils, Vector3 } from 'three';
+import { lerp, minimumJerk, quintic, wrapAngle } from '../../kernel/math';
 import { FLAT, highestUnder, lowestUnder } from '../floor';
 import type { Leg, Now, Steps, Swing } from './state';
 
@@ -16,7 +16,7 @@ export function arcOf(steps: Steps, now: Now, leg: Leg, w: Swing, u: number): nu
 /** how far a swing steps up and down (0 … 1 each): its landing `STEP` or more above or below the floor it left */
 export function stepping(steps: Steps, leg: Leg, w: Swing): { up: number; down: number } {
   const climb = leg.anchor.y - steps.feet.ankleHeight - w.level, step = STEP * steps.st.scale;
-  return { up: smoothstep(0, step, climb), down: smoothstep(0, step, -climb) };
+  return { up: MathUtils.smoothstep(climb, 0, step), down: MathUtils.smoothstep(-climb, 0, step) };
 }
 
 /**

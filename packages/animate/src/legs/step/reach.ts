@@ -1,6 +1,6 @@
 // How far a leg reaches and where its hip is: the geometry the stepper decides its steps by.
-import { Vector3 } from 'three';
-import { forwardOf, leftOf, lerp, minimumJerk, smoothstep } from '../../kernel/math';
+import { MathUtils, Vector3 } from 'three';
+import { forwardOf, leftOf, lerp, minimumJerk } from '../../kernel/math';
 import { xcomOf } from '../support';
 import { FLAT, foothold, LEVEL } from '../floor';
 import { ROLL, _a, _b, _f, _l, _m, _o, _v, _x, dropOf, rollOf, type Body, type Leg, type Now, type Reading, type Steps, type Timing } from './state';
@@ -52,7 +52,7 @@ export function offHome(steps: Steps, now: Now, leg: Leg, ahead: number): number
  * `IN_PLACE` (m, default body) — turning, squaring, not a step up or down a flight */
 export function staysOn(steps: Steps, now: Body, level: number, ahead: number): boolean {
   if (steps.floor === FLAT) return false;
-  const { contact, r } = now, at = travelOf(steps, now, ahead, _stay);
+  const { contact, r } = now, at = travelOf(now, ahead, _stay);
   const on = ({ x, z }: Vector3) => Math.abs(steps.floor(x, z) - level) <= LEVEL;
   const near = Math.hypot(at.x - r.position.x, at.z - r.position.z) < IN_PLACE * steps.st.scale;
   if (!contact) return near && on(r.position) && on(at);
@@ -70,7 +70,7 @@ function rolled(steps: Steps, now: Now, leg: Leg): number {
   // (standing, from further: a quiet stance holds its centre of mass ~4–6 cm ahead of the ankles and sways about it — read: Winter 1995 —
   // which would roll the feet up and down, the pelvis bobbing with them)
   const from = lerp(STANDING_PIVOT, PIVOT, now.moving) * s;
-  return lerp(rollOf(leg), limit, Math.max(Number(now.tiptoe > 0), smoothstep(from, from + PIVOT * s, Math.abs(aheadOf(steps, now, leg)))));
+  return lerp(rollOf(leg), limit, Math.max(Number(now.tiptoe > 0), MathUtils.smoothstep(Math.abs(aheadOf(steps, now, leg)), from, from + PIVOT * s)));
 }
 
 /** the most a planted foot rolls to help the hip reach it: onto its heel when it is ahead, its ball when behind */
@@ -110,7 +110,7 @@ export function shankLean(steps: Steps, hip: Vector3, ankle: Vector3, yaw: numbe
  * treads, `STAIRS` of the bob gone on a flight's slope — the leap's rise on it. */
 export function nominal(steps: Steps, body: Body): number {
   const { st, legs } = steps, { standing, rise, run, Ts, v, climb } = body;
-  const moving = body.moving * (1 - STAIRS.bob * smoothstep(0, STAIRS.slope, Math.abs(climb) / Math.max(v, STAIRS.slow)));
+  const moving = body.moving * (1 - STAIRS.bob * MathUtils.smoothstep(Math.abs(climb) / Math.max(v, STAIRS.slow), 0, STAIRS.slope));
   const swinging = 1 - Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0));
   const planted = Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / Ts)) ** 2), 0));
   return standing + rise - (dropOf(st, body) + st.bob * lerp(swinging, planted, run)) * st.scale * moving;
@@ -142,19 +142,19 @@ export function strokeOf(steps: Steps): number {
 
 /** the extrapolated centre of mass `ahead` s on: the root carried on, the centre of mass where it is over it — as `r.xcom` is */
 export function xcomAhead(steps: Steps, now: Body, ahead: number, out: Vector3): Vector3 {
-  const at = travelOf(steps, now, ahead, out).add(now.over).addScaledVector(forwardOf(now.yaw, _f), now.sitting);
-  return xcomOf(at, pace(steps, now, ahead, _x), steps.feet.length, out);
+  const at = travelOf(now, ahead, out).add(now.over).addScaledVector(forwardOf(now.yaw, _f), now.sitting);
+  return xcomOf(at, pace(now, ahead, _x), steps.feet.length, out);
 }
 
 /** Where the root will be `ahead` s on: follow its forecast, or keep its pace with braking bounded by a stop. */
-export function travelOf(steps: Steps, { r, accel }: Reading, ahead: number, out: Vector3): Vector3 {
+export function travelOf({ r, accel }: Reading, ahead: number, out: Vector3): Vector3 {
   if (r.forecast) return out.copy(r.forecast(ahead).position);
   const changing = brakingTime(r.velocity, accel, ahead);
   return out.copy(r.position).addScaledVector(r.velocity, ahead).addScaledVector(accel, changing * (ahead - changing / 2));
 }
 
 /** Its velocity then: a walker's as foreseen, or its current pace bounded by a braking stop. */
-export function pace(steps: Steps, { r, accel, dt }: Reading, ahead: number, out: Vector3): Vector3 {
+export function pace({ r, accel, dt }: Reading, ahead: number, out: Vector3): Vector3 {
   if (r.forecast) return out.subVectors(r.forecast(ahead + dt).position, r.forecast(ahead).position).divideScalar(dt).setY(0);
   return out.copy(r.velocity).addScaledVector(accel, brakingTime(r.velocity, accel, ahead)).setY(0);
 }
@@ -168,7 +168,7 @@ function brakingTime(velocity: Vector3, accel: Vector3, ahead: number): number {
 /** half the feet's spread at `speed` (m): side-stepping, the feet open wider and close in to the narrowest: their travel never crosses */
 export function widthAt(steps: Steps, { across, Ts, crouch }: Reading & Timing, speed: number): number {
   const { st } = steps, s = st.scale, { width } = st;
-  const gait = lerp(lerp(width.stand, width.walk * s, smoothstep(0, 1, speed)), width.run * s, smoothstep(st.run[0], st.run[1], speed));
+  const gait = lerp(lerp(width.stand, width.walk * s, MathUtils.smoothstep(speed, 0, 1)), width.run * s, MathUtils.smoothstep(speed, st.run[0], st.run[1]));
   return Math.max(gait, (width.narrowest * s + Math.abs(across) * speed * Ts) / 2) + st.crouch.wider * s * crouch;
 }
 

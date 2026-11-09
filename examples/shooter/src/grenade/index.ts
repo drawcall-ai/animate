@@ -4,6 +4,9 @@ import { DataTexture, Group, LinearFilter, Matrix4, Object3D, PointLight, Sprite
 import type { Combatant } from '../combat';
 import { GrenadeModel } from './model';
 
+// The player carries `GRENADES` on the vest per encounter (a reset refills them). The view stays free until a grenade leaves the hand,
+// which starts its fuse. A blast hurts soldiers in the open, the player too, and throws the crates; cover stops it.
+
 export const GRENADES = 3;
 export const FUSE = 3;
 const RADIUS = 0.04, BLAST_RADIUS = 6;

@@ -107,7 +107,7 @@ function regripped(person: Reacher, side: Side, thing: Thing, regrip: Regrip, ti
  * turn), onto the least strained of them; else still the one it has, the arm working for it (a lance borne upright beside the hip).
  * Whether it kept the grasp as comfortable enough there: weighed again as the end or the body moves on, it may yet be regripped.
  */
-export function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>, settling = false): boolean {
+function planGrasp(person: Reacher, side: Side, thing: Thing, hold: Hold, end: Readonly<Placement>, settling = false): boolean {
   if (fixes(hold.thing.grip(hold.grip)) || !shifts(hold) || !inHand(person, thing)) return false;
   const f = person.frame, bone = person.hands[side], restOf = person.restOf(bone);
   const from = inHandNow(person, side, thing, hold);
