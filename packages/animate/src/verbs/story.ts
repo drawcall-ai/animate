@@ -1,3 +1,4 @@
+import { Vector3 } from 'three';
 import { action, type TimelineYield } from '@pmndrs/timeline';
 import { selfOf, type Body } from '../body';
 import type { Miss, RequestKind, Staging } from '../kernel/requests';
@@ -86,9 +87,14 @@ export function verb(body: Body, name: string, staging: Staging, ending: Ending 
 function* run(self: Self, call: Call, staging: Staging, { until, kind }: Ending): Verb {
   self.unyielded.delete(call);
   const ends = until === undefined ? null : endsOf(until), request = self.file(call.verb, () => call.site, staging, kind);
+  const still = stillness(self);
   try {
     yield (_state, clock) => {
       request.renewed = self.time;
+      // (a mover ends or throws, whatever its staging waits on: only the story's own `until` may keep a body at a thing for ever)
+      if (!ends && kind !== 'aimer' && request.outcome === 'running' && still() > STILL.seconds) {
+        request.fail({ where: '', off: still(), limit: STILL.seconds, why: `nothing of the body has moved for ${STILL.seconds} s and it has not got there (off and limit in s): another verb may hold the part it needs, or what it waits on may never come` });
+      }
       if (request.error || request.miss) return 'finished';
       return (ends ? ends(clock.delta) : request.outcome === 'met') ? 'finished' : 'running';
     };
@@ -98,6 +104,24 @@ function* run(self: Self, call: Call, staging: Staging, { until, kind }: Ending)
   } finally {
     self.drop(request);
   }
+}
+
+/** how long (s) a mover may stand with its body's root and hands each within `moved` (m) of where they were before it has failed: longer
+ * than any of its verbs' own measures of a stall (a walk's 6 s), and further than a body's breath and sway */
+const STILL = { seconds: 8, moved: 0.05 };
+
+/** how long (s) `self`'s root and hands have stood still, as of this read */
+function stillness(self: Self): () => number {
+  const bones = [0, ...Object.values(self.hands)], was = bones.map(() => new Vector3());
+  let since = NaN;
+  return () => {
+    const moved = bones.map((bone, k) => self.pose.position(bone).distanceTo(was[k]) > STILL.moved).includes(true);
+    if (Number.isNaN(since) || moved) {
+      since = self.time;
+      bones.forEach((bone, k) => was[k].copy(self.pose.position(bone)));
+    }
+    return self.time - since;
+  };
 }
 
 /** a condition over the story's frames (their deltas, s) */

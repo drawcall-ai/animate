@@ -41,7 +41,7 @@ const REFIT_AFTER = 0.5;
 /**
  * Follow a path with load compliance only on support take-up, until the thing rests within `near` of its path's end; report a late
  * settling endpoint. The `end` of a carry fails it instead of waiting on: once late, or once at rest where the body's own trunk and head
- * hold it off its end (a carry ends true only with the thing in place). Late is timed from the path's end — on a leg the carry `walks`,
+ * hold it off its end (a carry ends true only with the thing in place); any other leg, once late, is over as far as the arms took it. Late is timed from the path's end — on a leg the carry `walks`,
  * from when the body stands. Its request's eta is `eta` of the path's time left (s; default that time): what the carry does besides the
  * path counted in.
  */
@@ -84,6 +84,7 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
     const hold = hand === undefined ? null : person.holding[hand];
     return end && turns(f) && hold && !others.length && shifts(hold) && inHand(person, thing) ? sideOf(hand) : null;
   };
+  const overdue = (f: Frame) => f.time - stood > RESTING;
   const there = (f: Frame) => {
     if (!Number.isNaN(seated)) {
       if (f.time < seated) return false;
@@ -108,7 +109,8 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
     // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it)
     const side = seating(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
     const resting = rested(f, movingFrame, goal, turns(f) ? guide.goal.quaternion : undefined);
-    if (side && led && short <= SEATS && !resting.spins && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
+    // (once overdue no more: a seat that will not take would go on being tried, and the carry on running)
+    if (side && led && !overdue(f) && short <= SEATS && !resting.spins && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
       // (the thing as it stood with its end a sub-step before, as `restingAt` reads them: a sub-step apart, a moving body's place would
       // seem off it by as far as it moves in one)
       seated = seat(person, side, thing, movingFrame.moved(f.time) ? movingFrame.prev : movingFrame.current, ended);
@@ -135,13 +137,15 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
       was.copy(offset);
       wasTurned.copy(movingFrame.current.quaternion);
     }
-    const stalled = f.time - still > STALL.seconds, overdue = f.time - stood > RESTING;
+    const stalled = f.time - still > STALL.seconds, isOverdue = overdue(f);
     // (within `STALL.close`, swaying with a body that carries its end, it will never stand still: long enough there is there too)
-    if ((stalled || overdue) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
-    if (!late && (overdue || (stalled && !close))) {
+    if ((stalled || isOverdue) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
+    if (!late && (isOverdue || (stalled && !close))) {
       late = true;
+      // (a place on its way, no end of it: as near as the arms take it, and on — only the end is a carry's to miss)
+      if (!end) return true;
       const turned = turnedOff > TURNED ? `, turned ${(turnedOff * 180 / Math.PI).toFixed(0)}° off its turn` : '';
-      if (end) request.fail({ where: thing.object.name, off: short, limit: near, why: `stopped ${cm(short)} cm off it${turned}: ${guide.off > STALL.close ? inTheWay(guide) : limits(person, thing, guide)}` });
+      request.fail({ where: thing.object.name, off: short, limit: near, why: `stopped ${cm(short)} cm off it${turned}: ${guide.off > STALL.close ? inTheWay(guide) : limits(person, thing, guide)}` });
     }
     return false;
   };

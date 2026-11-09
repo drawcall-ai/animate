@@ -1,4 +1,5 @@
-import { Body, dog, arriving, attempt, carry, grab, humanoid, Missed, release, wait, reach } from '../../src/index';
+import { parallel } from '@pmndrs/timeline';
+import { Body, dog, arriving, attempt, carry, grab, grip, humanoid, lookAt, Missed, release, sit, stand, wait, reach } from '../../src/index';
 import { DOG } from '../../skills/animate/references/dog';
 import { BoxGeometry, Group, Mesh, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
@@ -233,4 +234,27 @@ it('lifts an attached item when a creature starts carrying it', () => {
   }, [body], 12, () => finished);
   expect(finished).toBe(true);
   expect(load.parent).toBe(body.bones.jaw);
+});
+
+// (the trial that found it: sat, sipped, lowered to the lap, stood: the turn it was left in is one the arm cannot hold at the body's carrying
+// place, and the carry waited on that place for ever, the walk done and the raise never begun)
+it('walks on with what the arm cannot hold at its carrying place, and ends', () => {
+  const body = person(), room = roomOf(body), cup = empty(room, 'cup', new Vector3(-0.28, 0.95, 0.25));
+  cup.userData.mass = 0.3;
+  grip(cup, 'handle', new Vector3(-0.06, 0, 0), { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.012 });
+  const seat = empty(room, 'seat', new Vector3(0, 0.45, 3)), spot = empty(room, 'spot', new Vector3(0.5, 0.5, 3)), bird = empty(room, 'bird', new Vector3(-1, 1.8, 1.5));
+  seat.rotation.y = Math.PI;
+  const tilt = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.9), head = body.species.person!.head, lips = empty(body.bones.head, 'lips', new Vector3(0, head.nose.y - 0.03, head.nose.z + 0.12).sub(new Vector3(0, 0.05, 0.04).applyQuaternion(tilt)));
+  lips.quaternion.copy(tilt);
+  let carried: boolean | null = null;
+  play(function* () {
+    yield* grab(body, cup, { right: 'handle' }, { already: true });
+    yield* carry(body, cup, () => body.armPoint('right', new Vector3(0, -0.5, 1).normalize(), 0.6));
+    yield* sit(body, seat);
+    yield* parallel('all', lookAt(body, bird, { until: 4 }), carry(body, cup, lips));
+    yield* carry(body, cup, () => body.armPoint('right', new Vector3(0.2, -0.7, 1).normalize(), 0.6));
+    yield* stand(body);
+    carried = yield* carry(body, cup, spot);
+  }, [body], 30, () => carried !== null);
+  expect(carried).toBe(true);
 });

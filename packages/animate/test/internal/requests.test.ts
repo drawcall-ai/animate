@@ -1,6 +1,8 @@
+import { action, runTimeline } from '@pmndrs/timeline';
 import { Object3D, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { selfOf } from '../../src/body';
+import { Missed, verb } from '../../src/verbs/story';
 import { finder } from '../../src/things/target';
 import { dt, person, run } from '../kit/bodies';
 import { roomOf } from '../kit/things';
@@ -46,3 +48,30 @@ describe('targets', () => {
 
 });
 
+describe('stillness', () => {
+  const running = (until?: number) => {
+    const body = person();
+    let miss: unknown = null, ended = false;
+    const step = runTimeline(function* () {
+      try {
+        yield* verb(body, 'stuck', () => () => action({ until: () => false }), { until });
+      } catch (cause) {
+        miss = cause;
+      }
+      ended = true;
+    });
+    for (let t = 0; t < 12 && !ended; t += dt) {
+      step(undefined, dt);
+      body.update(dt);
+    }
+    return { miss, ended };
+  };
+
+  it('a mover whose body stands still short of its goal ends in a miss, whatever its staging waits on', () => {
+    expect(running().miss).toBeInstanceOf(Missed);
+  });
+
+  it('a mover given its own `until` may stand as long as it likes', () => {
+    expect(running(Infinity).ended).toBe(false);
+  });
+});
