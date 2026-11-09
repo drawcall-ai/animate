@@ -1,9 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { Goal } from '../../kernel/goal';
-import { minimumJerk } from '../../kernel/math';
 import { timedPath } from '../../kernel/timed-path';
-import { SHAPING } from '../../fingers/shape';
 import type { GripOn } from '../../things/thing';
 import { worn } from '../../things/hold';
 import { INDEX } from '../anatomy/bones';
@@ -19,9 +17,6 @@ import type { Person } from '../person';
 
 /** how far out along the face's normal a fingertip's way to its button runs straight in at its end (m, default body) */
 const RUN = 0.045;
-/** how much of the way is left as its index sets off pointing, and as it points (m, default body, along the way): pointed before its run
- * in, so the pad goes along the run as the wrist does (a finger straightening over the run would swing its pad off the line) */
-const POINTS = { from: 0.22, to: 0.12 };
 /** how near its button a fingertip's pad comes to touch it (m, default body) */
 export const TOUCH = 0.001;
 /** how far off the face's normal a fingertip draws back along the line from the eyes at most (rad) */
@@ -40,19 +35,12 @@ export function runOf(person: Person, take: HandPlan): Vector3 | null {
 /**
  * a fingertip's way to its button (the thing's frame), as one motion: a smooth curve from where its hand sets off through its run and on
  * in to its grip (`points`), timed by one minimum-jerk profile over its length (it passes the run without stopping and comes to rest
- * only on the button), set off `after` s on; its index points before the way's run in (`FingerState.pointAt`, `POINTS`), frozen so
+ * only on the button), set off `after` s on; its index points before the way's run in (`FingerState`'s `POINTS`), frozen so
  */
 export function pressingIn(person: Person, hand: HandPlan & { from: Vector3; points: Vector3[]; lengths: number[]; seconds: number }, after: number) {
   const total = hand.lengths.reduce((sum, length) => sum + length, 0) || 1, seconds = hand.seconds;
   const path = timedPath({ current: { position: hand.from, quaternion: IDENTITY } }, hand.points.map((position, k) => [seconds * hand.lengths[k] / total, { position }] as const), { delay: after });
-  let began = NaN;
-  const goal = (f: Frame): Goal => {
-    if (Number.isNaN(began)) began = f.time;
-    // (its pointing asked as far ahead as the fingers take to ease into a shape)
-    const left = (1 - minimumJerk(Math.min(1, Math.max(0, (f.time + SHAPING - began - after) / seconds)))) * total / person.scale;
-    person.fingers?.pointAt(hand.side, Math.min(1, Math.max(0, (POINTS.from - left) / (POINTS.from - POINTS.to))));
-    return { ...hand.goal, position: path.to(f).position };
-  };
+  const goal = (f: Frame): Goal => ({ ...hand.goal, position: path.to(f).position });
   return reaching(person, hand.side, goal, { on: person.movingFrameOf(hand.thing.object), thing: hand.thing, bodyFollows: !worn(hand.thing), accel: HOLD.accel, speed: HOLD.speed });
 }
 

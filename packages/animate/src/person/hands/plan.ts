@@ -6,7 +6,7 @@ import type { Request } from '../../kernel/requests';
 import { headingOf, turnOnto } from '../../kernel/math';
 import { toWorld } from '../../kernel/scene';
 import { digitsOf, handOn, type HandPart, type HandPlacement, type HandPoint } from '../../fingers/placement';
-import { POINT, shapeOf, type Shape } from '../../fingers/shape';
+import { pointingWith, shapeOf, type Shape } from '../../fingers/shape';
 import type { GripOn, Thing } from '../../things/thing';
 import type { Hold } from '../../things/hold';
 import { INDEX, type Side } from '../anatomy/bones';
@@ -193,7 +193,7 @@ export function emptyAt(person: Person, take: Pick<HandPlan, 'thing' | 'grip'>, 
 function pick(thing: Object3D, grip: GripOn, point: (part: HandPart) => HandPoint, up: Vector3, natural: Quaternion, cost: (hand: Placement) => number): HandPlacement {
   const at = point(grip.point), centre = grip.at.position;
   const placement = (position: Vector3, quaternion: Quaternion): HandPlacement => ({
-    on: thing, point: grip.point, position, quaternion, fingers: grip.point === 'palm' ? 'close' : structuredClone(POINT), digits: digitsOf(thing, grip),
+    on: thing, point: grip.point, position, quaternion, fingers: grip.point === 'palm' ? 'close' : pointingWith(grip.point), digits: digitsOf(thing, grip),
   });
   // (a fingertip pressing into a face: its pad facing straight in, so it meets the face square rather than glancing off it, the hand
   // rolled about that as a pointing hand is)

@@ -137,6 +137,57 @@ describe('fingers', () => {
     expect(back).toBeGreaterThan(0.03);
   });
 
+  it('bring a pad grip with the digit it presses loose and the rest curled, closing as the hand arrives', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+    const card = new Mesh(new BoxGeometry(0.006, 0.03, 0.03));
+    card.name = 'card';
+    card.userData.mass = 0.02;
+    card.position.set(-0.22, 1.05, 0.38);
+    Object.assign(empty(card, 'grip', new Vector3(0.003, 0, 0)).userData, { point: 'thumb', digits: { index: 'pad' } });
+    Object.assign(empty(card, 'pad', new Vector3(-0.003, 0, 0)).userData, { facing: [1, 0, 0] });
+    room.add(card);
+    let held = false, coming: number[] = [];
+    play(function* () {
+      held = yield* grab(body, card, { right: 'grip' }, { step: false });
+      yield* wait(0.5);
+    }, [body], 3, () => { if (!held) coming.push(bent(body, 'rightIndexIntermediate')); });
+    expect(held).toBe(true);
+    coming = coming.slice(15, -15);
+    // (as loose as it rests all the way: a pointing index reads under 0.2)
+    expect(Math.min(...coming)).toBeGreaterThan(0.4);
+    expect(bent(body, 'rightIndexIntermediate')).toBeGreaterThan(Math.min(...coming) + 0.2);
+  });
+
+  it('come to a button across the room in a loose fist, and point only before its run in', () => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body);
+    const panel = new Mesh(new BoxGeometry(0.2, 0.2, 0.02));
+    panel.name = 'panel';
+    panel.position.set(-0.2, 1.2, 2.2);
+    Object.assign(empty(panel, 'button', new Vector3(0, 0, -0.012)).userData, { point: 'index', facing: [0, 0, 1] });
+    room.add(panel);
+    let held = false, walking = 0;
+    play(function* () {
+      held = yield* grab(body, panel, { right: 'button' });
+    }, [body], 5, (t) => { if (t > 0.5 && t < 1.5) walking = Math.max(walking, bent(body, 'rightIndexIntermediate')); return held; });
+    expect(held).toBe(true);
+    expect(walking).toBeGreaterThan(0.8);
+    expect(bent(body, 'rightIndexIntermediate')).toBeLessThan(0.3);
+  });
+
+  it.each(['middle', 'little'] as const)('press with the %s finger, it out and the index in', (digit) => {
+    const body = new Body(humanoid(FINGERED)), room = roomOf(body), name = digit[0].toUpperCase() + digit.slice(1);
+    const panel = new Mesh(new BoxGeometry(0.2, 0.2, 0.02));
+    panel.name = 'panel';
+    panel.position.set(-0.2, 1.2, 0.5);
+    Object.assign(empty(panel, 'button', new Vector3(0, 0, -0.012)).userData, { point: digit, facing: [0, 0, 1] });
+    room.add(panel);
+    let held = false;
+    play(function* () { held = yield* grab(body, panel, { right: 'button' }); }, [body], 4, () => held);
+    expect(held).toBe(true);
+    expect(bent(body, `right${name}Intermediate`)).toBeLessThan(0.3);
+    expect(bent(body, 'rightIndexIntermediate')).toBeGreaterThan(0.8);
+  });
+
   it('lay what a grip asks over a hand its app poses, closed on the grip', () => {
     const body = new Body(humanoid(FINGERED)), room = roomOf(body);
     const rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));

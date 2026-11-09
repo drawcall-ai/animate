@@ -61,6 +61,16 @@ export const POINT = {
   thumb: { curl: 0.3, oppose: 0.45, spread: 0.25 }, index: digit(0.05, 0.1), middle: digit(0.8, 0.3), ring: digit(0.85, 0.3), little: digit(0.9, 0.3),
 } as const satisfies Shape;
 
+/** A hand pressing with `digit`'s pad: `POINT`, with that digit out where the index is and the index curled in with the others (the
+ * thumb's own: every finger curled, the thumb as `POINT` holds it). */
+export function pointingWith(digit: Digit): Shape {
+  const shape: Shape = structuredClone(POINT);
+  if (digit === 'index') return shape;
+  shape.index = { ...POINT.middle };
+  if (digit !== 'thumb') shape[digit] = { ...POINT.index };
+  return shape;
+}
+
 /** The thumb's and the index's pads brought together in front of the palm, as a hand pinches a small thing; the other fingers curled
  * out of their way. */
 const PINCH = {
