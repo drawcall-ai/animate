@@ -25,13 +25,13 @@ function* takeIfNear(body: Body, cup: Object3D): Verb {
 
 ## A whole story
 
-This headless hand-over uses the shipped [person skeleton](references/person.ts); copy that file beside your script. The box has constructed grip empties; no model or renderer is required. Two hands cannot share a spot, so the box has grips for each body, and the giver lets go only once the receiver holds it.
+This headless hand-over uses the shipped [person skeleton](references/person.ts); copy that file to `references/` beside your script. The box has constructed grip empties; no model or renderer is required. Two hands cannot share a spot, so the box has grips for each body, and the giver lets go only once the receiver holds it.
 
 ```ts
 import { Group, Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { arriving, Body, carry, grab, grip, humanoid, play, release, wait } from '@drawcall/animate';
-import { PERSON } from './references/person';
+import { PERSON } from './references/person.ts';
 
 const giver = new Body(humanoid(PERSON), { dev: true });
 const receiver = new Body(humanoid(PERSON), { dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
@@ -83,7 +83,7 @@ No body kneels, lies or climbs. A pose's `lower` is a deep crouch on both feet a
 ## Knowing when something has finished
 
 - A thing is held: `grab` returned `true`, or `body.holds(thing)`.
-- A walk has ended: only once its feet are squared, a second or two after arriving. `arriving(body, seconds)` is true that long beforehand. It counts only movers begun once it is made, so make it before or beside the verb it times; with no mover it stays false forever.
+- A walk has ended: only once its feet are squared, a second or two after it stands there. `arriving(body, seconds)` is true that long before a mover ends, so `arriving(body, 2)` is about when a walk gets there. It counts only movers begun once it is made, so make it before or beside the verb it times; with no mover it stays false forever.
 - A body stands on its mark: `body.feet`. `body.position` is its hips, which sway.
 - A body is at rest: `body.settled`. This is about the feet only, and is true while a pose is still easing in or out.
 - A pose has arrived: give it `hold`. Eased back: nothing reports it, so read the bone you care about.
@@ -172,7 +172,7 @@ Bodies of different sizes walk at different paces, and `speed` holds them togeth
 
 To walk beside a body (a dog at heel, a guard, a child, a crowd after its leader), follow an empty parented to its `object`, racing the leader's story: `heel.position.set(-0.6, 0, 0); person.object.add(heel); yield* parallel('race', function* () { yield* walkTo(person, yard, { speed: 3 }); yield* wait(2); }, walkTo(rex, heel, { speed: 4, until: Infinity }))`. Its `speed` is an honest limit: give it about a third above the leader's or it never closes (`walk cannot keep up` in `body.log` says so). Keep a mark still otherwise: without `until` a walk to an empty on a body stalls and misses as that body breathes. A mark is an empty on the floor, its +Z the way to face. Grips and approach empties belong to the thing, so the story survives moved furniture; build hand targets from `body.species.person`'s measures, not metres.
 
-A stage or stairs is the `floor` function, the same for every body on the set; walks do not handle ramps or shallow treads, so use level areas and treads sized for the largest foot. Bodies keep their feet clear of each other but plan no path round things, and hands and carried things pass through anything: route with waypoints.
+A stage or stairs is the `floor` function, the same for every body on the set; walks do not handle ramps or shallow treads, so use level areas and treads sized for the largest foot. Bodies keep their feet clear of each other but plan no path round things, and hands and carried things pass through anything: route a body with one `walkTo` after another, ending each with its own `until` on how near the body has come so it flows on (`arriving` waits for its stop).
 
 ## Skeletons and species
 

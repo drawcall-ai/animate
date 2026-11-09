@@ -228,3 +228,16 @@ it('a walk given until misses once it stalls short of a goal standing still', ()
   expect(miss).toMatchObject({ verb: 'walkTo', why: expect.stringContaining('no nearer') });
   expect(ended).toBeLessThan(15);
 });
+
+it('`arriving` counts down to a walk\'s end, its feet squared: half a second before that, the body has stopped on its mark', () => {
+  const body = person();
+  let speed = Infinity, off = Infinity, ended = false;
+  play(function* () {
+    yield* walkTo(body, new Vector3(0, 0, 2.5), { until: arriving(body, 0.5) });
+    speed = body.velocity.length();
+    off = Math.abs(body.position.z - 2.5);
+    ended = true;
+  }, [body], 10, () => ended);
+  expect(speed).toBeLessThan(0.3);
+  expect(off).toBeLessThan(0.15);
+});

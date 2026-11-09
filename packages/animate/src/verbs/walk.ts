@@ -88,8 +88,9 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
 
 /**
  * A condition for `wait` and `until`: true once what `body`'s stories have begun moving it toward since the condition was made (that
- * instant included: a walk asked beside it counts) — its walk, its hands, what it carries — will arrive within `seconds`, or has (each
- * mover that has ended counts as there). False until one begins: made before or beside a walk, it waits for that walk, so it reads the
+ * instant included: a walk asked beside it counts) — its walk, its hands, what it carries — will have ended within `seconds`, or has (each
+ * mover that has ended counts as there). A walk ends with its feet squared, a second or two after it stands there, so `arriving(body, 0.5)`
+ * finds it stopped on its mark: to flow through a mark on the way, end the walk on how near it has come. False until one begins: made before or beside a walk, it waits for that walk, so it reads the
  * same however the story's branches are ordered. What the body does of itself (its hands backing out of what they let go) does not hold
  * it up. To wait until the body is at rest, `wait(() => body.settled)`.
  */

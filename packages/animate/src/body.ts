@@ -132,7 +132,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return new Vector3(root.x, selfOf(this).floor(root.x, root.z), root.z);
   }
 
-  /** its ground velocity: its centre of mass's over the last sub-step, horizontal (m/s) */
+  /** its ground velocity: its centre of mass's over the last sub-step, horizontal (m/s). The trunk swings within each stride, so a run asked 3.5 m/s reads up to some 4 here: a walk's `speed` caps its pace over the ground, not this */
   get velocity(): Vector3 {
     const self = selfOf(this), [prev, prev2] = reader ? self.posesFor(reader) : [self.frame.prev, self.frame.prev2];
     return prev.com(new Vector3()).sub(prev2.com(new Vector3())).divideScalar(self.frame.dt).setY(0);
