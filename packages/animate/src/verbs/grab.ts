@@ -13,7 +13,8 @@ import type { Request } from '../kernel/requests';
 
 /**
  * Takes hold of `thing` with each hand named in `grips` by an empty under the thing (`{ right: 'handle' }`; the thing's own name: its
- * origin): it walks up to stand in reach (borrowed legs; with `step: false` it stays where it stands), its eyes find the grips first
+ * origin): it walks up to stand in reach (borrowed legs; with `step: false` it stays where it stands; two grips choose the side it stands on,
+ * the left hand's on its left, even round the far side of the thing, which is said once), its eyes find the grips first
  * (borrowed), its hands rise before it arrives and reach them as it does (asked), the body bowing and bending as low as they are. It picks
  * where to stand once, as it starts, from where its feet and the grips are then: a thing still moving, or feet still walking, gives a
  * stand for where they were; with no particular place to stand, leave the walking to it. A mover, it ends holding, its fingers closed. A

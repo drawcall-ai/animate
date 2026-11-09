@@ -95,6 +95,26 @@ describe('a door swung with the body standing still', () => {
   });
 });
 
+describe('a two-hand grab with its grips the other way round', () => {
+  const said = (left: string, right: string) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const body = person(), room = roomOf(body), book = empty(room, 'book', new Vector3(0, 1.1, 2));
+    grip(book, 'plus', new Vector3(0.13, 0, 0));
+    grip(book, 'minus', new Vector3(-0.13, 0, 0));
+    play(body, function* () {
+      yield* grab(body, book, { left, right });
+    });
+    const told = warn.mock.calls.map(([message]) => String(message));
+    warn.mockRestore();
+    return told;
+  };
+
+  it('says so once as it walks round to the far side; taken from this side, nothing', () => {
+    expect(said('minus', 'plus')).toEqual([expect.stringMatching(/walks round to the far side of what it takes, turning \d+°.*swap them/)]);
+    expect(said('plus', 'minus')).toEqual([]);
+  });
+});
+
 describe('a verb never yielded', () => {
   const warned = (story: (body: Body) => void) => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

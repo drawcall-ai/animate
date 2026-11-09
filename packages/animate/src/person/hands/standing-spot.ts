@@ -47,6 +47,16 @@ interface PlacedBounds { bounds: Box3; position: Vector3; quaternion: Quaternion
 /** A walk to where a person stands, and when it has arrived there. */
 export type ReachWalk = Extract<ReturnType<typeof footing>, { walk: Walk }>;
 
+/** Tuned: a stand on the far side of what it takes: its way from the thing this far from the body's (a cosine: 120°; none of the suites' stands comes to it), the body turning past 90° */
+const ROUND_FAR = -0.5;
+
+/** said once: two grips' sides have the body walk round what it takes, as the story may not have meant */
+function sayRound(person: Person, grips: number, middle: Vector3, there: Vector3, face: number): void {
+  const stand = _stand.subVectors(there, middle).setY(0), body = person.pose.com(_com).sub(middle).setY(0);
+  if (grips < 2 || stand.dot(body) >= ROUND_FAR * stand.length() * body.length() || Math.abs(wrapAngle(face - person.locomotion.facing)) <= Math.PI / 2) return;
+  person.warn('stand round', `a grab walks round to the far side of what it takes, turning ${(Math.abs(wrapAngle(face - person.locomotion.facing)) * 180 / Math.PI).toFixed(0)}°: the hands' grips choose the side it stands on, its left hand on its left: to take it from this side, swap them`);
+}
+
 /** Test reach from standing shoulder height, including free-hand trunk rotation. */
 export function armReaches(person: Person, at: Readonly<Vector3>, side: Side | undefined, free: boolean): boolean {
   // (seated, its shoulders as far down as the seat lets them)
@@ -200,6 +210,7 @@ export function footing(person: Person, to: Stand, step = true) {
     for (let k = 0; k < 8 && !clear(beside); k++) beside.addScaledVector(forwardOf(yaw), -ROUND / 4 * proportions.scale);
     via.push((f) => moved(beside, f));
   }
+  if (!point) sayRound(person, to.grips.length, middle, there, face);
   const walk = new Walk(person, { to: destination, face: facing, within: ahead, via });
   return {
     walk,
@@ -271,3 +282,4 @@ function backOf(things: readonly PlacedBounds[], middle: Vector3, forward: Vecto
 export const flat = (a: Readonly<Vector3>, b: Readonly<Vector3>) => Math.hypot(a.x - b.x, a.z - b.z);
 
 const _com = new Vector3(), _corner = new Vector3();
+const _stand = new Vector3();
