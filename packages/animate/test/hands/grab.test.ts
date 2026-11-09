@@ -160,6 +160,19 @@ describe('a loose thing lifted clear', () => {
   it('is carried as high turned about as not', () => {
     expect(Math.abs(lifted(Math.PI, 0.15, true).top - lifted(0, 0.15, true).top)).toBeLessThan(0.05);
   });
+
+  it('ends a grab holding what is too heavy for its lift to come quite clear', () => {
+    for (const hands of [BOTH, { right: 'right' }] as const) {
+      const body = person({ dev: true }), room = roomOf(body);
+      const load = box(room, new Vector3(0, 0.5, 0.5), { size: new Vector3(0.4, 0.2, 0.3), mass: 15 });
+      let took: boolean | undefined;
+      play(function* () {
+        took = yield* grab(body, load, hands);
+      }, [body], 10, () => took !== undefined);
+      expect(took).toBe(true);
+      expect(body.holds(load)).toBe(true);
+    }
+  });
 });
 
 describe('grab, from where it stands', () => {
