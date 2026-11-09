@@ -9,6 +9,9 @@ import { cases } from '../../../packages/animate/test/kit/open';
 const test = cases([
   // A box on the floor misses: the 0.46 m arms stop 1.5–2.9 cm over its grips, the knees at 146° and the hips at 0.36 m, the trunk bowed no further; it expects the lift done.
   ['lift-heavy on the soldier: final-pose dev checks', /beyond the arm’s reach/],
+  // (#18) XCoM 0.104 m for one sub-step at 9.22 s, bound 0.1: the trailing knee held straight at full reach through pre-swing, snapping bent
+  // as the foot lifts — the centre of mass jolted with it.
+  ['reach: faster final-pose dev checks', /XCoM outside support/, [0]],
 ]);
 for (const scenario of SCENARIOS) {
   const bodies = [{ on: '', skeleton: undefined },
