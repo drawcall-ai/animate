@@ -1,7 +1,6 @@
 import { Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { describe, expect, it } from 'vitest';
-import { cases } from '../kit/open';
 import { Body, carry, dog, grab, horse, lookAt, release, wait, walkTo, poseOf } from '../../src/index';
 import { gazeOff, readings, person, play } from '../kit/bodies';
 import { DOG } from '../../skills/animate/references/dog';
@@ -9,9 +8,7 @@ import { HORSE } from '../../skills/animate/references/horse';
 import { box, empty, roomOf, worldOf } from '../kit/things';
 
 describe('bodies together', () => {
-  // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: 0.104 m at this life seed)
-  // (at this life seed the XCoM runs 0.104 m past the feet, its bound 0.1, for a sub-step of the carry after the handover)
-  cases([['hands a box over: one carries it out, the other takes it from those hands, the first lets go into them', /XCoM/, [3]]])('hands a box over: one carries it out, the other takes it from those hands, the first lets go into them', () => {
+  it('hands a box over: one carries it out, the other takes it from those hands, the first lets go into them', () => {
     const giver = person({ dev: true }), taker = person({ dev: true, at: new Vector3(0, 0, 1.6), face: Math.PI });
     const room = roomOf(giver, taker);
     const load = box(room, new Vector3(0, 0.9, 0.45), { mass: 2, solid: false });
