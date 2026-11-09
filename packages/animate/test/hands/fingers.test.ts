@@ -156,6 +156,8 @@ describe('fingers', () => {
     coming = coming.slice(15, -15);
     // (as loose as it rests all the way: a pointing index reads under 0.2)
     expect(Math.min(...coming)).toBeGreaterThan(0.4);
+    // (run into the card's edge on the way, it gives over a few frames: flicked out of it at once, it opened 0.25 rad in one)
+    expect(Math.max(...coming.slice(1).map((now, k) => coming[k] - now))).toBeLessThan(0.1);
     expect(bent(body, 'rightIndexIntermediate')).toBeGreaterThan(Math.min(...coming) + 0.2);
   });
 
