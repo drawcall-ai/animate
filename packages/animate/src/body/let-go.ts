@@ -62,7 +62,9 @@ export function letGo(self: Self, thing: Thing, hands: readonly string[], onto?:
  * `thing`, which is `at` (world), put onto the empty `onto`: set exactly there as near as a carry there leaves it, else where it is, a miss
  */
 function put(self: Self, thing: Thing, onto: Object3D, at: Readonly<Placement>): Miss | null {
-  const empty = placedFor(self, onto, { position: new Vector3(), quaternion: new Quaternion() }), off = at.position.distanceTo(empty.position), turned = at.quaternion.angleTo(empty.quaternion);
+  // (the empty where the body last read it, as the thing is where it last showed it: read as the app has it now, an empty it moves after the
+  // body's update would seem as far off the thing as it moved since)
+  const empty = self.movingFrameOf(onto).at(self.frame.time).current, off = at.position.distanceTo(empty.position), turned = at.quaternion.angleTo(empty.quaternion);
   // (an empty out of the scene takes the thing out of it with it)
   if (self.object.parent && topOf(onto) !== topOf(self.object)) self.warn(`onto gone ${onto.uuid}`, `"${thing.object.name}" was put onto "${onto.name}", which is not in the body's scene, so it has gone out of the scene with it: put it onto an empty still there`);
   attach(thing, onto);

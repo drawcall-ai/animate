@@ -140,8 +140,9 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
       wasTurned.copy(movingFrame.current.quaternion);
     }
     const stalled = f.time - still > STALL.seconds;
-    // (within `STALL.close`, swaying with a body that carries its end, it will never stand still: long enough there is there too)
-    if ((stalled || overdue(f)) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
+    // (within `STALL.close`, swaying with a body that carries its end, it will never stand still: long enough there is there too — at its
+    // end's own pace, as `END` has a thing come to rest: one still swinging through it past that would be let go off it a sub-step on)
+    if ((stalled || overdue(f)) && resting.slow && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
     if (!late && (overdue(f) || (stalled && !close))) {
       late = true;
       // (a place on its way, no end of it: as near as the arms take it, and on — only the end is a carry's to miss)
@@ -208,13 +209,17 @@ export function holdAlong(person: Person, request: Request, thing: Thing, guide:
   }));
 }
 
-/** how a carried thing stands at its course's end (`at`): whether it has come to rest there, as `END` has it, within `near` of it, and
- * whether, at an end that sets a turn (`turn`), it still turns there — a thing swung through its end's turn is not in it as it passes */
-function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Readonly<Vector3>, turn?: Readonly<Quaternion>) => { rests: boolean; spins: boolean } {
+/** how a carried thing stands at its course's end (`at`): whether it has come to rest there, as `END` has it, within `near` of it; whether
+ * it moves and turns with its end as slowly as that (`slow`); and whether, at an end that sets a turn (`turn`), it still turns there — a
+ * thing swung through its end's turn is not in it as it passes */
+function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Readonly<Vector3>, turn?: Readonly<Quaternion>) => { rests: boolean; spins: boolean; slow: boolean } {
   let end: MovingFrame | null = null;
   return (f, movingFrame, at, turn) => {
     end ??= new MovingFrame(new Vector3().copy(at), new Quaternion().copy(turn ?? IDENTITY));
-    if (!end.moved(f.time)) end.move(f.time, at, turn ?? IDENTITY);
+    // (not read the sub-step before — a seat waited on — its end's history is where it was then: read afresh, as it first is, or a thing
+    // swinging after a moving end would seem at rest on where the end was before the wait)
+    if (!end.moved(f.time - 1.5 * f.dt)) end.place(f.time, at, turn ?? IDENTITY);
+    else if (!end.moved(f.time)) end.move(f.time, at, turn ?? IDENTITY);
     // (a thing its body moves is moved after the hands, so not yet this sub-step; one hanging from a hand is read where the hand is now)
     const [thing, before] = movingFrame.moved(f.time) ? [movingFrame.prev, movingFrame.prev2] : [movingFrame.current, movingFrame.prev];
     const off = _v.subVectors(thing.position, before.position).sub(_g.subVectors(end.prev.position, end.prev2.position)).divideScalar(f.dt);
@@ -222,7 +227,8 @@ function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Reado
     const turned = _t.copy(end.prev2.quaternion).invert().multiply(before.quaternion).invert()
       .multiply(_u.copy(end.prev.quaternion).invert().multiply(thing.quaternion));
     const spins = turn !== undefined && 2 * Math.atan2(Math.hypot(turned.x, turned.y, turned.z), Math.abs(turned.w)) / f.dt >= END.spin;
-    return { rests: thing.position.distanceTo(end.prev.position) < near && off.length() < END.speed && !spins, spins };
+    const slow = off.length() < END.speed && !spins;
+    return { rests: thing.position.distanceTo(end.prev.position) < near && slow, spins, slow };
   };
 }
 const _v = new Vector3(), _g = new Vector3(), _off = new Vector3();

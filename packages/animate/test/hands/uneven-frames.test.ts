@@ -18,8 +18,9 @@ const empty = (parent: Object3D, name: string, position: Vector3, userData = {})
   return node;
 };
 
-/** a body, a thing to take by `grips` in `hands`, and an empty for it; `steps` the story and the body once per frame of an uneven 16 … 72 ms */
-function scene(run: number, mass: number, at: Vector3, to: Vector3, grips: (thing: Object3D) => void) {
+/** a body, a thing to take by `grips` in `hands`, and an empty for it; `steps` the story and the body once per frame of an uneven 16 … 72 ms
+ * (or `frame`'s), the app first moving what it moves (`moves`, given the time) */
+function scene(run: number, mass: number, at: Vector3, to: Vector3, grips: (thing: Object3D) => void, frame = (next: () => number) => 0.016 + next() * 0.056) {
   const body = new Body(humanoid(PERSON as never), { dev: true, life: { seed: run } }), room = new Object3D();
   const thing = new Mesh(new BoxGeometry(0.1, 0.1, 0.1));
   thing.name = 'thing';
@@ -30,9 +31,13 @@ function scene(run: number, mass: number, at: Vector3, to: Vector3, grips: (thin
   room.add(body.object, thing);
   room.updateMatrixWorld(true);
   const next = random(run);
-  return { body, room, thing, spot, next, steps: (story: ReturnType<typeof runTimeline>, done: () => boolean) => {
+  return { body, room, thing, spot, next, steps: (story: ReturnType<typeof runTimeline>, done: () => boolean, moves?: (time: number) => void) => {
+    let time = 0;
     for (let f = 0; f < 1500 && !done(); f++) {
-      const dt = 0.016 + next() * 0.056;
+      const dt = frame(next);
+      time += dt;
+      moves?.(time);
+      room.updateMatrixWorld(true);
       story(undefined, dt);
       body.update(dt);
     }
@@ -69,6 +74,47 @@ describe('what a carry brings to an empty, however uneven the frames', () => {
       expect(thing.parent).toBe(spot);
     }
     expect(worst).toBeLessThan(0.0005);
+  });
+
+  it('sets a thing on an empty the app moves, let go of as the carry there returns, though the empty moved on since the body last showed it', () => {
+    for (let run = 1; run <= 25; run++) {
+      // (the app's frames uneven, one in ten a 150 ms hitch: the empty, moving at up to 0.3 m/s, goes on 4.5 cm in one)
+      const { body, thing, spot, steps } = scene(run, 0.3, new Vector3(-0.2, 0.9, 0.42), new Vector3(-0.3, 1.05, 0.45), (it) => void empty(it, 'top', new Vector3(0, 0.05, 0)),
+        (next) => next() < 0.1 ? 0.15 : 0.016 + next() * 0.056);
+      let done = false;
+      steps(runTimeline(function* () {
+        yield* wait(0.3);
+        yield* grab(body, thing, { right: 'top' }, { step: false });
+        thing.getWorldQuaternion(spot.quaternion);
+        expect(yield* carry(body, thing, spot, { step: false })).toBe(true);
+        release(body, thing, spot);
+        done = true;
+      }), () => done, (time) => void (spot.position.x = -0.3 + 0.1 * Math.sin(3 * time)));
+      expect(thing.parent).toBe(spot);
+      expect(body.log).toEqual([]);
+    }
+  });
+
+  it('calls a carry there only once the thing rests on its place, not as it swings through an empty the app shakes faster than a hand follows', () => {
+    for (let run = 1; run <= 25; run++) {
+      // (a frame a sub-step: what the carry calls there is where the story lets go of it)
+      const { body, thing, spot, steps } = scene(run, 0.3, new Vector3(-0.2, 0.9, 0.42), new Vector3(-0.3, 1.05, 0.45), (it) => void empty(it, 'top', new Vector3(0, 0.05, 0)), () => 1 / 60);
+      let done = false;
+      steps(runTimeline(function* () {
+        yield* wait(0.3);
+        yield* grab(body, thing, { right: 'top' }, { step: false });
+        thing.getWorldQuaternion(spot.quaternion);
+        try {
+          yield* carry(body, thing, spot, { step: false });
+        } catch (miss) {
+          if (!(miss instanceof Missed)) throw miss;
+          done = true;
+          return;
+        }
+        release(body, thing, spot);
+        done = true;
+      }), () => done, (time) => void (spot.position.x = -0.3 + 0.02 * Math.sin(6 * Math.PI * time)));
+    }
   });
 
   it('says how far off it a thing let go of on its way was, as the viewer sees it', () => {
