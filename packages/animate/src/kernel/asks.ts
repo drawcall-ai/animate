@@ -44,6 +44,7 @@ export interface ArmPosture {
 
 /** A `Posture`'s trunk, each field given. */
 type TrunkPosture = Required<Omit<Posture, 'head' | 'arms' | 'fingers'>>;
+const UNPOSED: TrunkPosture = { bow: 0, twist: 0, lean: 0, lower: 0 };
 
 /** What a body is asked to do with its stance this sub-step (see `Asks`), each field as it combines with the others asked. */
 export type Asked = Partial<Pick<Asks, 'lower' | 'bow' | 'bowLimit' | 'bowRate' | 'twist' | 'twistRate' | 'hips' | 'stagger' | 'shift' | 'steady'>> & { posture?: TrunkPosture };
@@ -52,8 +53,8 @@ export type Asked = Partial<Pick<Asks, 'lower' | 'bow' | 'bowLimit' | 'bowRate' 
  * How a body is asked to hold itself over its legs this sub-step — what each of its parts may ask at once and balance serves together:
  * let down or bowed for a reach, turned for an aim, shifted toward what a hand falls short of, held still, and posed as a story asks.
  * Each field combines one way: the deepest `lower` and `bow` (rising onto the toes only while none asks down), the least `bowLimit`, the
- * largest `twist`, `hips`, `twistRate`, `bowRate`, `shift` and `steady`, the last `stagger`; a `posture` is summed and added onto them
- * all. Balance takes what was asked at the start of its sub-step and clears it (so it acts on it a sub-step later).
+ * largest `twist`, `hips`, `twistRate`, `bowRate`, `shift` and `steady`, the last `stagger`; a `posture`, the one `pose` that has the
+ * trunk's, is added onto them all. Balance takes what was asked at the start of its sub-step and clears it (so it acts on it a sub-step later).
  */
 export class Asks {
   /** let the pelvis down by the knees (m; negative: up onto the toes) */
@@ -81,7 +82,7 @@ export class Asks {
   /** where the request that has its eyes asks them to look, for a species whose posture turns its head (it has no neck chain) */
   look: Readonly<Vector3> | null = null;
   /** the trunk posed as a story asks (`pose`), over all the rest */
-  readonly posture: TrunkPosture = { bow: 0, twist: 0, lean: 0, lower: 0 };
+  readonly posture: TrunkPosture = { ...UNPOSED };
 
   /** `asked` on top of what it holds, each field combined by its rule */
   add(asked: Asked): void {
@@ -96,7 +97,7 @@ export class Asks {
     if (stagger) this.stagger = stagger;
     if (shift && shift.length() > (this.shift?.length() ?? 0)) this.shift = shift;
     if (steady !== undefined) this.steady = Math.max(this.steady, steady);
-    if (posture) for (const key of TRUNK) this.posture[key] += posture[key];
+    if (posture) Object.assign(this.posture, posture);
   }
 
   /** what it holds, copied into `into`, and itself cleared */
@@ -104,15 +105,11 @@ export class Asks {
     [into.lower, into.bow, into.bowLimit, into.bowRate, into.twist, into.twistRate, into.hips, into.stagger, into.shift, into.steady, into.legGoal, into.look] =
       [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady, this.legGoal, this.look];
     [this.lower, this.bow, this.bowLimit, this.bowRate, this.twist, this.twistRate, this.hips, this.stagger, this.shift, this.steady, this.legGoal, this.look] = [0, 0, Infinity, 0, 0, 0, 0, null, null, 0, null, null];
-    for (const key of TRUNK) {
-      into.posture[key] = this.posture[key];
-      this.posture[key] = 0;
-    }
+    Object.assign(into.posture, this.posture);
+    Object.assign(this.posture, UNPOSED);
     return into;
   }
 }
-
-const TRUNK = ['bow', 'twist', 'lean', 'lower'] as const satisfies readonly (keyof TrunkPosture)[];
 
 /** down (+) wins, the deepest; up (−) only while none asks down, the highest */
 const deeper = (was: number, asked: number) => asked > 0 ? Math.max(was, asked) : was <= 0 ? Math.min(was, asked) : was;
