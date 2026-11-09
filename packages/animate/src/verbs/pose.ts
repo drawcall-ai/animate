@@ -1,17 +1,11 @@
 import { action, parallel } from '@pmndrs/timeline';
 import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
-import { follow } from '../kernel/follow';
 import type { ArmPosture, Posture } from '../kernel/poise';
 import { selfOf, type Body } from '../body/body';
 import { personOf } from '../body/person';
 import type { Self } from '../body/runtime';
-import { NOD } from '../look/offset';
-import { BOW } from '../legs/person/balance';
-import { LOWER } from '../legs/person/posture';
-import { EASING, POSED } from '../legs/creature';
-import { SWING } from '../hands/person/hang';
-import { SIDES } from '../species/humanoid/bones';
+import { INDEX, SIDES } from '../species/humanoid/bones';
 import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';
 
@@ -19,8 +13,8 @@ import { shapeOf } from '../fingers/shape';
 export interface PoseOptions {
   /** ends on this, `true`; with neither this nor `hold`, it holds the posture until its story moves on */
   until?: Until;
-  /** ends this many seconds after the posture has come as its parts' paces foresee, not as measured: an angle past what the body reaches
-   * still takes its full pace (`lower: 3`: 5 s, the hips stopping 0.63 m down) */
+  /** ends this many seconds after the parts it poses have come to rest, as measured: however far they got (`lower: 3` stops where the legs
+   * do). A walking body's stride never rests, so walking it takes them to have come 1.2 s on; other motion that keeps a part moving, 3 s on */
   hold?: number;
 }
 
@@ -59,7 +53,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
       return arm ? [{ side, arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];
     });
     yield* parallel('all',
-      pacing(self, request, posture, hold),
+      coming(self, request, posture, hold),
       posed && during(request, 'trunk', 'asked', () => self.poise.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
       ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))),
@@ -84,65 +78,49 @@ function add(to: Required<ArmPosture>, arm: Required<ArmPosture>): void {
 
 const ARM = ['shrug', 'forward', 'out', 'twist', 'elbow'] as const satisfies readonly (keyof ArmPosture)[];
 
-/** how near an angle a pose has come (rad; m for `lower`), and how long fingers take to, as far as `hold` is concerned (s) */
-const COME = { angle: 0.02, lower: 0.01, fingers: 0.25 };
+/** Tuned, over a person's and a dog's breathing and sway (at most 0.05 rad/s, 0.002 m/s): how still a posed part is once it has come (rad/s;
+ * its height, m/s), for how long (s), and how soon that can be said, as a part sets off slowly (s; fingers, unseen, take this long) */
+const STILL = { turn: 0.15, height: 0.03, seconds: 0.1, soonest: 0.1, fingers: 0.25 };
+/** Tuned: the most a posture is waited for (s). Walking, the stride moves every part, so it is taken to have come by the time a walker's
+ * bow and arms take at their paces; standing, another verb may keep a part moving for good. */
+const LONGEST = { walking: 1.2, standing: 3 };
 
-/**
- * How far each angle of `posture` has come, at its part's pace from where the last pose left off (the pose just before, if it flowed into
- * this one; else nothing) — its part's pace foreseen, not measured: what else the body does is left out. Met once it has come, `hold` s on.
- */
-function pacing(self: Self, request: Request, posture: Posture, hold: number | undefined) {
-  const creature = !self.species.person, each: { name: string; asked: number; near: number; ease: Easing }[] = [];
-  const left = flowed.get(self), from = (name: string) => left && self.time - left.time <= 2 * self.frame.dt ? left.values.get(name) ?? 0 : 0;
-  const field = (name: string, asked: number, near: number, easing: (from: number) => Easing) => each.push({ name, asked, near, ease: easing(from(name)) });
-  for (const key of ['bow', 'twist', 'lean', 'lower'] as const) {
-    const asked = posture[key];
-    if (asked === undefined) continue;
-    const near = key === 'lower' ? COME.lower : COME.angle;
-    if (creature) field(key, key === 'lower' ? asked : Math.max(-POSED[key], Math.min(POSED[key], asked)), near, damped(key === 'lower' ? Infinity : POSED[key]));
-    else field(key, asked, near, paced(key === 'lower' ? LOWER : BOW));
-  }
-  for (const [key, asked] of Object.entries(posture.head ?? {})) field(`head ${key}`, asked, COME.angle, paced(NOD));
-  for (const side of SIDES) for (const [key, asked] of Object.entries(posture.arms?.[side] ?? {})) field(`${side} arm ${key}`, asked, COME.angle, paced(SWING));
-  let elapsed = 0, come = NaN;
-  return action<Frame>({
-    init: () => () => flowed.set(self, { time: self.time, values: new Map(each.map(({ name, ease }) => [name, ease.value])) }),
-    update: (f) => {
+/** whether `parts` (bones) or the body's height moved last sub-step, more than idle life moves them */
+const moving = (f: Frame, parts: readonly number[]) => Math.abs(f.prev.position(0).y - f.prev2.position(0).y) > STILL.height * f.dt
+  || parts.some((part) => f.prev.rotation(part).angleTo(f.prev2.rotation(part)) > STILL.turn * f.dt);
+
+/** Until `parts` have been measured still, or have had `most` s to be: the last of a verb that ends once they are. */
+export function* comingToRest(parts: readonly number[], most: number) {
+  let elapsed = 0, still = 0;
+  yield* action<Frame>({
+    until: (f) => {
       elapsed += f.dt;
-      for (const { asked, ease } of each) ease.step(asked, f.dt);
-      if (hold === undefined) return;
-      if (Number.isNaN(come) && each.every(({ asked, near, ease }) => Math.abs(ease.value - asked) <= near) && (!posture.fingers || elapsed >= COME.fingers)) come = elapsed;
-      if (elapsed >= come + hold - 1e-9) request.met();
+      still = moving(f, parts) ? 0 : still + f.dt;
+      return still >= STILL.seconds || elapsed >= most;
     },
   });
 }
 
-/** where each body's last pose left its angles as it ended, as `pacing` foresaw them, and when */
-const flowed = new WeakMap<Self, { time: number; values: Map<string, number> }>();
-
-/** an angle taken up at a part's pace: its value now, and a sub-step on toward `goal` */
-interface Easing {
-  readonly value: number;
-  step(goal: number, dt: number): void;
-}
-
-/** an angle followed at `motion`'s pace (`follow`), from `from` at rest */
-const paced = (motion: { accel: number; speed: number }) => (from: number): Easing => {
-  const history = [from, from];
-  return {
-    get value() { return history[1]; },
-    step(goal, dt) { [history[0], history[1]] = [history[1], follow(history[0], history[1], goal, motion, dt)]; },
-  };
-};
-
-/** an angle eased critically damped at a creature's `EASING`, within ±`most`, from `from` at rest */
-const damped = (most: number) => (from: number): Easing => {
-  let x = from, v = 0;
-  return {
-    get value() { return x; },
-    step(goal, dt) {
-      v += (EASING ** 2 * (Math.max(-most, Math.min(most, goal)) - x) - 2 * EASING * v) * dt;
-      x += v * dt;
+/**
+ * Met `hold` s after the parts `posture` poses have been measured still, or have waited their `LONGEST`: what stops short of its asked
+ * angle (`lower: 3`) has come when it stops. Given no `hold`, it just keeps the pose on till its story ends it.
+ */
+function coming(self: Self, request: Request, posture: Posture, hold: number | undefined) {
+  const { head, arms, fingers, ...trunk } = posture, person = self.species.person !== undefined;
+  const parts = [
+    ...(Object.keys(trunk).length ? [0, ...(person ? [INDEX.chest] : [])] : []),
+    ...(head && self.gazer ? [self.gazer.head] : []),
+    ...SIDES.flatMap((side) => arms?.[side] ? [INDEX[`${side}UpperArm`], INDEX[`${side}LowerArm`]] : []),
+  ];
+  const soonest = fingers ? STILL.fingers : STILL.soonest;
+  let elapsed = 0, still = 0, come = Infinity;
+  return action<Frame>({
+    update: (f) => {
+      if (hold === undefined) return;
+      elapsed += f.dt;
+      still = moving(f, parts) ? 0 : still + f.dt;
+      if (come === Infinity && ((still >= STILL.seconds && elapsed >= soonest) || elapsed >= (self.locomotion.moving ? LONGEST.walking : LONGEST.standing))) come = elapsed;
+      if (elapsed >= come + hold - 1e-9) request.met();
     },
-  };
-};
+  });
+}

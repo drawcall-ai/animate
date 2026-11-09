@@ -36,6 +36,8 @@ export interface Steering {
   stagger?: readonly number[];
   /** the feet stay where they stand but to keep the balance or even out a staggered stance (a body let down or up to reach) */
   still?: boolean;
+  /** its weight on a seat: no foot lifts, however far its hips are from them */
+  seated?: boolean;
   /** the extrapolated centre of mass on the floor now, if the body knows it better than its root's (a pose's: its centre of mass carried
    * on at its speed for √(l/g)) */
   xcom?: Vector3;

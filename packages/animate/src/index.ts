@@ -9,6 +9,7 @@ export type { Species } from './species/define';
 export { walkTo, arriving } from './verbs/walk';
 export { lookAt } from './verbs/look';
 export { pose, type PoseOptions } from './verbs/pose';
+export { sit, stand, type SitOptions } from './verbs/sit';
 export { track } from './verbs/track';
 export { grab } from './verbs/grab';
 export { reach } from './verbs/reach';

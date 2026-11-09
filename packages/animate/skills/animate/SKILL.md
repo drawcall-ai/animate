@@ -76,7 +76,9 @@ To go somewhere, `walkTo`. To take a thing, `grab`, which walks up, looks and re
 
 A gesture is a loop of short poses, each held long enough to arrive, since a pose ended early comes out smaller: `hold` ends one that long after it has come. A pose's arms give way to a hand verb or a held thing.
 
-No body kneels, sits, lies or climbs. A pose's `lower` is a deep crouch on both feet and reads as one, not as sitting. For those, use a puppet: stop updating the body and write its `bones` from its last pose yourself, placing each hand with `@drawcall/animate/puppet` every frame, with a grip empty wherever a hand holds. To hand back, create a fresh body where it stands and blend from your pose onto it.
+To sit a person, `yield* sit(body, seat)`: `seat` is the point on the surface under its hips, best an empty on the chair whose +Z is the way the sitter faces. It walks there, round the chair if behind it, sits and ends seated, then stays so, with `lookAt`, `reach`, `grab` and `pose` working as usual, until `yield* stand(body)`, a `walkTo` or a `reach` needing its legs stands it. It throws `Missed` for a seat too high or too low for its legs, or no level floor for its feet. Nothing collides, so its way round goes through a wall behind the seat: bring a walled seat from the front.
+
+No body kneels, lies or climbs. A pose's `lower` is a deep crouch on both feet and reads as one. For those, use a puppet: stop updating the body and write its `bones` from its last pose yourself, placing each hand with `@drawcall/animate/puppet` every frame, with a grip empty wherever a hand holds. To hand back, create a fresh body where it stands and blend from your pose onto it.
 
 ## Knowing when something has finished
 
@@ -138,7 +140,7 @@ A carry's or reach's hold ends with the verb: after it the thing rides the hand 
 
 ### Bringing something to the face
 
-`carry` puts the thing's origin at the target, turned as the target is, so to bring one point of it (a rim) somewhere, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A thing brought to the face stops clear of it, and a target nearer than that misses, naming the clearance. An 8 × 10 cm cup tilted 0.9 rad comes no nearer than its rim 12 cm before the nose, level 20 cm; a smaller thing comes nearer. A head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
+`carry` puts the thing's origin at the target, turned as the target is, so to bring one point of it (a rim) somewhere, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A thing brought to the face stops clear of it, and a target nearer than that misses, naming the clearance. An 8 × 10 cm cup tilted 0.9 rad comes no nearer than its rim 11 cm before the nose, level 15 cm; a smaller thing comes nearer. A head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
 
 ```ts
 import { Object3D, Quaternion, Vector3 } from 'three';
@@ -148,7 +150,7 @@ function* sip(body: Body, cup: Object3D, rim: Object3D): Verb {
   const tilt = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.9), head = body.species.person!.head;
   const lips = new Object3D();
   lips.quaternion.copy(tilt);
-  lips.position.set(0, head.nose.y - 0.03, head.nose.z + 0.13).sub(rim.position.clone().applyQuaternion(tilt));
+  lips.position.set(0, head.nose.y - 0.03, head.nose.z + 0.12).sub(rim.position.clone().applyQuaternion(tilt));
   body.bones.head.add(lips);
   const done = yield* carry(body, cup, lips);
   lips.removeFromParent();

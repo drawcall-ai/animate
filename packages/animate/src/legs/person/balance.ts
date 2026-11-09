@@ -62,12 +62,12 @@ const LOWERED = 0.02;
  * (with its toe-out); tuned: eased in over this share of the swing
  */
 const KNEE_OFF = 0.35, KNEE_EASE = 0.3;
-/** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), a walker's XCoM (m), a
+/** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), a walker's XCoM (m, default body: lengths of a body scale with it), a
  * planted sole's sink into its floor and its lowest point's rise off it (m: rolling over its heel or ball, a rigged sole's points stand
  * up to ~1.1 cm off a flat floor). */
 const LIMIT = { slide: 0.001, vertical: 0.1, horizontal: 1, across: 0.06, xcom: 0.1, sunk: 0.01, raised: 0.02 };
 /** how fast `lower` (m/s², m/s) and `bow` (rad/s², rad/s) are taken up and given back: a squat's pace */
-export const BOW = { accel: 6, speed: 1.2 };
+const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 }, TURN = { accel: 60 };
 /** Tuned (rad/s²): the trunk's joints turning after a look taken up at once (`Poise.twistRate`), an aim tracking a turning view: at
@@ -157,7 +157,10 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
   return (f) => {
     if (f.dev && f.time > f.dt) check(person, f, f.dev, stepper.legs);
     person.poise.pass(poise);
-    const dt = f.dt, go = person.going, root = rootOf(f, go, poise, stepper);
+    // (seated, the legs asked elsewhere stand it first; the seat's own height and bow over what the parts ask)
+    const seat = person.seat?.step(f.dt, person.going) ?? null;
+    const dt = f.dt, go = seat ? null : person.going, root = rootOf(f, go, poise, stepper);
+    if (seat) [poise.lower, poise.posture.lower, poise.bow] = [lerp(poise.lower, seat.seating.lower, seat.share), poise.posture.lower * (1 - seat.share), Math.max(poise.bow, seat.bow)];
     if (first && !root.forecast) stepper = stepperFor(false);
     first = false;
     // (the hips off the root first as they stand: off a scene's root, off the centre of mass a planner's starts at)
@@ -216,12 +219,14 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     const compressed = (leg: Leg) => leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / stepper.Ts)) ** 2;
     const compression = Math.min(1, stepper.legs.reduce((sum, leg) => sum + compressed(leg), 0));
     // (crouched over a root at its hips — sitting back behind the feet, the mass not held over the root — the trunk bows over them by
-    // `CROUCH_LEAN`, as the legs take the crouch)
-    const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch;
+    // `CROUCH_LEAN`, as the legs take the crouch; on a seat, its weight borne there, it sits up)
+    const stoop = root.centre ? 0 : CROUCH_LEAN * stepper.crouch * (1 - (seat?.share ?? 0));
     const cycle = { phase, bob: swing ? Math.sin(Math.PI * swing.u) : 0, nod: swing ? Math.cos(2 * Math.PI * swing.u) : 1, compression, stance: stepper.Ts / stepper.cycle };
     const bow = requested.bow + stoop;
     posture.carry(f, upright, { ...requested, bow }, trunk, life, cycle);
-    const offset = hips.follow(offsets[0], offsets[1], upright.pelvis.clone().sub(upright.root).setY(0), PELVIS, dt, new Vector3());
+    const carried = upright.pelvis.clone().sub(upright.root).setY(0);
+    if (seat) carried.lerp(_v.copy(seat.seating.hips).sub(upright.root).setY(0), seat.share);
+    const offset = hips.follow(offsets[0], offsets[1], carried, PELVIS, dt, new Vector3());
     [offsets[0], offsets[1]] = [offsets[1], offset];
     // (the pelvis's turn with the stride followed off the facing; running, the legs are told of it before they reach from its hips —
     // reversed, it swings the stance hip back off its foot; walking, they reach from a pelvis square to its facing, as a walker's do)
@@ -263,7 +268,8 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
       crouch: Math.max(root.crouch ?? 0, Math.min(lowered, walkingMost)),
       tiptoe: Math.max(0, -requested.lower),
       stagger: poise.stagger ?? undefined,
-      still: !upright.moving && Math.abs(requested.lower) > LOWERED * s && !poise.stagger,
+      still: !!seat || (!upright.moving && Math.abs(requested.lower) > LOWERED * s && !poise.stagger),
+      seated: !!seat,
       xcom: xcomOfPoses(f.prev, f.prev2, dt, proportions.legLength, new Vector3()),
     });
     const { yaw, moving, run, legs } = stepper;
@@ -358,7 +364,7 @@ export function drivenBy(person: PersonLegged, rootOf: (f: Frame, go: Go | null,
     locomotion.bow = bow;
     locomotion.velocity.copy(root.velocity).setY(0);
     locomotion.planted = locomotion.moving ? 0 : locomotion.planted + dt;
-    locomotion.settled = stepper.settled;
+    locomotion.settled = stepper.settled && (!seat || seat.seated);
     locomotion.quiet.copy(posture.quiet);
   };
 }
@@ -427,7 +433,7 @@ export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
     if (!moving && planted.length && bears(xcom, soles(i), planted, s)) borne.add(w);
   });
   for (const leg of legs) if (leg.swing && moving) borne.delete(leg.swing);
-  const support = legs.flatMap((leg, i) => leg.swing ? borne.has(leg.swing) ? [] : footprint(proportions, leg.anchor, leg.yaw) : soles(i));
+  const support = legs.flatMap((leg, i) => leg.swing ? borne.has(leg.swing) ? [] : footprint(proportions, leg.anchor, leg.yaw) : soles(i)).concat(person.seat?.support ?? []);
   if (!support.length) return;
   const hull = hullOf(support);
   if (person.locomotion.settled && legs.every((leg) => !leg.swing) && Math.hypot(velocity.x, velocity.z) < 0.05) {
@@ -435,7 +441,7 @@ export function checkSupport(person: PersonLegged, f: Frame, dev: Dev): void {
     if (value > 0.001) dev.append(f.time - f.dt, { check: 'standing CoM outside the feet (m)', value, limit: 0.001, where: 'hips' });
   }
   const value = outside(hull, xcom);
-  if (value > LIMIT.xcom) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: LIMIT.xcom, where: 'hips' });
+  if (value > LIMIT.xcom * s) dev.append(f.time - f.dt, { check: 'XCoM outside support (m)', value, limit: LIMIT.xcom * s, where: 'hips' });
 }
 
 /** where the feet's middle stands from the centre of mass (`OVER` behind it, facing as the stepper does; × `scale`) */

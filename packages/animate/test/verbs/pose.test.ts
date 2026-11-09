@@ -310,6 +310,55 @@ describe('pose hold', () => {
     expect(() => pose(person(), { bow: 0.1 }, { hold: 1, until: 1 })).toThrow(/not both/);
   });
 
+  it('has measured the posture come: a large pose ends later than a small one, and nearly where it stays', () => {
+    const chest = (body: Body) => body.bones.chest.getWorldQuaternion(new Quaternion()).angleTo(new Quaternion());
+    const run = (bow: number) => {
+      const body = person({ life: { seed: 1 } });
+      let done = false, now = 0, at = 0, took = 0;
+      play(function* () {
+        yield* pose(body, { bow }, { hold: 0 });
+        at = chest(body);
+        took = now;
+        yield* pose(body, { bow }, { until: 1 });
+        done = true;
+      }, [body], 8, (time) => { now = time; return done; });
+      return { at, took, after: chest(body) };
+    };
+    const small = run(0.1), large = run(0.8);
+    expect(small.took).toBeLessThan(0.5);
+    expect(large.took).toBeGreaterThan(small.took + 0.4);
+    expect(Math.abs(large.at - large.after)).toBeLessThan(0.05);
+    expect(large.at).toBeGreaterThan(0.3);
+  });
+
+  it('asked more than the legs give, it ends when they stop, not when the asking would', () => {
+    const body = person({ life: { seed: 1 } });
+    let hips = 0, now = 0, took = 0, done = false;
+    play(function* () {
+      yield* pose(body, { lower: 3 }, { hold: 0 });
+      hips = body.bones.hips.getWorldPosition(new Vector3()).y;
+      took = now;
+      done = true;
+    }, [body], 8, (time) => { now = time; return done; });
+    expect(took).toBeLessThan(2);
+    expect(hips).toBeLessThan(0.5);
+  });
+
+  it('walking, the stride never rests: it ends all the same, 1.2 s on at most', () => {
+    const walker = person();
+    let now = 0, took = 0;
+    play(function* () {
+      yield* parallel('race', walkTo(walker, new Vector3(0, 0, 30), { until: Infinity }), function* () {
+        yield* wait(2);
+        const posed = now;
+        yield* pose(walker, { head: { pitch: 0.2 } }, { hold: 0.2 });
+        took = now - posed;
+      });
+    }, [walker], 12, (time) => { now = time; return took > 0; });
+    expect(took).toBeGreaterThan(0.3);
+    expect(took).toBeLessThan(1.6);
+  });
+
   it('a pose held has arrived when it ends', () => {
     const body = person();
     let bowed = 0, done = false;

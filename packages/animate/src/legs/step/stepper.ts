@@ -80,7 +80,7 @@ export class Stepper extends Steps {
     this.carry(now);
     const cues = cue(this, now);
     keepTime(this, now, cues);
-    liftFeet(this, now, cues);
+    if (!r.seated) liftFeet(this, now, cues);
     bindFeet(this, physics.contact && r.platform);
     placePelvis(this, now);
     const stepping = legs.some((leg) => leg.swing);

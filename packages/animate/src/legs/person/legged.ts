@@ -3,6 +3,8 @@ import type { Proportions } from '../../species/humanoid/proportions';
 import type { Stride } from '../../species/humanoid/humanoid';
 import type { Legged } from '../legged';
 import type { Impact } from './impact';
+import type { Seat } from './seat';
+import type { ArmPosture } from '../../kernel/poise';
 
 /** A person as its legs see it: a body on legs of its proportions, and whether its hands hold anything. */
 export interface PersonLegged extends Legged {
@@ -11,6 +13,9 @@ export interface PersonLegged extends Legged {
   /** how it strides, as multipliers on a person's defaults */
   readonly stride: Stride;
   readonly holding: Readonly<Record<string, object | null>>;
+  /** what it sits on, sitting down or rising from it */
+  seat: Seat | null;
+  readonly armPose: Record<string, Required<ArmPosture>>;
 }
 
 /** how high the floor is under a person's feet (m): their ankles where they stand or land (as it is made, its own), less the ankle's height */

@@ -118,11 +118,11 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     ended.quaternion.copy(guide.goal.quaternion);
     ended.time = f.time;
     if (resting.rests && (turnedOff <= TURNED || late) && (dip === 0 || f.time - since >= seconds)) {
-      if (!end || guide.off <= near) return true;
+      if (!end || guide.off <= STALL.close) return true;
       // (at rest where its own body holds it, short of its end: the body stands in its way, and no further waiting brings it there)
       if (!blocked) {
         blocked = true;
-        request.fail({ where: thing.object.name, off: guide.off, limit: near, why: inTheWay(guide) });
+        request.fail({ where: thing.object.name, off: guide.off, limit: STALL.close, why: inTheWay(guide) });
       }
       return false;
     }
@@ -137,11 +137,11 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     }
     const stalled = f.time - still > STALL.seconds, overdue = f.time - stood > RESTING;
     // (within `STALL.close`, swaying with a body that carries its end, it will never stand still: long enough there is there too)
-    if ((stalled || overdue) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= near)) return true;
+    if ((stalled || overdue) && (short > near || turnedOff > TURNED) && close && (!end || guide.off <= STALL.close)) return true;
     if (!late && (overdue || (stalled && !close))) {
       late = true;
       const turned = turnedOff > TURNED ? `, turned ${(turnedOff * 180 / Math.PI).toFixed(0)}° off its turn` : '';
-      if (end) request.fail({ where: thing.object.name, off: short, limit: near, why: `stopped ${cm(short)} cm off it${turned}: ${guide.off > near ? inTheWay(guide) : limits(person, thing, guide)}` });
+      if (end) request.fail({ where: thing.object.name, off: short, limit: near, why: `stopped ${cm(short)} cm off it${turned}: ${guide.off > STALL.close ? inTheWay(guide) : limits(person, thing, guide)}` });
     }
     return false;
   };
