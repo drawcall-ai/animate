@@ -217,24 +217,19 @@ function reachOf(skeleton: Skeleton, bones: readonly number[], axis: Vector3, an
  * and neck; the base shares it over spine/chest, gaze handles neck/head/eyes. */
 export function aiming(self: Self, at: (f: Frame) => Readonly<Vector3>, share: number): Behaviour {
   if (!self.gazer) throw new Error('lookAt: the body has no gaze');
-  /** the side (+1 left, −1 right) the trunk turned to the sub-step before (0: none yet) */
-  let side = 0;
   return (f) => {
     const direction = at(f).clone().sub(self.headOffset.eyes(f.prev, new Vector3()));
-    let yaw = wrapAngle(Math.atan2(direction.x, direction.z) - self.locomotion.facing);
-    // (a point near straight behind keeps the side the trunk turned to: wrapped afresh each sub-step, one there would flip it from 45° one
-    // way to 45° the other in one)
-    if (Math.abs(yaw) > Math.PI - BEHIND && side * yaw < 0) yaw += side * 2 * Math.PI;
-    side = Math.sign(yaw);
+    const yaw = wrapAngle(Math.atan2(direction.x, direction.z) - self.locomotion.facing);
     const pitch = -Math.atan2(direction.y, Math.hypot(direction.x, direction.z));
-    // (derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; taken up at once, as an aim offset follows the look:
-    // the trunk's joints alone pace it, a player's flick turned within them, not at a squat's pace)
-    self.asks.add({ twist: clamp(share * yaw, -Math.PI / 4, Math.PI / 4), twistRate: Infinity, bow: PITCHED * share * pitch });
+    // (derived: two 25° axial joint ranges, leaving 5° for gait counter-rotation; turned at the head's pace, the head riding on it: a point
+    // passing behind the body has it come round from 45° one way to 45° the other as the bearing wraps, over a quarter second)
+    self.asks.add({ twist: clamp(share * yaw, -Math.PI / 4, Math.PI / 4), twistRate: TWISTING, bow: PITCHED * share * pitch });
   };
 }
 
-/** Tuned (rad, 20°): how near straight behind a point keeps the side an aiming trunk turned to; past it, across, the trunk turns the other way */
-const BEHIND = 0.35;
+/** how fast an aiming trunk turns its share at most (rad/s): no quicker than the head it carries turns (`GLANCE`), so a view turning up to
+ * ~9 rad/s has a 0.65 share keep up with it */
+const TWISTING = GLANCE.turnSpeed;
 
 /** Tuned: an aiming trunk takes this much less of its pitch than of its bearing (25% of the pitch at 65% of the bearing), so looking
  * down does not become a bow */

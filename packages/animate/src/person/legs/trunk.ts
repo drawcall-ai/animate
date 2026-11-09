@@ -51,7 +51,7 @@ const LOWERED = 0.02;
 const BOW = { accel: 6, speed: 1.2 };
 /** how fast the pelvis (m/s²) and the trunk's joints (rad/s²) may change their motion: the gait's own oscillations, braked only at their kinks */
 const PELVIS = { accel: 30 }, TURN = { accel: 60 };
-/** Tuned (rad/s²): the trunk's joints turning after a look taken up at once (`Asks.twistRate`), an aim tracking a turning view: at
+/** Tuned (rad/s²): the trunk's joints turning after a look taken up at its own rate (`Asks.twistRate`), an aim tracking a turning view: at
  * `TURN`'s pace the chest would swing on past a quick turn that reverses, carrying what the body points with it off its line */
 const AIMING = { accel: 300 };
 

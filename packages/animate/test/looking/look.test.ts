@@ -62,7 +62,9 @@ describe('lookAt with a trunk share', () => {
     ['5 cm left of straight behind', () => new Vector3(0.05, 1.5, -3)],
     ['5 cm right of straight behind', () => new Vector3(-0.05, 1.5, -3)],
     ['passing slowly behind', (time: number) => new Vector3(-0.5 + 0.1 * time, 1.5, -3)],
-  ] as const)('keeps the trunk to one side for a point %s, standing and walking away: no sub-step swings it across', (_name, at) => {
+    // (from 135° one way to 135° the other, its bearing crossing straight behind and 161° either side of it)
+    ['sweeping across behind', (time: number) => new Vector3(-3 + 0.6 * time, 1.5, -3)],
+  ] as const)('turns the trunk for a point %s, standing and walking away, no sub-step swinging it across, nor the neck', (_name, at) => {
     for (const seed of [1, 3]) for (const walks of [false, true]) {
       const body = person({ dev: true, life: { seed } });
       let time = 0, was = 0, most = 0;
@@ -71,11 +73,12 @@ describe('lookAt with a trunk share', () => {
         time = t;
         // (the chest's turn off the hips about the vertical)
         const turn = new Euler().setFromQuaternion(poseOf(body).rotation(INDEX.hips).clone().invert().multiply(poseOf(body).rotation(INDEX.chest)), 'YXZ').y;
-        // (once it has turned to it: it is taken up at once, at the trunk's joints' pace)
+        // (once it has turned to it, within its first second)
         if (t > 1) most = Math.max(most, Math.abs(turn - was));
         was = turn;
       });
       expect(most).toBeLessThan(0.2);
+      expect(body.log).toEqual([]);
     }
   });
 });
