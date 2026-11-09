@@ -4,7 +4,7 @@ import { Euler, Quaternion, Vector3 } from 'three';
  * The fastest gaze shift of a head, from its world rotation every step (`dt` apart), in degrees: the movement around its peak speed
  * (from and to a tenth of it), how far it turned, its peak angular speed (°/s), how far its speed fell between two higher speeds as a
  * share of the peak (a single bell: 0; slowing, then a second shift: more), and the most its turn's axis swung from one step to the
- * next (turning back: > 90°); and the head's most roll in the world over all of them. Its speed from step `k` to the next is `speed`'s
+ * next it turned briskly in (turning back: > 90°); and the head's most roll in the world over all of them. Its speed from step `k` to the next is `speed`'s
  * (rad/s; default its turn in the world).
  */
 export function headShift(heads: readonly Quaternion[], dt: number, speed = (k: number) => heads[k + 1].angleTo(heads[k]) / dt) {
@@ -20,11 +20,23 @@ export function headShift(heads: readonly Quaternion[], dt: number, speed = (k: 
   moving.forEach((v, k) => {
     valley = Math.max(valley, Math.min(Math.max(...moving.slice(0, k + 1)), Math.max(...moving.slice(k))) - v);
   });
-  let swing = 0;
-  for (let k = from + 1; k <= to; k++) swing = Math.max(swing, spin(heads[k], heads[k + 1]).angleTo(spin(heads[k - 1], heads[k])) * deg);
+  // (its axis read off the steps it turns at least `BRISK` of its peak in, each against the last such step: slower, a step turns it a
+  // fraction of a degree, its axis set by the pitch drifting and the body stepping beneath rather than by the shift — the soldier's head
+  // at a tenth of its peak untying the knot, its yaw over by 0.3° as its pitch rose, read as a 142° swing. A turn back is read across the
+  // slow steps at its turn, from the brisk ones on either side)
+  let swing = 0, axis: Vector3 | null = null;
+  for (let k = from; k <= to; k++) {
+    if (speeds[k] < BRISK * peak) continue;
+    const next = spin(heads[k], heads[k + 1]);
+    if (axis) swing = Math.max(swing, next.angleTo(axis) * deg);
+    axis = next;
+  }
   const roll = Math.max(...heads.map((q) => Math.abs(new Euler().setFromQuaternion(q, 'YXZ').z) * deg));
   return { amplitude: heads[from].angleTo(heads[to + 1]) * deg, peak: peak * deg, valley: valley / peak, swing, roll };
 }
+
+/** the share of its peak speed a head turns at, at least, for a step's axis to tell which way the shift goes */
+const BRISK = 0.25;
 
 /** the world turn from `a` to `b`: its axis times its angle */
 export function spin(a: Quaternion, b: Quaternion): Vector3 {

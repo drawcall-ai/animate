@@ -1,4 +1,4 @@
-import { Quaternion, Vector3 } from 'three';
+import { Euler, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { runTimeline } from '@pmndrs/timeline';
 import { Body, humanoid, lookAt } from '@drawcall/animate';
@@ -58,4 +58,18 @@ it('re-centres its eyes on a near look begun as a bow straightens', () => {
     return (Math.atan2(ahead.y, Math.hypot(ahead.x, ahead.z)) - Math.atan2(line.y, Math.hypot(line.x, line.z))) * 180 / Math.PI;
   };
   expect(Math.abs(headAboveLine(true) - headAboveLine(false))).toBeLessThan(2);
+});
+
+// The measure itself: a head turned 20° one way and straight back is turning back; one whose shift trails off at a tenth of its peak,
+// its yaw going 0.6° over and 0.4° back as its pitch rises 0.1° a step (as the soldier's did untying the knot), is not.
+it('reads a turn back as a swing past its bound, and a trailing shift\'s wiggle as none', () => {
+  const dt = 1 / 60, degree = Math.PI / 180, head = (yaw: number, pitch = 0) => new Quaternion().setFromEuler(new Euler(pitch * degree, yaw * degree, 0, 'YXZ'));
+  // (out at 200°/s for 0.1 s, then back as fast)
+  const back = Array.from({ length: 13 }, (_, k) => head((k <= 6 ? k : 12 - k) * 200 * dt));
+  expect(headShift(back, dt).swing).toBeGreaterThan(SHIFT_BOUNDS.swing);
+  // (four fifths of a minimum-jerk shift of 20° in 0.3 s, its peak 124°/s, then four steps at 13–19°/s)
+  const eased = (s: number) => 20 * (10 * s ** 3 - 15 * s ** 4 + 6 * s ** 5);
+  const shift = Array.from({ length: 15 }, (_, k) => head(eased(k / 18)));
+  const tail = [0.3, 0.6, 0.4, 0.2].map((over, k) => head(eased(14 / 18) + over, 0.1 * (k + 1)));
+  expect(headShift([...shift, ...tail], dt).swing).toBeLessThan(SHIFT_BOUNDS.swing);
 });
