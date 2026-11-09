@@ -1,10 +1,10 @@
 import { Quaternion, Vector3 } from 'three';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { quatYXZ } from '../../kernel/math';
-import type { Feet } from '../../step/steps';
 import type { Proportions } from '../anatomy/proportions';
 import { KNEE_FLEXION } from '../anatomy/ranges';
 import { shankTilt } from './leg';
+import type { Feet } from '../../step/types';
 
 /** half a foot's width at the toes (m, default body): how far past the ankle's line a foot holds the body sideways */
 const FOOT_HALF_WIDTH = 0.04;

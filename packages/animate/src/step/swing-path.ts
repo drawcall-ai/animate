@@ -2,7 +2,8 @@
 import { MathUtils, Vector3 } from 'three';
 import { lerp, minimumJerk, quintic, wrapAngle } from '../kernel/math';
 import { FLAT, highestUnder, lowestUnder } from './floor';
-import type { Leg, StepInput, Steps, Swing } from './steps';
+import type { Steps } from './steps';
+import type { Leg, StepInput, Swing } from './types';
 
 /** how high a swing's arc lifts its foot over its path `u` through it (m): it peaks mid-swing walking; a runner's heel stays up later, the
  * knee bent late into the swing; a gait's as its `arc` has it */
@@ -110,3 +111,6 @@ const AHEAD = 10;
 const STEP_UP = 0.08;
 
 const _at = new Vector3();
+
+/** how long a swing has left (s) */
+export const remaining = (w: Swing) => (1 - w.u) * w.T;

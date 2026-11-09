@@ -6,8 +6,8 @@ import { clampRotation } from '../../kernel/limits';
 import { clamp, forwardOf, minimumJerk, wrapAngle, yawOf } from '../../kernel/math';
 import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import type { Stepper } from '../../step/stepper';
-import type { Leg } from '../../step/steps';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
+import type { Leg } from '../../step/types';
 
 /**
  * Tuned within the hip's ~35–45° of turn (recalled: AAOS ranges): a swinging knee points at most this far (rad) off the pelvis's facing

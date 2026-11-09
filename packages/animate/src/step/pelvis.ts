@@ -2,10 +2,11 @@
 import { follow } from '../kernel/follow';
 import { MathUtils, Vector3 } from 'three';
 import { lerp, minimumJerk, softMin } from '../kernel/math';
-import { LOWEST, type StepInput, type Steps } from './steps';
+import { LOWEST, type Steps } from './steps';
 import { foldOf, hipOf, lengthOf, nominal, legReach, travelOf } from './leg-reach';
 import { swingPose } from './swing';
 import { RISE, stepping } from './swing-path';
+import type { StepInput } from './types';
 
 /**
  * The swinging ankles on their paths, the pelvis as high as the feet let it (in the air: where the root has it). In the air the pelvis'

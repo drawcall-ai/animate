@@ -2,7 +2,6 @@
 import type { Frame, Behaviour } from '../../kernel/frame';
 import { lerp, wrapAngle } from '../../kernel/math';
 import { Stepper } from '../../step/stepper';
-import type { Steering } from '../../step/steps';
 import { Asks } from '../../kernel/asks';
 import type { LegGoal, Stance } from '../../step/leg-goal';
 import { seedOf } from '../../kernel/random';
@@ -15,6 +14,7 @@ import { drivenRoot } from '../../step/root';
 import { personStepping } from './stepping';
 import { defaultStance, standingFeet } from '../anatomy/stance';
 import type { Person } from '../person';
+import type { Steering } from '../../step/types';
 
 /**
  * Legs under a root the app drives (`drive`, read every sub-step; see `Stepper`) — its hips over the floor, as a game's character

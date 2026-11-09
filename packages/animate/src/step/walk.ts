@@ -4,9 +4,10 @@ import { STROLL, type LegGoal, type Stance } from './leg-goal';
 import type { Miss, Request } from '../kernel/requests';
 import { loadFactor } from '../kernel/load';
 import { forwardOf, headingOf, wrapAngle } from '../kernel/math';
-import { remaining, SETTLED_AFTER } from './steps';
+import { SETTLED_AFTER } from './steps';
 import { FLAT } from './floor';
 import type { Self } from '../body/self';
+import { remaining } from './swing-path';
 
 /** Tuned: this share of a speed asked counts as reaching it */
 const NEAR = 0.9;

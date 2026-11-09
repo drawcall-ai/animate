@@ -4,12 +4,13 @@ import type { Dev } from '../../kernel/dev';
 import type { Frame } from '../../kernel/frame';
 import { pointSegmentDistance } from '../../kernel/math';
 import type { LegGoal } from '../../step/leg-goal';
-import { runs, type Leg } from '../../step/steps';
+import { runs } from '../../step/steps';
 import { bears, hullOf, outside, xcomOf } from '../../step/support';
 import { INDEX, SIDES, type Side } from '../anatomy/bones';
 import { solePoints } from '../anatomy/landmarks';
 import type { Person } from '../person';
 import { ballOf, footprint, footRotation, heelOf, heelSides } from './foot';
+import type { Leg } from '../../step/types';
 
 /** Development bounds: planted pivot slide (m), touchdown speeds (m/s), closest shanks (m, ~their thickness), a walker's XCoM (m, default body: lengths of a body scale with it), a
  * planted sole's sink into its floor and its lowest point's rise off it (m: rolling over its heel or ball, a rigged sole's points stand

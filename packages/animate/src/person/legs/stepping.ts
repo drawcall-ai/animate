@@ -2,12 +2,12 @@
 import type { Proportions } from '../anatomy/proportions';
 import type { Gait } from '../../species/gait';
 import { powerGait, stanceOf } from '../../species/schedule';
-import type { CadencedStepping } from '../../step/steps';
 import { squatOf, STANDING_REACH } from './walk-pose';
 import { lerp } from '../../kernel/math';
 import { defaultStance } from '../anatomy/stance';
 import type { Stride } from '../anatomy/humanoid';
 import { UNVARIED, type Variation } from './variation';
+import type { CadencedStepping } from '../../step/types';
 
 /** Recalled: free walk 1.37 m/s, 1.41 m stride, 0.64 s stance (Perry 1992); 1.3 cm toe clearance (Winter 1992); tuned: below 0.5 m/s the stride
  * shortens instead of its cadence slowing. */

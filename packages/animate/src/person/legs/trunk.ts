@@ -8,7 +8,6 @@ import { clamp, forwardOf, lerp, minimumJerk, quatYXZ, yawOf } from '../../kerne
 import type { LegGoal, Stance } from '../../step/leg-goal';
 import type { Locomotion } from '../../step/locomotion';
 import type { Stepper } from '../../step/stepper';
-import type { Leg, Steering } from '../../step/steps';
 import { xcomOfPoses } from '../../step/support';
 import { INDEX, SIDES } from '../anatomy/bones';
 import type { Person } from '../person';
@@ -17,6 +16,7 @@ import type { Seat } from './seat';
 import { armsHeld } from './turn';
 import type { Variation } from './variation';
 import { LOWER, WalkPose, entrain, walkBlend, type TrunkPose, type WalkPoseState } from './walk-pose';
+import type { Leg, Steering } from '../../step/types';
 
 /**
  * How quickly a person's legs take it up to a pace and down from it (m/s²), which the trunk carries itself at — its lean into the

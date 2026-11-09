@@ -11,7 +11,7 @@ it('samples shared leg reach tables independently of query order and earlier bod
     [-0.5, -0.2, 0, 0.2, 0.5].flatMap((ahead) => [0, -0.2, -0.4].map((pitch) => [out, ahead, pitch] as const)));
   const sample = async (reverse: boolean) => {
     vi.resetModules();
-    const { ChainLeg } = await import('../../src/creature/feet');
+    const { ChainLeg } = await import('../../src/creature/chain-leg');
     const legs = chains.map((chain) => new ChainLeg(chain, rest, FLAT));
     for (const query of reverse ? queries.slice().reverse() : queries) for (const leg of legs) leg.depth(...query);
     const read = () => chains.map((chain) => {

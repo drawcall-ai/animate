@@ -3,7 +3,8 @@ import { MathUtils, Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, minimumJerk } from '../kernel/math';
 import { xcomOf } from './support';
 import { FLAT, foothold, LEVEL } from './floor';
-import { ROLL, dropOf, rollOf, type StepBody, type Leg, type StepInput, type Reading, type Steps, type Timing } from './steps';
+import { type Steps } from './steps';
+import type { StepBody, Leg, StepInput, Reading, Timing, Stepping } from './types';
 
 /** the place of a leg's hip, the pelvis turned with the stride */
 export function hipOf(steps: Steps, input: StepInput, leg: Leg): Vector3 {
@@ -180,3 +181,14 @@ const PIVOT = 0.03;
 /** Tuned: standing, a planted foot rolls only with the hip this far (m, default body) off it: past a quiet stance's sway over the feet */
 const STANDING_PIVOT = 0.08;
 const [_v, _a, _b, _x, _l, _f, _m, _o] = Array.from({ length: 8 }, () => new Vector3());
+
+export const dropOf = (st: Stepping, { across, run }: Timing & Reading) => lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run);
+/** how far `x` (rad) is past 0, easing in from `BEND`/2 before it (C¹: the heel starts lifting at rest) */
+export const overbend = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
+/** a planted foot's roll off its strike (rad): flat after `ROLL` */
+export const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
+/** Tuned: a strike rolls flat in `ROLL` s */
+export const ROLL = 0.1;
+
+/** Tuned: the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend */
+const BEND = 0.15;

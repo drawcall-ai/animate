@@ -1,8 +1,9 @@
 // A planted foot posed: rolling over its sole, its ankle and toes on the floor.
 import { Quaternion, Vector3 } from 'three';
 import { forwardOf, leftOf } from '../kernel/math';
-import { overbend, rollOf, type FootPose, type Leg, type Steps } from './steps';
-import { lengthOf, pivotLimit, pointed, shankLean } from './leg-reach';
+import { type Steps } from './steps';
+import { lengthOf, pivotLimit, pointed, shankLean, overbend, rollOf } from './leg-reach';
+import type { FootPose, Leg } from './types';
 
 /** A planted foot: rolling flat off its heel strike, onto its heel or ball as far as the hip needs to reach it. */
 export function plantedPose(steps: Steps, leg: Leg, at: Vector3): FootPose {

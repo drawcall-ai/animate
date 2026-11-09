@@ -3,10 +3,12 @@ import { MathUtils, Vector3 } from 'three';
 import { forwardOf, leftOf, lerp, wrapAngle } from '../kernel/math';
 import { bears, hullOf, outside } from './support';
 import { SETTLING, type GaitClock } from './gait-clock';
-import { runs, SHUFFLING, THRESHOLDS, remaining, strayed, type Leg, type StepInput, type Steps } from './steps';
+import { runs, SHUFFLING, THRESHOLDS, strayed, type Steps } from './steps';
 import { aheadOf, hipOf, nominal, offHome, legReach, xcomAhead } from './leg-reach';
-import { landing, liftLeg } from './swing';
-import { RISE } from './swing-path';
+import { liftLeg } from './swing';
+import { RISE, remaining } from './swing-path';
+import type { Leg, StepInput } from './types';
+import { landing } from './landing';
 
 /** What prompts a foot to step this sub-step: a fall to catch, how far it is turned off the facing. */
 export function promptsOf(steps: Steps, input: StepInput): Prompts {

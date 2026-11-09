@@ -5,14 +5,15 @@ import { Asks } from '../kernel/asks';
 import { BonePose } from '../kernel/bone-pose';
 import { trunkMotion, type Striding } from './trunk-motion';
 import { seedOf } from '../kernel/random';
-import { ChainLeg, feetOf, steppingOf } from './feet';
+import { feetOf, steppingOf } from './feet';
 import { offTheWay, Planner, stanceYaw } from '../step/planner';
 import { Stepper } from '../step/stepper';
-import { type Steering } from '../step/steps';
 import { drivenRoot } from '../step/root';
 import { strideAt } from '../species/gait';
 import { Inertia } from '../kernel/inertia';
 import type { Self } from '../body/self';
+import type { Steering } from '../step/types';
+import { ChainLeg } from './chain-leg';
 
 /**
  * A creature's balance, a sub-step at a time: its species' legs carry it where the request that has its legs asks (`legGoal`) — the planner takes its root

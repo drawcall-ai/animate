@@ -1,11 +1,13 @@
 // The clock a gait's feet keep (a four-legged one's), and a person's cadence in its place: how long a stride takes, and for a gait whose turn each foot's lift is.
 import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import { clamp, lerp } from '../kernel/math';
+import { clamp, lerp, mod } from '../kernel/math';
 import { offsetAt, strideAt, type Gait } from '../species/gait';
 import { velocityAhead } from './leg-reach';
 import { STROLL } from './leg-goal';
-import { mod, remaining, type CadencedStepping, type Feet, type Leg, type Reading, type Steps, type Timing } from './steps';
+import { type Steps } from './steps';
+import type { CadencedStepping, Feet, Leg, Reading, Timing } from './types';
+import { remaining } from './swing-path';
 
 /** A stride's time as it steps now (s): its cycle, a foot's share of it standing and its stance. */
 interface StrideTime { C: number; duty: number; Ts: number }

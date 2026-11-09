@@ -1,7 +1,7 @@
 // The height a body stands at over its floor: the floor under its way, kept low over its edges and smoothed over its stride.
 import { FLAT, type Floor } from './floor';
 import { Matrix4, Vector3 } from 'three';
-import type { Steering } from './steps';
+import type { Steering } from './types';
 
 /**
  * The ground a body's pelvis stands its height over, a sub-step at a time: the floor under the root's way — the heights it has passed

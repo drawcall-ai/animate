@@ -1,8 +1,8 @@
 import { Vector3, type Object3D } from 'three';
 import type { Frame } from '../kernel/frame';
 import { OFF_FLOOR } from '../kernel/dev';
-import type { Steering } from './steps';
 import type { Self } from '../body/self';
+import type { Steering } from './types';
 
 /** What a body's root does when the app drives it (a player's): its position, velocity, facing and stance. */
 export interface Root {

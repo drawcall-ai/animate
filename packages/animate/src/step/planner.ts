@@ -5,7 +5,7 @@ import { follow } from '../kernel/follow';
 import type { Motion } from '../kernel/goal';
 import { clamp, lerp, wrapAngle, yawOf } from '../kernel/math';
 import { strideAt, type Gait } from '../species/gait';
-import type { Steering } from './steps';
+import type { Steering } from './types';
 
 /** A floor-plane goal: where, moving how fast (m/s), and the facing to arrive at (rad; none: face the way it goes). */
 /** where to go, how fast it moves, the facing to arrive with, and whether a few steps back or aside keep the facing (`KEPT`) */
