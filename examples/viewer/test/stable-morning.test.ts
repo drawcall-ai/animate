@@ -47,8 +47,8 @@ const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [[
 const test = cases([
   // The rack stands where the default body lifts from (its wrists hang at 0.84 m, the saddle's grips just above): the soldier's short
   // arms hang its wrists at 0.97 m, so as far as it stops from the rack it bends its knees past the bound for a load at knuckle height (35°),
-  // at many life seeds, these among them; at 1 to 36°, and its log holds the breach below too.
-  ['leading posture and clearance on the soldier', [1, 3]],
+  // at many life seeds, this among them: to 36°, and its log holds the breach below too.
+  ['leading posture and clearance on the soldier', [1]],
   // Its carry's XCoM spikes for a sub-step as the trailing foot lifts, past the bound (0.1 m) at some life seeds: 0.107 m at this one.
   ['takes the slack without stretching the rope on the soldier', [1]],
 ]);
