@@ -10,7 +10,7 @@ export type Until = number | (() => boolean);
 /**
  * A verb as a story runs it (`yield*`): it steps with the story, frame by frame. It returns `true` when what it moves was measured there
  * within its tolerance as it ended (an aimer: when it ended), `false` only when the story's own `until` cut it short (no failure and no
- * claim), and throws `Missed` when it cannot get there.
+ * claim), and throws `Missed` when it cannot get there: a mover without `until` whose body has stood still 8 s short of its goal has not.
  */
 export type Verb = Generator<TimelineYield<unknown>, boolean, unknown>;
 
