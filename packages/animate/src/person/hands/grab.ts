@@ -15,6 +15,7 @@ import { pathAhead } from '../look/around';
 import { bringShoulder } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { approach } from './approach';
+import { handsGoing } from './reach';
 import { emptyAt, gripAt, holdOn, type HandPlan } from './plan';
 import { ARM } from './arm-clearance';
 import { flat, footing, walkingToReach } from './standing-spot';
@@ -42,6 +43,10 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
     things: [...new Set(takes.map((take) => take.thing))].map((thing) => ({ bounds: thing.bounds, ...person.movingFrameOf(thing.object).current })),
   }, step);
   if (plan !== 'there' && 'nowhere' in plan) {
+    // (no stand in reach: the hands go as far as they can as the body stands, the eyes on them, for as long as a reach there takes, and it misses)
+    const going = handsGoing(person, takes.map((take) => ({ side: take.side, target: (f: Frame) => ({ position: gripAt(person, take, f, new Vector3()) }) })), motion?.speed);
+    const until = person.frame.time + Math.max(...going.map((hand) => hand.lasts));
+    yield* parallel<Frame>('race', noticing(person, request, middle), action<Frame>({ until: (f) => f.time >= until }), ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
     request.fail({ ...plan.nowhere, where: takes.map(({ thing, side, grip }) => `${thing.object.name} ${side} ${grip}`).join(', ') });
     return false;
   }

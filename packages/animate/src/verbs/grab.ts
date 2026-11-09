@@ -17,8 +17,9 @@ import { personOf } from './person-of';
  * stand for where they were; with no particular place to stand, leave the walking to it. A mover, it ends holding, its fingers closed. A
  * named hand that holds something else lets go of it as it sets off, as `release` would (what the body wears, a rifle on its mount, stays
  * there, held by any other hand on it). A loose thing with a mass (on no body) is lifted clear of what it rests on; anything else — a part
- * of what the other hand holds, a pouch's magazine — stays where it is, and the hands follow it. It throws `Missed` if no stand reaches
- * the grips (with `step: false`: if they are out of reach from where it stands), if a hand stops getting nearer its unmet position or turn
+ * of what the other hand holds, a pouch's magazine — stays where it is, and the hands follow it. If no stand reaches the grips (with
+ * `step: false`: they are out of reach from where it stands), the hands go as far as they can for as long as a reach there takes, the eyes on
+ * them, and it throws `Missed`; as it does if a hand stops getting nearer its unmet position or turn
  * once the planned reach is over (or is still off it four seconds on), or if a pad a facing fixes has not come within 1 cm of its grip by the
  * time its turn is made up (up to 0.4 s after it touches: the grab waits for that). What each empty asks of the hand (`grip`) is fixed as the
  * grab starts, within what its grip leaves free, from where the body stands, and the hand keeps it on the thing while it holds it. Given

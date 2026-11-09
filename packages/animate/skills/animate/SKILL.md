@@ -134,7 +134,7 @@ If a carry misses `held off by a joint's range`, the wrist cannot turn that far 
 
 A part of a held thing (a lid, a pin) is a thing of its own with its own mass and grips, parented where it sits: the other hand grabs it, `carry` lifts it off, and `release` onto an empty puts it back. A hand holding something lets go of it when it grabs something else, and a thing both hands leave stays where it is, even in mid-air: put it down first, or if it rides on an empty under the body, aim it with `body.orient` each frame before `update`. Take it back with one `grab` of both grips, since one hand at a time leaves the other idle. Targets for what a person does about itself come from `body.armPoint`.
 
-A `grab` or `reach` that no stand brings there misses at once with the hand unmoved: use that to ask whether it can. For a try the viewer sees (a jar on too high a shelf), walk under it and race a `reach` given `until` with what the rest of the body does: the arm goes as far as it can and the `Missed` comes 2 s on, for `attempt` to take: `const miss = yield* parallel('race', attempt(reach(body, { right: jar }, { until: Infinity })), lookAt(body, jar, { until: Infinity }), pose(body, { lower: -0.08 }))`.
+A `grab` or `reach` that no stand brings there goes as far as the arm can for its time, the eyes on it, then misses: for a jar on too high a shelf, walk under it and `attempt` the reach, and the try shows.
 
 To throw what one hand holds, turn the body toward the target first, `throwAt` it, and give its `released` motion to your physics. It goes either way; a target beyond its speed misses after the follow-through.
 

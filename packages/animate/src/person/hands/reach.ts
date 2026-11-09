@@ -62,16 +62,8 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
   const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
   // (the verdict as its story ends it, moving or not: as near as a stopped hand counts as there)
   request.there = () => targets.every(({ side, target }) => closeTo(person.frame, person.hands[side], target(person.frame)));
-  const going = targets.map(({ side, target }) => {
-    const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
-    const { speed } = pace, { accel } = motion;
-    // (at an explicit hand speed, its joints keep to the moving point as briskly as to a held grip)
-    if (speed !== undefined) return { side, step: reaching(person, side, target, { ...HOLD, accel, speed }), lasts: distance / speed + speed / accel };
-    const seconds = reachTime(distance / person.scale, seedOf(side, Math.round(distance * 1000))) / person.tempo;
-    return { side, step: reaching(person, side, target, { seconds }), lasts: seconds };
-  });
-  const lasts = Math.max(...going.map((hand) => hand.lasts));
-  let setOff = NaN, stirred = person.frame.time;
+  const going = handsGoing(person, targets, pace.speed), lasts = Math.max(...going.map((hand) => hand.lasts));
+  let setOff = NaN, stirred = -Infinity;
   // (given `until`, a target on the move is followed till then, as a walk's is: a hand behind it has failed nothing, one off a target that
   // has stood still this long has)
   const moving = (f: Frame) => {
@@ -99,8 +91,8 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
       const plan = inReach ? 'there' : footing(person, { place: (f) => ({ position: middle(f).clone(), quaternion: _turn }), held }, pace.step ?? true);
       const reachWalk = plan !== 'there' && 'walk' in plan ? plan : null;
       let stalled = plan !== 'there' && 'nowhere' in plan ? plan.nowhere : null, arrived = false;
-      // (out of reach and given `until`: the arm goes as far as it can as the body stands, a try seen, till the target has stood still too long)
-      if (stalled && pace.until !== undefined && Number.isNaN(setOff)) setOff = person.frame.time;
+      // (no stand in reach: the arm goes as far as it can as the body stands, the eyes on it, for as long as a reach there takes)
+      if (stalled && Number.isNaN(setOff)) setOff = person.frame.time;
       const setsOff = (f: Frame) => {
         if (Number.isNaN(setOff) && (plan === 'there' || (reachWalk && reachWalk.walk.eta <= NEAR))) setOff = f.time;
         return !Number.isNaN(setOff);
@@ -114,14 +106,27 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
         });
         if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = close || there(f)) });
       });
-      const stuck = (f: Frame) => { if (stalled && !moving(f)) request.fail(stalled); };
+      const stuck = (f: Frame) => { if (stalled && f.time >= setOff + lasts && !moving(f)) request.fail(stalled); };
       stuck(person.frame);
       if (arrived) request.met();
-      if (stalled || arrived) yield* action<Frame>({ update: stuck, until: moved });
+      if (arrived) yield* action<Frame>({ until: moved });
+      else if (stalled) yield* parallel<Frame>('race', noticing(person, request, middle), action<Frame>({ update: stuck, until: moved }));
     }
   }, function* () {
     yield* action<Frame>({ until: () => !Number.isNaN(setOff) });
     yield* parallel<Frame>('all', ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
+  });
+}
+
+/** `targets`' hands going there at `speed` (none: as a calm reach that far), and how long each takes (s) */
+export function handsGoing(person: Person, targets: readonly { side: Side; target: (f: Frame) => Goal }[], speed?: number) {
+  const { accel } = paceAt(speed, CALM);
+  return targets.map(({ side, target }) => {
+    const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
+    // (at an explicit hand speed, its joints keep to the moving point as briskly as to a held grip)
+    if (speed !== undefined) return { side, step: reaching(person, side, target, { ...HOLD, accel, speed }), lasts: distance / speed + speed / accel };
+    const seconds = reachTime(distance / person.scale, seedOf(side, Math.round(distance * 1000))) / person.tempo;
+    return { side, step: reaching(person, side, target, { seconds }), lasts: seconds };
   });
 }
 

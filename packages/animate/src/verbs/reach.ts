@@ -10,11 +10,10 @@ import type { HandOptions } from '../body/hand-staging';
  * not driven and `step` allows, it walks up first (borrowed legs) and stays where it stood, its eyes on the targets (borrowed), the hands
  * going as it arrives (asked), the body turning, bowing, bending or rising on its toes for them. It picks where to stand as it starts, and
  * again whenever a target has moved about 10 cm from where it planned for. A mover, it ends once the hands are there and still, within 1 cm and 2° (or stopped within 1.5 cm: as near as the arm comes);
- * its hold ends with the verb, so `until: Infinity` (raced) stays there. It throws `Missed` if it can stand nowhere in reach (with `step:
- * false`: if it cannot reach from where it stands), or a hand stops getting nearer its unmet position or turn once the planned reach is
- * over (or is still off it four seconds on), balance-support steps aside. Given `until`, a target out of reach for a while is followed on, the arm
- * going as far as it can as the body stands (one out of reach that stands still for 2 s misses, the hand having tried), and it returns
- * `true` if the hands are on their targets as that ends, else `false`.
+ * its hold ends with the verb, so `until: Infinity` (raced) stays there. If it can stand nowhere in reach (with `step: false`: it cannot reach
+ * from where it stands), the arm goes as far as it can for as long as a reach there takes, the eyes on it, and it throws `Missed`, as it does if a
+ * hand stops getting nearer its unmet position or turn once the planned reach is over (or is still off it four seconds on), balance-support steps
+ * aside. Given `until`, a target on the move is followed on, however far off (one that has stood still for 2 s misses as above), and it returns `true` if the hands are on their targets as that ends, else `false`.
  */
 export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Target>, options: HandOptions = {}): Verb {
   const named = Object.entries<Target | undefined>(targets).flatMap(([hand, target]) => target === undefined ? [] : [{ hand, target: handTarget(target, 'reach') }]);

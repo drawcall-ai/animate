@@ -106,12 +106,14 @@ function* walkingToReach(self: Self, request: Request, hand: string, point: (f: 
   // (let down for a point below the base, never for one above it: it stoops only to reach down)
   const below = base.y - at.y, drop = below > 0 ? Math.max(0, below - lowered) : below;
   if (drop > out || below < -out) {
+    yield* trying(self, request, hand, point, pace);
     request.fail({ where: `${where} ${chain}`, off: Math.abs(below), limit: out + lowered, why: `out of reach: ${Math.abs(below).toFixed(2)} m from the hand's base, up or down` });
     return null;
   }
   const beyond = Math.hypot(base.x - at.x, drop, base.z - at.z) - out;
   if (beyond <= 0) return { chain, bones, stoop };
   if (!step) {
+    yield* trying(self, request, hand, point, pace);
     request.fail({ where: `${where} ${chain}`, off: beyond, limit: 0, why: `out of reach with the feet planted, ${beyond.toFixed(2)} m short: let it step, or start nearer` });
     return null;
   }
@@ -126,6 +128,16 @@ function* walkingToReach(self: Self, request: Request, hand: string, point: (f: 
   if (!walk.stall) return { chain, bones, stoop };
   request.fail(walk.stall);
   return null;
+}
+
+/** a creature's hand going as far as it can for `point`, for as long as a dip that far takes: what it does before it misses */
+function trying(self: Self, request: Request, hand: string, point: (f: Frame) => Readonly<Vector3>, pace: Pace) {
+  const chain = chainOf(self, hand), bones = self.pose.skeleton.chain(chain), stoop = stooping(self, bones), tip = new LimbMover(chain);
+  const ends = self.frame.time + dipping(self.pose.position(bones[bones.length - 1]).distanceTo(point(self.frame)), pace);
+  return during(request, `hand.${hand}`, 'asked', (f) => {
+    stoop.to(f, point(f), false);
+    tip.to(f, { position: _v.copy(point(f)) }, { ...DIP, ...pace });
+  }, (f) => f.time >= ends);
 }
 
 /** a creature's hand chain's tip to `goal` (at a calm dip's pace), stooping for it, the hand asked, until it is there */

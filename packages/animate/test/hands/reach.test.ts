@@ -1,13 +1,15 @@
-import { Quaternion, Vector3 } from 'three';
+import { Object3D, Quaternion, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { attempt, Body, carry, dog, grab, horse, humanoid, lookAt, Missed, reach, release, wait } from '../../src/index';
 import { species } from '../../src/species';
 import { HORSE } from '../../skills/animate/references/horse';
-import { person, play } from '../kit/bodies';
-import { empty, roomOf, worldOf } from '../kit/things';
+import { now, person, play } from '../kit/bodies';
+import { box, empty, roomOf, worldOf } from '../kit/things';
 import { DOG } from '../../skills/animate/references/dog';
 import { PERSON } from '../../skills/animate/references/person';
+
+const BOTH = { left: 'left', right: 'right' } as const;
 
 // Trial 3's stationary neck: bent at rest, with no joint limits or walking roles.
 const NECK = species([
@@ -174,16 +176,18 @@ it.each([
   expect(body.log).toEqual([]);
 });
 
-it('a reach out of it with its feet kept misses at once', () => {
-  const body = person();
+it('a reach out of it with its feet kept tries for the arm\'s time, then misses', () => {
+  const body = person(), target = new Vector3(-.2, 1.15, .8), from = worldOf(body.bones.rightHand).distanceTo(target);
   let miss: Missed | null = null, took = NaN;
-  play(function* () { miss = yield* attempt(reach(body, { right: new Vector3(-.2, 1.15, .8) }, { step: false })); }, [body], 10, (time) => {
+  play(function* () { miss = yield* attempt(reach(body, { right: target }, { step: false })); }, [body], 10, (time) => {
     if (miss) took = time;
     return miss !== null;
   });
   expect(miss).toBeInstanceOf(Missed);
   expect(miss).toMatchObject({ verb: 'reach', why: expect.stringContaining('beyond reach with the feet planted') });
-  expect(took).toBeLessThan(0.1);
+  expect(took).toBeGreaterThan(0.4);
+  expect(took).toBeLessThan(2);
+  expect(worldOf(body.bones.rightHand).distanceTo(target)).toBeLessThan(from - 0.2);
 });
 
 it('grab and a creature reach keep the feet planted with step false, missing out of reach', () => {
@@ -234,17 +238,47 @@ it('a dog reaches an object’s orientation as well as its position', () => {
   expect(pet.log).toEqual([]);
 });
 
-it('out of reach and given `until`, the arm tries as far as it goes before it misses', () => {
-  const body = person(), room = roomOf(body), jar = empty(room, 'jar', new Vector3(0, 2.6, 0.6));
-  room.updateMatrixWorld(true);
-  let miss: Missed | null = null, top = 0, ended = false;
-  play(function* () {
-    miss = yield* attempt(reach(body, { right: jar }, { until: Infinity }));
-    ended = true;
-  }, [body], 5, () => {
-    top = Math.max(top, worldOf(body.bones.rightHand).y);
-    return ended;
+// (a viewer sees the try: the same whether `until` was given or not, no hidden flag for it)
+describe('what no stand reaches', () => {
+  const tried = (asked: (body: Body, jar: Object3D) => Generator<unknown, unknown, unknown>) => {
+    const body = person(), room = roomOf(body), jar = box(room, new Vector3(0, 2.6, 0.6), { solid: false, size: new Vector3(0.1, 0.2, 0.1) });
+    let miss: Missed | null = null, top = 0, ended = NaN;
+    play(function* () {
+      miss = (yield* attempt(asked(body, jar) as Generator<never, unknown, unknown>)) as Missed | null;
+      ended = now();
+    }, [body], 6, () => {
+      top = Math.max(top, worldOf(body.bones.rightHand).y);
+      return !Number.isNaN(ended);
+    });
+    return { miss, top, ended };
+  };
+
+  it.each([
+    ['a reach', (body: Body, jar: Object3D) => reach(body, { right: jar })],
+    ['a reach given until', (body: Body, jar: Object3D) => reach(body, { right: jar }, { until: Infinity })],
+    ['a grab', (body: Body, jar: Object3D) => grab(body, jar, { right: 'right' })],
+    ['a grab given until', (body: Body, jar: Object3D) => grab(body, jar, { right: 'right' }, { until: Infinity })],
+    ['a grab of two hands', (body: Body, jar: Object3D) => grab(body, jar, BOTH)],
+  ])('%s: the arm goes as far as it can for its time, then it misses', (_name, asked) => {
+    const { miss, top, ended } = tried(asked);
+    expect(miss).toBeInstanceOf(Missed);
+    expect(top).toBeGreaterThan(1.9);
+    expect(ended).toBeGreaterThan(0.5);
+    expect(ended).toBeLessThan(2);
   });
-  expect(miss).toBeInstanceOf(Missed);
-  expect(top).toBeGreaterThan(1.9);
+
+  it('a creature\'s: its hand goes for it too, before it misses', () => {
+    const pet = new Body(dog(DOG)), jaw = worldOf(pet.bones.jaw), target = jaw.clone().add(new Vector3(0, 3, 0.2));
+    let miss: Missed | null = null, ended = NaN, top = 0;
+    play(function* () {
+      miss = yield* attempt(reach(pet, { jaw: target }));
+      ended = now();
+    }, [pet], 6, () => {
+      top = Math.max(top, worldOf(pet.bones.jaw).y);
+      return !Number.isNaN(ended);
+    });
+    expect(miss).toBeInstanceOf(Missed);
+    expect(ended).toBeGreaterThan(0.5);
+    expect(top).toBeGreaterThan(jaw.y + 0.05);
+  });
 });
