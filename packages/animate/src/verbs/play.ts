@@ -26,9 +26,9 @@ export function play<R>(bodies: Body | readonly Body[], story: ReusableTimeline<
 
 /** what `bodies` are doing for their stories: each verb running, where it was asked for and since when */
 function running(bodies: readonly Body[]): string {
-  const verbs = bodies.flatMap((body) => selfOf(body).requests.filter((request) => !request.owned).map((request) => {
+  const verbs = bodies.flatMap((body) => selfOf(body).requests.filter((request) => request.kind !== 'own').map((request) => {
     const since = `since ${request.filed.toFixed(1)} s`;
-    return `${request.verb} (${[request.site, since, request.endless ? 'never ends without until' : ''].filter(Boolean).join(', ')})`;
+    return `${request.verb} (${[request.site, since, request.kind === 'aimer' ? "never ends without until (a pose's: or hold)" : ''].filter(Boolean).join(', ')})`;
   }));
   return verbs.join('; ') || 'no verb is running, so a `wait` whose condition never holds, or a step of its own';
 }

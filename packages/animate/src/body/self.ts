@@ -17,7 +17,7 @@ import { Binding } from './binding';
 import { PlatformFrame } from './platform';
 import { placedFor } from '../things/placed';
 import { anchors, movers, type Interpolated } from '../things/anchors';
-import { Claims, Request, type Staging } from '../kernel/requests';
+import { Claims, Request, type RequestKind, type Staging } from '../kernel/requests';
 import type { Thing } from '../things/thing';
 import type { Goal, Placement } from '../kernel/goal';
 import { heldMass, wornOf, type Bearing, type Hold } from '../things/hold';
@@ -258,17 +258,11 @@ export abstract class Self {
   }
 
   /** the request `verb` files (its staging runs from its next sub-step on); `site` names where its story asked for it */
-  file(verb: string, site: string | (() => string), staging: Staging, aimer = false, owned = false): Request {
-    const request = new Request(this, verb, site, staging, aimer);
-    request.owned = owned;
-    if (!aimer && !owned) this.lastMover = this.time;
+  file(verb: string, site: string | (() => string), staging: Staging, kind?: RequestKind): Request {
+    const request = new Request(this, verb, site, staging, kind);
+    if (request.kind === 'mover') this.lastMover = this.time;
     this.requests.push(request);
     return request;
-  }
-
-  /** a request of the body's own (a hand backing out of what it let go): no story renews it; it ends with its staging */
-  own(verb: string, site: string, staging: Staging): Request {
-    return this.file(verb, site, staging, false, true);
   }
 
   /** a request's verb has ended: its staging stops, its claims let go */
@@ -393,7 +387,8 @@ export abstract class Self {
     this.turnedNodes.step(f);
     for (const request of [...this.requests]) {
       request.stage(f);
-      if (!request.owned) continue;
+      // (one of the body's own: no story renews it; it ends with its staging)
+      if (request.kind !== 'own') continue;
       request.renewed = f.time;
       if (request.finished) this.drop(request);
     }

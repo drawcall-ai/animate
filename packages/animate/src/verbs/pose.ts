@@ -58,7 +58,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
       ...posedArms.map(({ side, into, arm }) => during(request, `arm.${side}`, 'asked', () => add(into, arm))),
       ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));
-  }, { until, aimer: true, meets: hold !== undefined });
+  }, { until, kind: 'aimer' });
 }
 
 /** each hand's shape `fingers` asks of `self`, with the fingers it is written to; a skeleton without finger bones has none to pose */

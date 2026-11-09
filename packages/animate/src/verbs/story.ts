@@ -1,6 +1,6 @@
 import { action, type TimelineYield } from '@pmndrs/timeline';
 import { selfOf, type Body } from '../body';
-import type { Miss, Staging } from '../kernel/requests';
+import type { Miss, RequestKind, Staging } from '../kernel/requests';
 import type { Self } from '../body/self';
 
 /** When something ends: after this many seconds of the story's time, once a condition holds, or never (`Infinity`). */
@@ -67,10 +67,8 @@ export class Call {
 interface Ending {
   /** the story's own end for it */
   until?: Until;
-  /** it keeps on at its goal rather than moving something somewhere: it ends only when told, and then `true` */
-  aimer?: boolean;
-  /** an aimer told by its staging as well (a pose's `hold`): it does end without `until` */
-  meets?: boolean;
+  /** an aimer ends only when told, and then `true` */
+  kind?: Exclude<RequestKind, 'own'>;
 }
 
 /**
@@ -85,10 +83,9 @@ export function verb(body: Body, name: string, staging: Staging, ending: Ending 
   return run(self, call, staging, ending);
 }
 
-function* run(self: Self, call: Call, staging: Staging, { until, aimer = false, meets = false }: Ending): Verb {
+function* run(self: Self, call: Call, staging: Staging, { until, kind }: Ending): Verb {
   self.unyielded.delete(call);
-  const ends = until === undefined ? null : endsOf(until), request = self.file(call.verb, () => call.site, staging, aimer);
-  request.endless = aimer && !ends && !meets;
+  const ends = until === undefined ? null : endsOf(until), request = self.file(call.verb, () => call.site, staging, kind);
   try {
     yield (_state, clock) => {
       request.renewed = self.time;
@@ -97,7 +94,7 @@ function* run(self: Self, call: Call, staging: Staging, { until, aimer = false, 
     };
     if (request.error) throw request.error;
     if (request.miss) throw new Missed(call.verb, request.site, request.miss);
-    return !ends || aimer || (request.there?.() ?? false);
+    return !ends || kind === 'aimer' || (request.there?.() ?? false);
   } finally {
     self.drop(request);
   }

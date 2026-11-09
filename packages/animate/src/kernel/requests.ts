@@ -68,6 +68,10 @@ export interface Miss {
   why: string;
 }
 
+/** What a request is: a `mover` takes something somewhere, and a story can wait on its arrival; an `aimer` keeps on at its goal (a look, a tracked
+ * pose), with no arrival to foresee, ending only when its story says; the body's `own` (a hand backing out of what it let go): no story renews or waits on it. */
+export type RequestKind = 'mover' | 'aimer' | 'own';
+
 /** A story-owned request stages after balance and before part motion; cancellation releases its claims. Arbitration lives in `rank`. */
 export class Request {
   private static made = 0;
@@ -80,8 +84,6 @@ export class Request {
   error: Error | null = null;
   /** its goal's measure now, as a story's `until` ends it: whether what it moves is there, within the verb's tolerance */
   there: (() => boolean) | null = null;
-  /** an aimer no `until` ends: it never ends of itself */
-  endless = false;
   /** seconds until what it moves arrives (∞: it moves nothing, or does not know) */
   eta = Infinity;
   /** the body's time when it was filed (s) */
@@ -90,15 +92,11 @@ export class Request {
   renewed: number;
   /** whether development has said it went unrenewed */
   stale = false;
-  /** whether the body filed it itself (a hand backing out of what it let go): no story waits on it */
-  owned = false;
   private runner: TimelineRunner<Frame> | null = null;
   private readonly claims = new Set<Claim>();
   private readonly clock: TimelineClock = { delta: 0, prevDelta: 0, frame: 0 };
 
-  /** `aimer`: it keeps on at its goal (a look, a tracked pose) rather than moving something somewhere: no arrival to foresee, it ends only
-   * when its story says */
-  constructor(readonly body: Filed, readonly verb: string, private called: string | (() => string), private readonly staging: Staging, readonly aimer = false) {
+  constructor(readonly body: Filed, readonly verb: string, private called: string | (() => string), private readonly staging: Staging, readonly kind: RequestKind = 'mover') {
     this.filed = this.renewed = body.time;
   }
 
@@ -125,7 +123,7 @@ export class Request {
       (this.runner ??= new TimelineRunner(this.staging(this))).step(f, this.clock);
     } catch (cause) {
       // (a request of the body's own has no story to say it)
-      if (this.owned) throw cause;
+      if (this.kind === 'own') throw cause;
       // (its own name said once: a check at the call says it too)
       const said = cause instanceof Error ? cause.message : String(cause);
       this.error = new Error(`${this.label}: ${said.startsWith(`${this.verb}: `) ? said.slice(this.verb.length + 2) : said}`, { cause });

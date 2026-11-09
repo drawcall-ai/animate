@@ -55,7 +55,7 @@ export function personHands(person: Person): HandStaging {
     },
     backOut(hands, away) {
       const sides = hands.map(sideOf);
-      person.own('release', '', (request) => () => backingOut(person, request, sides.map((side) => ({ side, away: away[side] ?? null }))));
+      person.file('release', '', (request) => () => backingOut(person, request, sides.map((side) => ({ side, away: away[side] ?? null }))), 'own');
     },
   };
 }

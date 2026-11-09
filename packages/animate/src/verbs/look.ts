@@ -46,7 +46,7 @@ export function lookAt(body: Body, target: Seen, options: LookOptions = {}): Ver
   return verb(body, 'lookAt', (request) => function* () {
     yield* parallel('all', during(request, 'look', 'asked', looking(self, point, { recentring: true, head })),
       trunk > 0 && during(request, 'trunk', 'asked', aiming(self, point, trunk)));
-  }, { until: options.until, aimer: true });
+  }, { until: options.until, kind: 'aimer' });
 }
 
 /** where what `self` looks at is, each sub-step */

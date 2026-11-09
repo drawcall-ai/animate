@@ -217,14 +217,14 @@ export function creatureHands(self: Self): HandStaging {
       try {
         yield* holdingOn(self, request, hand, 'reach', (f) => target(f).position, () => target, motion, options.step ?? true);
       } finally {
-        self.own('reach', '', (returning) => () => handingBack(self, returning, [hand], 'borrowed'));
+        self.file('reach', '', (returning) => () => handingBack(self, returning, [hand], 'borrowed'), 'own');
       }
     },
     away() {
       return null;
     },
     backOut(hands) {
-      self.own('release', '', (request) => () => handingBack(self, request, hands, 'borrowed'));
+      self.file('release', '', (request) => () => handingBack(self, request, hands, 'borrowed'), 'own');
     },
   };
 }

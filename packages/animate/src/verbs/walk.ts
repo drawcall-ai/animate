@@ -96,5 +96,5 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
 export function arriving(body: Body, seconds: number): () => boolean {
   const self = selfOf(body), since = self.time;
   return () => self.lastMover >= since && self.requests.every((request) =>
-    request.aimer || request.owned || request.filed < since || request.outcome !== 'running' || request.eta <= seconds);
+    request.kind !== 'mover' || request.filed < since || request.outcome !== 'running' || request.eta <= seconds);
 }

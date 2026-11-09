@@ -134,7 +134,7 @@ it('arriving foresees every mover: a reach before its hands get there, a grab wh
     release(body, near);
     yield* wait(0.1);
     // (the hands backing out — the body's own request — while what its stories moved has arrived: as settled as the body is)
-    at.backing = h.requests.some((request) => request.owned) ? 1 : 0;
+    at.backing = h.requests.some((request) => request.kind === 'own') ? 1 : 0;
     at.unheld = grabbed() && h.locomotion.settled ? 1 : 0;
     yield* parallel('all', function* () {
       yield* grab(body, far, { left: 'left', right: 'right' });

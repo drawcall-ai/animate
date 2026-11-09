@@ -19,5 +19,5 @@ export type Tracked = Partial<Record<'head' | 'left' | 'right', Target>>;
 export function track(body: Body, tracked: Tracked, options: { until?: Until } = {}): Verb {
   const person = personOf(body, 'track');
   for (const target of [tracked.left, tracked.right]) if (target) handTarget(target, 'track');
-  return verb(body, 'track', (request) => () => tracking(person, request, tracked), { until: options.until, aimer: true });
+  return verb(body, 'track', (request) => () => tracking(person, request, tracked), { until: options.until, kind: 'aimer' });
 }

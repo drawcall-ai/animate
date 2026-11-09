@@ -179,7 +179,7 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
     if (value <= limit) continue;
     noted.add(hold);
     const name = hold.thing.object.name, off = (100 * value).toFixed(1), mover = person.claims.owner(`hand.${side}`)?.request;
-    if (mover && !mover.aimer && !mover.owned) mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip: its other hand or its joints hold it off` });
+    if (mover?.kind === 'mover') mover.fail({ where: `${name} ${side}`, off: value, limit, why: `the hand was drawn ${off} cm off its grip: its other hand or its joints hold it off` });
     else if (worn) f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit, where: `${name} ${side}` });
     else person.warn(`held ${name} ${side} ${f.time}`, `the ${side} hand holding "${name}" has fallen ${off} cm off its grip, and it keeps its hold: walk the body with what moves it, or release it`);
   }
