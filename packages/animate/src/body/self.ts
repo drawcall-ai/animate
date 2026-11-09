@@ -27,7 +27,6 @@ import { FingerState } from '../fingers/state';
 import { TurnedNodes } from './turned-nodes';
 import { checkShear, massed, restPose, type SelfOptions } from './setup';
 import { Springs, type TrunkCapsules } from './springs';
-import type { Person } from '../person/person';
 
 /** Body state and arbitration. Each 1/60 s sub-step applies balance, request staging, part claims, then carried things.
  * Balance reads the previous sub-step’s asks; after all writes, final poses advance current → prev → prev2. */
@@ -140,11 +139,6 @@ export abstract class Self {
   }
 
   private staged: HandStaging | null = null;
-
-  /** it as a person, for what only a person does */
-  get person(): Person {
-    throw new Error('not a person');
-  }
 
   /** whether hand `hand` can hold a wrist at `wrist` (world) as the body is posed now */
   abstract holds(f: Frame, hand: string, wrist: Goal): boolean;

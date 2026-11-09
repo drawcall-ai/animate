@@ -104,8 +104,8 @@ describe('sit', () => {
 
   it('a creature does not sit, a driven body neither', () => {
     const pup = new Body(dog(DOG));
-    expect(() => sit(pup, new Vector3())).toThrow(/does not sit; a person does/);
-    expect(() => stand(pup)).toThrow(/does not sit/);
+    expect(() => sit(pup, new Vector3())).toThrow(/^sit: for a person/);
+    expect(() => stand(pup)).toThrow(/^stand: for a person/);
     const driven = person({ drive: () => ({ position: new Vector3(), velocity: new Vector3(), yaw: 0 }) });
     expect(() => play(driven, sit(driven, seatAt(0.45)))).toThrow(/drives it/);
   });

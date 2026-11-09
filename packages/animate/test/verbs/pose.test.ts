@@ -282,7 +282,7 @@ describe('pose of the arms', () => {
     }, [body], 2);
     expect(worldOf(body.bones.rightHand).distanceTo(at)).toBeLessThan(0.02);
     expect(body.log).toEqual([]);
-    expect(() => pose(new Body(horse(HORSE)), { arms: { left: { out: 1 } } })).toThrow("arms are a person's");
+    expect(() => pose(new Body(horse(HORSE)), { arms: { left: { out: 1 } } })).toThrow('pose arms: for a person');
   });
 });
 

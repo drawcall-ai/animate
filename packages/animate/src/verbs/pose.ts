@@ -5,6 +5,7 @@ import type { ArmPosture, Posture } from '../kernel/asks';
 import { selfOf, type Body } from '../body';
 import type { Self } from '../body/self';
 import { comingToRest, STILL } from '../kernel/rest';
+import { personOf } from './person-of';
 import { verb, type Until, type Verb } from './story';
 import { shapeOf } from '../fingers/shape';
 
@@ -40,22 +41,22 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   }
   const self = selfOf(body);
   if (head && !self.gazer) throw new Error(`pose: a ${body.species.name ?? 'custom species'} has no head to turn (no gaze)`);
-  if (arms && !body.species.person) throw new Error(`pose: arms are a person's; a ${body.species.name ?? 'custom species'} has none to pose`);
+  const armPose = arms && personOf(body, 'pose arms').armPose;
   const shapes = fingers ? shapesOf(self, body, fingers) : [];
   const asked = { bow: trunk.bow ?? 0, twist: trunk.twist ?? 0, lean: trunk.lean ?? 0, lower: trunk.lower ?? 0 };
   const posed = Object.keys(trunk).length > 0, { until, hold } = options;
   if (until !== undefined && hold !== undefined) throw new Error('pose: give `until` or `hold`, not both');
   if (hold !== undefined && !(hold >= 0 && hold < Infinity)) throw new Error(`pose: a hold of ${hold} s`);
   return verb(body, 'pose', (request) => function* () {
-    const posedArms = SIDES.flatMap((side) => {
+    const posedArms = armPose ? SIDES.flatMap((side) => {
       const arm = arms?.[side];
-      return arm ? [{ side, arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];
-    });
+      return arm ? [{ side, into: armPose[side], arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];
+    }) : [];
     yield* parallel('all',
       coming(self, request, posture, hold),
       posed && during(request, 'trunk', 'asked', () => self.asks.add({ posture: asked })),
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
-      ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(self.person.armPose[side], arm))),
+      ...posedArms.map(({ side, into, arm }) => during(request, `arm.${side}`, 'asked', () => add(into, arm))),
       ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));
   }, { until, aimer: true, meets: hold !== undefined });
 }

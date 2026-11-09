@@ -1,4 +1,6 @@
-import { Body, selfOf } from '../body';
+import { Body } from '../body';
+import { rising, sitting } from '../person/sit';
+import { personOf } from './person-of';
 import type { Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
@@ -22,16 +24,15 @@ export interface SitOptions {
  * chair's back and arms coming round, and a wall behind a seat, so bring a walled seat from the front.
  */
 export function sit(body: Body, seat: Target, options: SitOptions = {}): Verb {
-  const { face, speed, until } = options;
+  const { face, speed, until } = options, person = personOf(body, 'sit');
   if (seat instanceof Body) throw new Error('sit: a body is no seat');
   if (speed !== undefined && !(speed > 0)) throw new Error(`sit: a speed of ${speed}`);
   if (face !== undefined && !Number.isFinite(face)) throw new Error(`sit: a facing of ${face}: give radians about +Y`);
-  if (!body.species.person) throw new Error(`sit: a ${body.species.name ?? 'custom species'} does not sit; a person does`);
-  return verb(body, 'sit', (request) => () => selfOf(body).person.sitting(request, seat, face, speed), { until });
+  return verb(body, 'sit', (request) => () => sitting(person, request, seat, face, speed), { until });
 }
 
 /** A seated person stands, its feet where they are: it ends once it has stood. Standing, it ends at once. */
 export function stand(body: Body): Verb {
-  if (!body.species.person) throw new Error(`stand: a ${body.species.name ?? 'custom species'} does not sit to stand from`);
-  return verb(body, 'stand', (request) => () => selfOf(body).person.rising(request));
+  const person = personOf(body, 'stand');
+  return verb(body, 'stand', (request) => () => rising(person, request));
 }

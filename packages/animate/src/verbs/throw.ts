@@ -1,9 +1,12 @@
 import type { Object3D } from 'three';
-import { selfOf, type Body } from '../body';
+import type { Body } from '../body';
 import type { Released } from '../body/let-go';
 import { handsOn } from '../things/hold';
 import type { Target } from '../things/target';
 import { Thing } from '../things/thing';
+import { sideOf } from '../person/anatomy/bones';
+import { throwing } from '../person/throw';
+import { personOf } from './person-of';
 import { verb, type Verb } from './story';
 
 /** How a throw goes. */
@@ -37,9 +40,7 @@ export interface ThrowOptions {
  * the flight is your physics'.
  */
 export function throwAt(body: Body, thing: Object3D, target?: Target, options: ThrowOptions = {}): Verb {
-  const self = selfOf(body), held = Thing.of(thing), hands = handsOn(self, held);
-  if (!body.species.person) throw new Error(`throwAt: a ${body.species.name ?? 'custom species'} has no arms to throw with`);
+  const person = personOf(body, 'throwAt'), held = Thing.of(thing), hands = handsOn(person, held);
   if (hands.length !== 1) throw new Error(`throwAt: "${thing.name}" is held in ${hands.length} hands; throw what one hand holds`);
-  const person = self.person;
-  return verb(body, 'throwAt', (request) => () => person.throwing(request, held, hands[0], target, options));
+  return verb(body, 'throwAt', (request) => () => throwing(person, request, held, sideOf(hands[0]), target, options));
 }

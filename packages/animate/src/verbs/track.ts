@@ -1,4 +1,6 @@
-import { selfOf, type Body } from '../body';
+import type { Body } from '../body';
+import { tracking } from '../person/track';
+import { personOf } from './person-of';
 import { handTarget, type Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
@@ -15,6 +17,7 @@ export type Tracked = Partial<Record<'head' | 'left' | 'right', Target>>;
  * It asks for the eyes, the legs and the trunk with a head, and for each hand it is given.
  */
 export function track(body: Body, tracked: Tracked, options: { until?: Until } = {}): Verb {
+  const person = personOf(body, 'track');
   for (const target of [tracked.left, tracked.right]) if (target) handTarget(target, 'track');
-  return verb(body, 'track', (request) => () => selfOf(body).person.tracking(request, tracked), { until: options.until, aimer: true });
+  return verb(body, 'track', (request) => () => tracking(person, request, tracked), { until: options.until, aimer: true });
 }

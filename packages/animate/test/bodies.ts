@@ -4,6 +4,7 @@ import type { ReadonlyBonePose } from '../src/kernel/bone-pose';
 import type { Gazer } from '../src/species/define';
 import { Body, humanoid, type BodyOptions } from '../src/index';
 import { selfOf } from '../src/body';
+import { personOf } from '../src/verbs/person-of';
 import { during, type Channel, type Tier } from '../src/kernel/requests';
 import type { Frame } from '../src/kernel/frame';
 import type { LegGoal } from '../src/step/leg-goal';
@@ -25,7 +26,7 @@ const scaled = (factor: number) => PERSON.map((bone) => ({ ...bone, position: [b
 export const feetOf = (h: Person) => (h.stepper?.legs ?? []).map((leg) => ({ position: leg.anchor, yaw: leg.yaw, phase: leg.swing ? 'swing' : 'planted' }));
 
 /** `body`'s runtime, as a person */
-export const insides = (body: Body): Person => selfOf(body).person;
+export const insides = (body: Body): Person => personOf(body, 'insides');
 
 /** where `side`'s palm is (world) as `h` is posed: where its hand holds a grip */
 export const palmAt = (h: Person, side: Side) => h.pose.point(h.hands[side], palmOf(h.proportions, side), new Vector3());

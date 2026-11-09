@@ -36,13 +36,6 @@ import type { Floor } from '../step/floor';
 import type { ArmPosture } from '../kernel/asks';
 import { Impact } from './legs/impact';
 import { trunkOf } from './springs';
-import { rising, sitting } from './sit';
-import { throwing } from './throw';
-import { tracking } from './track';
-import type { Request } from '../kernel/requests';
-import type { Target } from '../things/target';
-import type { ThrowOptions } from '../verbs/throw';
-import type { Tracked } from '../verbs/track';
 import type { Seat } from './legs/seat';
 import type { SelfOptions } from '../body/setup';
 
@@ -76,10 +69,6 @@ export class Person extends Self {
     this.stride = species.stride ?? {};
   }
 
-  get person(): Person {
-    return this;
-  }
-
   /** a person's: if its arm, posed onto it afresh, keeps clear of its trunk */
   holds(f: Frame, hand: string, wrist: Goal): boolean {
     const side = sideOf(hand), frame = { current: this.scratch.copy(f.current) };
@@ -95,23 +84,6 @@ export class Person extends Self {
   /** before the head aims at `point`: the body bows and lowers to see low down */
   gazeAsks(pose: ReadonlyBonePose, point: Readonly<Vector3>): void {
     gazeAsks(this, pose, point);
-  }
-
-  /** the stagings of what only a person does */
-  throwing(request: Request, thing: Thing, hand: string, target: Target | undefined, options: ThrowOptions) {
-    return throwing(this, request, thing, sideOf(hand), target, options);
-  }
-
-  tracking(request: Request, tracked: Tracked) {
-    return tracking(this, request, tracked);
-  }
-
-  sitting(request: Request, seat: Target, face: number | undefined, speed: number | undefined) {
-    return sitting(this, request, seat, face, speed);
-  }
-
-  rising(request: Request) {
-    return rising(this, request);
   }
 
   protected behave(): Behaviours {
