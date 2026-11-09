@@ -1,7 +1,7 @@
 import { Euler, Quaternion, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { parallel } from '@pmndrs/timeline';
-import { Body, dog, humanoid, lookAt, poseOf, walkTo } from '../../src/index';
+import { Body, dog, humanoid, lookAt, poseOf, wait, walkTo } from '../../src/index';
 import { INDEX, gazeOff, readings, person, play } from '../kit/bodies';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
@@ -81,6 +81,30 @@ describe('lookAt with a trunk share', () => {
       expect(body.log).toEqual([]);
     }
   });
+});
+
+// (a point 52° aside, 0.8 m off at hip height, looked at for 1.5 s; then the body turns on the spot to face it, its trunk turning beneath
+// a look that stays on it: the line from the eyes hardly moves, so neither does the head, its turn in the world within 3° over the turn —
+// tuned; read along the trunk's facing, the line's pitch seemed to rise as the trunk came round to it and the head pitched ~10° down)
+it.each([0.9, -0.9])('holds the head on a point low aside as the body turns to it beneath: %s rad', (bearing) => {
+  const body = person({ dev: true }), point = new Vector3(0.8 * Math.sin(bearing), 0.9, 0.8 * Math.cos(bearing));
+  let time = 0, turned = NaN, most = 0;
+  const held = new Quaternion();
+  play(function* () {
+    yield* parallel('all', lookAt(body, point), function* () {
+      yield* wait(() => time > 1.5);
+      turned = time;
+      yield* walkTo(body, body.position.clone(), { face: bearing });
+    }());
+  }, [body], 3, (t) => {
+    time = t;
+    const head = new Quaternion().copy(poseOf(body).rotation(INDEX.head));
+    if (Number.isNaN(turned)) held.copy(head);
+    else if (t < turned + 0.8) most = Math.max(most, head.angleTo(held));
+  });
+  expect(body.facing).toBeCloseTo(bearing, 1);
+  expect(most * 180 / Math.PI).toBeLessThan(3);
+  expect(body.log).toEqual([]);
 });
 
 it("follows a function that gives a body: its eyes, then the next body's as the focus changes", () => {

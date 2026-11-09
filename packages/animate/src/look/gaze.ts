@@ -93,17 +93,15 @@ export function looking(self: Self, target: (f: Frame) => Readonly<Vector3>, { m
     const local = _line.copy(d).applyQuaternion(_rel.copy(turned).invert());
     const down = Math.max(0, Math.atan2(-local.y, Math.hypot(local.x, local.z)));
     const effort = Math.min(1, down / (gazer.pitch ?? Infinity));
-    const worldDown = pitchAlong(d, facing);
+    // (the line's pitch in the world read in the plane the head turns into for it, not the trunk's: there a line 45° aside, pitched 41°
+    // down, reads 51°, so the trunk turning toward it beneath a steady look read as the line rising, the eyes gave it up and the head
+    // pitched down for them — 4° in four sub-steps untying the knot, its yaw falling back 2° as the eyes, less pitched, took more aside)
+    const declination = (line: Vector3) => pitchAlong(line, lineHeading(line.normalize(), facing));
     const resting = Math.min(gazer.range.down, Math.max(EYES * down * effort, gazer.range.down * effort ** 2));
-    if (jumped || !seen || !aimed) eyes.sight(worldDown, resting);
-    else eyes.step(f.dt, worldDown, pitchAlong(_line.subVectors(aimed, origin), facing), resting, shift >= SETTLED);
+    if (jumped || !seen || !aimed) eyes.sight(declination(_line.copy(d)), resting);
+    else eyes.step(f.dt, declination(_line.copy(d)), declination(_line.subVectors(aimed, origin)), resting, shift >= SETTLED);
     (aimed ??= new Vector3()).copy(point);
-    const way = (line: Vector3) => {
-      // (as far as the line itself has a heading: one passing straight down under the eyes swings its heading round in a moment, and
-      // the eyes' own pitch, reset at each new sight, would make it jump too: judged by either, a squat over a box snapped the head ~450°/s)
-      const vertical = MathUtils.smoothstep(Math.hypot(line.x, line.z), 0.1, 0.35);
-      upright(line, facing + wrapAngle(Math.atan2(line.x, line.z) - facing) * vertical, _whole).multiply(_p.setFromAxisAngle(X, -eyes.value));
-    };
+    const way = (line: Vector3) => upright(line, lineHeading(line, facing), _whole).multiply(_p.setFromAxisAngle(X, -eyes.value));
     way(d);
     const last = bones[bones.length - 1];
     const was = _was.copy(self.headOffset.rotation(f.prev, last));
@@ -306,6 +304,14 @@ function unwrapped(v: Vector3): Vector3 {
 
 /** how far `line` points down (rad, + down) in the vertical plane turned `yaw`, past straight down for a line behind it */
 const pitchAlong = (line: Vector3, yaw: number) => Math.atan2(-line.y, line.x * Math.sin(yaw) + line.z * Math.cos(yaw));
+
+/** the heading a head turns to to look along `line` (unit) from a trunk facing `facing`: the line's own, as far as it has one — one passing
+ * straight down under the eyes swings its heading round in a moment, and the eyes' own pitch, reset at each new sight, would make it
+ * jump too: judged by either, a squat over a box snapped the head ~450°/s */
+function lineHeading(line: Vector3, facing: number): number {
+  const vertical = MathUtils.smoothstep(Math.hypot(line.x, line.z), 0.1, 0.35);
+  return facing + wrapAngle(Math.atan2(line.x, line.z) - facing) * vertical;
+}
 
 /** looking along `d` (unit) unrolled: turned `yaw` about the vertical and pitched in that plane (`pitchAlong`), into `out`. Where the yaw
  * eased off `d`'s heading (nearly straight up or down) the eyes take the little left aside: turned the least way onto `d` instead, the
