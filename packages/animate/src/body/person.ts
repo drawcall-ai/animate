@@ -31,6 +31,7 @@ import { handStep, HOLD, placeArm } from '../hands/person/arms';
 import { armClear } from '../hands/person/trunk';
 import { hanging } from '../hands/person/hang';
 import { steadied } from '../hands/person/take';
+import { padOff } from '../hands/person/press';
 import { lookAround } from '../look/around';
 import type { Floor } from '../legs/floor';
 import type { ArmPosture } from '../kernel/poise';
@@ -105,6 +106,7 @@ export class Person extends Self {
         if (f.dev) checkTaking(this, f, taking);
         move(this, f, this.carrying);
         if (f.dev) checkHeld(this, f, noted);
+        if (f.dev) checkSettled(this, f);
         this.carrying.clear();
         bear(this, f, this.worn, this.borne);
       },
@@ -173,6 +175,19 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
     f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where: `${hold.thing.object.name} ${side}` });
   }
 }
+
+/** a pad its facing fixes off its grip, said once its turn is made up: the grab it closed still took hold (`FIXED_OFF`) */
+function checkSettled(person: Person, f: Frame): void {
+  for (const side of SIDES) {
+    const hold = person.holding[side];
+    if (!hold?.point || hold.settles === undefined || f.time < hold.settles) continue;
+    hold.settles = undefined;
+    const value = padOff(person, { side, thing: hold.thing, grip: hold.grip, point: hold.point }, f), limit = FIXED_OFF * person.scale;
+    if (value > limit) f.dev?.append(f.time, { check: 'a fingertip closed off its grip (m)', value, limit, where: `${hold.thing.object.name} ${side} ${hold.grip}` });
+  }
+}
+/** Tuned: how far off its grip a pad its facing fixes may stay unsaid (m, default body): a fingertip's breadth */
+const FIXED_OFF = 0.01;
 
 /** Start relaxed on `floor` at `at` (its x and z), facing `yaw`, with flat feet each on the floor under it and the pelvis within standing reach. */
 function relaxed(proportions: Proportions, pose: Pose, floor: Floor, at: Vector3, yaw: number): Pose {

@@ -62,7 +62,7 @@ export function touching(person: Reacher, take: Taking, f: Frame): boolean {
 }
 
 /** how far (m) `take`'s pad is off its empty, each as it last stood */
-export function padOff(person: Reacher, take: Taking, f: Frame): number {
+export function padOff(person: Reacher, take: Pick<Taking, 'side' | 'thing' | 'grip' | 'point'>, f: Frame): number {
   const bone = person.hands[take.side], pad = _pad.copy(take.point.at).applyQuaternion(f.prev.rotation(bone)).add(f.prev.position(bone));
   const { position, quaternion } = person.track(take.thing.object).at(f.time).prev;
   return pad.distanceTo(_empty.copy(take.thing.grip(take.grip).at.position).applyQuaternion(quaternion).add(position));

@@ -118,16 +118,21 @@ describe('a hand on what a grip declares', () => {
     expect(body.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: expect.stringContaining('a fingertip still off its grip') })]));
   });
 
-  it('says so when a facing fixes its pad off its grip', () => {
+  it.each([
+    ['says so when its facing leaves it off', [0.28, 1.02, 0.3], [0, 0, -1], true],
+    ['says nothing when its turn brings it on', [0.2, 1.1, 0.35], [0, -1, 0], false],
+  ] as const)('a pad a facing fixes %s', (_, at, facing, off) => {
     const { body, room, rod, grip, gap } = rodBefore('thumb', 0.01);
     delete rod.userData.mass;
-    grip.userData.facing = [0, 0, -1];
+    rod.position.set(at[0], at[1], at[2]);
+    grip.position.set(-0.01, 0, 0);
+    grip.userData.facing = [...facing];
     room.updateMatrixWorld(true);
-    let took: boolean | null = null;
-    play(function* () { took = yield* grab(body, rod, { left: 'grip' }, { step: false }); }, [body], 14, () => took !== null);
+    let took = false;
+    play(function* () { took = yield* grab(body, rod, { left: 'grip' }, { step: false }); yield* wait(1); }, [body], 14);
     expect(took).toBe(true);
-    expect(gap()).toBeGreaterThan(0.01);
-    expect(body.log).toEqual(expect.arrayContaining([expect.objectContaining({ check: 'a fingertip closed off its grip (m)' })]));
+    expect(gap() > 0.01).toBe(off);
+    expect(body.log.some(({ check }) => check === 'a fingertip closed off its grip (m)')).toBe(off);
   });
 
   it('regrips a plain grip about the point it took, turning the thing with that point still on its grip until it is seated', () => {

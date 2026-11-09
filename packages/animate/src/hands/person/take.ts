@@ -135,7 +135,7 @@ export function holdOn(person: Reacher, take: Taking): Hold {
   const { position, quaternion } = handOn(take.point, take.placement), began = person.frame.time, from = turnIn(person, take.side, take.thing, new Quaternion());
   const turn = new Quaternion();
   const goal = { position, get quaternion() { return turn.slerpQuaternions(from, quaternion, smoothstep(0, SETTLING, person.frame.time - began)); } };
-  return { ...held, goal };
+  return { ...held, goal, settles: take.thing.grip(take.grip).point !== 'palm' ? began + SETTLING : undefined };
 }
 
 /** where `side`'s hand holding `hold` goes on its thing while the thing is held by more than the hand (worn, on another body, resting):

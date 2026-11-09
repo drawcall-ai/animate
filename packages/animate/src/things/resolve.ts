@@ -33,6 +33,8 @@ export interface Hold {
   goal: Goal;
   placement?: HandPlacement;
   point?: HandPoint;
+  /** when a pad a facing fixes has had its turn made up, and whether it came onto its grip is yet to be read (s) */
+  settles?: number;
   keep?: (f: Frame) => void;
 }
 
