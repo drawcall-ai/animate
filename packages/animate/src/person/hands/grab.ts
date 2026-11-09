@@ -152,7 +152,6 @@ export function holdingAtOnce(person: Person, request: Request, thing: Thing, na
   f.current.setLocal(INDEX.chest, spine);
   person.startAs([INDEX.spine, INDEX.chest]);
   posed();
-  bear(person, f, [], person.borne);
   person.startAs(takes.map((take) => person.hands[take.side]));
   const guide = guidesFor(person, thing, CARRYING, false)();
   for (const { hold, move } of handsHolding(person, thing, guide, place)) hold.idle = (at) => {
