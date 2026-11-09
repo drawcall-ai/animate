@@ -15,7 +15,7 @@ import { HORSE } from '../../skills/animate/references/horse';
 import { DOG } from '../../skills/animate/references/dog';
 import { droid } from '../skeletons/droid';
 import { worldOf } from '../things';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 /** `bone`'s turn in `posed` off its turn in `still` (in its own frame, as yaw, pitch and roll: Euler YXZ) */
 function off(posed: Body, still: Body, bone: number): Euler {

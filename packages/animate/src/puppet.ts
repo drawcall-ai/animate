@@ -1,5 +1,5 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
-import { poseOf, selfOf, type Body } from './body/body';
+import { selfOf, type Body } from './body/body';
 import { personOf } from './body/person';
 import type { Self } from './body/runtime';
 import type { HandPlacement } from './fingers/placement';
@@ -9,8 +9,7 @@ import { Thing } from './things/thing';
 
 // For a body its app poses itself, its update stopped (what no verb does: sitting, climbing): where its hands go, and how its fingers shape.
 
-export { poseOf };
-export type { HandPlacement, HandShape };
+export type { HandPlacement };
 
 /**
  * The placement hand `side` takes the grip `empty` by (its thing the empty's parent): what the grip leaves free fixed as a grab fixes it,

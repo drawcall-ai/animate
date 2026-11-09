@@ -11,7 +11,7 @@ import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
 import { HORSE, PERSON } from '../src/skeletons';
 import { legsHorse, scripted, type Route } from '../src/scenarios/legs';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 // The legs on scripted roots: a person and two horses (walk, trot) carried along a straight, a bend and a stop by the scene.
 

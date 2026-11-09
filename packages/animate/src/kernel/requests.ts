@@ -43,6 +43,8 @@ export class Request {
   outcome: 'running' | 'met' | 'failed' = 'running';
   /** what it failed of, once it has */
   miss: Miss | null = null;
+  /** what its staging threw (a misuse), for its story's step to throw: its staging has stopped */
+  error: Error | null = null;
   /** its goal's measure now, as a story's `until` ends it: whether what it moves is there, within the verb's tolerance */
   there: (() => boolean) | null = null;
   /** an aimer no `until` ends: it never ends of itself */
@@ -84,8 +86,18 @@ export class Request {
 
   /** its staging, a sub-step on (made on its first) */
   stage(f: Frame): void {
+    if (this.error) return;
     this.clock.delta = f.dt;
-    (this.runner ??= new TimelineRunner(this.staging(this))).step(f, this.clock);
+    try {
+      (this.runner ??= new TimelineRunner(this.staging(this))).step(f, this.clock);
+    } catch (cause) {
+      // (a request of the body's own has no story to say it)
+      if (this.owned) throw cause;
+      this.error = new Error(`${this.label}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+      this.outcome = 'failed';
+      this.end();
+      return;
+    }
     this.clock.prevDelta = f.dt;
     this.clock.frame++;
     if (this.runner.finished && this.outcome === 'running') this.outcome = 'met';

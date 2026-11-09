@@ -11,7 +11,7 @@ import { xcomOfPoses, hullOf, outside } from '../../src/legs/support';
 import { footprint } from '../../src/legs/person/foot';
 import type { Person } from '../../src/body/person';
 import { insides, person, play, run } from '../bodies';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 /** a flight of `count` steps up along +z from `start`, each `rise` high and `tread` deep, flat on top (the throne room's: 5 × 0.2 on 0.45) */
 const stairs = (start: number, count: number, rise: number, tread: number) => (_x: number, z: number) =>

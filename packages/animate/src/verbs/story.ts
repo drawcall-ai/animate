@@ -37,8 +37,9 @@ export class Missed extends Error {
 }
 
 /**
- * Runs `verb` (or a `parallel` of them) and returns the `Missed` it threw, or `null` if it ended without one; anything else it throws goes
- * on up. For where a miss is an ordinary outcome of the story: `const miss = yield* attempt(grab(…)); if (miss) …`.
+ * Runs `verb` (or a `parallel` of them) and returns the `Missed` it threw, or `null` if it ended without one, discarding what it returned
+ * (so a `false` from its own `until` reads `null`); anything else it throws goes on up. For where a miss is an ordinary outcome of the
+ * story: `const miss = yield* attempt(grab(…)); if (miss) …`. `release` is no verb: its `Missed` is thrown at the call, for a `try`.
  */
 export function* attempt(verb: Generator<TimelineYield<unknown>, unknown, unknown>): Generator<TimelineYield<unknown>, Missed | null, unknown> {
   try {
@@ -62,41 +63,48 @@ export class Call {
   }
 }
 
-/**
- * A verb's request on `body`, filed when the story reaches it and kept until it ends (its `finally` runs on a race's cancel too). It ends
- * `true` once its staging has met its goal and throws `Missed` once that staging fails; given `until`, it ends on that, `true` if its
- * goal's measure (`Request.there`) holds at that instant and `false` if not, a failure meanwhile only followed on — but one it `gives up`
- * on (a walk's stall, a carry's) still throws. Each frame the story steps it renews the request. An aimer ends only on `until`, `true`,
- * or if `ending` (a `hold`), on its goal.
- */
-export function verb(body: Body, name: string, staging: Staging, until?: Until, aimer = false, givesUp = false, ending = false): Verb {
-  const self = selfOf(body), call = new Call(name, self.time);
-  self.unyielded.add(call);
-  return run(self, call, staging, until, aimer, givesUp, ending);
+/** How a verb ends. */
+interface Ending {
+  /** the story's own end for it */
+  until?: Until;
+  /** it keeps on at its goal rather than moving something somewhere: it ends only when told, and then `true` */
+  aimer?: boolean;
+  /** an aimer told by its staging as well (a pose's `hold`): it does end without `until` */
+  meets?: boolean;
 }
 
-function* run(self: Self, call: Call, staging: Staging, until: Until | undefined, aimer: boolean, givesUp: boolean, ending: boolean): Verb {
+/**
+ * A verb's request on `body`, filed when the story reaches it and kept until it ends (its `finally` runs on a race's cancel too). It ends
+ * `true` once its staging has met its goal; given `until`, it ends on that, `true` if its goal's measure (`Request.there`) holds at that
+ * instant and `false` if not. A failure throws `Missed`, and what its staging threw is thrown, in the story's step: `until` or not, once,
+ * where a `try` round the `yield*` takes it. Each frame the story steps it renews the request.
+ */
+export function verb(body: Body, name: string, staging: Staging, ending: Ending = {}): Verb {
+  const self = selfOf(body), call = new Call(name, self.time);
+  self.unyielded.add(call);
+  return run(self, call, staging, ending);
+}
+
+function* run(self: Self, call: Call, staging: Staging, { until, aimer = false, meets = false }: Ending): Verb {
   self.unyielded.delete(call);
-  const request = self.file(call.verb, () => call.site, staging, aimer), ends = endsOf(until);
-  request.endless = aimer && until === undefined && !ending;
-  const missed = () => request.miss && (!ends || givesUp) ? request.miss : null;
+  const ends = until === undefined ? null : endsOf(until), request = self.file(call.verb, () => call.site, staging, aimer);
+  request.endless = aimer && !ends && !meets;
   try {
     yield (_state, clock) => {
       request.renewed = self.time;
-      if (missed()) return 'finished';
+      if (request.error || request.miss) return 'finished';
       return (ends ? ends(clock.delta) : request.outcome === 'met') ? 'finished' : 'running';
     };
-    const miss = missed();
-    if (miss) throw new Missed(call.verb, request.site, miss);
+    if (request.error) throw request.error;
+    if (request.miss) throw new Missed(call.verb, request.site, request.miss);
     return !ends || aimer || (request.there?.() ?? false);
   } finally {
     self.drop(request);
   }
 }
 
-/** a condition over the story's frames (their deltas, s) for `until`; none: the verb's own goal decides */
-function endsOf(until: Until | undefined): ((delta: number) => boolean) | null {
-  if (until === undefined) return null;
+/** a condition over the story's frames (their deltas, s) */
+function endsOf(until: Until): (delta: number) => boolean {
   if (typeof until === 'function') return until;
   if (!(until >= 0)) throw new Error(`until ${until}: give seconds, a condition or Infinity`);
   let elapsed = 0;
@@ -110,7 +118,6 @@ function endsOf(until: Until | undefined): ((delta: number) => boolean) | null {
 /** Waits until `until`: this many seconds of the story's time, or a condition. */
 export function* wait(until: Until): Generator<TimelineYield<unknown>, true, unknown> {
   const ends = endsOf(until);
-  if (!ends) throw new Error('wait: give seconds, a condition or Infinity');
   yield* action({ until: (_state, clock) => ends(clock.delta) });
   return true;
 }

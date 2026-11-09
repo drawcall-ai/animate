@@ -5,25 +5,23 @@ export interface Problem {
   limit: number;
   /** the bone, thing or other place the problem is at */
   where: string;
-  /** what was seen, said for a reader: what limited it and by how much (a check is matched by `check` and `where`, not this) */
-  detail?: string;
 }
 
-/** One row of a body's log: one check while one set of verbs ran, however many sub-steps it went wrong in. */
-export interface LogEntry {
-  check: string;
-  /** where it was worst (a bone, a foot) */
-  where: string;
+/**
+ * One row of a body's log: one check at one place while one set of verbs ran. A row says a sub-step of motion broke a limit set as a guard
+ * against visible faults, not that a verb failed (those throw `Missed`): a `worst` marginally over `limit` for a few sub-steps (`count`) is
+ * rarely visible, so judge it by eye and move on; one well over, or for many sub-steps, is usually a story asking too much of that part
+ * (`beat` says which verb): ask less, or more slowly.
+ */
+export interface LogEntry extends Omit<Problem, 'value'> {
   /** its worst value, in the check's units */
   worst: number;
-  limit: number;
   /** how many sub-steps it went wrong in */
   count: number;
   /** when it first went wrong (the body's time, s) */
   time: number;
   /** the verbs running then, each with where the story asked for it */
   beat?: string;
-  detail?: string;
 }
 
 /** One body's development log. Absent entirely when dev is off. */
@@ -33,17 +31,16 @@ export class Dev {
   beat?: string;
   private readonly rows = new Map<string, LogEntry>();
 
-  append(time: number, { check, value, limit, where, detail }: Problem): void {
-    const key = `${check}\n${this.beat ?? ''}`, row = this.rows.get(key);
+  append(time: number, { check, value, limit, where }: Problem): void {
+    const key = `${check}\n${where}\n${this.beat ?? ''}`, row = this.rows.get(key);
     if (!row) {
-      const made: LogEntry = { check, where, worst: value, limit, count: 1, time, ...(this.beat === undefined ? {} : { beat: this.beat }), ...(detail === undefined ? {} : { detail }) };
+      const made: LogEntry = { check, where, worst: value, limit, count: 1, time, ...(this.beat === undefined ? {} : { beat: this.beat }) };
       this.rows.set(key, made);
       this.log.push(made);
       return;
     }
     row.count++;
-    if (Math.abs(value - limit) <= Math.abs(row.worst - row.limit)) return;
-    Object.assign(row, { worst: value, where, limit, detail });
+    if (Math.abs(value - limit) > Math.abs(row.worst - row.limit)) Object.assign(row, { worst: value, limit });
   }
 }
 

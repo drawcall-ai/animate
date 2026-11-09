@@ -11,7 +11,7 @@ import { Actor } from './actor';
 import { segmentDistance } from './clearance';
 import { headShift, SHIFT_BOUNDS, spin } from './gaze';
 import { cases } from '../../../packages/animate/test/open';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 // Recalled conservative human radii, as shares of stature: the head round its centre, the trunk (hips–chest), the thorax (chest–neck,
 // test/clearance.ts's capsule), a thigh or shank.

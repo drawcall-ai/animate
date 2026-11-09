@@ -2,7 +2,7 @@ import { Object3D, Vector3 } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { floorAt } from './hall';
 import { arriving, lookAt, pose, reach, walkTo, type Body, type Verb } from '@drawcall/animate';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 // The small, character-defining gestures of the medal moment, each a story function on one body (and whom it is for).
 // Each is a gaze (`lookAt`: where the eyes go, its `roll` and `pitch` tipping the head as it looks) beside a `pose`: trunk and head angles

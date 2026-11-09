@@ -5,7 +5,7 @@ import { Body, humanoid, lookAt } from '@drawcall/animate';
 import { OUTLIER, PERSON, SOLDIER } from '../src/skeletons';
 import { FIXED_DT } from '../src/scenario';
 import { headShift, SHIFT_BOUNDS } from './gaze';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 // A person's gaze shift from up on its left to down on its right, as people shift gaze: one movement, the head's speed a single bell
 // within its main sequence, never turning back, and upright on the way (`SHIFT_BOUNDS`) — on the default body and skeletons unlike it.

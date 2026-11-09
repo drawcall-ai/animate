@@ -10,7 +10,7 @@ import { spinOf } from '../../src/kernel/rotation';
 import { ChainTip, reached } from '../../src/kernel/tip';
 import { claim, dt } from '../bodies';
 import { turn } from './rigs';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 /** a free root at (0, 1, 0) with a leg hanging down −y: a ball-jointed thigh, a knee bending back (+x), a foot */
 const LEG = [

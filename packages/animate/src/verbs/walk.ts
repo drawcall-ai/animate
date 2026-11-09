@@ -75,11 +75,13 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
     // (given `until`, it follows its target, however it moves, until then — or it stalls short of one standing still)
     if (until !== undefined) yield* during(request, 'go', 'asked', step, () => walk.stall !== null);
     else yield* during(request, 'go', 'asked', step, (f, _, time) => time > 0 && (walk.arrived(f) || walk.stall !== null));
-    if (walk.stall) request.fail(walk.stall);
+    // (the legs taken by a newer verb are why it got no nearer, whatever it looked like from here)
+    const over = self.owner('go')?.request;
+    if (walk.stall) request.fail(over && over !== request ? { ...walk.stall, why: `${over.label} took the legs from it` } : walk.stall);
     else request.met();
     // (there, the legs are its, standing, till its story moves on)
     yield* during(request, 'go', 'asked', () => {});
-  }, until, false, true);
+  }, { until });
 }
 
 /**

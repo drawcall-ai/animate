@@ -9,7 +9,7 @@ import { resolve } from '../src/things/resolve';
 import { PERSON } from '../skills/animate/references/person';
 import { HORSE } from '../skills/animate/references/horse';
 import { DOG } from '../skills/animate/references/dog';
-import { poseOf } from '../src/puppet';
+import { poseOf } from '../src/index';
 
 describe('a body', () => {
   it('steps in fixed sub-steps whatever its frames: jittered frames give what fixed ones do', () => {

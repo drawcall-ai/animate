@@ -1,5 +1,4 @@
 // Absolute model-space positions in metres: +Y up, +Z forward, +X left.
-import type { SkeletonBone } from '@drawcall/rig';
 
 /**
  * A warmblood of 1.60 m at the withers (16 hands), standing square : the trunk on the spine under the saddle,
@@ -37,4 +36,4 @@ export const HORSE = [
   { name: 'leftEar', parent: 'head', position: [0.06, 1.82, 1.25] },
   { name: 'rightEar', parent: 'head', position: [-0.06, 1.82, 1.25] },
   { name: 'tail', parent: 'pelvis', position: [0, 1.43, -0.79] },
-] as const satisfies readonly SkeletonBone[];
+] as const;

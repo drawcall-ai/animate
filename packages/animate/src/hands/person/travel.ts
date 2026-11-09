@@ -1,4 +1,5 @@
 import { Quaternion, Vector3 } from 'three';
+import type { Placement } from '../../kernel/goal';
 import { parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { Carrier } from '../../kernel/carrier';
@@ -102,7 +103,7 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
     dip = 0.08 * load * Math.min(1, Math.max(0, goal.y - from) / 0.1);
     // (an end that sets a turn is arrived at turned too, not on its place alone — or, once late, on its place however it is turned)
     const turnedOff = turns(f) ? carrier.current.quaternion.angleTo(guide.goal.quaternion) : 0;
-    const short = carrier.current.position.distanceTo(goal), close = short <= STALL.close && turnedOff <= STALL.turn;
+    const short = carrier.current.position.distanceTo(goal), close = closeOn(carrier.current, goal, turns(f) ? guide.goal.quaternion : undefined);
     // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it (`SEATS`), a thing in one hand is
     // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it)
     const side = seating(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
@@ -155,11 +156,18 @@ export function* travel(person: Reacher, request: Request, thing: Thing, waypoin
 function limits(person: Reacher, thing: Thing, guide: Guide): string {
   const goal = guide.goal;
   return Object.entries(person.holding).flatMap(([side, hold]) => hold?.thing === thing
-    ? [`${side} hand ${limitOf(person, sideOf(side))(_g.copy(hold.goal.position).applyQuaternion(goal.quaternion).add(goal.position))}`] : []).join('; ');
+    ? [`${side} hand ${limitOf(person, sideOf(side))(_g.copy(hold.goal.position).applyQuaternion(goal.quaternion).add(goal.position))}`] : []).join('; ')
+    || 'no hand holds it any more: it was let go during the carry';
 }
 
 /** why a carried thing its own body holds off its end is not there */
-const inTheWay = (guide: Guide) => `its own trunk and head hold it ${cm(guide.off)} cm off its end: the body stands too near it, so stand back or choose a target clear of it`;
+const inTheWay = (guide: Guide) => guide.clear === 'head'
+  ? `the head's clearance holds it ${cm(guide.off)} cm off its end: a thing brought to the face stops clear of it, so choose a target clear of the head`
+  : `its own trunk and head hold it ${cm(guide.off)} cm off its end: the body stands too near it, so stand back or choose a target clear of it`;
+
+/** whether a carried thing is on a place, as near as a hand's joints leave it (`STALL.close`), and turned as it is if it sets a turn */
+export const closeOn = (at: Placement, position: Vector3, quaternion?: Quaternion) =>
+  at.position.distanceTo(position) <= STALL.close && (!quaternion || at.quaternion.angleTo(quaternion) <= STALL.turn);
 
 const cm = (m: number) => (100 * m).toFixed(1);
 

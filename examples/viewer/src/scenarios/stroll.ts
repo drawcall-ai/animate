@@ -1,7 +1,7 @@
 import { Group, MathUtils, Vector3 } from 'three';
 import { walkTo } from '@drawcall/animate';
 import type { Person, Scenario } from '../scenario';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 /** the point's pace (m/s), and the body's top speed */
 const PACE = 1.3;

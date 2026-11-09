@@ -38,10 +38,10 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
     }
     if (on) self.meet(on);
     if (on && on !== self) checkShared(on, held, named);
-    for (const { grip } of named) checkGrip(held.grip(grip).node);
+    for (const { grip } of named) checkGrip(self, held, held.grip(grip).node);
     request.there = () => named.every(({ hand, grip }) => self.holding[hand]?.thing === held && self.holding[hand]?.grip === grip);
     yield* self.handling.take(request, held, named, options);
-  }, options.until);
+  }, { until: options.until });
 }
 
 /** a grip another body's hand holds: two hands cannot be on one spot (a hand-over gives the taker grips of its own) */
@@ -53,12 +53,15 @@ function checkShared(holder: Holder, thing: Thing, named: readonly { hand: strin
   }
 }
 
-/** what an empty held by a hand may carry: what a grip asks, what a thing takes (held by its origin), what a carry's end takes, what a model's loader leaves */
+/** what a grip reads: what a grip asks, what its hand's way to it asks, what a carry's end takes, what a model's loader leaves */
 const GRIP_KEYS = new Set(['handle', 'facing', 'radius', 'length', 'point', 'digits', 'mass', 'centre', 'approach', 'speed', 'name', 'gltfExtensions']);
 
-/** a grip's world scale must be uniform: else it has no one turn a hand can take */
-function checkGrip(node: Object3D): void {
-  for (const key of Object.keys(node.userData)) if (!GRIP_KEYS.has(key)) throw new Error(`grab: grip "${node.name}" has userData.${key}: a grip takes handle, facing, radius, length, point and digits (\`grip\`; keep data of your own on another object)`);
+/** a key on an empty that no grip reads may be a typo, or an artist's extras or data of the app's: said once. A grip's world scale must be
+ * uniform: else it has no one turn a hand can take. (A thing gripped by its own name is the app's own object, its data its own.) */
+function checkGrip(self: Holder & { warn(check: string, message: string): void }, thing: Thing, node: Object3D): void {
+  if (node !== thing.object) for (const key of Object.keys(node.userData)) {
+    if (!GRIP_KEYS.has(key)) self.warn(`grip key ${key}`, `grip "${node.name}" has userData.${key}, which nothing reads: a grip takes handle, facing, radius, length, point, digits, approach and speed (\`grip\`). A typo?`);
+  }
   node.updateWorldMatrix(true, false);
   const scale = new Vector3().setFromMatrixScale(node.matrixWorld), spread = Math.max(scale.x, scale.y, scale.z) / Math.min(scale.x, scale.y, scale.z) - 1;
   if (spread > 1e-6) throw new Error(`grab: grip "${node.name}" has a non-uniform world scale, so no one turn a hand can take: scale it evenly`);

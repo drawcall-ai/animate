@@ -59,5 +59,5 @@ export function track(body: Body, tracked: Tracked, options: { until?: Until } =
       }));
     }
     yield* parallel('all', ...branches);
-  }, options.until, true);
+  }, { until: options.until, aimer: true });
 }

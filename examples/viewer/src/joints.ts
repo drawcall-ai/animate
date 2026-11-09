@@ -1,7 +1,7 @@
 import { Matrix4, Vector3, type Object3D } from 'three';
 import type { HumanoidBone } from '@drawcall/animate';
 import type { Person } from './scenario';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 /** the points on a person that are not bones: on its head and its feet */
 export type Landmark = 'nose' | 'headTop' | 'leftEye' | 'rightEye' | 'leftEar' | 'rightEar' | 'leftHeel' | 'rightHeel' | 'leftBigToe' | 'rightBigToe' | 'leftSmallToe' | 'rightSmallToe';

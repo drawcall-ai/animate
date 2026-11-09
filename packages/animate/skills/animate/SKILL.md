@@ -7,9 +7,11 @@ description: Write or review code that moves bodies with @drawcall/animate (`Bod
 
 A story is a generator on the app's `runTimeline` from @pmndrs/timeline; advance it before updating each body. The body supplies idle motion and balance, so a pause usually needs only `wait`. Units are metres, seconds and radians; +Y is up, +Z forward, +X the body's left. Each verb's doc comment has its options and exact behaviour; this skill covers which to reach for and how they combine.
 
+Your app and this library must share one copy of three; a second copy breaks every `instanceof`, and the first target or `Body` built from it throws saying so.
+
 A verb does nothing until `yield*`ed. A mover (`walkTo`, `reach`, `grab`, `carry`, `throwAt`) ends when its goal is met. An aimer (`lookAt`, `track`, `pose`) never ends by itself, so `yield*` one alone runs for ever: race it or give it `until`, and give a `pose` that should end once it has come a `hold`.
 
-A verb returns `true` when what it moved stands there within its tolerance as it ends (an aimer when it ends), and `false` only when your own `until` cut a mover short: nothing has gone wrong. When it cannot get there it throws `Missed`, whose message says where it stopped and what to change. That reaches your `update` once and ends the story, so where a miss is an ordinary turn of events, take it with `attempt` and go on:
+A verb returns `true` when what it moved stands there within its tolerance as it ends (an aimer when it ends), and `false` only when your own `until` cut a mover short: nothing has gone wrong. When it cannot get there it throws `Missed`, `until` or not, whose message says where it stopped and what to change. That reaches your `update` once and ends the story, so where a miss is an ordinary turn of events, take it with `attempt` and go on (`attempt` discards the verb's return, so a `false` reads as `null`; `release` is no verb, and throws its `Missed` at the call, so take that with `try`):
 
 ```ts
 import { attempt, grab, type Body, type Verb } from '@drawcall/animate';
@@ -100,7 +102,7 @@ function* crouchAndLook(body: Body, look: () => Verb): Verb {
 }
 ```
 
-Check a story with `play`: a story still running at its `limit` throws, naming each verb running and where it was called. Make bodies with `dev: true` while you work and read `body.log` after it: one row per motion check and call site (balance, feet, joint speed), each with its worst value. It holds what a step of motion got wrong, not failures, which throw whether dev is on or not. An app with dev on only in development has it off in its tests, so pass it there. A verb called but never `yield*`ed, and a fallback the body took, are said once on the console. `body.owners` shows who holds each part, but empties once a race ends, so signal moments from the beat after the verb.
+Check a story with `play`: a story still running at its `limit` throws, naming each verb running and where it was called. Make bodies with `dev: true` while you work and read `body.log` after it: one row per motion check, place and running verbs (balance, feet, joint speed), each with its worst value. It holds what a step of motion got wrong, not failures, which throw whether dev is on or not. A row marginally over its `limit` for a few sub-steps (`count`) is rarely visible: watch it and move on. One well over, or for many, usually means the verb in its `beat` asks too much of that part: ask less, or more slowly. An app with dev on only in development has it off in its tests, so pass it there. A verb called but never `yield*`ed, and a fallback the body took, are said once on the console. `body.owners` shows who holds each part, but empties once a race ends, so signal moments from the beat after the verb.
 
 ## Overlapping
 
@@ -136,7 +138,7 @@ A carry's or reach's hold ends with the verb: after it the thing rides the hand 
 
 ### Bringing something to the face
 
-`carry` puts the thing's origin at the target, turned as the target is, so to bring one point of it (a rim) somewhere, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A carry stops about 7 cm clear of the face by design and returns `true`, and a head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
+`carry` puts the thing's origin at the target, turned as the target is, so to bring one point of it (a rim) somewhere, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A thing brought to the face stops clear of it, and a target nearer than that misses, naming the clearance. An 8 × 10 cm cup tilted 0.9 rad comes no nearer than its rim 12 cm before the nose, level 20 cm; a smaller thing comes nearer. A head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
 
 ```ts
 import { Object3D, Quaternion, Vector3 } from 'three';
@@ -146,7 +148,7 @@ function* sip(body: Body, cup: Object3D, rim: Object3D): Verb {
   const tilt = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.9), head = body.species.person!.head;
   const lips = new Object3D();
   lips.quaternion.copy(tilt);
-  lips.position.set(0, head.nose.y - 0.03, head.nose.z).sub(rim.position.clone().applyQuaternion(tilt));
+  lips.position.set(0, head.nose.y - 0.03, head.nose.z + 0.13).sub(rim.position.clone().applyQuaternion(tilt));
   body.bones.head.add(lips);
   const done = yield* carry(body, cup, lips);
   lips.removeFromParent();
@@ -156,7 +158,7 @@ function* sip(body: Body, cup: Object3D, rim: Object3D): Verb {
 
 ## Walking and running
 
-A person does not run from a story: `walkTo` tops out near 1.9 m/s whatever `speed` you ask, and asking 2 to 4 m/s logs balance problems. A person runs under `drive`. `speed` is a ceiling on any body, reached only with room to speed up, so check `body.velocity`: a dog asked for 4 m/s peaks under 1 m/s on a 6.5 m dash. Raising `accel` alongside helps only sometimes.
+A person does not run from a story: `walkTo` tops out near 1.9 m/s whatever `speed` you ask, and asking 2 to 4 m/s logs balance problems. A person runs under `drive`. `speed` is a ceiling on any body, reached only with room to speed up, so check `body.velocity`: a dog asked for 4 m/s peaks near 2.3 m/s on a 6.5 m dash. Raising `accel` alongside helps only sometimes.
 
 Bodies of different sizes walk at different paces; to move together give each the same `speed`. To hold a formation, walk followers to targets in their own lanes, ending when the leader arrives, with a little speed in hand and starting near their lanes, since a lane target behind a follower turns it round. To lead a horse, take the rope first: a tether limits its head's reach but does not make it follow.
 
@@ -166,7 +168,7 @@ A stage or stairs is the `floor` function, the same for every body on the set; w
 
 ## Skeletons and species
 
-A bare body and a skinned body use the same skeleton. To skin a mesh, follow the installed `@drawcall/rig` package's skill, and pass the rigged scene as `model` and the skin report as `mass`. A humanoid's bones take the `HumanoidBone` names whatever a rig guide suggests. Skeletons face +Z in metres at real size, since sizes set strides and reach. The [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) are starting points; another height is the person's positions scaled. Bodies that start together read as copies: give each its own `life.seed`, and do not start identical walks on one frame. A person at attention takes `life: { steady: 1 }`.
+A bare body and a skinned body use the same skeleton. Only skinning a mesh needs `@drawcall/rig`; a bare body and the skeleton files here do not. To skin one, install it, follow its skill, and pass the rigged scene as `model` and the skin report as `mass`. A humanoid's bones take the `HumanoidBone` names whatever a rig guide suggests. Skeletons face +Z in metres at real size, since sizes set strides and reach. The [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) are starting points; another height is the person's positions scaled. Bodies that start together read as copies: give each its own `life.seed`, and do not start identical walks on one frame. A person at attention takes `life: { steady: 1 }`.
 
 For hair, tails and other swinging chains, spread the species and add `springs: { braid: { stiffness: 18, damping: 0.55, hang: [-2.2, 0, 0] as const } }`, keyed by an existing root bone; one setting covers the hierarchy below it. Skin hair standing clear of the body and give its root the `hang` turn it falls from. A person's springs keep out of its own head and trunk; nothing else collides.
 

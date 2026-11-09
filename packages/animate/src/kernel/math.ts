@@ -1,4 +1,4 @@
-import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 
 /** standard gravity (m/s²) */
 export const GRAVITY = 9.81;
@@ -106,4 +106,16 @@ export function bisect(clear: (value: number) => boolean, free: number, hit: num
     else hit = mid;
   }
   return free;
+}
+
+/**
+ * `value`, said at once if it comes from another copy of three than this library's: every `instanceof` here fails it, and bodies then miss
+ * things or crash with no word of why.
+ */
+export function sameThree<T>(value: T): T {
+  const made = value as { isVector3?: boolean; isObject3D?: boolean } | undefined;
+  if ((made?.isVector3 && !(value instanceof Vector3)) || (made?.isObject3D && !(value instanceof Object3D))) {
+    throw new Error('this value is from another copy of three than @drawcall/animate\'s: install one copy (`pnpm dedupe`, or alias `three` in your bundler)');
+  }
+  return value;
 }

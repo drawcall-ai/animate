@@ -7,7 +7,7 @@ import { DOG } from '../src/skeletons';
 import { dogFetch } from '../src/scenarios/dog';
 import { Simulation } from '../src/simulation';
 import { ball } from '../src/things';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 const DEG = Math.PI / 180, dt = 1 / 60;
 

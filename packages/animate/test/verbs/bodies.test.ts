@@ -7,7 +7,7 @@ import { gazeOff, insides, person, play } from '../bodies';
 import { DOG } from '../../skills/animate/references/dog';
 import { HORSE } from '../../skills/animate/references/horse';
 import { box, empty, roomOf, worldOf } from '../things';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 describe('bodies together', () => {
   // (XCoM past the feet for a sub-step or two: a facing turning fast brakes into the 50° it may stand off a planted foot, and the trunk jolts: 0.104 m at this life seed)

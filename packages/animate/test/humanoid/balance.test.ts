@@ -7,7 +7,7 @@ import { INDEX } from '../../src/species/humanoid/bones';
 import { heelOf } from '../../src/legs/person/foot';
 import { wrapAngle, yawOf } from '../../src/kernel/math';
 import { claim, dt, insides, person, play, run, feetOf } from '../bodies';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 describe('balance', () => {
   it('stands facing as it started on hips set ahead of its root, no lean to step under', () => {

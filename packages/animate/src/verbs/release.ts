@@ -33,7 +33,7 @@ export interface Released {
  * still moves it and give that motion to your physics. Hands named in `keep` (`{ left: true }`) keep hold of a thing put onto `onto`: it
  * rests there, moved with its place, and they follow it (a magazine let onto its place under the well, then pushed home by its parent).
  * Put onto an empty more than 5 mm off, it throws `Missed` with the thing let go where it is there, under the empty; onto an empty another
- * thing sits in, it throws at once: nothing lets go.
+ * thing sits in, it throws at once: nothing lets go. It is no verb: its `Missed` is thrown at the call, so `attempt` cannot take it; use `try`.
  */
 export function release<S extends AnySpecies>(body: Body<S>, thing: Object3D, onto?: Object3D, keep?: ByHand<S, true>): Released;
 export function release<S extends AnySpecies>(body: Body<S>, hands: ByHand<S, Object3D>): Released;

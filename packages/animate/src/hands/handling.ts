@@ -21,7 +21,7 @@ export interface HandOptions {
    * rising on its toes for the target as far as its arms and trunk allow, and misses if that is not far enough */
   step?: boolean;
   /** ends on this instead of arriving (`grab`: instead of holding), `true` if there as it ends, else `false`; a target that moves is
-   * followed until then */
+   * followed until then. What cannot get there still throws `Missed`: a hand off a target standing still, a carry held off its end */
   until?: Until;
 }
 

@@ -4,7 +4,7 @@ import { Body, humanoid } from '@drawcall/animate';
 import { Joints } from '../src/joints';
 import { BODY25_COLORS, BODY25_KEYPOINTS, BODY25_PAIRS, drawOpenPose2D, OpenPoseSkeleton, projectBody25, toBody25, type Context2D } from '../src/openpose';
 import { PERSON } from '../src/skeletons';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 /** OpenPose's own BODY_25 part names, in its order (poseParameters.cpp) */
 const OPENPOSE = [

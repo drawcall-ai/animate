@@ -5,7 +5,7 @@ import { selfOf } from '../../src/body/body';
 import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, dt, insides, person, play, run } from '../bodies';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 it('checks a planted foot in the final pose after a later writer moved it, naming the requests running', () => {
   const body = person({ dev: true });
@@ -15,7 +15,7 @@ it('checks a planted foot in the final pose after a later writer moved it, namin
   body.update(dt);
   // (caught and blamed on the request running, matched by what it measures — a planted foot's slide, here 4 cm — not by the check's
   // exact name or limit, which are the legs' own)
-  expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/planted .*slide/), where: expect.stringMatching(/Foot$/), beat: 'test', worst: expect.closeTo(0.04, 3) }));
+  expect(body.log).toContainEqual(expect.objectContaining({ check: expect.stringMatching(/planted .*slide/), where: 'leftFoot', beat: 'test', worst: expect.closeTo(0.04, 3) }));
 });
 
 it('catches a later joint writer and a snap from final rotations', () => {

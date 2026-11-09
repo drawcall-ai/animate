@@ -1,7 +1,7 @@
 import type { Body } from '@drawcall/animate';
 import { Quaternion, Vector3 } from 'three';
 import { expect } from 'vitest';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 interface Peak { joint: string; frame: number; value: number }
 

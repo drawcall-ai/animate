@@ -17,7 +17,7 @@ import { ARM_REACH, PROTRACTION } from './bend';
 import { BODY_RADIUS, LOAD_RESERVE } from './clearance';
 import { footing, walking, type WalkUp } from './stand';
 import { guidesFor, CARRYING, type Guides } from './guide';
-import { holdAlong, STALL, travel } from './travel';
+import { closeOn, holdAlong, travel } from './travel';
 import { regripping, type Regripping } from './grasp';
 
 /** Tuned: a load heavier than this (kg) lifted off its support first gets the anticipatory knee dip (the APA below): a lighter one is just taken */
@@ -64,10 +64,10 @@ export function* carrying(person: Reacher, request: Request, thing: Thing, way: 
   else yield* transferring(person, request, thing, way, plan, guides, resting, grasp);
   request.met();
   const kept = guides();
-  // (at the end of a story's `until`: on its place — or as near it as its body holds it, which only a guide says — as a carry ends true)
+  // (at the end of a story's `until`: on the place it was asked to, not where a guide kept it clear of the body)
   request.there = () => {
-    const { position, quaternion } = person.track(thing.object).current;
-    return position.distanceTo(kept.goal.position) <= STALL.close && quaternion.angleTo(kept.goal.quaternion) <= STALL.turn;
+    const goal = end(person.frame);
+    return closeOn(person.track(thing.object).current, goal.position, goal.quaternion ?? kept.goal.quaternion);
   };
   yield* holdAlong(person, request, thing, kept, end, undefined, way.own);
 }

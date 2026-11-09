@@ -254,18 +254,18 @@ describe('a sword in a scabbard on the hips', () => {
 });
 
 describe('hands that cannot get there', () => {
-  it('given until: a reach out of the arms ends false as it comes; a carry stopped short misses', () => {
+  it('given until, what cannot get there misses all the same: a grab out of the arms, a carry stopped short', () => {
     // (driven: nothing walks it up to what it reaches for)
     const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0 };
     const body = person({ dev: true, drive: () => root }), h = insides(body), room = roomOf(body);
     const far = box(room, new Vector3(0, 1, 3), { solid: false, name: 'far' });
-    let ended = false, cut: boolean | undefined, miss: Missed | null = null;
+    let ended = false, miss: Missed | null = null;
     play(function* () {
-      cut = yield* grab(body, far, { left: 'left', right: 'right' }, { until: 6 });
+      miss = yield* attempt(grab(body, far, { left: 'left', right: 'right' }, { until: 6 }));
       ended = true;
     }, [body], 7, () => ended);
     expect(ended).toBe(true);
-    expect(cut).toBe(false);
+    expect(miss).toBeInstanceOf(Missed);
     expect(body.holds(far)).toBe(false);
     const near = box(room, new Vector3(0, 1.1, 0.35), { solid: false, name: 'near' });
     ended = false;

@@ -3,7 +3,7 @@ import { expect, it } from 'vitest';
 import { track, type Floor, type Root } from '../../src/index';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { dt, insides, person, run, scene, airborne } from '../bodies';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 /** eight 0.22 m risers up from z = 0, on 0.55 m treads */
 const STAIRS: Floor = (_x, z) => Math.max(0, Math.min(8, Math.floor(z / 0.55) + 1)) * 0.22;

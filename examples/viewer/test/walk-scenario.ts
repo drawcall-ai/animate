@@ -1,7 +1,7 @@
 import { Group, MathUtils, Vector3 } from 'three';
 import { walkTo } from '@drawcall/animate';
 import type { Person, Scenario } from '../src/scenario';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 /**
  * A walk from standing at the origin facing +Z to a point on the floor (and a facing there): judged as a stroll, done once the walk

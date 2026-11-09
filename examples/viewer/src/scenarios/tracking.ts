@@ -4,7 +4,7 @@ import { lookAt, reach, track, wait, walkTo } from '@drawcall/animate';
 import { destination, route, scalar, type Way } from '../keys';
 import type { Person, Scenario } from '../scenario';
 import { ball, box } from '../things';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 // Keyframed trackers, as a VR headset and controllers record them: a hand, the head, or the head and both hands. The body
 // follows them; the reaching scene also leads its walk by the next recorded waypoint.

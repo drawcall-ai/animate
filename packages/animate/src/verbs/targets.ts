@@ -1,4 +1,5 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
+import { sameThree } from '../kernel/math';
 import type { Frame } from '../kernel/frame';
 import type { Self } from '../body/runtime';
 import type { Goal } from '../kernel/goal';
@@ -38,6 +39,7 @@ interface Found extends Goal {
 
 /** `target` as `self` finds it each sub-step (once a sub-step: read again in the same sub-step, as it was) */
 export function finder(self: Self, target: Target): (f: Frame) => Found {
+  sameThree(target);
   const found: Found = { position: new Vector3() }, turn = new Quaternion(), velocity = new Vector3(), placed = { position: new Vector3(), quaternion: new Quaternion() };
   // (a function's object as it leaves it each sub-step, not eased across the update as the app moving it once an update would be)
   let made: Carrier | null = null;
@@ -51,7 +53,7 @@ export function finder(self: Self, target: Target): (f: Frame) => Found {
   return (f) => {
     if (time === f.time) return found;
     time = f.time;
-    const at = typeof target === 'function' ? target(f.time) : target;
+    const at = typeof target === 'function' ? sameThree(target(f.time)) : target;
     if (at instanceof Vector3) {
       if (![at.x, at.y, at.z].every(Number.isFinite)) throw new Error(`a target that is no point: (${at.x}, ${at.y}, ${at.z})`);
       return Object.assign(found, { position: found.position.copy(at), quaternion: undefined, velocity: undefined, object: undefined, carriedBy: undefined });

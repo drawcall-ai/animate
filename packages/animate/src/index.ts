@@ -1,4 +1,4 @@
-export { Body, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
+export { Body, poseOf, type BodyOptions, type Foot, type Owner, type Owners } from './body/body';
 export type { Root } from './legs/legged';
 export type { Floor } from './legs/floor';
 export type { LogEntry } from './kernel/dev';
@@ -19,5 +19,5 @@ export { wait, attempt, Missed, type Until, type Verb } from './verbs/story';
 export { play } from './verbs/play';
 export type { Target } from './verbs/targets';
 export type { Posture } from './kernel/poise';
-export type { Fingers } from './fingers/shape';
+export type { Fingers, HandShape } from './fingers/shape';
 export { grip, type Grip } from './things/grip';

@@ -1,12 +1,11 @@
 import { Group, Object3D, Vector3 } from 'three';
 import { action, parallel, runTimeline, type NonReuseableTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, wait, walkTo, type Species, attempt, Missed, grip } from '@drawcall/animate';
+import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, wait, walkTo, type Species, attempt, Missed, grip, poseOf } from '@drawcall/animate';
 import { selfOf } from '../../../packages/animate/src/body/body';
 import { cases } from '../../../packages/animate/test/open';
 import { DOG, HORSE, PERSON, scaled } from '../src/skeletons';
 import { ball, box, cylinder } from '../src/things';
-import { poseOf } from '@drawcall/animate/puppet';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, things high and low. Every run must
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed open (expected
@@ -240,13 +239,16 @@ check('a person takes a ball the scene slides along, the frames uneven', () => {
   expect(body.log).toEqual([]);
 });
 // (a goal in the head is held clear in front of it)
-it('a cup carried to the mouth stops in front of the face', () => {
+it('a cup carried to the mouth stops in front of the face, and misses naming the head\'s clearance', () => {
   const body = new Body(humanoid(PERSON), { dev: true }), cup = cupIn(roomWith(body), around(0, 0.6, 0.9));
   const mouth = grip(body.bones.head, 'mouth', new Vector3(0, -0.06, 0.08));
-  expect(run(body, function* () {
+  let missed: Missed | null = null;
+  const seen = run(body, function* () {
     yield* grab(body, cup, { right: 'cup' });
-    yield* carry(body, cup, mouth, { until: 2 });
-  }, 15)).toEqual(ok);
+    missed = yield* attempt(carry(body, cup, mouth));
+  }, 15);
+  expect(seen).toEqual(ok);
+  expect((missed as Missed | null)?.why).toMatch(/head's clearance holds it [\d.]+ cm off its end/);
 });
 it('a hand a body does not have fails to compile', () => {
   const body = person(), toy = ballIn(roomWith(body), around(0, 1.5, 0.04));

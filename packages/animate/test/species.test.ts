@@ -9,7 +9,7 @@ import { play, run } from './bodies';
 import { box, roomOf } from './things';
 import { PERSON } from '../skills/animate/references/person';
 import { HORSE } from '../skills/animate/references/horse';
-import { poseOf } from '../src/puppet';
+import { poseOf } from '../src/index';
 
 describe('a humanoid', () => {
   it('measures its proportions off its skeleton, its height off the crown, with Dempster’s masses for that height', () => {

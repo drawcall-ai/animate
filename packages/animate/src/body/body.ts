@@ -1,4 +1,5 @@
 import { Quaternion, Vector3, type Group, type Object3D } from 'three';
+import { sameThree } from '../kernel/math';
 import { INDEX } from '../species/humanoid/bones';
 import type { ReadonlyPose } from '../kernel/pose';
 import type { LogEntry } from '../kernel/dev';
@@ -60,6 +61,8 @@ export class Body<S extends AnySpecies = AnySpecies> {
 
   /** Rejects creature legs that cannot step within their joint ranges with the sole on the floor. */
   constructor(readonly species: S, options: BodyOptions = {}) {
+    sameThree(options.at);
+    sameThree(options.model);
     const binding = new Binding(species, options.model);
     selves.set(this, species.person ? new Person(species, options, binding) : new Self(species, options, binding));
     this.object = binding.object;
@@ -167,7 +170,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
     return { go: owner('go'), look: owner('look'), trunk: owner('trunk'), head: owner('head'), hands: Object.fromEntries(hands) };
   }
 
-  /** what `dev: true` found (empty with it off), one row per check and call site: sub-step motion checks and misuse noted, not failures, which throw (`Missed`) */
+  /** what `dev: true` found (empty with it off), one row per check, place and running verbs: sub-step motion checks and misuse noted, not failures, which throw (`Missed`) */
   get log(): readonly LogEntry[] {
     return selfOf(this).log;
   }

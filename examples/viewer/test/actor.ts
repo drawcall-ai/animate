@@ -4,7 +4,7 @@ import type { HumanoidBone } from '@drawcall/animate';
 import { selfOf } from '../../../packages/animate/src/body/body';
 import { personOf, type Person as Insides } from '../../../packages/animate/src/body/person';
 import type { Person } from '../src/scenario';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 type Proportions = NonNullable<Person['species']['person']>;
 type BoneName = HumanoidBone | 'leftToes' | 'rightToes';

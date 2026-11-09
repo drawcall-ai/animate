@@ -11,7 +11,7 @@ import { Pose } from '../../src/kernel/pose';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { claim, person, scene } from '../bodies';
 import { HORSE } from '../../skills/animate/references/horse';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);
 const WALK = gaitOf(MARE);
@@ -274,10 +274,12 @@ it('checks a walk\'s hooves leave the floor one at a time, a girdle\'s never up 
     for (let k = 0; k < 40; k++) step();
     return body.log.filter((entry) => entry.check.startsWith('gait lift-off together') || entry.check.startsWith('walk pair in the air'));
   };
-  const checks = run(true);
-  expect(checks.map(({ check }) => check).sort()).toEqual(['gait lift-off together (cycle apart)', 'walk pair in the air together (cycle apart)']);
+  const checks = run(true).map((entry) => `${entry.check} ${entry.where}`);
+  expect(checks).toContain('gait lift-off together (cycle apart) leftForeHoof with rightForeHoof');
+  expect(checks).toContain('walk pair in the air together (cycle apart) leftForeHoof with rightForeHoof');
+  expect(checks).toContain('walk pair in the air together (cycle apart) leftHindHoof with rightHindHoof');
   // (a walk's hooves a quarter of a cycle apart may be up together: a diagonal or lateral pair is no girdle's)
-  expect(checks.find(({ check }) => check.startsWith('walk pair'))?.where).toMatch(/(Fore\w* with \w*Fore)|(Hind\w* with \w*Hind)/);
+  expect(checks.filter((check) => check.startsWith('walk pair') && /Fore\w* with \w*Hind/.test(check))).toEqual([]);
   expect(run(false)).toEqual([]);
 });
 

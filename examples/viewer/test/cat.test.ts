@@ -7,7 +7,7 @@ import type { SkeletonBone } from '@drawcall/rig';
 import { Body, reach, walkTo } from '@drawcall/animate';
 import { powerGait, species, swing, type Range } from '@drawcall/animate/species';
 import { play } from '../../../packages/animate/test/bodies';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 const LEGS = ['leftFore', 'rightFore', 'leftHind', 'rightHind'] as const;
 const JOINTS = [0, 1, 2, 3] as const;

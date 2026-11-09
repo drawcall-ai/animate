@@ -3,7 +3,7 @@ import { expect, it } from 'vitest';
 import { selfOf } from '../../../packages/animate/src/body/body';
 import { lionRun } from '../src/scenarios/lion';
 import { Simulation } from '../src/simulation';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 const DEG = Math.PI / 180;
 

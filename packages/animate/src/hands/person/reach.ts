@@ -58,8 +58,9 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
     } };
   });
   const middle = (f: Frame) => targets.reduce((sum, { target }) => sum.add(target(f).position), _middle.set(0, 0, 0)).divideScalar(targets.length);
-  const there = (f: Frame) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f)));
-  request.there = () => targets.every(({ side, target }) => reached(person.frame, person.hands[side], target(person.frame), undefined, Infinity));
+  // (one measure: a reach is met once there and still, while one its story ends on is there however it is moving)
+  const there = (f: Frame, speed?: number) => targets.every(({ side, target }) => reached(f, person.hands[side], target(f), undefined, speed));
+  request.there = () => there(person.frame, Infinity);
   const going = targets.map(({ side, target }) => {
     const distance = person.pose.position(person.hands[side]).distanceTo(target(person.frame).position);
     const { speed } = pace, { accel } = motion;
@@ -69,14 +70,22 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
     return { side, step: reaching(person, side, target, { seconds }), lasts: seconds };
   });
   const lasts = Math.max(...going.map((hand) => hand.lasts));
-  let setOff = NaN;
+  let setOff = NaN, stirred = person.frame.time;
+  // (given `until`, a target on the move is followed till then, as a walk's is: a hand behind it has failed nothing, one off a target that
+  // has stood still this long has)
+  const moving = (f: Frame) => {
+    if (pace.until === undefined) return false;
+    if (targets.some(({ target }) => target(f).velocity!.length() > REACHED.speed)) stirred = f.time;
+    return f.time - stirred < STILL;
+  };
   const late = lateWatch(person, request, targets.map(({ side, target }) => ({ side, goal: target, where: side })));
   const eta = (f: Frame) => {
     // Balance can interrupt the final reach with a support step; its time is not time spent failing to reach — a step's own, not the
     // whole of a stance that never settles
     if (stepping(person)) setOff += f.dt;
     request.eta = Math.max(0, setOff + lasts - f.time);
-    late(f, setOff + lasts);
+    moving(f);
+    late(f, Math.max(setOff, stirred) + lasts);
   };
   yield* parallel<Frame>('all', function* () {
     for (;;) {
@@ -100,9 +109,10 @@ export function* reachingTo(person: Reacher, request: Request, targets: readonly
         });
         if (!stalled) yield* action<Frame>({ update: eta, until: (f) => moved(f) || (arrived = there(f)) });
       });
-      if (stalled) request.fail(stalled);
+      const stuck = (f: Frame) => { if (stalled && !moving(f)) request.fail(stalled); };
+      stuck(person.frame);
       if (arrived) request.met();
-      if (stalled || arrived) yield* action<Frame>({ until: moved });
+      if (stalled || arrived) yield* action<Frame>({ update: stuck, until: moved });
     }
   }, function* () {
     yield* action<Frame>({ until: () => !Number.isNaN(setOff) });
@@ -155,6 +165,8 @@ export function limitOf(person: Reacher, side: Side): (at: Vector3) => string {
 const NEAR = 0.6;
 /** Tuned: a target moved this far (m, default body) from where it was planned for is planned for again */
 const MOVED = 0.1;
+/** Tuned: how long (s) a target followed to `until` must stand still before a hand off it has failed */
+const STILL = 2;
 const _middle = new Vector3(), _turn = new Quaternion();
 
 /** whether a foot is in the air under `person`: a support step under way */

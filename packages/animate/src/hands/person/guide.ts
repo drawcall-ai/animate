@@ -30,8 +30,7 @@ export class Guide {
   private readonly at = new Vector3();
   private readonly turned = new Quaternion();
   private time = NaN;
-  /** how far (m) the body's own trunk and head held the last goal read off where it was asked to go: none for a goal on its own head
-   * (a cup put to the mouth stops in front of it by design), else the body stands in the way of its end */
+  /** how far (m) the body's own trunk and head held the last goal read off where it was asked to go: its end is that much out of its reach */
   off = 0;
   /** how much of the push clear of the body it has taken up, the two sub-steps before */
   private readonly pushed = [new Vector3(), new Vector3()];
@@ -40,7 +39,7 @@ export class Guide {
   private readonly pivot = new Vector3();
 
 
-  constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, private readonly clear: Clearance) {
+  constructor(private readonly person: Reacher, private readonly thing: Thing, private readonly motion: Motion, readonly clear: Clearance) {
     const own = person.track(thing.object);
     const grips = Object.values(person.holding).flatMap((hold) => hold?.thing === thing ? [thing.grip(hold.grip).at.position] : []);
     // (held in both hands; one hand's thing goes where its course has it, the hand with it)
@@ -72,7 +71,7 @@ export class Guide {
       { accel: motion.turnAccel ?? CARRYING.turnAccel, speed: motion.turnSpeed }, f.dt, this.turned, own ? Infinity : undefined);
     // (a goal in the neck or head — a cup put to the mouth — is carried clear of them in front)
     if (this.clear) clearBody(person, f, thing, goal.position, turned, current, this.clear !== 'head', this.clear === 'parts');
-    this.off = this.clear === 'head' ? 0 : goal.position.distanceTo(target.position);
+    this.off = goal.position.distanceTo(target.position);
     // (followed about the middle of its grips, where the hands are: turning, a thing held off its middle lags about them, not about its
     // own origin, and does not swing off them)
     const pivot = this.pivot, held = (at: Placement, turn: Quaternion, out: Vector3) => out.copy(pivot).applyQuaternion(turn).add(at.position);

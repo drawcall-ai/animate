@@ -5,7 +5,7 @@ import { INDEX } from '../../src/species/humanoid/bones';
 import { gazeOff, insides, person, play } from '../bodies';
 import { CHEWBACCA } from '../skeletons/chewbacca';
 import { DOG } from '../../skills/animate/references/dog';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 const BODIES: [string, () => Body][] = [['the default person', () => person({ dev: true })], ['a 2.3 m skeleton', () => new Body(humanoid(CHEWBACCA), { dev: true })]];
 

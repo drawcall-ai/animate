@@ -2,7 +2,7 @@ import { Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { INDEX } from '../../src/species/humanoid/bones';
 import { dt, person, run } from '../bodies';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 function supported(mass = 75) {
   const root = { position: new Vector3(), velocity: new Vector3(), yaw: 0, support: new Vector3() };

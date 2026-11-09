@@ -5,7 +5,7 @@ import { beyond } from '../../src/kernel/limits';
 import { INDEX } from '../../src/species/humanoid/bones';
 import type { Person } from '../../src/body/person';
 import { insides, person, play } from '../bodies';
-import { poseOf } from '../../src/puppet';
+import { poseOf } from '../../src/index';
 
 const eyes = (h: Person) => h.pose.point(INDEX.head, h.proportions.eyes, new Vector3());
 const turned = (yaw: number, pitch = 0) => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), pitch));
@@ -70,10 +70,13 @@ describe('track', () => {
       play(function* () { yield* track(body, { right }); }, [body], 3);
       const said = warn.mock.calls.map(([message]) => String(message));
       warn.mockRestore();
+      short = poseOf(body).position(INDEX.rightHand).distanceTo(right);
       return said;
     };
+    let short = 0;
     // (a wrist held up and out past the arm's length: it comes to rest about 10 cm short, said as it stops coming nearer)
     expect(warned(new Vector3(-0.2, 1.9, 0.6))).toEqual([expect.stringContaining('a tracked right hand falls short')]);
+    expect(short).toBeGreaterThan(0.05);
     expect(warned(new Vector3(-0.25, 1.35, 0.4))).toEqual([]);
   });
 

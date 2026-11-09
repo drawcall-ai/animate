@@ -22,5 +22,5 @@ export function reach<S extends AnySpecies>(body: Body<S>, targets: ByHand<S, Ta
   return verb(body, 'reach', (request) => function* () {
     const self = selfOf(body);
     yield* self.handling.reach(request, named.map(({ hand, target }) => ({ hand, target: finder(self, target) })), options);
-  }, options.until);
+  }, { until: options.until });
 }

@@ -1,4 +1,5 @@
 import { Box3, Matrix4, Mesh, Object3D, Quaternion, Ray, Vector3 } from 'three';
+import { sameThree } from '../kernel/math';
 import { surfaceOf, Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
 import type { Holder } from './resolve';
@@ -32,6 +33,7 @@ export class Thing {
 
   /** `object` as a thing (one record per object) */
   static of(object: Object3D): Thing {
+    sameThree(object);
     let thing = things.get(object);
     if (!thing) things.set(object, (thing = new Thing(object)));
     return thing;

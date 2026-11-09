@@ -174,7 +174,7 @@ function checkHeld(person: Person, f: Frame, noted: WeakSet<object>): void {
     const where = `${hold.thing.object.name} ${side}`, why = `the hand was drawn ${(100 * value).toFixed(1)} cm off its grip: its other hand or its joints hold it off`;
     const mover = person.owner(`hand.${side}`)?.request;
     if (mover && !mover.aimer && !mover.owned) mover.fail({ where, off: value, limit: HELD, why });
-    else f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where, detail: why });
+    else f.dev?.append(f.time, { check: 'held grip distance (m)', value, limit: HELD, where });
   }
 }
 

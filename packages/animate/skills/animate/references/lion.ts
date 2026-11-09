@@ -1,5 +1,4 @@
 // Absolute model-space positions in metres: +Y up, +Z forward, +X left.
-import type { SkeletonBone } from '@drawcall/rig';
 
 /**
  * A lion of ~190 kg, 1.0 m at the withers, standing square : each leg's top, elbow or stifle, wrist or hock and
@@ -30,4 +29,4 @@ export const LION = [
   { name: 'rightHind1', parent: 'rightHind0', position: [-0.15, 0.62, -0.27] },
   { name: 'rightHind2', parent: 'rightHind1', position: [-0.15, 0.3, -0.68] },
   { name: 'rightHind3', parent: 'rightHind2', position: [-0.15, 0.06, -0.56] },
-] as const satisfies readonly SkeletonBone[];
+] as const;

@@ -1,7 +1,7 @@
 // The verbs a story asks a body's goals with, recorded as they run (`asking.ts`): the metrics judge the eyes and hands against them.
 import { Vector3 } from 'three';
 import { vi } from 'vitest';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 vi.mock('@drawcall/animate', async (original) => {
   const actual = await original<typeof import('@drawcall/animate')>();

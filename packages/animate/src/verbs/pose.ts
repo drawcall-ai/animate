@@ -19,7 +19,8 @@ import { shapeOf } from '../fingers/shape';
 export interface PoseOptions {
   /** ends on this, `true`; with neither this nor `hold`, it holds the posture until its story moves on */
   until?: Until;
-  /** ends this many seconds after the posture has come, by its parts' paces: how a pose says it has finished */
+  /** ends this many seconds after the posture has come as its parts' paces foresee, not as measured: an angle past what the body reaches
+   * still takes its full pace (`lower: 3`: 5 s, the hips stopping 0.63 m down) */
   hold?: number;
 }
 
@@ -63,7 +64,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
       head !== undefined && during(request, 'head', 'asked', () => self.headOffset.add(head)),
       ...posedArms.map(({ side, arm }) => during(request, `arm.${side}`, 'asked', () => add(personOf(self).armPose[side], arm))),
       ...shapes.map(({ side, shape, state }) => during(request, `fingers.${side}`, 'asked', () => state.ask(side, shape))));
-  }, until, true, false, hold !== undefined);
+  }, { until, aimer: true, meets: hold !== undefined });
 }
 
 /** each hand's shape `fingers` asks of `self`, with the fingers it is written to; a skeleton without finger bones has none to pose */

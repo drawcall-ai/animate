@@ -1,7 +1,7 @@
 import { Box3, Quaternion, Vector3, type Object3D } from 'three';
 import type { Body } from '@drawcall/animate';
 import { isPerson, type Simulation } from './simulation';
-import { poseOf } from '@drawcall/animate/puppet';
+import { poseOf } from '@drawcall/animate';
 
 /** the height the camera looks at over a person's travel, above the floor (y = 0; × its standing height): about the hips, but not bobbing with them */
 const FOCUS_HEIGHT = 0.54;

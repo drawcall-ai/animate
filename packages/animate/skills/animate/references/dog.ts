@@ -1,5 +1,4 @@
 // Absolute model-space positions in metres: +Y up, +Z forward, +X left.
-import type { SkeletonBone } from '@drawcall/rig';
 
 /**
  * A Labrador of ~30 kg, 0.54 m at the withers, standing square : its joints where the mesh has them (left and
@@ -28,4 +27,4 @@ export const DOG = [
   { name: 'rightHind1', parent: 'rightHind0', position: [-0.054, 0.302, -0.191] },
   { name: 'rightHind2', parent: 'rightHind1', position: [-0.064, 0.165, -0.329] },
   { name: 'rightHind3', parent: 'rightHind2', position: [-0.077, 0.035, -0.308] },
-] as const satisfies readonly SkeletonBone[];
+] as const;

@@ -1,4 +1,5 @@
 import { Object3D, Vector3 } from 'three';
+import { sameThree } from '../kernel/math';
 import type { Digit, Finger, Thumb } from '../fingers/shape';
 
 /** A direction or place on a grip: in the empty's frame. */
@@ -36,6 +37,8 @@ export interface Grip {
  * its own frame; default its origin).
  */
 export function grip(thing: Object3D, name: string, at: Vec, spec: Grip = {}): Object3D {
+  sameThree(thing);
+  sameThree(at);
   const empty = new Object3D();
   empty.name = name;
   if (at instanceof Vector3) empty.position.copy(at);
