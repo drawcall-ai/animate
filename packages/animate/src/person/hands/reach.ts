@@ -45,9 +45,9 @@ export function following(at: Readonly<Vector3>, grips: Partial<Record<Side, str
 }
 
 /** Follow targets with borrowed walking; replan after movement while keeping each hand's motion history. */
-export function* reachingTo(person: Person, request: Request, targets: readonly { side: Side; target: (f: Frame) => Found }[], pace: HandOptions) {
+export function* reachingTo(person: Person, request: Request, asked: readonly { side: Side; target: (f: Frame) => Found }[], pace: HandOptions) {
   const motion = paceAt(pace.speed, CALM);
-  targets = targets.map(({ side, target }) => {
+  const targets = asked.map(({ side, target }) => {
     const sample = new PointVelocity();
     let velocity = new Vector3();
     let time = NaN;
@@ -77,7 +77,7 @@ export function* reachingTo(person: Person, request: Request, targets: readonly 
   // has stood still this long has)
   const moving = (f: Frame) => {
     if (pace.until === undefined) return false;
-    if (targets.some(({ target }) => target(f).velocity!.length() > REACHED.speed)) stirred = f.time;
+    if (targets.some(({ target }) => target(f).velocity.length() > REACHED.speed)) stirred = f.time;
     return f.time - stirred < STILL;
   };
   yield* parallel<Frame>('all', function* () {

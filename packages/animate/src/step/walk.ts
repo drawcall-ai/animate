@@ -146,7 +146,7 @@ export class Walk {
     go.speed = Math.min(way.speed ?? STROLL.speed * self.tempo / effort, self.stepper?.top ?? Infinity);
     // (asked faster than a stroll it speeds up and brakes the quicker, as fast as it is asked or going: a gallop's stop within a gallop's reach.
     // Fit: 2, 3.9 and 2.1–3.9 m/s² at 3.5, 14 and 4 m/s, a lion's as tuned by hand before: 2, 3 and 3)
-    const quicker = (way.speed ?? 0) > STROLL.speed ? Math.sqrt(Math.max(way.speed!, self.locomotion.velocity.length()) / STROLL.speed) : 1;
+    const pace = way.speed, quicker = pace !== undefined && pace > STROLL.speed ? Math.sqrt(Math.max(pace, self.locomotion.velocity.length()) / STROLL.speed) : 1;
     go.accel = STROLL.accel * quicker * self.tempo / effort;
     this.start ??= body.clone();
     if (this.leg < via.length && body.distanceTo(_v.copy(via[this.leg](f)).setY(0)) < ARRIVED.distance * self.scale) {
