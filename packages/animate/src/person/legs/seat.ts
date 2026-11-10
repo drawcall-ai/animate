@@ -5,7 +5,7 @@ import type { Miss } from '../../kernel/requests';
 import { forwardOf, minimumJerk } from '../../kernel/math';
 import { OVER_ANKLES, standingFeet } from '../anatomy/stance';
 import { footprint } from './foot';
-import { squatOf } from './walk-pose';
+import { squatOf } from './lowering';
 import { levelUnder } from '../../step/floor';
 import type { Person } from '../person';
 

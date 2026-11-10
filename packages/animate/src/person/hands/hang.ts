@@ -9,7 +9,7 @@ import { ArmClear, checkArms, keepArmOut, NUDGED } from './arm-clearance';
 import { clamp, leftOf, lerp, wrapAngle, yawOf } from '../../kernel/math';
 import type { Proportions } from '../anatomy/proportions';
 import { palmOf } from '../anatomy/landmarks';
-import { bowAhead } from '../legs/walk-pose';
+import { bowAhead } from '../legs/lowering';
 import type { Person } from '../person';
 
 // A free arm: it hangs from the shoulder, swings with the stride, turns back with the trunk's bow and is posed over that as asked.

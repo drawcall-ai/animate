@@ -10,7 +10,7 @@ import { ARM_REACH, PROTRACTION } from './shoulder';
 import { BODY_RADIUS, LOAD_RESERVE } from './load-clearance';
 import { INDEX, type Side } from '../anatomy/bones';
 import { floorUnder } from '../legs/height';
-import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../legs/walk-pose';
+import { bowLever, lowering, MOST_BOW, squatOf, TIPTOE } from '../legs/lowering';
 import { stanceWidth } from '../anatomy/stance';
 import type { Person } from '../person';
 

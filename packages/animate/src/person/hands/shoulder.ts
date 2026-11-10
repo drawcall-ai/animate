@@ -2,7 +2,7 @@ import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../../kernel/frame';
 import type { ReadonlyBonePose } from '../../kernel/bone-pose';
 import { forwardOf, wrapAngle, yawOf } from '../../kernel/math';
-import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../legs/walk-pose';
+import { handLowering, MOST_BOW, shoulderHeight, squatOf } from '../legs/lowering';
 import { INDEX, type Side } from '../anatomy/bones';
 import type { Proportions } from '../anatomy/proportions';
 import { NECK_PITCH, TRUNK_PITCH } from '../anatomy/ranges';

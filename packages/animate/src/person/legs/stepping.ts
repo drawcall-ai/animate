@@ -2,7 +2,8 @@
 import type { Proportions } from '../anatomy/proportions';
 import type { Gait } from '../../species/gait';
 import { powerGait, stanceOf } from '../../species/schedule';
-import { squatOf, STANDING_REACH } from './walk-pose';
+import { squatOf } from './lowering';
+import { STANDING_REACH } from './walk-pose';
 import { lerp } from '../../kernel/math';
 import { stanceWidth, TOE_OUT } from '../anatomy/stance';
 import type { Stride } from '../anatomy/humanoid';
