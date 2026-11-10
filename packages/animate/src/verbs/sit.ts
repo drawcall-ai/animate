@@ -5,7 +5,7 @@ import type { Target } from '../things/target';
 import { checkSpeed, verb, type Until, type Verb } from './story';
 
 /** How a sit goes. */
-export interface SitOptions {
+interface SitOptions {
   /** the facing to sit with (rad about +Y; 0 faces +Z); default the seat's own (an `Object3D`'s +Z), else away from the seat as the body comes */
   face?: number;
   /** its top speed walking there (m/s) */

@@ -52,7 +52,7 @@ export function* attempt(verb: Generator<TimelineYield<unknown>, unknown, unknow
 }
 
 /** a verb called, as a body remembers it until its story first steps it: which, when, and where (read off the stack only if asked for) */
-export class Call {
+class Call {
   private readonly stack = new Error();
   private read?: string;
 

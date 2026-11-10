@@ -25,7 +25,7 @@ export const footRotation = (yaw: number, pitch: number, out = new Quaternion())
  * The ankle of a foot standing flat with its ankle at `anchor`, heading `yaw`, rolled by `pitch`
  * about its heel (pitch > 0, toes up) or its ball (pitch < 0, heel up).
  */
-export function ankleFor(proportions: Proportions, side: Side, anchor: Readonly<Vector3>, yaw: number, pitch: number, out = new Vector3()): Vector3 {
+function ankleFor(proportions: Proportions, side: Side, anchor: Readonly<Vector3>, yaw: number, pitch: number, out = new Vector3()): Vector3 {
   const local = pitch >= 0 ? heelOf(proportions, _pivot) : ballOf(proportions, side, _pivot);
   const world = _world.copy(local).applyQuaternion(footRotation(yaw, 0, _q)).add(anchor);
   return out.copy(local).applyQuaternion(footRotation(yaw, pitch, _q)).negate().add(world);

@@ -140,7 +140,7 @@ export interface LegRole<Name extends string> extends Omit<LegChain<Name, Vec3>,
  * each, from its first joint to the hand or jaw), and the `trunk` bones its gait moves over its legs (four legs only), which gives it its
  * quiet life: without one it stands still but for its `inertia` lean, so a story gives it life with `pose` and `lookAt`.
  */
-export interface Roles<Name extends string, Hand extends string> {
+interface Roles<Name extends string, Hand extends string> {
   root?: Name;
   legs?: readonly LegRole<Name>[];
   gaze?: { neck?: readonly Name[]; eyes: { bone: Name; at: Vec3 }; range: Gazer['range']; pitch?: number };
@@ -153,7 +153,7 @@ export interface Roles<Name extends string, Hand extends string> {
  * a share of the way to another bone's joint; default its joint); each joint's range (default free, ±π); the trunk's `inertia`; development
  * snap ceilings.
  */
-export interface Tuning<Name extends string> {
+interface Tuning<Name extends string> {
   gait?: Gait;
   masses?: Partial<Record<Name, number>>;
   centres?: Partial<Record<Name, Vec3 | readonly [toward: Name, share: number]>>;

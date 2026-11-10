@@ -465,7 +465,7 @@ const CROUCHING = { accel: 60, speed: 7.5 };
 const ZERO = new Vector3();
 const [_a, _accel, _away, _d, _pivot, _over] = Array.from({ length: 6 }, () => new Vector3());
 
-export function physicsOf({ support, position }: Steering, floor: Floor): Physics {
+function physicsOf({ support, position }: Steering, floor: Floor): Physics {
   const flight = support === null;
   return { physical: support !== undefined, contact: support ?? undefined, flight, clearance: flight ? Math.max(0, position.y - floor(position.x, position.z)) : 0 };
 }

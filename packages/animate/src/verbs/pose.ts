@@ -12,7 +12,7 @@ import { shapeOf } from '../fingers/shape';
 import { clamp } from '../kernel/math';
 
 /** How a pose goes. */
-export interface PoseOptions {
+interface PoseOptions {
   /** ends on this, `true`; with neither this nor `hold`, it holds the posture until its story moves on */
   until?: Until;
   /** ends this many seconds after the parts it poses have come to rest, as measured: however far they got (`lower: 3` stops where the legs

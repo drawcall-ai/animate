@@ -45,7 +45,7 @@ import type { SelfOptions } from '../body/setup';
 const still = (): Required<ArmPosture> => ({ shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0 });
 
 /** How a person's stride carries its trunk, as its arms and eyes follow it (`Trunk.settle`, each sub-step). */
-export interface GaitState {
+interface GaitState {
   /** the stride's phase (rad): 0 as the left foot lifts, π as the right does */
   phase: number;
   /** 0 standing … 1 walking, 0 walking … 1 running */

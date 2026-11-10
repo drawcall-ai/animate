@@ -242,7 +242,7 @@ export class GaitClock {
 /** how long a gait's foot bears weight once down before it lifts again (share of a cycle) */
 export const STANDS_FIRST = 0.1;
 /** the fewest feet a gait's body leaves on the floor */
-export const STANDING = 2;
+const STANDING = 2;
 /** Derived: a gait's feet whose footfalls are within `TOGETHER` of a cycle leave the floor together (a trot's diagonals, 0.02 apart in
  * Clayton-Hobbs' offsets), the others at least that far apart (a walk's neighbours are 0.25 apart: half of that and more is clear of both) */
 const TOGETHER = 0.1;

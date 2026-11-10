@@ -10,7 +10,7 @@ export type Tier = 'borrowed' | 'asked';
 export type Channel = 'legs' | 'look' | 'trunk' | 'head' | `hand.${string}` | `arm.${string}` | `fingers.${string}`;
 
 /** A claimed part poses the body; a leg claim returns its requested motion. */
-export interface Claim {
+interface Claim {
   readonly request: Request;
   readonly channel: Channel;
   readonly tier: Tier;
@@ -171,7 +171,7 @@ export function during(request: Request, channel: Channel, tier: Tier, step: (f:
 
 /** the order a body part's claims run in, the one that takes it last: borrowed before asked, older before newer — but the first
  * borrower of the legs keeps them */
-export function rank(a: Claim, b: Claim): number {
+function rank(a: Claim, b: Claim): number {
   if (a.tier !== b.tier) return a.tier === 'borrowed' ? -1 : 1;
   const newer = a.request.order - b.request.order;
   return a.channel === 'legs' && a.tier === 'borrowed' ? -newer : newer;

@@ -11,7 +11,7 @@ import { finder, type Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
 /** How a look goes: how much of it the head and the trunk take. To tilt or nod the head as it looks, `pose` its `head` beside it. */
-export interface LookOptions {
+interface LookOptions {
   /**
    * how much of a turn aside the head takes (0 … 1; default all but a few degrees): the eyes take the rest, as far as they turn
    * comfortably (a person's 20° each way), and past that the head turns on for them — so 0.3 is a glance with the eyes, the head

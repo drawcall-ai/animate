@@ -198,7 +198,7 @@ export const overbend = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + 
 /** a planted foot's roll off its strike (rad): flat after `ROLL` */
 export const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
 /** Tuned: a strike rolls flat in `ROLL` s */
-export const ROLL = 0.1;
+const ROLL = 0.1;
 
 /** Tuned: the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend */
 const BEND = 0.15;

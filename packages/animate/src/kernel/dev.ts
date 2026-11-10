@@ -1,5 +1,5 @@
 /** A motion check gone wrong in a sub-step, or a misuse noted: what was checked, what was seen and what is allowed (in the check's units), and where. */
-export interface Problem {
+interface Problem {
   check: string;
   value: number;
   limit: number;

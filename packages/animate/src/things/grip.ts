@@ -12,7 +12,7 @@ type Vec = Vector3 | readonly [number, number, number];
  * cannot hold it. With nothing asked, the empty is where the palm's middle goes, the hand turned as the arm brings it and kept turned as it
  * took hold. A creature's tip takes the empty's position alone. In a model, these are the empty's `userData` (GLB extras).
  */
-export interface Grip {
+interface Grip {
   /** a handle running through the empty: an axis, pointing out of the fist at the thumb's end; the palm against it and the fingers round it,
    * rolling freely about it (with `facing`, its palm fixed so: the grip fully fixed) */
   handle?: Vec;

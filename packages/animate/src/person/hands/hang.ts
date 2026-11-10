@@ -51,7 +51,7 @@ function drawnBack(proportions: Proportions, bow: number, held: number): number 
 const CLEAR = 0.055;
 /** how fast a free arm's joints may change their motion (rad/s²) and close in on its pose (rad/s): its swing's own pace, braked where it
  * kinks; let go of, it comes down calmly — and posed, it goes there so */
-export const SWING = { accel: 25, speed: 2.5 };
+const SWING = { accel: 25, speed: 2.5 };
 /** how far (rad) a free arm's joint may run on past where a verb left it before its brakes (`SWING.accel`) stop it: what it inherits of
  * that verb's motion, √(2 · accel · this) */
 const OVERRUN = Math.PI / 2;

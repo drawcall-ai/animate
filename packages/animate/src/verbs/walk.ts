@@ -9,7 +9,7 @@ import { finder, type Target } from '../things/target';
 import { checkSpeed, verb, type Until, type Verb } from './story';
 
 /** How a walk goes. */
-export interface WalkOptions {
+interface WalkOptions {
   /**
    * the facing to arrive with: an angle (rad about +Y; 0 faces +Z) or a target to face; default the target's own (an `Object3D`'s), else
    * the way it comes. The body faces the way it walks and turns to this only over its last step or so — but a few steps back or aside

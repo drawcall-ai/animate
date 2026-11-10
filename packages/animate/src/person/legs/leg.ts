@@ -31,7 +31,7 @@ export function shankTilt(pose: ReadonlyBonePose, side: Side, yaw: number): numb
  * blended with the body's `facing`); a leg raised forward bends with the knee up, one raised out
  * sideways carries it along.
  */
-export function kneePole(side: Side, yaw: number, facing: number, hip: Vector3, ankle: Vector3, out: Vector3): Vector3 {
+function kneePole(side: Side, yaw: number, facing: number, hip: Vector3, ankle: Vector3, out: Vector3): Vector3 {
   // (halfway round from the facing to the foot's heading: a sum of the two would vanish for a foot turned far round)
   forwardOf(facing + 0.5 * wrapAngle(yaw - facing), out);
   const leg = _leg.subVectors(ankle, hip).normalize();

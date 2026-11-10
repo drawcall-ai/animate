@@ -26,7 +26,7 @@ import type { Person } from '../person';
 /** the longest a carried thing takes to come to rest at its path's end once it is over, unless told (s) */
 const RESTING = 2;
 /** how long a carried thing stands still (within `moved`, m) short of its end to be as near as the arms take it, and how near it then is there (`close`, m) */
-export const STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: REACHED.close, turn: REACHED.closeTurn };
+const STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: REACHED.close, turn: REACHED.closeTurn };
 /** how far off its place (m) the fingers seat a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
  * push or draw what they hold without the hand moving */
 const SEATS = 0.03;

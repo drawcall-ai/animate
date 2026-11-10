@@ -25,7 +25,7 @@ const LAP = { forward: 0.2, elbow: 0.8, out: -0.2 };
 const REACHES = 0.97;
 
 /** Where a person sits on a seat: its hips (world), where it stands to sit (the floor), how far its hips go down (m). */
-export interface Seating { hips: Vector3; stand: Vector3; lower: number; seconds: number }
+interface Seating { hips: Vector3; stand: Vector3; lower: number; seconds: number }
 
 /** How `person` sits on the surface at `at` facing `yaw`, or what stops it: the seat too high or too low for its legs, or no level floor for its feet. */
 export function seating(person: Person, at: Readonly<Vector3>, yaw: number): Seating | Miss {
