@@ -15,7 +15,7 @@ import { sideOf } from '../anatomy/bones';
 import { bringShoulder } from './shoulder';
 import { LimbMover } from '../../kernel/limb';
 import { following, LEADING, limitOf } from './reach';
-import { grasped, seat, shifts, type Regripping } from './grasp';
+import { grasped, nudge, shifts, type Regripping } from './grasp';
 import type { Clearance } from '../../things/carry-path';
 import type { Guide } from './guide';
 import type { Person } from '../person';
@@ -27,9 +27,9 @@ import type { Person } from '../person';
 const RESTING = 2;
 /** how long a carried thing stands still (within `moved`, m) short of its end to be as near as the arms take it, and how near it then is there (`close`, m) */
 const STALL = { moved: 0.003, turned: 0.005, seconds: 0.3, close: REACHED.close, turn: REACHED.closeTurn };
-/** how far off its place (m) the fingers seat a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
+/** how far off its place (m) the fingers nudge a thing in one hand, the arm leaving it there: a couple of centimetres, as far as fingers
  * push or draw what they hold without the hand moving */
-const SEATS = 0.03;
+const NUDGES = 0.03;
 /** how near its end's turn (rad) a thing carried to a turned end is to have arrived: there, turned too */
 const TURNED = 0.05;
 
@@ -63,7 +63,7 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
   const load = resting ? factor - 1 : 0;
   const pace = (1 - lag.slower) / factor, path = timedPath(movingFrame, waypoints, { pace, delay: lag.delay, on });
   const total = waypoints.reduce((sum, [seconds]) => sum + seconds / pace, 0);
-  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0, seated = NaN;
+  let began = NaN, since = NaN, stood = NaN, still = NaN, late = false, blocked = false, dip = 0, nudged = NaN;
   /** where its end was a sub-step before */
   const ended = { position: new Vector3(), quaternion: new Quaternion(), time: -Infinity };
   // (whether its end sets a turn — an object, not a point: its path turns the thing on either way, from how it set out)
@@ -81,20 +81,20 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
     if (dip > 0) goal.position.y -= dip * Math.sin(Math.PI * u) ** 2;
     return goal;
   };
-  // (the hand a thing hangs from alone, carried to a place: the fingers seat it there)
-  const seating = (f: Frame) => {
+  // (the hand a thing hangs from alone, carried to a place: the fingers nudge it there)
+  const nudging = (f: Frame) => {
     const [hand, ...others] = handsOn(person, thing);
     const hold = hand === undefined ? null : person.holding[hand];
     return end && turns(f) && hold && !others.length && shifts(hold) && inHand(person, thing) ? sideOf(hand) : null;
   };
   const overdue = (f: Frame) => f.time - stood > RESTING;
   const there = (f: Frame) => {
-    if (!Number.isNaN(seated)) {
-      if (f.time < seated) return false;
+    if (!Number.isNaN(nudged)) {
+      if (f.time < nudged) return false;
       guide.read(f, to);
       if (movingFrame.current.position.distanceTo(guide.goal.position) <= near) return true;
-      // (its place moved on while it was seated, or the arm took it off: seated again)
-      seated = NaN;
+      // (its place moved on while it was nudged, or the arm took it off: nudged again)
+      nudged = NaN;
     }
     if (!path.over(f) || ready?.() === false) return false;
     if (Number.isNaN(since)) since = f.time;
@@ -108,18 +108,18 @@ export function* travel(person: Person, request: Request, thing: Thing, waypoint
     // (an end that sets a turn is arrived at turned too, not on its place alone — or, once late, on its place however it is turned)
     const turnedOff = turns(f) ? movingFrame.current.quaternion.angleTo(guide.goal.quaternion) : 0;
     const short = movingFrame.current.position.distanceTo(goal), close = closeOn(movingFrame.current, goal, turns(f) ? guide.goal.quaternion : undefined);
-    // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it (`SEATS`), a thing in one hand is
-    // seated on it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it. Once
-    // the arm has brought it to rest there (`slow`): seated as it still came on, the hand held where it was, the arm carried it on past
+    // (at its place — its guide there, only the arm leaving it off — within the fingers' reach of it (`NUDGES`), a thing in one hand is
+    // nudged onto it there, what the arm leaves made up in the fingers rather than waited on: put there then, it sits exactly on it. Once
+    // the arm has brought it to rest there (`slow`): nudged as it still came on, the hand held where it was, the arm carried it on past
     // its place as the fingers drew it back onto it, slid in the hand as far as the arm had still to go — and the fingers closed afresh
     // about it where it got to, an index opened off the face it was on)
-    const side = seating(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
+    const side = nudging(f), led = guided.position.distanceTo(goal) <= near && guided.quaternion.angleTo(guide.goal.quaternion) <= TURNED;
     const resting = rested(f, movingFrame, goal, turns(f) ? guide.goal.quaternion : undefined);
-    // (once overdue no more: a seat that will not take would go on being tried, and the carry on running)
-    if (side && led && !overdue(f) && short <= SEATS && resting.slow && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
+    // (once overdue no more: a nudge that will not take would go on being tried, and the carry on running)
+    if (side && led && !overdue(f) && short <= NUDGES && resting.slow && turnedOff <= STALL.turn && guide.off <= near && (dip === 0 || f.time - since >= seconds) && f.time - ended.time < 1.5 * f.dt) {
       // (the thing as it stood with its end a sub-step before, as `restingAt` reads them: a sub-step apart, a moving body's place would
       // seem off it by as far as it moves in one)
-      seated = seat(person, side, thing, movingFrame.moved(f.time) ? movingFrame.prev : movingFrame.current, ended);
+      nudged = nudge(person, side, thing, movingFrame.moved(f.time) ? movingFrame.prev : movingFrame.current, ended);
       return false;
     }
     ended.position.copy(guide.goal.position);
@@ -224,7 +224,7 @@ function restingAt(near: number): (f: Frame, movingFrame: MovingFrame, at: Reado
   let end: MovingFrame | null = null, stirred = -Infinity;
   return (f, movingFrame, at, turn) => {
     end ??= new MovingFrame(new Vector3().copy(at), new Quaternion().copy(turn ?? IDENTITY));
-    // (not read the sub-step before — a seat waited on — its end's history is where it was then: read afresh, as it first is, or a thing
+    // (not read the sub-step before — a nudge waited on — its end's history is where it was then: read afresh, as it first is, or a thing
     // swinging after a moving end would seem at rest on where the end was before the wait)
     if (!end.moved(f.time - 1.5 * f.dt)) end.place(f.time, at, turn ?? IDENTITY);
     else if (!end.moved(f.time)) end.move(f.time, at, turn ?? IDENTITY);

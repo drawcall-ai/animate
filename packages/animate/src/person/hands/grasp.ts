@@ -50,8 +50,8 @@ const TURNED_OFF = 0.05;
 /** the hand bone's node in the thing's frame: how the hand holds it */
 type InHand = Placement;
 
-/** how long (s) the fingers take to seat a thing on the place a carry brings it to (`seat`): a few millimetres and degrees */
-const SEAT = 0.1;
+/** how long (s) the fingers take to nudge a thing onto the place a carry brings it to (`nudge`): a few millimetres and degrees */
+const NUDGE = 0.1;
 
 /** hand `side`'s node in `thing`'s frame as the body was last posed (into `out`) */
 function heldNow(person: Person, side: Side, thing: Thing, out: InHand): InHand {
@@ -191,20 +191,20 @@ function once(act: (f: Frame) => void): (f: Frame) => void {
 }
 
 /**
- * `thing`, carried to a place in hand `side` alone, seated on it exactly: `at` (world) where it is, `end` its place, the hand held where
- * it is and the thing moved in its fingers over `SEAT` s the last few millimetres and degrees the arm leaves it off its place. When it is
- * seated (s, the body's time).
+ * `thing`, carried to a place in hand `side` alone, nudged onto it exactly: `at` (world) where it is, `end` its place, the hand held where
+ * it is and the thing moved in its fingers over `NUDGE` s the last few millimetres and degrees the arm leaves it off its place. When it is
+ * nudged there (s, the body's time).
  */
-export function seat(person: Person, side: Side, thing: Thing, at: Readonly<Placement>, end: Readonly<Placement>): number {
+export function nudge(person: Person, side: Side, thing: Thing, at: Readonly<Placement>, end: Readonly<Placement>): number {
   const hold = person.holding[side];
-  if (!hold || hold.thing !== thing || !inHand(person, thing)) throw new Error(`seat: "${thing.object.name}" does not hang from the ${side} hand`);
+  if (!hold || hold.thing !== thing || !inHand(person, thing)) throw new Error(`nudge: "${thing.object.name}" does not hang from the ${side} hand`);
   const from = inHandNow(person, side, thing, hold);
   // (the hand where it is, as the thing where it is has it, brought into the thing's frame on its place)
   const back = end.quaternion.clone().invert(), hand = from.position.clone().applyQuaternion(at.quaternion).add(at.position);
   const to: InHand = { position: hand.sub(end.position).applyQuaternion(back), quaternion: back.multiply(at.quaternion).multiply(from.quaternion) };
   const start = person.frame.time;
-  hold.regrip = { from: from.quaternion, to: to.quaternion, palm: palmIn(person, side, from, new Vector3()), onto: palmIn(person, side, to, new Vector3()), start, seconds: SEAT };
-  return start + SEAT;
+  hold.regrip = { from: from.quaternion, to: to.quaternion, palm: palmIn(person, side, from, new Vector3()), onto: palmIn(person, side, to, new Vector3()), start, seconds: NUDGE };
+  return start + NUDGE;
 }
 
 /** how hand `side` holds `thing` now: as its regrip has reached, else as the body was last posed */

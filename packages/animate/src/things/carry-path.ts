@@ -17,8 +17,8 @@ export type CarryPath = ReturnType<typeof carryPathOf>;
 export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: Frame) => Goal)[], end: Object3D | null) {
   const f = person.frame, at = person.movingFrameOf(thing.object).current.position.clone();
   const turn = (f: Frame) => targets[targets.length - 1](f).quaternion;
-  const seat = thing.object.parent;
-  const out = seat ? approachOf(seat).reverse() : [], into = end ? approachOf(end) : [];
+  const source = thing.object.parent;
+  const out = source ? approachOf(source).reverse() : [], into = end ? approachOf(end) : [];
   const leaving = out.map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position }));
   const coming = into.map((empty) => (frame: Frame) => ({ position: person.movingFrameOf(empty).at(frame.time).current.position, quaternion: turn(frame) }));
   const points: ((f: Frame) => Goal)[] = [...leaving, ...targets.slice(0, -1), ...coming, targets[targets.length - 1]];
@@ -42,7 +42,7 @@ export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: F
     /** whether the eyes go to its end: not one riding the body, but what hangs from a hand (`ridesBody`) */
     watched: end === null || !ridesBody(person, end),
     /** Waypoints before a body-mounted insertion corridor. */
-    outside: hasBodyApproach(end) && !hasBodyApproach(seat) ? targets.length - 1 : 0,
+    outside: hasBodyApproach(end) && !hasBodyApproach(source) ? targets.length - 1 : 0,
     /** the points it passes through, the last its end */
     points: points.slice(Math.min(nearest, points.length - 1)),
     /** what each of them is, as a carry says it */
@@ -50,7 +50,7 @@ export function carryPathOf(person: Self, thing: Thing, targets: readonly ((f: F
     last,
     /** whether it is kept clear of the body (`clearBody`): not on a way out of or into an empty on one of the body's bones by that
      * empty's approach (a pouch, a scabbard, a helm's place on the head), which brings it out or in */
-    clear: hasBodyApproach(seat) || hasBodyApproach(end) ? false : end !== null && boneOf(person, end) >= 0 ? 'head' as const : true,
+    clear: hasBodyApproach(source) || hasBodyApproach(end) ? false : end !== null && boneOf(person, end) >= 0 ? 'head' as const : true,
   };
 }
 

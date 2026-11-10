@@ -191,7 +191,7 @@ export class FingerState {
 
   /** `placement` as `hand` takes it — what hangs from the hand closed on where the hand holds it, which may be turned off its placement
    * (a reach's turn is only preferred), so the fingers meet its faces as it hangs; closed afresh once it has moved in the hand (a regrip,
-   * a seat on its place) */
+   * a nudge onto its place) */
   private hung(hand: HandFingers, placement: HandPlacement): Taken {
     if (!within(placement.on, hand.joints.hand)) return this.take(hand, placement);
     const known = hand.hung.get(placement), { position, quaternion } = placement.on;
