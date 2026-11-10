@@ -81,7 +81,9 @@ export class Guide {
     // (followed about the middle of its grips, where the hands are: turning, a thing held off its middle lags about them, not about its
     // own origin, and does not swing off them)
     const pivot = this.pivot, held = (at: Placement, turn: Quaternion, out: Vector3) => out.copy(pivot).applyQuaternion(turn).add(at.position);
-    this.position.follow(held(nominal.prev, nominal.prev.quaternion, _p1), held(nominal.current, nominal.current.quaternion, _p2), held(goal, goal.quaternion, _p3), motion, f.dt, this.at, own);
+    // (one its own body carries changes pace with the body at once — a takeoff, a landing — as far as the hips do)
+    this.position.follow(held(nominal.prev, nominal.prev.quaternion, _p1), held(nominal.current, nominal.current.quaternion, _p2), held(goal, goal.quaternion, _p3), motion, f.dt, this.at,
+      own ? _jolt.copy(f.current.position(0)).sub(f.prev.position(0)).sub(f.prev.position(0)).add(f.prev2.position(0)) : undefined);
     this.at.sub(_p1.copy(pivot).applyQuaternion(turned));
     // Constraint correction is not velocity to feed back into the intended path.
     nominal.move(f.time, this.at, turned);
@@ -97,5 +99,5 @@ export class Guide {
     return this.carrier;
   }
 }
-const _aimed = new Vector3(), _push = new Vector3(), _pushed = new Vector3();
+const _jolt = new Vector3(), _aimed = new Vector3(), _push = new Vector3(), _pushed = new Vector3();
 const _p1 = new Vector3(), _p2 = new Vector3(), _p3 = new Vector3();

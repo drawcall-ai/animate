@@ -117,18 +117,15 @@ type GoalPace = Pick<Motion, 'accel' | 'speed'>;
 /** Follow finite-difference goal velocity without lag; brake jumps and treat the first sample as stationary. One sampler per goal. */
 export class PointFollower {
   private readonly sample = new PointVelocity();
-  /** the goal's velocity as last sampled */
-  private readonly was = new Vector3();
-
-  /** A goal moving faster than the pace's speed jumped: it is braked to as at rest, not followed in its motion — unless it is `carried`
-   * with what follows it (a place on the follower's own body), which is followed in its motion however fast it goes, and whose changes of
-   * pace (the body taking off, landing) carry the follower with it at once, only its way to the goal braked: braked to the goal's new
-   * pace as to its own, a thing kept on a place on the chest fell 5 cm behind it as the body took off */
-  follow(prev2: Readonly<Vector3>, prev: Readonly<Vector3>, goal: Readonly<Vector3>, pace: GoalPace, dt: number, out: Vector3, carried = false): Vector3 {
+  /** A goal moving faster than the pace's speed jumped: it is braked to as at rest, not followed in its motion — unless it is carried
+   * with what follows it (a place on the follower's own body), which is followed in its motion however fast it goes; `carried` is then
+   * how far the carrier's last step outran the one before it (m: its change of pace × dt²), the follower carried on with it at once and
+   * only its way to the goal braked — braked to the body's new pace as to its own, a thing kept on a place on the chest fell 5 cm behind
+   * it as the body took off */
+  follow(prev2: Readonly<Vector3>, prev: Readonly<Vector3>, goal: Readonly<Vector3>, pace: GoalPace, dt: number, out: Vector3, carried?: Readonly<Vector3>): Vector3 {
     const velocity = this.sample.read(goal, dt, carried ? Infinity : pace.speed);
-    // (its history read as if it had changed pace with the goal)
-    const from = carried ? _from.copy(prev2).addScaledVector(this.was, dt).addScaledVector(velocity, -dt) : prev2;
-    this.was.copy(velocity);
+    // (its history read as if it had changed pace with its carrier)
+    const from = carried ? _from.subVectors(prev2, carried) : prev2;
     return follow(from, prev, goal, { ...pace, velocity }, dt, out);
   }
 }
