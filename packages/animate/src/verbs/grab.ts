@@ -4,7 +4,7 @@ import { bodyOf } from '../things/hold';
 import type { Self } from '../body/self';
 import { Thing } from '../things/thing';
 import { nameOf, type AnySpecies } from '../species/define';
-import { verb, type Verb } from './story';
+import { checkSpeed, verb, type Verb } from './story';
 import { letGo } from '../body/let-go';
 import type { GrabOptions } from '../body/hand-staging';
 import { personOf } from './person-of';
@@ -31,7 +31,7 @@ import type { Request } from '../kernel/requests';
 export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips: ByHand<S, string>, options: GrabOptions = {}): Verb {
   const named = Object.entries<string | undefined>(grips).flatMap(([hand, grip]) => grip === undefined ? [] : [{ hand, grip }]);
   if (!named.length) throw new Error('grab: name a grip for a hand');
-  if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`grab: a speed of ${options.speed}`);
+  checkSpeed('grab', options.speed);
   if (options.already && options.speed !== undefined) throw new Error('grab: already holding it, the hands have no way to go at a `speed`: give one or the other');
   const self = selfOf(body);
   // (as it starts: what its hands hold else let go, the grips looked over)

@@ -6,7 +6,7 @@ import { bodyOf } from '../things/hold';
 import { headingOf, headingOfTurn } from '../kernel/math';
 import { stallOf, Walk } from '../step/walk';
 import { finder, type Target } from '../things/target';
-import { verb, type Until, type Verb } from './story';
+import { checkSpeed, verb, type Until, type Verb } from './story';
 
 /** How a walk goes. */
 export interface WalkOptions {
@@ -45,7 +45,7 @@ export interface WalkOptions {
 export function walkTo(body: Body, target: Target, options: WalkOptions = {}): Verb {
   const { face, speed, until } = options;
   if (target instanceof Body) throw new Error('walkTo: a body is no target: give a point beside it (`other.position`), or one of its bones');
-  if (speed !== undefined && !(Number.isFinite(speed) && speed > 0)) throw new Error(`walkTo: speed ${speed} is no pace`);
+  checkSpeed('walkTo', speed);
   if (typeof face === 'number' && !Number.isFinite(face)) throw new Error('walkTo: the facing is no angle');
   return verb(body, 'walkTo', (request) => function* () {
     const self = selfOf(body);

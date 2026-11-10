@@ -2,7 +2,7 @@ import { Body } from '../body';
 import { rising, sitting } from '../person/sit';
 import { personOf } from './person-of';
 import type { Target } from '../things/target';
-import { verb, type Until, type Verb } from './story';
+import { checkSpeed, verb, type Until, type Verb } from './story';
 
 /** How a sit goes. */
 export interface SitOptions {
@@ -26,7 +26,7 @@ export interface SitOptions {
 export function sit(body: Body, seat: Target, options: SitOptions = {}): Verb {
   const { face, speed, until } = options, person = personOf(body, 'sit');
   if (seat instanceof Body) throw new Error('sit: a body is no seat');
-  if (speed !== undefined && !(speed > 0)) throw new Error(`sit: a speed of ${speed}`);
+  checkSpeed('sit', speed);
   if (face !== undefined && !Number.isFinite(face)) throw new Error(`sit: a facing of ${face}: give radians about +Y`);
   return verb(body, 'sit', (request) => () => sitting(person, request, seat, face, speed), { until });
 }

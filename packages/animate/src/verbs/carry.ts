@@ -5,7 +5,7 @@ import { Thing } from '../things/thing';
 import type { Frame } from '../kernel/frame';
 import type { Goal } from '../kernel/goal';
 import { finder, type Target } from '../things/target';
-import { verb, type Verb } from './story';
+import { checkSpeed, verb, type Verb } from './story';
 import type { HandOptions } from '../body/hand-staging';
 
 /**
@@ -39,7 +39,7 @@ import type { HandOptions } from '../body/hand-staging';
 export function carry(body: Body, thing: Object3D, target: Target | readonly Target[], options: HandOptions = {}): Verb {
   const targets = Array.isArray(target) ? target : [target];
   if (!targets.length) throw new Error('carry: give a target');
-  if (options.speed !== undefined && !(options.speed > 0 && options.speed < Infinity)) throw new Error(`carry: a speed of ${options.speed}`);
+  checkSpeed('carry', options.speed);
   return verb(body, 'carry', (request) => function* () {
     const self = selfOf(body), carried = Thing.of(thing);
     if (!handsOn(self, carried).length) throw new Error(`carry: no hand of the body holds "${thing.name}" (grab it first)`);

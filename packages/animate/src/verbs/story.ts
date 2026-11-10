@@ -122,6 +122,11 @@ export function* wait(until: Until): Generator<TimelineYield<unknown>, true, unk
   return true;
 }
 
+/** `speed`, if given, checked to be a pace a verb can go at: positive and finite, else a misuse said as `verb` is called */
+export function checkSpeed(verb: string, speed: number | undefined): void {
+  if (speed !== undefined && !(speed > 0 && speed < Infinity)) throw new Error(`${verb}: a speed of ${speed}`);
+}
+
 /** this library's files (its source, or the package it is built into), whose frames a call site skips */
 const LIBRARY = new URL('..', import.meta.url).href;
 

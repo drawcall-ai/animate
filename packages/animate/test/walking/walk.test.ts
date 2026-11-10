@@ -215,7 +215,7 @@ it.each([[1, 'left'], [-1, 'right']] as const)('turns about round the side it lo
 
 it('throws on a pace that is none, and for a body its app drives', () => {
   const body = person();
-  expect(() => walkTo(body, new Vector3(), { speed: 0 })).toThrow('no pace');
+  expect(() => walkTo(body, new Vector3(), { speed: 0 })).toThrow('walkTo: a speed of 0');
   const driven = person({ drive: () => ({ position: new Vector3(), velocity: new Vector3(), yaw: 0 }) });
   expect(() => play(function* () { yield* walkTo(driven, new Vector3(0, 0, 1)); }, [driven], 0.1)).toThrow('drives it');
 });
