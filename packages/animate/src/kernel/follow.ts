@@ -109,6 +109,7 @@ function vector(v: number | Vector3, out: Vector3): Vector3 {
 const ZERO = new Vector3();
 const [_u, _p, _g, _v, _a, _d] = Array.from({ length: 6 }, () => new Vector3());
 const [_q, _r, _p2, _p3] = Array.from({ length: 4 }, () => new Quaternion());
+const _from = new Vector3();
 
 /** How a moving goal is followed: `Motion`'s acceleration and speed. */
 type GoalPace = Pick<Motion, 'accel' | 'speed'>;
@@ -116,10 +117,19 @@ type GoalPace = Pick<Motion, 'accel' | 'speed'>;
 /** Follow finite-difference goal velocity without lag; brake jumps and treat the first sample as stationary. One sampler per goal. */
 export class PointFollower {
   private readonly sample = new PointVelocity();
+  /** the goal's velocity as last sampled */
+  private readonly was = new Vector3();
 
-  /** `jumpAbove`: a goal moving faster than this (m/s; default the pace's speed) jumped: it is braked to as at rest, not followed in its motion */
-  follow(prev2: Readonly<Vector3>, prev: Readonly<Vector3>, goal: Readonly<Vector3>, pace: GoalPace, dt: number, out: Vector3, jumpAbove = pace.speed): Vector3 {
-    return follow(prev2, prev, goal, { ...pace, velocity: this.sample.read(goal, dt, jumpAbove) }, dt, out);
+  /** A goal moving faster than the pace's speed jumped: it is braked to as at rest, not followed in its motion — unless it is `carried`
+   * with what follows it (a place on the follower's own body), which is followed in its motion however fast it goes, and whose changes of
+   * pace (the body taking off, landing) carry the follower with it at once, only its way to the goal braked: braked to the goal's new
+   * pace as to its own, a thing kept on a place on the chest fell 5 cm behind it as the body took off */
+  follow(prev2: Readonly<Vector3>, prev: Readonly<Vector3>, goal: Readonly<Vector3>, pace: GoalPace, dt: number, out: Vector3, carried = false): Vector3 {
+    const velocity = this.sample.read(goal, dt, carried ? Infinity : pace.speed);
+    // (its history read as if it had changed pace with the goal)
+    const from = carried ? _from.copy(prev2).addScaledVector(this.was, dt).addScaledVector(velocity, -dt) : prev2;
+    this.was.copy(velocity);
+    return follow(from, prev, goal, { ...pace, velocity }, dt, out);
   }
 }
 

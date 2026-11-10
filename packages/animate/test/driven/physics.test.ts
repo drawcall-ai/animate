@@ -1,7 +1,8 @@
-import { Object3D, Vector3 } from 'three';
+import { BoxGeometry, Mesh, Object3D, Vector3 } from 'three';
+import { runTimeline } from '@pmndrs/timeline';
 import { driven, jump } from '../kit/driving';
 import { expect, it } from 'vitest';
-import { track, type Floor, type Root, poseOf } from '../../src/index';
+import { carry, grab, release, track, wait, type Floor, type Root, poseOf } from '../../src/index';
 import { INDEX, dt, readings, person, run, scene, flying } from '../kit/bodies';
 
 /** eight 0.22 m risers up from z = 0, on 0.55 m treads */
@@ -289,4 +290,43 @@ it.each([false, true])('keeps an external hand target in its world frame (moving
     error = Math.max(error, poseOf(body).position(INDEX.rightHand).distanceTo(target.position));
   }
   expect(error).toBeLessThan(0.02);
+});
+
+// (a soldier's magazine kept under the rifle's well as the player jumps: what goes onto a place on the body goes there however the body
+// is flung, and a release there sets it without a word)
+it.each([[5, 0], [5, 3]])('keeps a thing on a place on its own chest through a jump at %s m/s up, %s m/s ahead, and lets it go onto it', (up, ahead) => {
+  const d = driven(), { body } = d;
+  const room = new Object3D(), thing = new Mesh(new BoxGeometry(0.03, 0.12, 0.06)), side = new Object3D(), spot = new Object3D();
+  thing.name = 'thing';
+  thing.userData.mass = 0.4;
+  thing.position.set(0.25, 1, 0.35);
+  side.name = 'side';
+  side.position.set(0, -0.04, 0);
+  thing.add(side);
+  spot.name = 'spot';
+  room.add(body.object, thing);
+  body.bones.chest.add(spot);
+  room.updateMatrixWorld(true);
+  spot.position.copy(body.bones.chest.worldToLocal(new Vector3(0.12, 1.05, 0.38)));
+  let there = false, landed = false;
+  const story = runTimeline(function* () {
+    yield* grab(body, thing, { left: 'side' }, { step: false });
+    yield* carry(body, thing, spot, { step: false, speed: 2.6 });
+    there = true;
+    yield* wait(() => landed);
+    release(body, thing, spot);
+  });
+  const off = () => thing.getWorldPosition(new Vector3()).distanceTo(spot.getWorldPosition(new Vector3()));
+  for (let frame = 0; frame < 600 && !there; frame++) { story(undefined, dt); body.update(dt); }
+  expect(there).toBe(true);
+  let worst = 0;
+  // (held 2 to 5 cm off its place as the body took off and landed, the guide braking to the body's new pace as to its own)
+  const step = () => { story(undefined, dt); worst = Math.max(worst, off()); };
+  jump(d, new Vector3(0, up, ahead), 14, Infinity, step);
+  d.root.velocity.set(0, 0, 0);
+  run(body, 0.3, step);
+  landed = true;
+  story(undefined, dt);
+  expect(worst).toBeLessThan(0.002);
+  expect(thing.parent).toBe(spot);
 });
