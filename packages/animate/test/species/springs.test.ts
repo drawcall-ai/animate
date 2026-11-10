@@ -1,7 +1,8 @@
 import { Vector3 } from 'three';
 import { expect, test } from 'vitest';
 import { Body, humanoid } from '../../src/index';
-import { species, type Spring } from '../../src/species';
+import { species } from '../../src/species';
+import type { Spring } from '../../src/species/spring';
 import { PERSON } from '../../skills/animate/references/person';
 
 const CHAIN = [

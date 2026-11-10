@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import { runTimeline, type ReusableTimeline } from '@pmndrs/timeline';
 import { Body, humanoid, poseOf, type BodyOptions, type HumanoidBone } from '../../src/index';
-import type { Gazer } from '../../src/species';
+import type { Gazer } from '../../src/species/define';
 import { PERSON } from '../../skills/animate/references/person';
 
 /** the sub-step (s) */

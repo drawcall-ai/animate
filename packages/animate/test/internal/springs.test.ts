@@ -1,7 +1,8 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, test } from 'vitest';
 import { Body } from '../../src/index';
-import { species, type Spring } from '../../src/species';
+import { species } from '../../src/species';
+import type { Spring } from '../../src/species/spring';
 import { Binding } from '../../src/body/binding';
 import { Springs } from '../../src/body/springs';
 

@@ -10,8 +10,6 @@ import { personOf } from './verbs/person-of';
 
 // For a body its app poses itself, its update stopped (what no verb does: sitting, climbing): where its hands go, and how its fingers shape.
 
-export type { HandPlacement };
-
 /**
  * The placement hand `side` takes the grip `empty` by (its thing the empty's parent): what the grip leaves free fixed as a grab fixes it,
  * from where the body stood at its last update. Hand it to `gripOn` and `shapeHand`: asked again before the body's next update, it is the
