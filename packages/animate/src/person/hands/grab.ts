@@ -1,5 +1,6 @@
 import { MathUtils, Box3, Quaternion, Ray, Vector3 } from 'three';
-import { bear, bodyOf, grasp, held as heldThings, lift, onBody, ridesBody } from '../../things/hold';
+import { bodyOf, grasp, held as heldThings, lift, onBody, ridesBody } from '../../things/hold';
+import { bear } from '../../things/bearing';
 import { action, parallel } from '@pmndrs/timeline';
 import type { Frame } from '../../kernel/frame';
 import { inView, noticing } from '../../look/gaze';
