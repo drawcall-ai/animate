@@ -8,12 +8,11 @@ import type { ReadonlyBonePose } from '../kernel/bone-pose';
 import { clamp, minimumJerk, yawOf } from '../kernel/math';
 import { seedOf } from '../kernel/random';
 import { swing } from '../kernel/life';
-import type { Gait } from '../species/gait';
 import { trunkMotion, type TrunkBones, type Striding } from './trunk-motion';
 import type { JointCycle } from '../species/cycle';
 import type { LegChain } from '../species/leg-chain';
 import { powerGait, stanceOf } from '../species/schedule';
-import { gaitAt } from '../species/scaled';
+import { gaitAt, type Gait } from '../species/gait';
 import { build, mirrored, needing, type Attention, type BoneNames, type Having, type LegRole, type Range, type Species, type Vec3 } from '../species/define';
 
 /** the bones a horse's skeleton names (each leg's, `left`/`right` before each) */

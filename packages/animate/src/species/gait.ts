@@ -67,3 +67,26 @@ export function offsetAt(gait: Gait, speed: number, leg: number): number {
   if (!(value >= 0 && value < 1)) throw new Error('a gait offset must be in [0, 1)');
   return value;
 }
+
+/** the gait dynamically similar at `size`: read at the speed of the same Froude number */
+export function gaitAt(gait: Gait, size: number): Gait {
+  const k = Math.sqrt(size), at = (v: number) => v / k;
+  const offsetOf = (offset: Gait['contacts'][number]['offset']) => typeof offset === 'number' ? offset : (v: number, fr: number) => offset(at(v), fr);
+  return {
+    ...gait,
+    height: gait.height * size,
+    slowest: gait.slowest * k,
+    referenceSpeed: gait.referenceSpeed === undefined ? undefined : gait.referenceSpeed * k,
+    clearance: gait.clearance.map((c) => c * size),
+    frequency: (v, fr) => gait.frequency(at(v), fr) / k,
+    contacts: gait.contacts.map((c) => ({
+      ...c,
+      offset: offsetOf(c.offset),
+      duty: (v: number, fr: number) => c.duty(at(v), fr),
+    })),
+    trunk: typeof gait.trunk === 'function' ? ((body) => (v: number, fr: number) => trunkAt(body(at(v), fr), size))(gait.trunk) : gait.trunk && trunkAt(gait.trunk, size),
+  };
+}
+
+/** a trunk motion at `size`: its rises and falls as long, its angles as they are */
+const trunkAt = (b: TrunkMotion, size: number): TrunkMotion => ({ ...b, withers: b.withers * size, croup: [b.croup[0] * size, b.croup[1]], headRise: b.headRise * size });

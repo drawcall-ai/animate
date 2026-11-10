@@ -3,7 +3,7 @@
 import type { SkeletonBone } from '../kernel/skeleton';
 import type { JointCycle } from '../species/cycle';
 import { powerGait } from '../species/schedule';
-import { gaitAt } from '../species/scaled';
+import { gaitAt } from '../species/gait';
 import { swing } from '../kernel/life';
 import { build, needing, type BoneNames, type Having, type LegRole, type Range, type Species } from '../species/define';
 
