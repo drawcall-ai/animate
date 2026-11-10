@@ -3,14 +3,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { expect, it } from 'vitest';
-import * as animate from '@drawcall/animate';
+import * as animate from '../../src/index';
 import * as three from 'three';
 import * as timeline from '@pmndrs/timeline';
-import { cases } from '../../../packages/animate/test/kit/open';
-import { PERSON } from '../../../packages/animate/skills/animate/references/person';
+import { cases } from '../kit/open';
+import { PERSON } from '../../skills/animate/references/person';
 
 // Compile and run the shipped skill's standalone examples.
-const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '../../..');
+const here = dirname(fileURLToPath(import.meta.url)), root = resolve(here, '../../../..');
 const DOCS = ['packages/animate/skills/animate/SKILL.md'];
 
 function blocks(): { name: string; code: string; doc: string }[] {
@@ -21,7 +21,7 @@ function blocks(): { name: string; code: string; doc: string }[] {
 /** each block's type errors, by block */
 function compiled(): Map<string, string[]> {
   const config = ts.readConfigFile(resolve(root, 'tsconfig.base.json'), ts.sys.readFile);
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'examples/viewer'));
+  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, resolve(root, 'packages/animate'));
   const options = { ...parsed.options, noUnusedLocals: false, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 };
   const files = new Map(blocks().map(({ name, code, doc }, i) => [resolve(root, dirname(doc), `__snippet${i + 1}.ts`),
     { name, text: code }]));
