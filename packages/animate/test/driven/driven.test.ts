@@ -108,14 +108,16 @@ it('crouches on a key press and stands on its release, the feet kept to the floo
   // (up again: its hips where they stand)
   expect(h.proportions.hipHeight - h.pose.position(0).y).toBeLessThan(0.02);
 });
-// (crouched: a crouch-walk, turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does)
+// (crouched: a crouch-walk, turns on the spot, a walk back and a strafe at a crouch-walk's pace, eased in over 0.25 s as a game does; the
+// pelvis 0.37 m down standing, a stride's dip further walking — and a strafe's further still, its side-step taking the feet some half a
+// metre apart: measured, 0.40 m walking ahead or back, 0.43 m strafing)
 it.each([
-  ['a walk ahead', moving(2, 4.5, forwardOf(0).multiplyScalar(0.8)), () => 0, 0.5, 5.25],
-  ['a quarter turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? Math.PI / 2 : 0, 0.3, 5],
-  ['a half turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? 0.95 * Math.PI : 0, 0.3, 5],
-  ['a walk back', moving(1, 4, forwardOf(0).multiplyScalar(-0.8)), () => 0, 0.3, 5],
-  ['a strafe', moving(1, 4, leftOf(0).multiplyScalar(0.8)), () => 0, 0.3, 5],
-] as const)('crouched, %s: the pelvis let down smoothly, steps still clean', (_, velocity, yaw, down, up) => {
+  ['a walk ahead', moving(2, 4.5, forwardOf(0).multiplyScalar(0.8)), () => 0, 0.5, 5.25, 0.42],
+  ['a quarter turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? Math.PI / 2 : 0, 0.3, 5, 0.42],
+  ['a half turn on the spot', () => new Vector3(), (t: number) => t > 1.5 ? 0.95 * Math.PI : 0, 0.3, 5, 0.42],
+  ['a walk back', moving(1, 4, forwardOf(0).multiplyScalar(-0.8)), () => 0, 0.3, 5, 0.42],
+  ['a strafe', moving(1, 4, leftOf(0).multiplyScalar(0.8)), () => 0, 0.3, 5, 0.45],
+] as const)('crouched, %s: the pelvis let down smoothly, steps still clean', (_, velocity, yaw, down, up, deepest) => {
   let low = Infinity, standing = 0;
   const { h } = drive(6, velocity, yaw, (t, root, h) => {
     root.crouch = Math.min(1, Math.max(0, (t - down) / 0.25), Math.max(0, (up - t) / 0.25));
@@ -123,7 +125,7 @@ it.each([
     if (t > down + 0.5 && t < up - 0.25) low = Math.min(low, h.pose.position(0).y);
   });
   expect(standing - low).toBeGreaterThan(0.33);
-  expect(standing - low).toBeLessThan(0.45);
+  expect(standing - low).toBeLessThan(deepest);
   expect(h.log).toEqual([]);
 });
 
