@@ -2,7 +2,7 @@ import { Euler, Object3D, Quaternion, Vector3 } from 'three';
 import type { AnySpecies } from '../species/define';
 import { STIFFNESS } from '../species/spring';
 import type { Binding } from './binding';
-import { nearestBetween } from '../kernel/math';
+import { GRAVITY, nearestBetween } from '../kernel/math';
 
 /**
  * Body-owned spring state. Only rotations are written; the rig keeps every joint and segment length. A person's links keep out of its
@@ -39,7 +39,7 @@ export class Springs {
       for (const [name, value] of Object.entries({ stiffness, damping })) {
         if (!(value >= 0 && Number.isFinite(value))) throw new Error(`springs.${root}.${name}: give a finite nonnegative number`);
       }
-      const gravity = new Vector3(...settings.gravity ?? [0, -9.81, 0]);
+      const gravity = new Vector3(...settings.gravity ?? [0, -GRAVITY, 0]);
       if (!gravity.toArray().every(Number.isFinite)) throw new Error(`springs.${root}.gravity: give a finite acceleration`);
       const before = this.links.length, names = [root];
       for (let i = 0; i < names.length; i++) {

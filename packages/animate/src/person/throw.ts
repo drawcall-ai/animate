@@ -3,7 +3,7 @@ import { parallel } from '@pmndrs/timeline';
 import { letGo } from '../body/let-go';
 import { timedPath, still } from '../kernel/timed-path';
 import type { Frame } from '../kernel/frame';
-import { lerp } from '../kernel/math';
+import { GRAVITY, lerp } from '../kernel/math';
 import type { Asked } from '../kernel/asks';
 import { during, type Miss, type Request } from '../kernel/requests';
 import { LimbMover } from '../kernel/limb';
@@ -114,7 +114,7 @@ export function* throwing(person: Person, request: Request, thing: Thing, side: 
       const { motion } = letGo(person, thing, [side], undefined, false);
       if (target) {
         const at = typeof target === 'function' ? target(f.time) : target;
-        const aim = aimed(thing.object.getWorldPosition(new Vector3()), at instanceof Object3D ? at.getWorldPosition(new Vector3()) : at, options.speed, options.gravity ?? G);
+        const aim = aimed(thing.object.getWorldPosition(new Vector3()), at instanceof Object3D ? at.getWorldPosition(new Vector3()) : at, options.speed, options.gravity ?? GRAVITY);
         motion.velocity.copy(aim.velocity);
         if (aim.short) aiming.short = { ...aim.short, where: thing.object.name };
       }
@@ -156,4 +156,4 @@ function aimed(from: Vector3, to: Vector3, speed: number | undefined, g: number)
   return { velocity: flat.multiplyScalar(v * Math.cos(angle)).setY(v * Math.sin(angle)), short: null };
 }
 
-const G = 9.81, UP = new Vector3(0, 1, 0), _turn = new Quaternion(), _held = new Quaternion();
+const UP = new Vector3(0, 1, 0), _turn = new Quaternion(), _held = new Quaternion();
