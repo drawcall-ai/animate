@@ -13,11 +13,11 @@ import { clamp } from '../kernel/math';
 
 /** How a pose goes. */
 interface PoseOptions {
-  /** ends on this, `true`; with neither this nor `hold`, it holds the posture until its story moves on */
+  /** ends on this, `true`; with neither this nor `stay`, it keeps the posture until its story moves on */
   until?: Until;
   /** ends this many seconds after the parts it poses have come to rest, as measured: however far they got (`lower: 3` stops where the legs
    * do). A walking body's stride never rests, so walking it takes them to have come 1.2 s on; other motion that keeps a part moving, 3 s on */
-  hold?: number;
+  stay?: number;
 }
 
 /**
@@ -28,13 +28,13 @@ interface PoseOptions {
  * part's own pace: a person's trunk at up to 1.2 rad/s (6 rad/s²; `lower` 0.6 m/s), its head and arms at up to 2.5 rad/s, so a 0.3 rad
  * nod is down in about a quarter second and back in as long; a creature's trunk closes about half the way in 0.3 s and 85% in 0.6 s, at
  * most 0.25 rad of bow and 0.15 of twist or lean (combined, they can still ask more than a big creature's legs follow). A pose that ends
- * before it has come two thirds of the way to an angle comes out that much smaller, so give `hold` to end it once it has come. A walking
- * person bows at most 0.5 rad. An aimer, it keeps on until `until` or `hold`. It asks for the trunk's
+ * before it has come two thirds of the way to an angle comes out that much smaller, so give `stay` to end it once it has come. A walking
+ * person bows at most 0.5 rad. An aimer, it keeps on until `until` or `stay`. It asks for the trunk's
  * posture with a trunk field (taking the trunk from a `lookAt` given a `trunk` share, or giving it up to a newer one), for the head's
  * turn with `head` — not for the eyes: a look beside it keeps them, and the head turns over where they look — and for each arm it poses; a hand verb or a held thing takes that arm over (`ArmPosture`). A person's `fingers`
  * (a skeleton with finger bones) take each hand's shape as asked rather than adding onto anything, easing in within about a quarter
  * second and back to relaxed once the pose ends; a hand holding something keeps its grasp, and a `grab` begun after the pose takes the fingers until its hand lets go, preshaping from the shape the pose gave the hand (begun the same frame as the pose, it finds the hand not yet shaped and sets out from it as it is; the pose's shape comes once the grab lets go). A person's `stagger` has its feet step apart
- * fore and aft, and hold there until the pose ends, then square up as a cut-off walk does (a step or a few, in up to about 3 s); `hold` then counts from their settling.
+ * fore and aft, and hold there until the pose ends, then square up as a cut-off walk does (a step or a few, in up to about 3 s); `stay` then counts from their settling.
  */
 export function pose(body: Body, posture: Posture, options: PoseOptions = {}): Verb {
   const { head, arms, fingers, stagger, ...trunk } = posture;
@@ -49,16 +49,16 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   const armPose = arms && personOf(body, 'pose arms').armPose;
   const shapes = fingers ? shapesOf(self, body, fingers) : [];
   const asked = { bow: trunk.bow ?? 0, twist: trunk.twist ?? 0, lean: trunk.lean ?? 0, lower: trunk.lower ?? 0 };
-  const posed = Object.keys(trunk).length > 0, { until, hold } = options;
-  if (until !== undefined && hold !== undefined) throw new Error('pose: give `until` or `hold`, not both');
-  if (hold !== undefined && !(hold >= 0 && hold < Infinity)) throw new Error(`pose: a hold of ${hold} s`);
+  const posed = Object.keys(trunk).length > 0, { until, stay } = options;
+  if (until !== undefined && stay !== undefined) throw new Error('pose: give `until` or `stay`, not both');
+  if (stay !== undefined && !(stay >= 0 && stay < Infinity)) throw new Error(`pose: a stay of ${stay} s`);
   return verb(body, 'pose', (request) => function* () {
     const posedArms = armPose ? SIDES.flatMap((side) => {
       const arm = arms?.[side];
       return arm ? [{ side, into: armPose[side], arm: { shrug: 0, forward: 0, out: 0, twist: 0, elbow: 0, ...arm } }] : [];
     }) : [];
     yield* parallel('all',
-      coming(self, request, posture, hold),
+      coming(self, request, posture, stay),
       // (under a walk its stride is the walk's: it stands so once there)
       stagger !== undefined && action<Frame>({ update: () => { if (!self.claims.owner('legs')) self.asks.add({ stagger: [off, -off] }); } }),
       posed && during(request, 'trunk', 'asked', () => self.asks.add({ posture: asked })),
@@ -99,9 +99,9 @@ function* settling(self: Self) {
   yield* action<Frame>({ until: (f) => (elapsed += f.dt) >= LONGEST.standing || self.locomotion.settled });
 }
 
-/** Met `hold` s after the parts `posture` poses have come to rest (`comingToRest`), however far they got. Given no `hold`, it keeps the pose on till its story ends it. */
-function* coming(self: Self, request: Request, posture: Posture, hold: number | undefined) {
-  if (hold !== undefined) {
+/** Met `stay` s after the parts `posture` poses have come to rest (`comingToRest`), however far they got. Given no `stay`, it keeps the pose on till its story ends it. */
+function* coming(self: Self, request: Request, posture: Posture, stay: number | undefined) {
+  if (stay !== undefined) {
     const { head, arms, fingers, stagger, ...trunk } = posture, person = self.species.person !== undefined;
     yield* comingToRest([
       ...(Object.keys(trunk).length ? [0, ...(person ? [self.skeleton.index('chest')] : [])] : []),
@@ -111,7 +111,7 @@ function* coming(self: Self, request: Request, posture: Posture, hold: number | 
     // (the feet stepped into it too: however still the trunk stood as they did)
     if (stagger !== undefined) yield* settling(self);
     let elapsed = 0;
-    if (hold > 0) yield* action<Frame>({ until: (f) => { const over = elapsed >= hold - 1e-9; elapsed += f.dt; return over; } });
+    if (stay > 0) yield* action<Frame>({ until: (f) => { const over = elapsed >= stay - 1e-9; elapsed += f.dt; return over; } });
     request.met();
   }
   yield* action<Frame>({});

@@ -122,7 +122,7 @@ describe('sit', () => {
   it.each([
     ['sits on another seat', (body: Body) => function* () { yield* sit(body, seatAt(0.45)); return yield* sit(body, seatAt(0.45, 2)); }],
     ['sits on the same seat again', (body: Body) => function* () { const seat = seatAt(0.45); yield* sit(body, seat); return yield* sit(body, seat); }],
-    ['crouched, sits', (body: Body) => function* () { yield* pose(body, { lower: 0.5 }, { hold: 0 }); return yield* sit(body, seatAt(0.45)); }],
+    ['crouched, sits', (body: Body) => function* () { yield* pose(body, { lower: 0.5 }, { stay: 0 }); return yield* sit(body, seatAt(0.45)); }],
   ] as const)('%s, and is down on it when it says so', (_, story) => {
     const body = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } });
     expect(play(body, story(body), { limit: 40 }).result).toBe(true);
@@ -131,7 +131,7 @@ describe('sit', () => {
 
   it('measures its seat from standing height, not from a crouch', () => {
     const body = person({ at: new Vector3(0, 0, 2), life: { seed: 1 } });
-    const { result } = play(body, function* () { yield* pose(body, { lower: 0.4 }, { hold: 0 }); return yield* attempt(sit(body, seatAt(0.1))); });
+    const { result } = play(body, function* () { yield* pose(body, { lower: 0.4 }, { stay: 0 }); return yield* attempt(sit(body, seatAt(0.1))); });
     expect(result?.why).toMatch(/too low/);
   });
 

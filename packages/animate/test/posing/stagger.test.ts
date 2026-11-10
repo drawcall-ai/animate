@@ -33,9 +33,9 @@ describe('a pose\'s stagger', () => {
     }
   });
 
-  it('asks no more than the feet settle on, and waits for them under a `hold`', () => {
+  it('asks no more than the feet settle on, and waits for them under a `stay`', () => {
     const body = person({ dev: true, life: { seed: 3 } });
-    play(function* () { yield* pose(body, { stagger: 2 }, { hold: 0 }); expect(body.settled).toBe(true); expect(stagger(body)).toBeGreaterThan(0.25); }, [body], 6);
+    play(function* () { yield* pose(body, { stagger: 2 }, { stay: 0 }); expect(body.settled).toBe(true); expect(stagger(body)).toBeGreaterThan(0.25); }, [body], 6);
     expect(body.log).toEqual([]);
   });
 

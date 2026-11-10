@@ -15,7 +15,7 @@ const HEAD_SHARE = 0.55;
 /** standing, the eyes rest ahead a little below eye level; walking, on the path a few steps ahead (× height up off the floor there, m ahead) */
 const AHEAD = { stand: { height: 0.75, distance: 3 }, walk: { height: 0.35, distance: 4.5 } };
 /** standing still, a glance aside every so often (s apart, s held, rad aside at most and up or down at most) */
-const GLANCES = { every: [2.5, 5], hold: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
+const GLANCES = { every: [2.5, 5], stay: [0.8, 1.6], aside: 0.7, pitch: 0.15 };
 
 /** Idle gaze follows the walking path; standing glances vary deterministically with `seed`, the less aside the stiller its life holds it. */
 export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3 {
@@ -32,7 +32,7 @@ export function lookAround(person: Walking, seed: number): (f: Frame) => Vector3
       until = 0;
     }
     if (f.time >= next) {
-      until = f.time + lerp(GLANCES.hold[0], GLANCES.hold[1], rand());
+      until = f.time + lerp(GLANCES.stay[0], GLANCES.stay[1], rand());
       next = until + lerp(GLANCES.every[0], GLANCES.every[1], rand());
       aside = (2 * rand() - 1) * GLANCES.aside;
       up = (2 * rand() - 1) * GLANCES.pitch;

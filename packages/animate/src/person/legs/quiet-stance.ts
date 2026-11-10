@@ -3,7 +3,7 @@ import type { Asks } from '../../kernel/asks';
 import { MathUtils, Vector3 } from 'three';
 import { lerp } from '../../kernel/math';
 import { irregular, seeded, seedOf } from '../../kernel/random';
-import { Life as Rhythms, type Rhythm } from '../../kernel/life';
+import { Life, type Rhythm } from '../../kernel/life';
 import type { Side } from '../anatomy/bones';
 import type { Person } from '../person';
 
@@ -12,7 +12,7 @@ import type { Person } from '../person';
  * in the research brief: spontaneous shifts roughly every 10–30 s, each held 20–40 s, to the other side
  * each time; tuned: ten quiet seconds after activity before the next.
  */
-const WEIGHT: Rhythm = { first: [10, 20], every: [10, 30], hold: [20, 40], quiet: 10, pick: (last, rand) => last === 0 ? (rand() < 0.5 ? 1 : -1) : -last };
+const WEIGHT: Rhythm = { first: [10, 20], every: [10, 30], stay: [20, 40], quiet: 10, pick: (last, rand) => last === 0 ? (rand() < 0.5 ? 1 : -1) : -last };
 
 /**
  * Recalled (Era et al. 1996, Mononen et al. 2007: marksmen's sway as they aim is a fraction of their quiet stance's; they breathe shallow
@@ -29,13 +29,13 @@ export class QuietStance {
   readonly drift = new Vector3();
   breath = 0;
   private time = 0; private amount = 0; private quietTime = 0;
-  private readonly rhythms: Rhythms<'weight'>;
+  private readonly rhythms: Life<'weight'>;
   /** its drift's own frequencies, × the tuned ones */
   private readonly tempo: number[];
 
   /** `sway`: how strongly it sways, as the person it is (1: as tuned) */
   constructor(seed: number, private readonly sway = 1) {
-    this.rhythms = new Rhythms(seed, [['weight', WEIGHT]]);
+    this.rhythms = new Life(seed, [['weight', WEIGHT]]);
     const random = seeded(seedOf('quiet', seed));
     this.tempo = [0, 1, 2].map(() => lerp(1 - TEMPO, 1 + TEMPO, random()));
   }

@@ -25,7 +25,7 @@ const measure = (posed: Body, still: Body, bone: number) => {
 
 /**
  * `posture` held by one of two like bodies for 2 s beside the other asked nothing (both of the same seed, so their quiet life is the
- * same): `bone` and the root off the other's at the hold's end and 1.5 s after it ends, and each body's log
+ * same): `bone` and the root off the other's at the stay's end and 1.5 s after it ends, and each body's log
  */
 function posed(make: () => Body, posture: Posture, bone: (body: Body) => number) {
   const posing = make(), still = make();
@@ -233,19 +233,19 @@ describe('pose of the arms', () => {
   });
 });
 
-describe('pose hold', () => {
-  /** how long `posture` given `hold` takes to end, and what it returned */
-  const ended = (posture: Posture, hold: number, make: () => Body = () => person()) => {
+describe('pose stay', () => {
+  /** how long `posture` given `stay` takes to end, and what it returned */
+  const ended = (posture: Posture, stay: number, make: () => Body = () => person()) => {
     const body = make();
     let result: boolean | undefined, took = 0;
-    play(function* () { result = yield* pose(body, posture, { hold }); }, [body], 20, (time) => {
+    play(function* () { result = yield* pose(body, posture, { stay }); }, [body], 20, (time) => {
       took = time;
       return result !== undefined;
     });
     return { result, took };
   };
 
-  it('ends once the posture has come at its part\'s pace, the hold on', () => {
+  it('ends once the posture has come at its part\'s pace, the stay on', () => {
     // (a person's bow at 1.2 rad/s; a head at 2.5)
     const bow = ended({ bow: 0.6 }, 0), held = ended({ bow: 0.6 }, 0.5);
     expect(bow.result).toBe(true);
@@ -254,7 +254,7 @@ describe('pose hold', () => {
     expect(held.took - bow.took).toBeCloseTo(0.5, 1);
     expect(ended({ head: { pitch: 0.3 } }, 0).took).toBeLessThan(0.5);
     expect(ended({ lean: 0.12 }, 0, () => new Body(droid())).result).toBe(true);
-    expect(() => pose(person(), { bow: 0.1 }, { hold: 1, until: 1 })).toThrow(/not both/);
+    expect(() => pose(person(), { bow: 0.1 }, { stay: 1, until: 1 })).toThrow(/not both/);
   });
 
   it('has measured the posture come: a large pose ends later than a small one, and nearly where it stays', () => {
@@ -263,7 +263,7 @@ describe('pose hold', () => {
       const body = person({ life: { seed: 1 } });
       let done = false, now = 0, at = 0, took = 0;
       play(function* () {
-        yield* pose(body, { bow }, { hold: 0 });
+        yield* pose(body, { bow }, { stay: 0 });
         at = chest(body);
         took = now;
         yield* pose(body, { bow }, { until: 1 });
@@ -282,7 +282,7 @@ describe('pose hold', () => {
     const body = person({ life: { seed: 1 } });
     let hips = 0, now = 0, took = 0, done = false;
     play(function* () {
-      yield* pose(body, { lower: 3 }, { hold: 0 });
+      yield* pose(body, { lower: 3 }, { stay: 0 });
       hips = body.bones.hips.getWorldPosition(new Vector3()).y;
       took = now;
       done = true;
@@ -298,7 +298,7 @@ describe('pose hold', () => {
       yield* parallel('race', walkTo(walker, new Vector3(0, 0, 30), { until: Infinity }), function* () {
         yield* wait(2);
         const posed = now;
-        yield* pose(walker, { head: { pitch: 0.2 } }, { hold: 0.2 });
+        yield* pose(walker, { head: { pitch: 0.2 } }, { stay: 0.2 });
         took = now - posed;
       });
     }, [walker], 12, (time) => { now = time; return took > 0; });
@@ -310,7 +310,7 @@ describe('pose hold', () => {
     const body = person();
     let bowed = 0, done = false;
     const chest = () => body.bones.chest.getWorldQuaternion(new Quaternion()).angleTo(new Quaternion());
-    play(function* () { yield* pose(body, { bow: 0.6 }, { hold: 0 }); bowed = chest(); done = true; }, [body], 5, () => done);
+    play(function* () { yield* pose(body, { bow: 0.6 }, { stay: 0 }); bowed = chest(); done = true; }, [body], 5, () => done);
     expect(bowed).toBeGreaterThan(0.2);
   });
 });
