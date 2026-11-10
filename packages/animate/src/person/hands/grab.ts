@@ -39,8 +39,6 @@ const CLOSE = 1.6;
 /** Overlap gaze, walking and hand preparation; fail when no reachable stand exists. */
 export function* grabbing(person: Person, request: Request, takes: readonly HandPlan[], step: boolean, motion?: Pace) {
   const middle = (f: Frame) => takes.reduce((sum, take) => sum.add(gripAt(person, take, f, _grip)), _middle.set(0, 0, 0)).divideScalar(takes.length);
-  // (the eyes on the grips' places on the thing, not on where the wrists go for them: that slides as each hand turns on its way)
-  const sight = (f: Frame) => takes.reduce((sum, take) => sum.add(emptyAt(person, take, f)), _sight.set(0, 0, 0)).divideScalar(takes.length);
   // (what its hands hold already — this one regripping it, or the other — rides with the body: bowing toward it brings it along, so the
   // bow would never bring the grip nearer, only bend the trunk as far as it goes)
   const holding = takes.map((take) => heldThings(person).includes(take.thing));
@@ -53,7 +51,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
     // (no stand in reach: the hands go as far as they can as the body stands, the eyes on them, for as long as a reach there takes, and it misses)
     const going = handsGoing(person, takes.map((take) => ({ side: take.side, target: (f: Frame) => withinArm(person, f, take.side, { position: gripAt(person, take, f, new Vector3()) }) })), motion?.speed);
     const until = person.frame.time + Math.max(...going.map((hand) => hand.lasts));
-    yield* parallel<Frame>('race', noticing(person, request, sight), action<Frame>({ until: (f) => f.time >= until }), ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
+    yield* parallel<Frame>('race', noticing(person, request, middle), action<Frame>({ until: (f) => f.time >= until }), ...going.map(({ side, step }) => during(request, `hand.${side}`, 'asked', step)));
     request.fail({ ...plan.nowhere, where: takes.map(({ thing, side, grip }) => `${thing.object.name} ${side} ${grip}`).join(', ') });
     return false;
   }
@@ -72,7 +70,7 @@ export function* grabbing(person: Person, request: Request, takes: readonly Hand
   const gaze = (f: Frame) => {
     if (Number.isNaN(noticed)) noticed = f.time;
     returning ||= flat(f.prev.com(com), middle(f)) < CLOSE * person.scale || near();
-    return stood || returning || f.time - noticed < LOOKING ? sight(f) : pathAhead(person, f.prev, ahead);
+    return stood || returning || f.time - noticed < LOOKING ? middle(f) : pathAhead(person, f.prev, ahead);
   };
   const raisedHand = (f: Frame, take: HandPlan) => {
     const shoulder = f.prev.position(INDEX[`${take.side}UpperArm`]);
@@ -185,5 +183,5 @@ function shortOf(person: Person, take: HandPlan, shoulder: Vector3, at: Vector3)
   at.copy(from).addScaledVector(way, most).applyQuaternion(frame.quaternion).add(frame.position);
 }
 
-const _grip = new Vector3(), _middle = new Vector3(), _sight = new Vector3(), _back = new Quaternion(), _box = new Box3(), _from = new Vector3(), _to = new Vector3();
+const _grip = new Vector3(), _middle = new Vector3(), _back = new Quaternion(), _box = new Box3(), _from = new Vector3(), _to = new Vector3();
 const _way = new Vector3(), _hit = new Vector3(), _ray = new Ray(), _right = new Vector3(1, 0, 0);
