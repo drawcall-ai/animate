@@ -3,7 +3,7 @@ import { sameThree } from './kernel/math';
 import { INDEX } from './person/anatomy/bones';
 import type { ReadonlyBonePose } from './kernel/bone-pose';
 import type { LogEntry } from './kernel/dev';
-import type { AnySpecies, Species } from './species/define';
+import { nameOf, type AnySpecies, type Species } from './species/define';
 import { Person } from './person/person';
 import { Creature } from './creature/creature';
 import type { Self } from './body/self';
@@ -82,7 +82,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
       const name = this.object.name ? ` "${this.object.name}"` : '';
-      throw new Error(`${this.species.name ?? 'custom species'}${name}, ${self.time.toFixed(3)} s, ${self.beat() || 'idle'}: ${message}`, { cause });
+      throw new Error(`${nameOf(this.species)}${name}, ${self.time.toFixed(3)} s, ${self.beat() || 'idle'}: ${message}`, { cause });
     } finally {
       reader = was;
     }
@@ -112,7 +112,7 @@ export class Body<S extends AnySpecies = AnySpecies> {
    */
   armPoint(side: 'left' | 'right', direction: Readonly<Vector3>, share: number): Vector3 {
     const person = this.species.person;
-    if (!person) throw new Error(`armPoint: a ${this.species.name ?? 'custom species'} has no arms`);
+    if (!person) throw new Error(`armPoint: a ${nameOf(this.species)} has no arms`);
     const pose = poseOf(this), turn = new Quaternion().setFromAxisAngle(UP, pose.facing);
     return direction.clone().normalize().applyQuaternion(turn).multiplyScalar(share * person.armLength).add(pose.position(INDEX[`${side}UpperArm`]));
   }

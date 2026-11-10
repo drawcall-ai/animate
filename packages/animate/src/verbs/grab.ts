@@ -3,7 +3,7 @@ import { selfOf, type Body, type ByHand } from '../body';
 import { bodyOf } from '../things/hold';
 import type { Self } from '../body/self';
 import { Thing } from '../things/thing';
-import type { AnySpecies } from '../species/define';
+import { nameOf, type AnySpecies } from '../species/define';
 import { verb, type Verb } from './story';
 import { letGo } from '../body/let-go';
 import type { GrabOptions } from '../body/hand-staging';
@@ -37,7 +37,7 @@ export function grab<S extends AnySpecies>(body: Body<S>, thing: Object3D, grips
   // (as it starts: what its hands hold else let go, the grips looked over)
   const starting = (request: Request) => {
     const held = Thing.of(thing), on = bodyOf(thing), hands = Object.keys(self.hands);
-    for (const { hand } of named) if (!hands.includes(hand)) throw new Error(`grab: a ${body.species.name ?? 'custom species'} has no hand "${hand}", only ${hands.join(', ') || 'none'}`);
+    for (const { hand } of named) if (!hands.includes(hand)) throw new Error(`grab: a ${nameOf(body.species)} has no hand "${hand}", only ${hands.join(', ') || 'none'}`);
     // (a named hand holding something else lets go of it first, as `release` would, without backing out)
     for (const { hand } of named) {
       const was = self.holding[hand]?.thing;

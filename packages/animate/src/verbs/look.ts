@@ -1,4 +1,5 @@
 import { Object3D, Vector3 } from 'three';
+import { nameOf } from '../species/define';
 import { parallel } from '@pmndrs/timeline';
 import { during } from '../kernel/requests';
 import { Body, selfOf } from '../body';
@@ -90,6 +91,6 @@ function offTheHead(self: Self, object: Object3D): void {
 function eyesOf(self: Self, seen: Body): (f: Frame) => Vector3 {
   const other = selfOf(seen), gazer = other.gazer, eyes = new Vector3();
   if (other === self) throw new Error('lookAt: a body cannot look at its own eyes');
-  if (!gazer) throw new Error(`lookAt: a ${seen.species.name ?? 'custom species'} has no eyes to look at (no gaze): look at one of its bones`);
+  if (!gazer) throw new Error(`lookAt: a ${nameOf(seen.species)} has no eyes to look at (no gaze): look at one of its bones`);
   return () => gazer.eyes(other.poseFor(self), eyes);
 }

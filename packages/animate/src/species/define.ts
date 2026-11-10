@@ -75,6 +75,9 @@ export interface Species<Bone extends string = string, Hand extends string = str
 /** Any species, whatever its names. */
 export type AnySpecies = Species<string, string>;
 
+/** `species`' label in what a body says: its `name`, or 'custom species' */
+export const nameOf = (species: AnySpecies) => species.name ?? 'custom species';
+
 /** What a creature heeds as it stands and walks besides what it looks at: a tether it is tied by, a startle (a new point each time). */
 export interface Attention {
   /** Horse head constraint while tied: a world anchor and positive length in metres; undefined when untied. Does not move its legs. */

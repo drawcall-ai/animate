@@ -1,4 +1,5 @@
 import { Object3D, Quaternion, Vector3 } from 'three';
+import { nameOf } from './species/define';
 import { selfOf, type Body } from './body';
 import type { Self } from './body/self';
 import type { HandPlacement } from './fingers/placement';
@@ -49,6 +50,6 @@ export function gripOn(body: Body, side: 'left' | 'right', on: HandPlacement): {
 /** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */
 function fingersOf(body: Body): NonNullable<Self['fingers']> {
   const fingers = selfOf(body).fingers;
-  if (!fingers) throw new Error(`fingers: a ${body.species.name ?? 'custom species'} skeleton has no finger bones`);
+  if (!fingers) throw new Error(`fingers: a ${nameOf(body.species)} skeleton has no finger bones`);
   return fingers;
 }

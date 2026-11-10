@@ -3,7 +3,7 @@ import type { Goal } from '../kernel/goal';
 import type { Binding } from '../body/binding';
 import type { HandStaging } from '../body/hand-staging';
 import { Self, type Behaviours } from '../body/self';
-import type { AnySpecies } from '../species/define';
+import { nameOf, type AnySpecies } from '../species/define';
 import { bear, checkParents } from '../things/hold';
 import { creature } from './balance';
 import { creatureHands, idleHold } from './hands';
@@ -12,7 +12,7 @@ import type { SelfOptions } from '../body/setup';
 /** Any species but a person: its legs and trunk motion, and hands that are each the tip of a chain. */
 export class Creature extends Self {
   constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
-    if (options.life?.steady !== undefined) throw new Error(`life.steady: a person's; a ${species.name ?? 'custom species'} has no such setting`);
+    if (options.life?.steady !== undefined) throw new Error(`life.steady: a person's; a ${nameOf(species)} has no such setting`);
     super(species, options, binding);
     // (made now, so that legs that cannot stand fail before the first update)
     this.behaviours = this.behave();

@@ -10,7 +10,7 @@ import { HeadOffset } from '../look/offset';
 import { createLocomotion, type Locomotion } from '../step/locomotion';
 import type { Root } from '../step/root';
 import type { Stepper } from '../step/stepper';
-import { steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
+import { nameOf, steadiness, type AnySpecies, type Gazer, type Temperament } from '../species/define';
 import { MovingFrame } from '../kernel/moving-frame';
 import { yawOf } from '../kernel/math';
 import { Binding } from './binding';
@@ -361,7 +361,7 @@ export abstract class Self {
   warn(check: string, message: string): void {
     if (this.warned.has(check)) return;
     this.warned.add(check);
-    console.warn(`animate: ${this.species.name ?? 'custom species'}${this.binding.object.name ? ` "${this.binding.object.name}"` : ''}: ${message}`);
+    console.warn(`animate: ${nameOf(this.species)}${this.binding.object.name ? ` "${this.binding.object.name}"` : ''}: ${message}`);
   }
 
   beat(): string {

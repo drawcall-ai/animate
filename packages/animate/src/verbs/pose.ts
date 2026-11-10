@@ -1,4 +1,5 @@
 import { action, parallel } from '@pmndrs/timeline';
+import { nameOf } from '../species/define';
 import { during, type Request } from '../kernel/requests';
 import type { Frame } from '../kernel/frame';
 import type { ArmPosture, Posture } from '../kernel/asks';
@@ -44,7 +45,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
   const self = selfOf(body);
   // (each foot half of it off the root, which stands over the feet's middle)
   const most = stagger === undefined ? 0 : STAGGER * personOf(body, 'pose stagger').proportions.legLength, off = clamp(stagger ?? 0, -most, most) / 2;
-  if (head && !self.gazer) throw new Error(`pose: a ${body.species.name ?? 'custom species'} has no head to turn (no gaze)`);
+  if (head && !self.gazer) throw new Error(`pose: a ${nameOf(body.species)} has no head to turn (no gaze)`);
   const armPose = arms && personOf(body, 'pose arms').armPose;
   const shapes = fingers ? shapesOf(self, body, fingers) : [];
   const asked = { bow: trunk.bow ?? 0, twist: trunk.twist ?? 0, lean: trunk.lean ?? 0, lower: trunk.lower ?? 0 };
@@ -70,7 +71,7 @@ export function pose(body: Body, posture: Posture, options: PoseOptions = {}): V
 /** each hand's shape `fingers` asks of `self`, with the fingers it is written to; a skeleton without finger bones has none to pose */
 function shapesOf(self: Self, body: Body, fingers: NonNullable<Posture['fingers']>) {
   const state = self.fingers;
-  if (!state) throw new Error(`pose: a ${body.species.name ?? 'custom species'} skeleton has no finger bones to pose`);
+  if (!state) throw new Error(`pose: a ${nameOf(body.species)} skeleton has no finger bones to pose`);
   return SIDES.flatMap((side) => {
     const asked = fingers[side];
     return asked ? [{ side, shape: shapeOf(asked), state }] : [];
