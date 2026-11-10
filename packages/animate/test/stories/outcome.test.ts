@@ -207,7 +207,9 @@ describe('play', () => {
 
   it('throws at its limit naming what still runs and where, what never ends saying so', () => {
     const body = person();
-    expect(() => play(body, lookAt(body, new Vector3(0, 1.5, 3)), { limit: 0.5 })).toThrow(/^story still running after 0\.5 s: lookAt \(outcome\.test\.ts:\d+, since 0\.0 s, it ends only on its until \(a pose's: or stay\)\)/);
+    expect(() => play(body, lookAt(body, new Vector3(0, 1.5, 3)), { limit: 0.5 })).toThrow(/^story still running after 0\.5 s: lookAt \(outcome\.test\.ts:\d+, since 0\.0 s, it ends only on its `until`\)$/);
+    const posed = person();
+    expect(() => play(posed, pose(posed, { bow: 0.2 }), { limit: 0.5 })).toThrow(/^story still running after 0\.5 s: pose \(outcome\.test\.ts:\d+, since 0\.0 s, it ends only on its `until` or its `stay`\)$/);
   });
 
   it('calls `frame` after the bodies update, each frame, with the time', () => {

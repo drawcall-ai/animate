@@ -28,7 +28,8 @@ export function play<R>(bodies: Body | readonly Body[], story: ReusableTimeline<
 function running(bodies: readonly Body[]): string {
   const verbs = bodies.flatMap((body) => selfOf(body).requests.filter((request) => request.kind !== 'own').map((request) => {
     const since = `since ${request.filed.toFixed(1)} s`;
-    return `${request.verb} (${[request.site, since, request.kind === 'aimer' ? "it ends only on its until (a pose's: or stay)" : ''].filter(Boolean).join(', ')})`;
+    const ends = request.kind !== 'aimer' ? '' : `it ends only on its \`until\`${request.verb === 'pose' ? ' or its `stay`' : ''}`;
+    return `${request.verb} (${[request.site, since, ends].filter(Boolean).join(', ')})`;
   }));
   return verbs.join('; ') || 'no verb is running, so a `wait` whose condition never holds, or a step of its own';
 }
