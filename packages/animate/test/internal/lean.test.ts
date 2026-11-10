@@ -4,7 +4,7 @@ import { expect, it } from 'vitest';
 import { Body, humanoid, walkTo } from '../../src/index';
 import { PERSON } from '../../skills/animate/references/person';
 import { INDEX, dt } from '../kit/bodies';
-import { insides } from './insides';
+import { personSelf } from './self';
 
 const DEG = Math.PI / 180;
 /** half a step walking at 1.3 m/s (sub-steps: ~0.47 s a step, ~2.1 steps/s) */
@@ -12,7 +12,7 @@ const STEP = 15;
 
 /** a person walking 5 m ahead from standing and stopping there: its chest's pitch (rad, + forward) and its ground speed each sub-step */
 function walk(leaning: boolean) {
-  const species = humanoid(PERSON), body = new Body(leaning ? species : { ...species, inertia: undefined }, { dev: true }), h = insides(body);
+  const species = humanoid(PERSON), body = new Body(leaning ? species : { ...species, inertia: undefined }, { dev: true }), h = personSelf(body);
   const story = runTimeline(function* () { yield* walkTo(body, new Vector3(0, 0, 5)); });
   const pitch: number[] = [], speed: number[] = [];
   for (let t = 0; t < 8; t += dt) {

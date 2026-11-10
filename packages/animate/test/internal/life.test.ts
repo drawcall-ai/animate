@@ -4,13 +4,13 @@ import { grab, walkTo } from '../../src/index';
 import { QuietStance } from '../../src/person/legs/quiet-stance';
 import { INDEX, person, play, run, type Side } from '../kit/bodies';
 import { box, roomOf } from '../kit/things';
-import { insides } from './insides';
+import { personSelf } from './self';
 
 const pitchOf = (rotation: Quaternion) => new Euler().setFromQuaternion(rotation, 'YXZ').x;
 
 it('stands alive, deterministically: breathing, millimetre sway and a weight shift within 25 s', () => {
   const sample = () => {
-    const body = person({ dev: true }), h = insides(body);
+    const body = person({ dev: true }), h = personSelf(body);
     const x: number[] = [], pitch: number[] = [];
     run(body, 25, () => {
       x.push(h.pose.com(new Vector3()).x);
@@ -38,7 +38,7 @@ it('stands alive, deterministically: breathing, millimetre sway and a weight shi
 
 it('slows its walk under a load, counting a load held in both hands once', () => {
   const pace = (mass: number, both: boolean) => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = personSelf(body), room = roomOf(body);
     const load = box(room, new Vector3(0, 1, 0.4), { mass, solid: false });
     let speed = 0;
     play(function* () {
@@ -57,7 +57,7 @@ it('slows its walk under a load, counting a load held in both hands once', () =>
 });
 
 it('keeps its sway and breathing after a loaded walk, without spontaneous weight shifts', () => {
-  const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+  const body = person({ dev: true }), h = personSelf(body), room = roomOf(body);
   const load = box(room, new Vector3(-0.15, 1.05, 0.35), { mass: 5, solid: false });
   play(function* () {
     yield* grab(body, load, { right: 'right' });

@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { forwardOf, wrapAngle, yawOf } from '../kit/angles';
 import { INDEX, dt, run } from '../kit/bodies';
 import { SWAY_BAND, drive, driven, moving } from '../kit/driving';
-import { airborne, insides } from './insides';
+import { airborne, personSelf } from './self';
 
 /** Each yaw's first stride harmonic against the stride's phase: peak to peak (rad) and phase (rad) of `y ≈ A cos(phase − at)`. */
 function harmonic(samples: { phase: number; y: number }[]) {
@@ -23,10 +23,10 @@ it.each([
   let thoraxYaw = 0;
   const { h } = drive(6, moving(0.3, 6, forwardOf(0).multiplyScalar(speed)), () => 0, (t, _, h, body) => {
     if (t < 3) return;
-    const phase = insides(body).gaitState.phase;
+    const phase = personSelf(body).gaitState.phase;
     pelvis.push({ phase, y: yawOf(h.pose.rotation(0)) });
     thorax.push({ phase, y: yawOf(h.pose.rotation(INDEX.chest)) });
-    thoraxYaw = insides(body).gaitState.thoraxYaw;
+    thoraxYaw = personSelf(body).gaitState.thoraxYaw;
   });
   const p = harmonic(pelvis), c = harmonic(thorax), deg = 180 / Math.PI, apart = Math.abs(wrapAngle(c.at - p.at)) * deg;
   expect(p.range * deg).toBeGreaterThanOrEqual(band.pelvis[0]);

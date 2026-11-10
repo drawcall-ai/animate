@@ -4,11 +4,11 @@ import { selfOf } from '../../src/body';
 import { finder } from '../../src/things/target';
 import { dt, person, run } from '../kit/bodies';
 import { roomOf } from '../kit/things';
-import { claim, insides } from './insides';
+import { claim, personSelf } from './self';
 
 describe('requests', () => {
   it("only the request that has a part moves it; the legs' others keep their count, unheard", () => {
-    const body = person(), h = insides(body);
+    const body = person(), h = personSelf(body);
     const runs = { trunk: [0, 0], legs: [0, 0] };
     const borrowed = claim(body, 'trunk', () => void runs.trunk[0]++, 'borrowed');
     const asked = claim(body, 'trunk', () => void runs.trunk[1]++);

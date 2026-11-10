@@ -4,7 +4,7 @@ import { Body, poseOf } from '../../src/index';
 import { placedFor } from '../../src/things/placed';
 import { INDEX, dt, person, run } from '../kit/bodies';
 import { rng } from '../kit/random';
-import { claim, insides } from './insides';
+import { claim, personSelf } from './self';
 
 describe('a body', () => {
   it('steps in fixed sub-steps whatever its frames: jittered frames give what fixed ones do', () => {
@@ -29,7 +29,7 @@ describe('a body', () => {
     mount.matrixWorldAutoUpdate = target.matrixAutoUpdate = false;
     target.matrix.makeTranslation(0.1, 0, 0);
     claim(body, 'trunk', (f) => f.current.setLocal(INDEX.chest, new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), f.time)));
-    claim(body, 'hand.right', () => { samples.push(placedFor(insides(body), target, { position: new Vector3(), quaternion: new Quaternion() }).position.toArray()); });
+    claim(body, 'hand.right', () => { samples.push(placedFor(personSelf(body), target, { position: new Vector3(), quaternion: new Quaternion() }).position.toArray()); });
     body.update(dt);
     mount.matrixWorld.makeTranslation(2, 1, 3);
     body.update(2 * dt);

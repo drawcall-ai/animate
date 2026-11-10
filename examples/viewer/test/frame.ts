@@ -21,7 +21,7 @@ export function* frames(sim: Simulation): Generator<Frame[]> {
     // (the scene's world matrices as a render would leave them: things and grips are read off them)
     sim.stage.scene.updateMatrixWorld(true);
     const solids = sim.stage.solids?.() ?? [];
-    yield actors.map((h) => ({ t: sim.t, h, asked: askedOf(h.body, h.insides.frame.time), solids }));
+    yield actors.map((h) => ({ t: sim.t, h, asked: askedOf(h.body, h.self.frame.time), solids }));
   }
 }
 

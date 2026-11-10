@@ -16,7 +16,7 @@ import { cases } from '../../../packages/animate/test/kit/open';
 // Whole-scene simulations can occupy a worker for over a minute; let Vitest receive its RPC replies between cases.
 afterEach(() => setImmediate());
 
-/** Keep task accuracy, gait and clearance regressions that the runtime checks do not cover. */
+/** Keep task accuracy, gait and clearance regressions that the dev checks do not cover. */
 function judged(sc: Scenario, strides?: MetricsOptions['strides']) {
   const sim = new Simulation(sc);
   const m = measure(frames(sim));

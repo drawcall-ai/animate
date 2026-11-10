@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Body, carry, grab, release, wait } from '../../src/index';
 import { INDEX, person, play } from '../kit/bodies';
 import { box, empty, named, roomOf, worldOf } from '../kit/things';
-import { insides, palmAt } from './insides';
+import { personSelf, palmAt } from './self';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
@@ -21,7 +21,7 @@ function shelf(room: Object3D, height = 0.26): Object3D {
 
 /** the largest distance from each holding palm to its grip over a run, as `check` reads them each frame */
 function grips(body: Body, thing: Object3D) {
-  const h = insides(body);
+  const h = personSelf(body);
   let most = 0;
   return {
     check: () => {
@@ -67,7 +67,7 @@ describe('carry', () => {
 
   it('prepares a heavy lift before its support leaves it, lifts it slower than a light one, and dips with it as it takes its weight', () => {
     const lift = (mass: number) => {
-      const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+      const body = person({ dev: true }), h = personSelf(body), room = roomOf(body);
       const load = box(room, new Vector3(-0.15, 1, 0.35), { mass, solid: false });
       let held = NaN, off = NaN, end = NaN, top = -Infinity, dip = 0, down = 0, preparation = 0, hips = NaN;
       play(function* () {
@@ -158,7 +158,7 @@ describe('carry', () => {
 
 describe('release', () => {
   it('puts what one hand carries onto an empty, the hand keeping hold of it there and going with it as its place moves', () => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = personSelf(body), room = roomOf(body);
     const ball = box(room, new Vector3(-0.2, 1.1, 0.35), { size: new Vector3(0.06, 0.06, 0.06), mass: 0.4 });
     Object.assign(empty(ball, 'grip', new Vector3()).userData, { handle: [0, 1, 0], radius: 0.03 });
     const place = empty(room, 'place', new Vector3(-0.25, 1.2, 0.4));
@@ -189,8 +189,8 @@ describe('release', () => {
       yield* wait(0.5);
       done = true;
     }, [body], 8, () => done);
-    expect(insides(body).holding.left?.thing.object).toBe(load);
-    expect(insides(body).holding.right).toBeNull();
+    expect(personSelf(body).holding.left?.thing.object).toBe(load);
+    expect(personSelf(body).holding.right).toBeNull();
     expect(load.parent).toBe(body.bones.leftHand);
     expect(body.log).toEqual([]);
   });

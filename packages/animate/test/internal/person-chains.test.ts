@@ -9,7 +9,7 @@ import { INDEX } from '../../src/person/anatomy/bones';
 import { humanoid, poseOf } from '../../src/index';
 import { rng, turnUpTo } from '../kit/random';
 import { dt, person } from '../kit/bodies';
-import { claim } from './insides';
+import { claim } from './self';
 import { PERSON } from '../../skills/animate/references/person';
 
 /** where bone `name` of a body is in the scene, as its last update wrote it */

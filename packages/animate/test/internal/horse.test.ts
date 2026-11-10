@@ -9,7 +9,7 @@ import { strideAt } from '../../src/species/gait';
 import { quintic } from '../../src/kernel/math';
 import { BonePose } from '../../src/kernel/bone-pose';
 import { INDEX, person, scene } from '../kit/bodies';
-import { claim } from './insides';
+import { claim } from './self';
 import { HORSE } from '../../skills/animate/references/horse';
 
 const MARE = horse(HORSE), SKELETON = MARE.skeleton, bone = (name: string) => SKELETON.index(name);

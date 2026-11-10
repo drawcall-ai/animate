@@ -6,7 +6,7 @@ import { palmOf } from '../../src/person/anatomy/landmarks';
 import { forwardOf, leftOf, yawOf } from '../kit/angles';
 import { INDEX, SIDES, person, play } from '../kit/bodies';
 import { SOLDIER } from '../kit/skeletons/soldier';
-import { insides } from './insides';
+import { personSelf } from './self';
 
 // (where a palm is, on a hand, is not to be read off a body but through its grips: these judge it)
 describe('a bow', () => {
@@ -15,7 +15,7 @@ describe('a bow', () => {
   const palms = (body: Body) => SIDES.map((side) => {
     const p = poseOf(body), yaw = yawOf(p.local(0).clone()), sign = side === 'left' ? 1 : -1;
     const hip = p.position(INDEX[`${side}UpperLeg`]), axis = p.position(INDEX[`${side}LowerLeg`]).clone().sub(hip);
-    const palm = p.point(INDEX[`${side}Hand`], palmOf(insides(body).proportions, side), new Vector3());
+    const palm = p.point(INDEX[`${side}Hand`], palmOf(personSelf(body).proportions, side), new Vector3());
     const off = palm.sub(hip).addScaledVector(axis, -clamp(palm.dot(axis) / axis.lengthSq(), 0, 1));
     return { ahead: off.dot(forwardOf(yaw)), out: sign * off.dot(leftOf(yaw)) };
   });

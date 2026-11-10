@@ -9,13 +9,13 @@ import { grasp } from '../../src/things/hold';
 import { Thing } from '../../src/things/thing';
 import { INDEX, dt, feetOf, person, play, readings, run } from '../kit/bodies';
 import { armed, box, empty, roomOf, worldOf } from '../kit/things';
-import { insides, palmAt } from './insides';
+import { personSelf, palmAt } from './self';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
 /** a body wearing 10 kg 30 cm out to its left at the chest, stood a while */
 const loaded = () => {
-  const body = person(), h = insides(body);
+  const body = person(), h = personSelf(body);
   roomOf(body);
   const load = new Object3D();
   load.userData.mass = 10;
@@ -28,7 +28,7 @@ const loaded = () => {
 describe('two hands', () => {
   it('takes and holds a load at hip height standing: its weight shifting over planted feet is no walk', () => {
     // (it once was, which switched the loaded reach's bow off and on every sub-step)
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = personSelf(body), room = roomOf(body);
     const load = box(room, new Vector3(0, 0.88, 0.61), { size: new Vector3(0.44, 0.25, 0.3), mass: 5 });
     let planted = 0, walking = 0;
     play(function* () {
@@ -48,7 +48,7 @@ describe('two hands', () => {
 
 describe('a load kept clear of the head', () => {
   it.each([0.02, 0.22])('clears a %s m load from the neck→head segment, above the trunk too', (radius) => {
-    const body = person(), h = insides(body), room = roomOf(body);
+    const body = person(), h = personSelf(body), room = roomOf(body);
     run(body, 1);
     const size = new Vector3(2, 2, 2).multiplyScalar(radius);
     const thing = Thing.of(box(room, new Vector3(), { size, name: `${radius} m` }));
@@ -66,7 +66,7 @@ describe('a load kept clear of the head', () => {
 
 describe('a grip taken', () => {
   it.each([false, true])('is checked against the palm as the hand takes it (10 cm off: %s)', (off) => {
-    const body = person({ dev: true }), h = insides(body), room = roomOf(body);
+    const body = person({ dev: true }), h = personSelf(body), room = roomOf(body);
     run(body, 0.5);
     const rope = new Object3D(), palm = palmAt(h, 'left');
     rope.name = 'loose rope';
@@ -86,7 +86,7 @@ describe('a grip taken', () => {
 // (both hands held still out before the shoulders, a little above them: the clavicles go where the hands ask, swaying only with the body's
 // breath and sway — shrugged on from where they stood each sub-step, they rose 30–40° up their range)
 it('holds the clavicles where still hands ask, not shrugging them on, on both sides', () => {
-  const body = person({ dev: true }), h = insides(body);
+  const body = person({ dev: true }), h = personSelf(body);
   run(body, 0.5);
   const targets = (['left', 'right'] as const).map((side) => body.armPoint(side, new Vector3(0, 0.15, 1), 0.85));
   // (each clavicle's protraction and elevation, °, the left's signs for both)
@@ -121,7 +121,7 @@ describe('what a body wears', () => {
   });
 
   it('counts what it wears from its first sub-step, where it is then', () => {
-    const body = person(), h = insides(body);
+    const body = person(), h = personSelf(body);
     roomOf(body);
     const before = h.pose.com(new Vector3());
     const load = new Object3D();
@@ -134,7 +134,7 @@ describe('what a body wears', () => {
   });
 
   it('bears what it carries off its support, and none of it once it is put down', () => {
-    const body = person(), h = insides(body), room = roomOf(body);
+    const body = person(), h = personSelf(body), room = roomOf(body);
     const taken = new Vector3(0, 1.0, 0.4);
     const load = box(room, taken, { mass: 4, solid: false });
     const kg = { carried: -1, down: -1 };
@@ -156,7 +156,7 @@ describe('what a body wears', () => {
   });
 
   it('keeps a rifle on its chest at the aim its app gives while it turns, both hands on its grips', () => {
-    const { root, body, rifle, grips, aim, orient } = armed((_, root) => root.yaw), h = insides(body);
+    const { root, body, rifle, grips, aim, orient } = armed((_, root) => root.yaw), h = personSelf(body);
     let aimed = 0, gripped = 0;
     // (the chest turns within each update: a mount the app turned from the chest as it stood before it was off the aim by that turn)
     for (let frame = 0; frame < 180; frame++) {

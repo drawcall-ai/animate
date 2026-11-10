@@ -9,7 +9,7 @@ import { looking } from '../../src/look/gaze';
 import { spinOf } from '../../src/kernel/rotation';
 import { LimbMover, reached } from '../../src/kernel/limb';
 import { dt } from '../kit/bodies';
-import { claim } from './insides';
+import { claim } from './self';
 import { turn } from './rigs';
 
 /** a free root at (0, 1, 0) with a leg hanging down −y: a ball-jointed thigh, a knee bending back (+x), a foot */

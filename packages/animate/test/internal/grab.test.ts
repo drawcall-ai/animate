@@ -4,14 +4,14 @@ import { Body, grab, humanoid, wait } from '../../src/index';
 import { CHEWBACCA } from '../kit/skeletons/chewbacca';
 import { person, play } from '../kit/bodies';
 import { box, named, roomOf, worldOf } from '../kit/things';
-import { insides, palmAt } from './insides';
+import { personSelf, palmAt } from './self';
 
 const BOTH = { left: 'left', right: 'right' } as const;
 
 describe('grab, from where it stands', () => {
   it('sets off toward the grip at once: the hand never first draws back from it', () => {
     for (const at of [new Vector3(-0.1, 1.0, 0.45), new Vector3(-0.15, 0.3, 0.5), new Vector3(-0.3, 1.4, 0.3)]) {
-      const body = person(), h = insides(body), room = roomOf(body);
+      const body = person(), h = personSelf(body), room = roomOf(body);
       const thing = box(room, at, { mass: null, solid: false });
       const grip = named(thing, 'right');
       const off: number[] = [];
@@ -27,7 +27,7 @@ describe('grab, from where it stands', () => {
   });
 
   it('takes a grip on a turned thing, the palm on it', () => {
-    const body = person(), h = insides(body), room = roomOf(body);
+    const body = person(), h = personSelf(body), room = roomOf(body);
     const thing = box(room, new Vector3(-0.15, 1.0, 0.4), { turn: 0.6 });
     let held = false;
     play(function* () {
@@ -63,7 +63,7 @@ describe('grab already', () => {
     // (the hands as still as standing holds them: no reach, no jump onto the grips)
     expect(fastest).toBeLessThan(0.05);
     expect(worldOf(cushion).distanceTo(at)).toBeLessThan(0.02 * scale);
-    expect(palmAt(insides(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
+    expect(palmAt(personSelf(body), 'left').distanceTo(worldOf(named(cushion, 'left')))).toBeLessThan(0.02);
     expect(body.log).toEqual([]);
   });
 

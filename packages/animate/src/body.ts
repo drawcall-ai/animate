@@ -187,7 +187,7 @@ export function poseOf(body: Body): ReadonlyBonePose {
   return reader && reader !== self ? self.poseFor(reader) : self.pose;
 }
 
-/** the runtime of `body` */
+/** the self of `body`: its state, and how its parts are shared out among the verbs asking for them */
 export function selfOf(body: Body): Self {
   const self = selves.get(body);
   if (!self) throw new Error('not a body made with new Body');

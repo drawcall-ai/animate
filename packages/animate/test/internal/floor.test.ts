@@ -10,7 +10,7 @@ import { SIDES, person, play, run } from '../kit/bodies';
 import { xcomOfPoses, hullOf, outside } from '../../src/step/support';
 import { footprint } from '../../src/person/legs/foot';
 import type { Person } from '../../src/person/person';
-import { insides } from './insides';
+import { personSelf } from './self';
 
 /** a flight of `count` steps up along +z from `start`, each `rise` high and `tread` deep, flat on top (the throne room's: 5 × 0.2 on 0.45) */
 const stairs = (start: number, count: number, rise: number, tread: number) => (_x: number, z: number) =>
@@ -29,7 +29,7 @@ const KINDS: [name: string, make: (options: BodyOptions) => Body, speed: number 
 
 /** each sole's points of foot `i` of `body` as it stands: a person's measured sole, a creature's heel and toe */
 function solesOf(body: Body, i: number): Vector3[] {
-  if (body.species.person) return solePoints(insides(body).proportions, poseOf(body), SIDES[i]);
+  if (body.species.person) return solePoints(personSelf(body).proportions, poseOf(body), SIDES[i]);
   const chain = (body.species.legs?.chains ?? [])[i], bone = chain.joints[chain.joints.length - 1].bone;
   return [chain.heel, chain.toe].map((p) => poseOf(body).point(bone, p, new Vector3()));
 }
@@ -57,7 +57,7 @@ function on(floor: (x: number, z: number) => number, z: number): Vector3 {
 
 /** `body` walked to `to` on `floor`, read every frame (the walk given `speed`, else as it goes) */
 function walked(body: Body, floor: (x: number, z: number) => number, to: Vector3, speed?: number): Walked {
-  const self = selfOf(body), h = body.species.person ? insides(body) : null, out: Walked = { sunk: 0, raised: 0, touchdowns: 0, straddled: 0, swing: Infinity, nosing: Infinity, up: 0, down: 0, pelvis: 0, xcom: 0, seat: Infinity };
+  const self = selfOf(body), h = body.species.person ? personSelf(body) : null, out: Walked = { sunk: 0, raised: 0, touchdowns: 0, straddled: 0, swing: Infinity, nosing: Infinity, up: 0, down: 0, pelvis: 0, xcom: 0, seat: Infinity };
   const coms: number[] = [], hips: number[] = [], last: (Vector3[] | null)[] = [null, null];
   let arrived = false;
   play(function* () { arrived = yield* walkTo(body, to, { speed }); }, [body], 20, () => {
@@ -190,7 +190,7 @@ describe('a person on a floor', () => {
   });
 
   it('arrives and turns about on a tread with both soles on it', () => {
-    const body = person({ dev: true, floor: flight }), h = insides(body), middle = THRONE.start + 2.5 * THRONE.tread;
+    const body = person({ dev: true, floor: flight }), h = personSelf(body), middle = THRONE.start + 2.5 * THRONE.tread;
     let there = false, done = false, off = 0;
     play(function* () {
       for (const face of [Math.PI / 2, Math.PI, 0]) {
@@ -215,7 +215,7 @@ describe('a person on a floor', () => {
   // from its edge — a closing step put down a tread below, past the mark, is further below the hip held over the top than the leg reaches)
   it('walks onto a mark near the top of a flight, facing down it, every step on the top', () => {
     const top = THRONE.start + (THRONE.count - 1) * THRONE.tread, height = THRONE.count * THRONE.rise;
-    const body = person({ dev: true, floor: flight, at: new Vector3(0, height, top + 1), face: 0.68 }), h = insides(body);
+    const body = person({ dev: true, floor: flight, at: new Vector3(0, height, top + 1), face: 0.68 }), h = personSelf(body);
     let done = false, lowest = Infinity;
     play(function* () {
       done = yield* walkTo(body, new Vector3(0.6, height, top + 0.2), { face: Math.PI, speed: 0.7 });

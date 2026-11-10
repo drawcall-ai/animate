@@ -3,7 +3,7 @@ import { expect, it } from 'vitest';
 import { selfOf } from '../../src/body';
 import { BonePose } from '../../src/kernel/bone-pose';
 import { INDEX, dt, person, run } from '../kit/bodies';
-import { insides, claim } from './insides';
+import { personSelf, claim } from './self';
 import { poseOf } from '../../src/index';
 
 it('checks a planted foot in the final pose after a later writer moved it, naming the requests running', () => {
@@ -35,7 +35,7 @@ it('checks sustained joint speed even when acceleration is below its ceiling', (
 });
 
 it('checks standing CoM against the soles once the final pose is still', () => {
-  const body = person({ dev: true }), h = insides(body);
+  const body = person({ dev: true }), h = personSelf(body);
   const pose = new BonePose(h.skeleton).copy(poseOf(body));
   // (the hips' segment's mass shifted 3 m aside, the standing pose and its soles as they were)
   h.skeleton.bones[INDEX.hips].com.x = 3;

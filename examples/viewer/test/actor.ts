@@ -1,8 +1,8 @@
-// Pose metrics use public bones, proportions and feet. Grip ownership, borne loads and quiet-stance intent still need the runtime.
+// Pose metrics use public bones, proportions and feet. Grip ownership, borne loads and quiet-stance intent still need the body's self.
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { HumanoidBone } from '@drawcall/animate';
 import { personOf } from '../../../packages/animate/src/verbs/person-of';
-import type { Person as Insides } from '../../../packages/animate/src/person/person';
+import type { Person as PersonSelf } from '../../../packages/animate/src/person/person';
 import type { Person } from '../src/scenario';
 import { poseOf } from '@drawcall/animate';
 
@@ -26,11 +26,11 @@ export interface Foot {
 
 /** A person read for the metrics: its bones and landmarks (world), its walk, its feet and what its hands hold and its body bears. */
 export class Actor {
-  readonly insides: Insides;
+  readonly self: PersonSelf;
   private readonly points: Record<string, { bone: BoneName; at: Vector3 }>;
 
   constructor(readonly body: Person) {
-    this.insides = personOf(body, 'Actor');
+    this.self = personOf(body, 'Actor');
     this.points = pointsOf(this.proportions);
   }
 
@@ -42,7 +42,7 @@ export class Actor {
 
   /** Locomotion intent: public velocity/facing include pose sway and cannot classify steady strides. */
   get locomotion() {
-    return this.insides.locomotion;
+    return this.self.locomotion;
   }
 
   get feet(): Foot[] {
@@ -52,7 +52,7 @@ export class Actor {
   /** what each hand holds (the scene's world matrices as of its last update) */
   get holding(): Record<Side, Held | null> {
     const held = (side: Side): Held | null => {
-      const hold = this.insides.holding[side];
+      const hold = this.self.holding[side];
       if (!hold) return null;
       const grip = hold.thing.grip(hold.grip).node.getWorldPosition(new Vector3());
       return { thing: hold.thing.object, grip, mass: hold.thing.mass };
@@ -62,7 +62,7 @@ export class Actor {
 
   /** what it bears of the things it holds and wears: each one's centre of mass (world) and the share it bears (kg) */
   get borne(): { centre: Vector3; kg: number }[] {
-    return [...this.insides.borne].map(([thing, { kg }]) => ({ centre: thing.object.localToWorld(thing.centre.clone()), kg }));
+    return [...this.self.borne].map(([thing, { kg }]) => ({ centre: thing.object.localToWorld(thing.centre.clone()), kg }));
   }
 
   /** where a bone (by its humanoid name) or a landmark (`leftEye`, `leftHeel`, `leftBigToe`, `nose`, …) is (world) */

@@ -9,8 +9,8 @@ import type { Person } from '../../src/person/person';
 import { palmOf } from '../../src/person/anatomy/landmarks';
 import type { Side } from '../../src/person/anatomy/bones';
 
-/** `body`'s runtime, as a person */
-export const insides = (body: Body): Person => personOf(body, 'insides');
+/** `body`'s self, as the person it is */
+export const personSelf = (body: Body): Person => personOf(body, 'personSelf');
 
 /** where `side`'s palm is (world) as `h` is posed: where its hand holds a grip */
 export const palmAt = (h: Person, side: Side) => h.pose.point(h.hands[side], palmOf(h.proportions, side), new Vector3());
