@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Box3, Mesh, Quaternion, Vector3 } from 'three';
 import { lookDirection } from '../src/angles';
 import { Avatar, type AvatarState } from '../src/avatar';
@@ -116,18 +116,48 @@ describe('avatar', () => {
     },
   );
 
-  it('completes a reload while turning in place at 7.2 rad/s', () => {
+  // (the mouse already sweeping round as the reload is asked, the body behind the view and the trunk twisted after it: the rifle rides the
+  // chest, its well before the support hand — turned to the hips' facing, it stood out of that arm's reach, and the grab missed)
+  it.each([[0, 7.2, 0], [0.5, 9, 0], [0.5, 9, -1.2], [0.5, -12, 1.3]])('completes a reload asked %s s into turning in place at %s rad/s, looking at pitch %s', (before, rate, pitch) => {
+    const input = state();
+    input.aim = false;
+    input.pitch = pitch;
+    const avatar = avatarAt(input);
+    advance(avatar, input, 180);
+    const turn = () => {
+      input.yaw += rate / 60;
+      avatar.update(1 / 60, input);
+    };
+    for (let frame = 0; frame < before * 60; frame++) turn();
+    avatar.requestReload();
+    for (let frame = 0; frame < 600 && avatar.reloading; frame++) turn();
+    expect(avatar.reloads).toBe(1);
+    expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
+  });
+
+  it('gives up a swap its hand misses, saying so, and fills the empty well at the next reload', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const input = state();
     input.aim = false;
     const avatar = avatarAt(input);
     advance(avatar, input, 180);
+    // (the full magazine 2 m below its pouch, out of the hand's reach)
+    const full = node(avatar.group, 'magazine 2'), at = full.position.clone();
+    full.position.y -= 2;
     avatar.requestReload();
-    for (let frame = 0; frame < 600 && avatar.reloading; frame++) {
-      input.yaw += 7.2 / 60;
-      avatar.update(1 / 60, input);
-    }
+    for (let frame = 0; frame < 600 && avatar.reloading; frame++) avatar.update(1 / 60, input);
+    expect(avatar.reloading).toBe(false);
+    expect(avatar.reloads).toBe(0);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/^The reload was given up: grab .*magazine 2 left base/));
+    expect(node(avatar.group, 'well').children.some((child) => child.name.startsWith('magazine'))).toBe(false);
+    warn.mockRestore();
+    full.position.copy(at);
+    avatar.requestReload();
+    for (let frame = 0; frame < 600 && avatar.reloading; frame++) avatar.update(1 / 60, input);
     expect(avatar.reloads).toBe(1);
-    expect(node(avatar.group, 'magazine 2').parent?.name).toBe('well');
+    expect(full.parent?.name).toBe('well');
+    advance(avatar, input, 120);
+    expect(avatar.fire()).toBe(true);
   });
 
   it('holds fire at a steady 600 rounds a minute on the 60 Hz simulation', () => {

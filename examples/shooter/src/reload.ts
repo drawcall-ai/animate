@@ -1,4 +1,4 @@
-import { attempt, carry, grab, release, wait, type Body } from '@drawcall/animate';
+import { attempt, carry, grab, release, wait, type Body, type Missed } from '@drawcall/animate';
 import { action } from '@pmndrs/timeline';
 import { Object3D, Vector3 } from 'three';
 import { onBone } from './bones';
@@ -38,7 +38,7 @@ export class Reload {
   swapping = false;
   /** the left hand off the rifle, which rides the chest meanwhile */
   riding = false;
-  /** how many swaps have ended */
+  /** how many swaps have seated a full magazine */
   count = 0;
   /** the magazines on it, each named by when it was issued: the one in the well and one in each pouch at first */
   readonly magazines: Object3D[] = [];
@@ -66,25 +66,57 @@ export class Reload {
     this.swapping = true;
     const [pouch] = this.pouches, spent = this.magazines.find((magazine) => magazine.parent === this.rifle.well);
     const full = this.magazines.find((magazine) => magazine.parent === pouch);
-    if (!spent || !full) throw new Error('Reload requires an inserted magazine and a spare in the first pouch');
+    if (!full) throw new Error('Reload requires a spare in the first pouch');
     // (the rifle turning up to the chest with the hand still on its front, the hand leaving it half way)
     yield* wait(raised);
     this.riding = true;
-    yield* this.swap(spent, full);
+    const miss = yield* attempt(this.swap(spent, full));
     this.riding = false;
-    this.count++;
-    // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it)
-    yield* grab(this.person, this.rifle.rifle, { left: 'foregrip' }, QUICK);
-    this.issue(pouch);
+    if (miss) this.fumble(miss);
+    else this.count++;
+    // (the support hand back on the receiver while the rifle still rides the chest, as it took it before the reload, then raised with it;
+    // missed — the body spun faster than the hand follows — it tries again, said in the console, until it holds it)
+    for (let missed; (missed = yield* attempt(grab(this.person, this.rifle.rifle, { left: 'foregrip' }, QUICK)));) {
+      console.warn(`The left hand missed the rifle's front and tries again: ${missed.message}`);
+    }
+    if (!this.magazines.some((magazine) => magazine.parent === pouch)) this.issue(pouch);
     this.swapping = false;
+  }
+
+  /** A swap the hand missed is given up, said in the console: a magazine it held or left short of the well is dropped, fumbled, and the
+   * rifle keeps what is in its well — none, once the spent one is out, for the next reload to fill — its rounds not refilled. */
+  private fumble(miss: Missed) {
+    console.warn(`The reload was given up: ${miss.message}`);
+    const { person, rifle: { well }, magazines } = this;
+    for (const magazine of magazines.filter((each) => each.parent !== well && !this.pouches.some((pouch) => each.parent === pouch))) {
+      const { velocity, spin } = person.holds(magazine) ? release(person, magazine) : { velocity: new Vector3(), spin: new Vector3() };
+      magazines.splice(magazines.indexOf(magazine), 1);
+      this.litter.drop(magazine, velocity, spin);
+    }
   }
 
   private issue(place: Object3D) {
     this.magazines.push(this.rifle.magazineIn(place, `magazine ${++this.issued}`));
   }
 
-  private *swap(spent: Object3D, full: Object3D) {
-    const { person, rifle: { well, below }, magazines } = this;
+  /** the spent magazine, if the well holds one, out and flung away; the full one into the well */
+  private *swap(spent: Object3D | undefined, full: Object3D) {
+    const { person, rifle: { well, below } } = this;
+    if (spent) yield* this.out(spent);
+    yield* grab(person, full, { left: 'base' }, BRISK);
+    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in: put onto
+    // its place under the well, the hand keeping hold, then pushed up the line, the hand going with it)
+    yield* carry(person, full, below, BRISK);
+    release(person, full, below, { left: true });
+    if (full.parent !== below) throw new Error(`"${full.name}" was not put onto "${below.name}"`);
+    yield* slide(full, RIFLE.wellLine, PUSH, (share) => 1 - (1 - share) ** 2);
+    release(person, full, well);
+    this.onReload?.('in');
+  }
+
+  /** the spent magazine pinched under the well, pulled down out of it and flung away down and out, let go of on the way */
+  private *out(spent: Object3D) {
+    const { person, magazines } = this;
     yield* grab(person, spent, { left: 'base' }, QUICK);
     this.onReload?.('out');
     // (pulled straight down out of the well along its line, gathering speed — carried out, it would leave the line still in the well —
@@ -96,15 +128,6 @@ export class Reload {
     const { velocity, spin } = release(person, spent);
     magazines.splice(magazines.indexOf(spent), 1);
     this.litter.drop(spent, velocity, spin);
-    yield* grab(person, full, { left: 'base' }, BRISK);
-    // (brought up under the well and turned as it is, then pushed home up its line in the pinch it came out of the pouch in: put onto
-    // its place under the well, the hand keeping hold, then pushed up the line, the hand going with it)
-    yield* carry(person, full, below, BRISK);
-    release(person, full, below, { left: true });
-    if (full.parent !== below) throw new Error(`"${full.name}" was not put onto "${below.name}"`);
-    yield* slide(full, RIFLE.wellLine, PUSH, (share) => 1 - (1 - share) ** 2);
-    release(person, full, well);
-    this.onReload?.('in');
   }
 }
 
