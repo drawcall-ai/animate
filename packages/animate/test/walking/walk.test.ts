@@ -262,6 +262,26 @@ it('a walk given until misses once it stalls short of a goal standing still', ()
   expect(ended).toBeLessThan(15);
 });
 
+// (a dog stands where an empty goes, but it never stands still, so neither do the dog's feet: one on a body moves as that body breathes,
+// said so; the app's own, edging to and fro a few millimetres, is no body's, and nothing of one is said)
+it.each([
+  ['on a body', true],
+  ['the app edges to and fro', false],
+] as const)('a walk to an empty that never stands still, %s, misses there with its feet never settled, naming a body only for one on a body', (_, onBody) => {
+  const leader = person(), rex = new Body(dog(DOG)), mark = new Object3D();
+  roomOf(leader, rex);
+  mark.position.set(-0.6, 0, 1);
+  (onBody ? leader.object : rex.object.parent!).add(mark);
+  let miss: Missed | null | undefined;
+  play(function* () { miss = yield* attempt(walkTo(rex, mark)); }, [leader, rex], 20, (time) => {
+    if (!onBody) mark.position.x = -0.6 + 0.002 * Math.sin(time * 2);
+    return miss !== undefined;
+  });
+  expect(miss?.why).toContain('its feet never settled');
+  if (onBody) expect(miss?.why).toContain('An empty on a body moves as it breathes');
+  else expect(miss?.why).not.toContain('body');
+});
+
 it('`arriving` counts down to a walk\'s end, its feet squared: half a second before that, the body has stopped on its mark', () => {
   const body = person();
   let speed = Infinity, off = Infinity, ended = false;

@@ -42,6 +42,8 @@ interface Route {
   within?: number;
   /** the goal's own velocity (m/s), when it moves and is known: followed rather than read off its motion */
   velocity?: (f: Frame) => Vector3 | undefined;
+  /** whether the goal rides a body (an empty on one), moving as that body breathes */
+  rides?: (f: Frame) => boolean;
   /** an explicit pace; otherwise a stroll, slowed by the weight held, quickened by the body's tempo */
   speed?: number;
   /** points to pass on the way first */
@@ -192,7 +194,7 @@ export class Walk {
       this.stall = {
         where: `walk, ${off.toFixed(2)} m left`, off, limit: ARRIVED.distance * s,
         why: there
-          ? `there and turned, but its feet never settled: a foot keeps wanting to step. An empty on a body moves as it breathes, so walk to a fixed point, or end on \`until: arriving(body, 0.3)\``
+          ? `there and turned, but its feet never settled: a foot keeps wanting to step${this.way.rides?.(f) ? '. An empty on a body moves as it breathes, so walk to a fixed point, or end on `until: arriving(body, 0.3)`' : ''}`
           : `no nearer its goal or its facing for ${STALL.seconds} s, ${off.toFixed(2)} m short: something holds it off, or it circles`,
       };
     }

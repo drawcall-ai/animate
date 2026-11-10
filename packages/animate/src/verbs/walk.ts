@@ -68,7 +68,8 @@ export function walkTo(body: Body, target: Target, options: WalkOptions = {}): V
       if (mark && height > OFF_FLOOR) self.warn('walk target', `a walk target is ${height.toFixed(2)} m off the floor under it: its height is ignored`);
       return found.position;
     };
-    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, speed, backs: true }, until === undefined);
+    const rides = (f: Frame) => { const at = find(f).object; return !!at && !!bodyOf(at); };
+    const walk = new Walk(self, { to, face: yaw, velocity: (f) => find(f).velocity, rides, speed, backs: true }, until === undefined);
     request.there = () => walk.stands(self.frame);
     const step = (f: Frame) => {
       const go = walk.step(f);
