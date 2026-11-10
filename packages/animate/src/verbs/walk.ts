@@ -22,7 +22,7 @@ interface WalkOptions {
   /**
    * how fast it may go (m/s; default a stroll's 1.3, slower with a load; where the floor rises or falls on its way — stairs — at most 0.7 ×
    * its scale, a person's height over the default 1.75 m, so a group sharing a climbing speed keeps under its smallest body's cap). An upper
-   * limit: it gets there with room to, speeding up and braking quicker the faster it is asked. On a straight, asking faster does not arrive
+   * limit: it gets there with room to, speeding up and braking quicker the faster it is asked (a person asked 3 m/s needs ~5 m). On a straight, asking faster does not arrive
    * later, within its last step or so; a walk that turns first or arrives turned goes as its turn lets it, and may. Its gait follows: a
    * person breaks into a run from 2 m/s, running by 3, and goes 4 m/s at most (× √ its legs' length); a creature as fast as its legs keep up.
    * Ending on arriving, held well short of a speed above a stroll it had the room for, it says so in its dev log (`walk speed not reached`).

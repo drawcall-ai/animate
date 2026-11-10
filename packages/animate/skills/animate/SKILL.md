@@ -9,7 +9,7 @@ A story is a generator on the app's `runTimeline` from @pmndrs/timeline; advance
 
 Your app and this library must share one copy of three; a second copy breaks every `instanceof`, and the first target or `Body` built from it throws saying so.
 
-A verb does nothing until `yield*`ed. A mover (`walkTo`, `reach`, `grab`, `carry`, `throwAt`, `sit`, `stand`) ends when its goal is met. An aimer (`lookAt`, `track`, `pose`) returning `true` says only that it ended: a person's head stops about 1.64 rad either way, turning the shorter way round for what is behind it (a dog's about 1.3 rad), and the eyes add a little, so turn the body for more. It never ends by itself, so `yield*` one alone runs for ever: race it or give it `until`, and give a `pose` that should end once it has come a `stay`.
+A verb does nothing until `yield*`ed. A mover (`walkTo`, `reach`, `grab`, `carry`, `throwAt`, `sit`, `stand`) ends when its goal is met. An aimer (`lookAt`, `track`, `pose`) returning `true` says only that it ended, not that it got there: a look turns the head only so far and never the body, so turn the body for what is behind it. An aimer never ends by itself, so `yield*` one alone runs for ever: race it or give it `until`, and give a `pose` that should end once it has come a `stay`.
 
 A verb returns `true` when what it moved stands there within its tolerance as it ends (an aimer when it ends), and `false` only when your own `until` cut a mover short: nothing has gone wrong. When it cannot get there it throws `Missed`, `until` or not, whose message says where it stopped and what to change. That reaches your `update` once and ends the story, so where a miss is an ordinary turn of events, take it with `attempt` and go on (`attempt` discards the verb's return, so a `false` reads as `null`; `release` is no verb, and throws its `Missed` at the call, so take that with `try`):
 
@@ -76,16 +76,16 @@ To go somewhere, `walkTo`. To take a thing, `grab`, which walks up, looks and re
 
 A gesture is a loop of short poses, each held long enough to arrive, since a pose ended early comes out smaller: `stay` ends one that long after it has come. A pose's arms give way to a hand verb or a held thing. A pose's `fingers` need a skeleton with finger bones: the shipped person has none, and a pose of them throws there, saying so. To set how a body's hands rest, race a `pose` of `fingers` against its story, listed first: a `grab` takes the fingers from it for its reach and they go back to it as the hand lets go. A pose started after the `grab` keeps them on the way in, or give the grip `digits` with values.
 
-To sit a person, `yield* sit(body, seat)`: `seat` is the point on the surface under its hips, best an empty on the chair whose +Z is the way the sitter faces. It walks there, round the chair if behind it, sits and ends seated, then stays so, with `lookAt`, `reach`, `grab` and `pose` working as usual, until `yield* stand(body)`, a `walkTo` or a `reach` needing its legs stands it. It throws `Missed` for a seat too high or too low for its legs, or no level floor for its feet. Nothing collides, so its way round goes through a wall behind the seat: bring a walled seat from the front. A creature does not sit.
+To sit a person, `sit` it on an empty on the chair where its hips go, its +Z the way the sitter faces; seated, its eyes, hands and trunk go on as usual until `stand` or a verb needing its legs stands it. Nothing collides, so its way round a seat goes through a wall behind it: bring a walled seat from the front. A creature does not sit.
 
-To brace a person, a fighter's stance or a lunge, stand its feet apart fore and aft with a pose's `stagger` (metres, left foot ahead; negative, right) and race it with what goes on over it: `parallel('race', pose(body, { stagger: 0.2 }), reach(…))`. A walk keeps its own stride, and the feet square up once the pose ends.
+To brace a person, a fighter's stance or a lunge, stand its feet apart with a pose's `stagger` and race it with what goes on over it: `parallel('race', pose(body, { stagger: 0.2 }), reach(…))`. A walk keeps its own stride.
 
 No body kneels, lies or climbs. A pose's `lower` is a deep crouch on both feet and reads as one. For those, use a puppet: stop updating the body and write its `bones` from its last pose yourself, placing each hand with `@drawcall/animate/puppet` every frame, with a grip empty wherever a hand holds. To hand back, create a fresh body where it stands and blend from your pose onto it.
 
 ## Knowing when something has finished
 
 - A thing is held: `grab` returned `true`, or `body.holds(thing)`.
-- A walk has ended: only once its feet are squared, a second or two after it stands there. `arriving(body, seconds)` is true that long before a mover ends, so `arriving(body, 2)` is about when a walk gets there. It counts only movers begun once it is made, so make it before or beside the verb it times; with no mover it stays false forever.
+- A walk has ended: only once its feet are squared, a second or two after it stands there, so `arriving(body, 2)` is about when it gets there. Make an `arriving` before or beside the verb it times.
 - A body stands on its mark: `body.feet`. `body.position` is its hips, which sway.
 - A body is at rest: `body.settled`. This is about the feet only, and is true while a pose is still easing in or out.
 - A pose has arrived: give it `stay`. Eased back: nothing reports it, so read the bone you care about.
@@ -106,7 +106,7 @@ function* crouchAndLook(body: Body, look: () => Verb): Verb {
 }
 ```
 
-Check a story with `play`: a story still running at its `limit` throws, naming each verb running and where it was called. To measure as it runs, give `frame: (time) => …`, called after the bodies update each frame. A headless run does not refresh `matrixWorld`, so read a bone with `getWorldPosition` or `getWorldQuaternion`, which do; `localToWorld` needs `updateWorldMatrix(true, false)` first. Make bodies with `dev: true` while you work and read `body.log` after it: one row per motion check, place and running verbs (balance, feet, joint speed), each with its worst value. It holds what a step of motion got wrong, not failures, which throw whether dev is on or not. A row marginally over its `limit` for a few sub-steps (`count`) is rarely visible: watch it and move on. One well over, or for many, usually means the verb in its `beat` asks too much of that part: ask less, or more slowly. An app with dev on only in development has it off in its tests, so pass it there. A verb called but never `yield*`ed, and a fallback the body took, are said once on the console. `body.owners` shows who holds each part, but empties once a race ends, so signal moments from the beat after the verb.
+Check a story with `play`, which throws for one still running at its `limit`. A headless run does not refresh `matrixWorld`, so read a bone with `getWorldPosition` or `getWorldQuaternion`, which do; `localToWorld` needs `updateWorldMatrix(true, false)` first. Make bodies with `dev: true` while you work and read `body.log` after it: one row per motion check, place and running verbs (balance, feet, joint speed), each with its worst value. It holds what a step of motion got wrong, not failures, which throw whether dev is on or not. A row marginally over its `limit` for a few sub-steps (`count`) is rarely visible: watch it and move on. One well over, or for many, usually means the verb in its `beat` asks too much of that part: ask less, or more slowly. An app with dev on only in development has it off in its tests, so pass it there. A verb called but never `yield*`ed, and a fallback the body took, are said once on the console. `body.owners` shows who holds each part, but empties once a race ends, so signal moments from the beat after the verb.
 
 ## Overlapping
 
@@ -116,7 +116,7 @@ Each part does one thing at a time. An asked part beats a borrowed one and a new
 
 ## Hands on things
 
-Give a movable thing its `userData.mass` (and `userData.centre` if its mass is off its origin) and grips: `grip(thing, name, at, spec)`, or in a model an empty with the same keys in its extras. A key on a grip's empty that no grip reads is said once on the console: it may be a typo. What a thing gripped by its own name holds in its `userData` is its own. Declare on each grip what the hand touches, not where the wrist goes: leave free what any way round will do, and fix what the hand must keep. Two grips choose the side the body stands on, the left hand's on its left: named the other way round they walk it to the far side of the thing, said once on the console. `facing` points from the hand into the thing, the way the touching palm or pad faces.
+Give a movable thing its `userData.mass` (and `userData.centre` if its mass is off its origin) and grips: `grip(thing, name, at, spec)`, or in a model an empty with the same keys in its extras. A key on a grip's empty that no grip reads is said once on the console: it may be a typo. What a thing gripped by its own name holds in its `userData` is its own. Declare on each grip what the hand touches, not where the wrist goes: leave free what any way round will do, and fix what the hand must keep. Two grips choose the side the body stands on, the left hand's on its left: named the other way round they walk it to the far side of the thing, said once on the console.
 
 - Laid on a surface (a box's side): a plain empty where the palm's middle goes, with a facing if the palm must lie flat.
 - Round something (a handle, a rung, a rail): `handle`, the line pointing out of the fist at the thumb's end. Add a facing for anything held one way; `radius` where the meshes do not show how far the palm lies off the line (alone: a ball); `length` to slide along it. To pinch something flat, put the handle along an edge, facing onto it.
@@ -136,9 +136,9 @@ If a carry misses `held off by a joint's range`, the wrist cannot turn that far 
 
 A part of a held thing (a lid, a pin) is a thing of its own with its own mass and grips, parented where it sits: the other hand grabs it, `carry` lifts it off, and `release` onto an empty puts it back. A hand holding something lets go of it when it grabs something else, and a thing both hands leave stays where it is, even in mid-air: put it down first, or if it rides on an empty under the body, aim it with `body.orient` each frame before `update`. Targets for what a person does about itself come from `body.armPoint`.
 
-A `grab` or `reach` that no stand brings there goes as far as the arm can for its time, the eyes on it, then misses: for a jar on too high a shelf, walk under it and `attempt` the reach, and the try shows. That try costs its time: a `Missed` from out of reach takes about a second or more on a person and on a dog about a second for each metre off, and there is no instant test of whether something is in reach.
+A `grab` or `reach` that no stand brings there tries, then misses: for a jar on too high a shelf, walk under it and `attempt` the reach, and the try shows. The try costs its time, a second or more, and there is no instant test of whether something is in reach.
 
-To throw what one hand holds, turn the body toward the target first, `throwAt` it, and give its `released` motion to your physics. It goes either way; a target beyond its speed misses after the follow-through. No verb catches: raise the hand with `reach`, stop the thing yourself as it touches, then `grab` it.
+To throw what one hand holds, turn the body toward the target first, `throwAt` it, and give its `released` motion to your physics. No verb catches: raise the hand with `reach`, stop the thing yourself as it touches, then `grab` it.
 
 A hold does not bring the feet: a thing your story moves (a door on its hinge) leaves a body standing still behind, its hand off the grip and `holds` still `true`, a `held grip distance` row in `body.log` from 8 cm off and said once on the console from 15. Walk the body with it, keeping its facing, at a pace the swing keeps to (0.4 rad/s beside a walk of `speed: 0.4` stays on); to keep them in step whatever the walk does, set the door's angle each frame from how far the body has come; or `release`.
 
@@ -148,7 +148,7 @@ What is held rides the hands through a walk, swinging with them: a tray sinks an
 
 ### Bringing something to the face
 
-`carry` puts the thing's origin at the target, turned as the target is, so to bring one point of it (a rim) somewhere, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A thing brought to the face stops clear of it, and a target nearer than that misses, naming the clearance. An 8 × 10 cm cup tilted 0.9 rad comes no nearer than its rim 11 cm before the nose, level 15 cm; a smaller thing comes nearer. A head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
+To bring one point of a carried thing (a rim) to the face, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A thing brought to the face stops clear of it, and a target nearer than that misses, naming the clearance. An 8 × 10 cm cup tilted 0.9 rad comes no nearer than its rim 11 cm before the nose, level 15 cm; a smaller thing comes nearer. A head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
 
 ```ts
 import { Object3D, Quaternion, Vector3 } from 'three';
@@ -167,7 +167,7 @@ function lipsFor(body: Body, rim: Object3D): Object3D {
 
 ## Walking and running
 
-`speed` is an upper limit, reached with room to speed up: a person asked 3 m/s needs ~5 m, speeding up and braking. The gait follows it, with no other word: a person breaks into a run from 2 m/s, is running by 3, and goes 4 m/s at most (× √ its legs' length); a creature goes as fast as its legs keep up. On a straight, asking faster does not arrive later, within its last step or so. A walk that turns first or arrives turned goes as its turn lets it, so asking faster may not help, and may land a second or so later. A walk that ends on arriving, held well short of a speed above a stroll it had the room for, says so in `body.log` under `dev`: `walk speed not reached`.
+There is no run verb: a walk's `speed` sets its gait, and is an upper limit a walk needs room to reach, so a short walk never comes up to a fast one.
 
 Bodies of different sizes walk at different paces, and `speed` holds them together only once each is up to it: a person reaches 90% of 1.3 m/s in 1.5 s and of 3.5 m/s in 2.2 s, a dog in 2.8 s and 4.3 s, so a dog started beside a person falls behind. To hold a formation, walk followers to targets in their own lanes, ending when the leader arrives; give the slower starter that lead, since a lane target behind a follower turns it round. To lead a horse, take the rope first: a tether limits its head's reach but does not make it follow.
 

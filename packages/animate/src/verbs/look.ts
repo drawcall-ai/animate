@@ -34,7 +34,9 @@ type Seen = Target | Body | ((time: number) => Vector3 | Object3D | Body);
 /**
  * Looks at `target` — a point, an object, or another body: its eyes, followed as they move; a function may give any of them, a
  * changing focus — the eyes on it, the head turning most of the way (a person's neck within its range, the body bowing to see low
- * down; a creature's posture turning its head), eased in and back out, a new focus taken as a gaze shift. An aimer, it keeps on until
+ * down; a creature's posture turning its head), eased in and back out, a new focus taken as a gaze shift. It turns no body: a person's head
+ * stops about 1.64 rad either way (a dog's about 1.3), turning the shorter way round for what is behind it, the eyes adding a little
+ * beyond. An aimer, it keeps on until
  * `until`. It asks for the eyes (and the trunk's posture, given a `trunk` share: a newer `pose` of the trunk takes the trunk from it until the
  * pose ends, and a look begun after the pose takes it back). A body to look at needs eyes (a gaze), and is not the
  * body looking; nor is an object on its own neck or head, which a look would turn on as the head turned to it: one on its chest, or in
