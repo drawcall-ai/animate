@@ -168,6 +168,39 @@ it('given until, walks after a target that moves, and stops with it', () => {
   expect(body.log).toEqual([]);
 });
 
+// (an empty standing still is a goal standing still, as a point is: its velocity, known, is none)
+it.each([
+  ['as it comes', undefined],
+  ['facing as asked', Math.PI / 2],
+] as const)('a dog walks to an empty standing still and ends there, %s', (_, face) => {
+  const body = new Body(dog(DOG), { dev: true }), mark = markAt(0.5, 3);
+  roomOf(body).add(mark);
+  let done: boolean | undefined;
+  play(function* () { done = yield* walkTo(body, mark, face === undefined ? {} : { face }); }, [body], 15, () => done !== undefined);
+  expect(done).toBe(true);
+  expect(body.position.setY(0).distanceTo(mark.position)).toBeLessThan(0.5);
+  expect(body.log).toEqual([]);
+});
+
+// (one it followed as it rolled, ended on arriving once it lay still, it is at: walked to again, it is there, and the walk ends)
+it('a dog following a ball that rolls to a stop, ended on arriving, is there: walked to again, it ends at once', () => {
+  const body = new Body(dog(DOG)), ball = markAt(0, 2);
+  roomOf(body).add(ball);
+  let followed: boolean | undefined, ended = NaN, again = NaN;
+  play(function* () {
+    followed = yield* walkTo(body, ball, { until: arriving(body, 0.3) });
+    ended = now();
+    yield* walkTo(body, ball);
+    again = now();
+  }, [body], 20, (time) => {
+    ball.position.x = Math.min(time, 2);
+    return !Number.isNaN(again);
+  });
+  expect(followed).toBe(true);
+  expect(body.position.setY(0).distanceTo(ball.position)).toBeLessThan(0.5);
+  expect(again - ended).toBeLessThan(2);
+});
+
 it('a dog keeps to an empty at a person\'s heel at a run and stands by it, and one held slower than its target says so', () => {
   const leader = person({ dev: true }), rex = new Body(dog(DOG), { dev: true, at: new Vector3(-0.6, 0, 0) });
   roomOf(leader, rex);

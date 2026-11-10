@@ -62,20 +62,22 @@ export function creature(body: Self): Behaviour {
     // (it sets off for a goal further than `STOP.start`, or one on the move, and stops within `STOP.distance` of a still one, slow:
     // there it stands, not edging about)
     const root = planner.root.position, speed0 = planner.root.velocity.length();
-    // (a goal on the move followed as it goes, carried on at its speed and drawn to where it is `FOLLOWING` /s: not its every sway)
-    if (go?.velocity && followed) followed.addScaledVector(go.velocity, f.dt).lerp(go.to, Math.min(1, FOLLOWING * f.dt)).setY(0);
-    else followed = go?.velocity ? go.to.clone().setY(0) : null;
+    // (a goal on the move — its velocity known and not none: an empty standing still is a goal standing still, as a point is —
+    // followed as it goes, carried on at its speed and drawn to where it is `FOLLOWING` /s: not its every sway)
+    const velocity = go?.velocity?.lengthSq() ? go.velocity : undefined;
+    if (go && velocity && followed) followed.addScaledVector(velocity, f.dt).lerp(go.to, Math.min(1, FOLLOWING * f.dt)).setY(0);
+    else followed = go && velocity ? go.to.clone().setY(0) : null;
     const asked = followed?.clone() ?? go?.to.clone().setY(0) ?? root.clone();
-    if (!going && (asked.distanceTo(root) > STOP.start || (go?.velocity?.lengthSq() ?? 0) > 0)) going = true;
-    if (going && asked.distanceTo(root) < STOP.distance && speed0 < STOP.speed && !go?.velocity) going = false;
+    if (!going && (asked.distanceTo(root) > STOP.start || velocity)) going = true;
+    if (going && asked.distanceTo(root) < STOP.distance && speed0 < STOP.speed && !velocity) going = false;
     // (a still goal behind it, nearer than its feet stand, it does not turn round for: come past it, it is there; asked a facing, it
     // steps back to it)
     const behind = _gap.copy(asked).sub(root).dot(forwardOf(planner.root.yaw, _to)) < 0;
-    if (going && !go?.velocity?.lengthSq() && behind && asked.distanceTo(root) < radius && face === undefined) going = false;
+    if (going && !velocity && behind && asked.distanceTo(root) < radius && face === undefined) going = false;
     const to = going ? asked : root.clone(), heading = Math.atan2(to.x - root.x, to.z - root.z);
     const faced = face ?? (to.distanceTo(root) > radius && offTheWay(heading, planner.root.yaw) ? heading : undefined);
     // (or where the scene drives it)
-    const r: Steering = driven ? driven(f) : planner.step(f, { position: to, velocity: go?.velocity, yaw: faced },
+    const r: Steering = driven ? driven(f) : planner.step(f, { position: to, velocity, yaw: faced },
       { accel: go?.accel ?? 1, speed: going ? go?.speed ?? 0 : 0, turnSpeed: turning }, stance, (forecast) => stepper.reachable(forecast));
     stepper.move(f, r);
     f.current.setLocal(0, _yaw.setFromAxisAngle(UP, stepper.yaw));
@@ -121,7 +123,7 @@ export function creature(body: Self): Behaviour {
     });
     locomotion.velocity.copy(r.velocity).setY(0);
     [locomotion.facing, locomotion.moving, locomotion.settled] = [stepper.yaw, speed > 0.05 || stepper.legs.some((leg) => leg.swing), stepper.settled];
-    locomotion.atGoal = !!go && !go.velocity?.lengthSq() && !going;
+    locomotion.atGoal = !!go && !velocity && !going;
   };
 }
 
