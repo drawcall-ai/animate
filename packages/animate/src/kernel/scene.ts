@@ -6,6 +6,13 @@ export interface Placed extends Placement {
   scale: number;
 }
 
+/** the top of the tree `node` is in: its scene's root, if it is in one */
+export function topOf(node: Object3D): Object3D {
+  let top = node;
+  while (top.parent) top = top.parent;
+  return top;
+}
+
 /** where `node` is in the world as the scene stands now, its scale with it */
 export function placedOf(node: Object3D): Placed {
   node.updateWorldMatrix(true, false);
@@ -35,4 +42,12 @@ export function toWorld(at: Placement, frame: Placement): Placement {
 export function within(object: Object3D, node: Object3D): boolean {
   for (let at: Object3D | null = object; at; at = at.parent) if (at === node) return true;
   return false;
+}
+
+/** `value` as a vector: a `Vector3` or [x, y, z]; none, the zero vector; anything else a misuse, said at once (`what`: what gave it) */
+export function vectorOf(value: unknown, what: string): Vector3 {
+  if (value === undefined) return new Vector3();
+  if (value instanceof Vector3) return value.clone();
+  if (Array.isArray(value) && value.length === 3 && value.every((x) => typeof x === 'number' && Number.isFinite(x))) return new Vector3(value[0], value[1], value[2]);
+  throw new Error(`${what} is neither a Vector3 nor [x, y, z]`);
 }

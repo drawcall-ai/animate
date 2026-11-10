@@ -1,6 +1,7 @@
 import { Group, MathUtils, Vector3 } from 'three';
 import { walkTo } from '@drawcall/animate';
 import type { Person, Scenario } from '../scenario';
+import { poseOf } from '@drawcall/animate';
 
 /** the point's pace (m/s), and the body's top speed */
 const PACE = 1.3;
@@ -59,4 +60,4 @@ function path(s: number, radius: number, out: Vector3): Vector3 {
 }
 
 /** whether `walker`'s centre of mass stands over `point` (within 15 cm) */
-const standsAt = (walker: Person, point: Vector3) => walker.pose.com(new Vector3()).setY(0).distanceTo(point) < 0.15;
+const standsAt = (walker: Person, point: Vector3) => poseOf(walker).com(new Vector3()).setY(0).distanceTo(point) < 0.15;

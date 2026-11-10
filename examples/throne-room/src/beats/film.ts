@@ -17,7 +17,9 @@ import type { Beat } from './index';
 
 // The whole scene as one film, as the last scene of A New Hope plays it: the doors open, the trio walks up the aisle between the troops
 // at attention and climbs to Leia, who hangs Luke's medal and then Han's (Luke bows, Han winks, Chewbacca roars); the droids react
-// throughout, and the trio turns to the hall as the troops applaud. The camera and the sound are steps of the same story.
+// throughout, and the trio turns to the hall as the troops applaud. The camera (film/camera.ts) and the sound (film/sound.ts) are steps of
+// the same story. It is the viewer's default beat, and waits for a click on "Play with sound", since browsers start audio only after one;
+// "Orbit" looks around the hall from wherever the story camera is, and "Story camera" goes back to it.
 //
 // It composes the other beats rather than rewriting them: the procession, the medal moment's gestures and the finale are each staged into
 // this one setting and their stories run in turn, the next one's preparation starting before the last ends; the droids' moods and the
@@ -122,8 +124,8 @@ export const beat: Beat & { order: number } = {
       // (early enough that Leia holds Luke's medal as the trio comes to stand before her)
       yield* wait(() => luke.position.z > 26);
       mark('bearer steps up');
-      if (!(yield* grab(bearer, lukeMedal, { right: INNER.right }))) throw new Error('the bearer could not take Luke\'s medal');
-      if (!(yield* grab(bearer, hanMedal, { left: INNER.left }))) throw new Error('the bearer could not take Han\'s medal');
+      yield* grab(bearer, lukeMedal, { right: INNER.right });
+      yield* grab(bearer, hanMedal, { left: INNER.left });
       const spot = place(0.65, 36.15, Math.PI + 0.5); // at her right, turned a little toward her
       yield* parallel('all', walkTo(bearer, spot, { speed: 0.5 }), lookAt(leia, luke, { until: 1.2 }));
       yield* parallel('race', lookAt(bearer, leia), function* () {

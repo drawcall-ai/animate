@@ -1,7 +1,7 @@
 import { GRAVITY } from '../kernel/math';
 
 /**
- * How a gait carries a four-legged body (`Gait.body`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
+ * How a gait carries a four-legged body (`Gait.trunk`), as the stride goes: with x the fore-left leg's phase from its mid-stance (rad)
  * and the wave w(c) = (1 − once) · cos(2x − c) + once · cos(x − c) — twice a stride (a walk's, a trot's: a bounce on each diagonal) or
  * once (a gallop's: `once` 1) — the withers rise `withers · w(0)` (m) and the croup `croup[0] · w(croup[1])`, the trunk pitching between
  * them; the spine pitches `spine · w(spinePhase)` (°, + its hind end up: extending); the head pitches `headPitch` (°) and rises
@@ -12,7 +12,7 @@ import { GRAVITY } from '../kernel/math';
  * pelvis the back (none: it does not). Running, the trunk rides its legs' push by `bounce` (share, on top of the wave): its centre of
  * mass and pitch go as each stance's push and the flights' fall carry them (`Riding`).
  */
-export interface Carriage {
+export interface TrunkMotion {
   bend?: number;
   withers: number;
   croup: readonly [number, number];
@@ -46,8 +46,8 @@ export interface Gait {
   /** running (a gallop), the body let down on its legs by `drop` of their length — eased in from Froude number `froude[0]` to `froude[1]` —
    * its stances reaching as far fore and aft as the legs reach so */
   readonly run?: { froude: readonly [number, number]; drop: number };
-  /** how the gait carries a four-legged body (`Carriage`), if it does: as it is, or as it changes with the pace (`carriages`) */
-  readonly body?: Carriage | ((speed: number, froude: number) => Carriage);
+  /** how the gait carries a four-legged body (`TrunkMotion`), if it does: as it is, or as it changes with the pace (`trunkMotions`) */
+  readonly trunk?: TrunkMotion | ((speed: number, froude: number) => TrunkMotion);
 }
 
 /** leg `leg`'s stride at `speed` (m/s; its slowest below `gait.slowest`): its cadence (1/s) and duty factor */
@@ -67,3 +67,26 @@ export function offsetAt(gait: Gait, speed: number, leg: number): number {
   if (!(value >= 0 && value < 1)) throw new Error('a gait offset must be in [0, 1)');
   return value;
 }
+
+/** the gait dynamically similar at `size`: read at the speed of the same Froude number */
+export function gaitAt(gait: Gait, size: number): Gait {
+  const k = Math.sqrt(size), at = (v: number) => v / k;
+  const offsetOf = (offset: Gait['contacts'][number]['offset']) => typeof offset === 'number' ? offset : (v: number, fr: number) => offset(at(v), fr);
+  return {
+    ...gait,
+    height: gait.height * size,
+    slowest: gait.slowest * k,
+    referenceSpeed: gait.referenceSpeed === undefined ? undefined : gait.referenceSpeed * k,
+    clearance: gait.clearance.map((c) => c * size),
+    frequency: (v, fr) => gait.frequency(at(v), fr) / k,
+    contacts: gait.contacts.map((c) => ({
+      ...c,
+      offset: offsetOf(c.offset),
+      duty: (v: number, fr: number) => c.duty(at(v), fr),
+    })),
+    trunk: typeof gait.trunk === 'function' ? ((body) => (v: number, fr: number) => trunkAt(body(at(v), fr), size))(gait.trunk) : gait.trunk && trunkAt(gait.trunk, size),
+  };
+}
+
+/** a trunk motion at `size`: its rises and falls as long, its angles as they are */
+const trunkAt = (b: TrunkMotion, size: number): TrunkMotion => ({ ...b, withers: b.withers * size, croup: [b.croup[0] * size, b.croup[1]], headRise: b.headRise * size });

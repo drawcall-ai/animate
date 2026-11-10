@@ -18,11 +18,6 @@ export function cylinder(parent: Object3D, name: string, radius: number, length:
   return place(parent, new Mesh(new CylinderGeometry(radius, radius, length, 16), material), name, position);
 }
 
-/** an empty (a place, a grip) under `parent` at `position`, named `name` */
-export function empty(parent: Object3D, name: string, position: Vector3): Object3D {
-  return place(parent, new Object3D(), name, position);
-}
-
 function place<T extends Object3D>(parent: Object3D, object: T, name: string, position: Vector3): T {
   object.name = name;
   object.position.copy(position);

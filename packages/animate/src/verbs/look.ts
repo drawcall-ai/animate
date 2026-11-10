@@ -1,15 +1,17 @@
-import { Vector3, type Object3D } from 'three';
+import { Object3D, Vector3 } from 'three';
+import { nameOf } from '../species/define';
 import { parallel } from '@pmndrs/timeline';
 import { during } from '../kernel/requests';
-import { Body, selfOf } from '../body/body';
-import type { Self } from '../body/runtime';
+import { Body, selfOf } from '../body';
+import type { Self } from '../body/self';
 import type { Frame } from '../kernel/frame';
 import { aiming, looking } from '../look/gaze';
-import { finder, type Target } from './targets';
+import { boneOf } from '../things/hold';
+import { finder, type Target } from '../things/target';
 import { verb, type Until, type Verb } from './story';
 
 /** How a look goes: how much of it the head and the trunk take. To tilt or nod the head as it looks, `pose` its `head` beside it. */
-export interface LookOptions {
+interface LookOptions {
   /**
    * how much of a turn aside the head takes (0 … 1; default all but a few degrees): the eyes take the rest, as far as they turn
    * comfortably (a person's 20° each way), and past that the head turns on for them — so 0.3 is a glance with the eyes, the head
@@ -32,10 +34,13 @@ type Seen = Target | Body | ((time: number) => Vector3 | Object3D | Body);
 /**
  * Looks at `target` — a point, an object, or another body: its eyes, followed as they move; a function may give any of them, a
  * changing focus — the eyes on it, the head turning most of the way (a person's neck within its range, the body bowing to see low
- * down; a creature's posture turning its head), eased in and back out, a new focus taken as a gaze shift. An aimer, it keeps on until
+ * down; a creature's posture turning its head), eased in and back out, a new focus taken as a gaze shift. It turns no body: a person's head
+ * stops about 1.64 rad either way (a dog's about 1.3), turning the shorter way round for what is behind it, the eyes adding a little
+ * beyond. An aimer, it keeps on until
  * `until`. It asks for the eyes (and the trunk's posture, given a `trunk` share: a newer `pose` of the trunk takes the trunk from it until the
  * pose ends, and a look begun after the pose takes it back). A body to look at needs eyes (a gaze), and is not the
- * body looking.
+ * body looking; nor is an object on its own neck or head, which a look would turn on as the head turned to it: one on its chest, or in
+ * its hand, is looked at.
  */
 export function lookAt(body: Body, target: Seen, options: LookOptions = {}): Verb {
   const { head, trunk = 0 } = options;
@@ -46,13 +51,14 @@ export function lookAt(body: Body, target: Seen, options: LookOptions = {}): Ver
   return verb(body, 'lookAt', (request) => function* () {
     yield* parallel('all', during(request, 'look', 'asked', looking(self, point, { recentring: true, head })),
       trunk > 0 && during(request, 'trunk', 'asked', aiming(self, point, trunk)));
-  }, options.until, true);
+  }, { until: options.until, kind: 'aimer' });
 }
 
 /** where what `self` looks at is, each sub-step */
 function located(self: Self, target: Seen): (f: Frame) => Vector3 {
   if (target instanceof Body) return eyesOf(self, target);
   if (typeof target !== 'function') {
+    if (target instanceof Object3D) offTheHead(self, target);
     const find = finder(self, target);
     return (f) => find(f).position;
   }
@@ -62,6 +68,7 @@ function located(self: Self, target: Seen): (f: Frame) => Vector3 {
   return (f) => {
     const at = target(f.time);
     if (!(at instanceof Body)) {
+      if (at !== seen && at instanceof Object3D) offTheHead(self, at);
       seen = at;
       return find(f).position;
     }
@@ -71,10 +78,21 @@ function located(self: Self, target: Seen): (f: Frame) => Vector3 {
   };
 }
 
+/** throws for `object` on `self`'s own neck or head (a bone of its neck's chain, or one under it): a look at it turns what carries it,
+ * chasing it round at the head's pace for ever */
+function offTheHead(self: Self, object: Object3D): void {
+  const neck = self.gazer?.neck;
+  if (neck === undefined) return;
+  const chain = self.skeleton.chain(neck), bones = self.skeleton.bones;
+  for (let bone = boneOf(self, object); bone >= 0; bone = bones[bone].parent) {
+    if (chain.includes(bone)) throw new Error(`lookAt: "${object.name}" rides the body's own ${bones[bone].name}, which a look at it turns, chasing it round for ever: look at something off its neck and head`);
+  }
+}
+
 /** where `seen`'s eyes are each sub-step, as `self` reads its pose: the midpoint between them, as its gaze has them */
 function eyesOf(self: Self, seen: Body): (f: Frame) => Vector3 {
   const other = selfOf(seen), gazer = other.gazer, eyes = new Vector3();
   if (other === self) throw new Error('lookAt: a body cannot look at its own eyes');
-  if (!gazer) throw new Error(`lookAt: a ${seen.species.name ?? 'custom species'} has no eyes to look at (no gaze): look at one of its bones`);
+  if (!gazer) throw new Error(`lookAt: a ${nameOf(seen.species)} has no eyes to look at (no gaze): look at one of its bones`);
   return () => gazer.eyes(other.poseFor(self), eyes);
 }

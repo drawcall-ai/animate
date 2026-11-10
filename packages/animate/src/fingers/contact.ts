@@ -77,10 +77,10 @@ export function meet(joints: Joints, hand: Placed, contacts: readonly Contact[],
     const m = r.length, jacobian = new Float64Array(m * n);
     for (let j = 0; j < n; j++) {
       const was = x[j];
-      x[j] = was + STEP;
+      x[j] = was + DELTA;
       residual(x, moved);
       x[j] = was;
-      for (let i = 0; i < m; i++) jacobian[i * n + j] = (moved[i] - r[i]) / STEP;
+      for (let i = 0; i < m; i++) jacobian[i * n + j] = (moved[i] - r[i]) / DELTA;
     }
     // (JᵀJ + λ) Δ = −Jᵀ r
     const a = new Float64Array(n * n), b = new Float64Array(n);
@@ -118,7 +118,7 @@ const KEEP = 10, WITHIN = 0.03;
 /** how many steps across its range each of a digit's values is swept in, to start it from */
 const SWEEP = 8;
 /** the solve's iterations each sub-step; its finite step (a digit's value) and its damping */
-const ITERATIONS = 4, STEP = 1e-3, DAMPING = 1e-7;
+const ITERATIONS = 4, DELTA = 1e-3, DAMPING = 1e-7;
 
 /** the least `key` of `digit` goes (see `Finger`, `Thumb`) */
 function leastOf(digit: Digit, key: 'curl' | 'hook' | 'spread' | 'oppose'): number {

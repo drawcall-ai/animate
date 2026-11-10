@@ -2,11 +2,11 @@ import { Euler, Quaternion, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
 import { limited } from '../kernel/limits';
-import type { ReadonlyPose } from '../kernel/pose';
-import type { Posture } from '../kernel/poise';
+import type { ReadonlyBonePose } from '../kernel/bone-pose';
+import type { Posture } from '../kernel/asks';
 import type { Gazer } from '../species/define';
 
-/** A head's turn as `Posture.head` has it: pitch (+ chin down), yaw (+ to its left), roll (+ its left side up), each given (rad). */
+/** A head's turn as `WalkPose.head` has it: pitch (+ chin down), yaw (+ to its left), roll (+ its left side up), each given (rad). */
 type Angles = Required<NonNullable<Posture['head']>>;
 
 /**
@@ -20,7 +20,7 @@ export class HeadOffset {
   /** each angle as followed the sub-step before last and the last (rad) */
   private readonly history = { pitch: [0, 0], yaw: [0, 0], roll: [0, 0] };
   /** for each final pose the offset was written into: the head as the gaze had it, turned (world) and where its eyes were */
-  private readonly gazed = new Map<ReadonlyPose, { rotation: Quaternion; eyes: Vector3 }>();
+  private readonly gazed = new Map<ReadonlyBonePose, { rotation: Quaternion; eyes: Vector3 }>();
   /** each neck bone's own turn as the offset was last written over it, and what it wrote */
   private readonly kept = new Map<number, { under: Quaternion; written: Quaternion }>();
   /** no offset written, none being given back */
@@ -82,12 +82,12 @@ export class HeadOffset {
   }
 
   /** the turn (world) of the neck's last bone in `pose`, as the gaze had it before the offset */
-  rotation(pose: ReadonlyPose, bone: number): Readonly<Quaternion> {
+  rotation(pose: ReadonlyBonePose, bone: number): Readonly<Quaternion> {
     return this.gazed.get(pose)?.rotation ?? pose.rotation(bone);
   }
 
   /** where the eyes were in `pose`, as the gaze had the head before the offset, into `out` */
-  eyes(pose: ReadonlyPose, out: Vector3): Vector3 {
+  eyes(pose: ReadonlyBonePose, out: Vector3): Vector3 {
     const record = this.gazed.get(pose);
     if (record) return out.copy(record.eyes);
     if (!this.gazer) throw new Error('a head offset on a body with no gaze');
@@ -100,6 +100,6 @@ const ANGLES = ['pitch', 'yaw', 'roll'] as const satisfies readonly (keyof Angle
  * How briskly a head's offset is taken up and given back (rad/s², rad/s): a nod's ~15° down in about a quarter of a second, a head thrown
  * back half a radian in under half a second (tuned; a voluntary nod's peak ~100–150°/s, recalled, not checked)
  */
-export const NOD = { accel: 14, speed: 2.5 };
+const NOD = { accel: 14, speed: 2.5 };
 const _euler = new Euler(), _turn = new Quaternion(), _share = new Quaternion(), _local = new Quaternion();
 const _below = new Quaternion(), _under = new Quaternion(), _conjugated = new Quaternion(), _inverse = new Quaternion();

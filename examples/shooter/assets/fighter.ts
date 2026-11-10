@@ -1,5 +1,16 @@
 import type { SkeletonBone } from '@drawcall/rig';
 
+// The braided opponent: a generated fighter with a seven-link braid, swung by the species' `springs` in src/fighter.ts. V toggles a
+// close-up camera during play and `/?braid` starts in that view; the encounter and opponent AI continue normally. The braid uses
+// fixed-step spring-bone motion that keeps out of the fighter's head and torso but not the environment. It follows the head with its
+// last pose when the opponent becomes a ragdoll.
+//
+// fighter-source.glb was generated with `npx drawcall generate model`, requesting a T-pose and a long braid extending upward clear of
+// the torso. The generator left the braid as a disconnected piece: fighter.glts normalizes the character, attaches that piece to the
+// hair tie and skins the skeleton below. The exported bind pose keeps the braid upright; its spring's `hang` turn hangs it behind the
+// head. `pnpm -F shooter fighter` rebuilds public/models/fighter.glb from the source, which is not committed yet; until it is, the
+// built model is used as it is.
+
 /** Measured on fighter-source.glb after fighter.glts normalizes it and attaches the upward braid. */
 export const FIGHTER = [
   { name: 'hips', position: [0, 0.98, 0.045] },

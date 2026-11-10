@@ -1,14 +1,14 @@
 import { Quaternion, Vector3 } from 'three';
-import type { ReadonlyPose } from './pose';
+import type { ReadonlyBonePose } from './bone-pose';
 import type { Frame } from './frame';
 
 /** A goal as it is, or as it is at each sub-step (`T` is never itself a function). */
 export type Live<T> = T | ((f: Frame) => T);
 
-/** Where something is, and turned how (world, or a carrier's frame). */
+/** Where something is, and turned how (world, or a moving frame). */
 export type Placement = Required<Pick<Goal, 'position' | 'quaternion'>>;
 
-/** Where a carrier is at a sub-step (`current`) and the two before. */
+/** Where a moving frame is at a sub-step (`current`) and the two before. */
 export type Trail = Readonly<Record<'prev2' | 'prev' | 'current', Placement>>;
 
 /** A placement to go to: its own velocity (m/s) and spin (rad/s) are followed without lag. */
@@ -20,8 +20,6 @@ export interface Goal {
   spin?: Vector3;
   /** the body whose bone carries it: that body letting itself down or bowing carries it down too */
   carriedBy?: object;
-  /** the tip may roll freely about this line (a hand round a bar, a palm on a face; in the frame the target is in): of the rotations so, the one nearest it is */
-  axis?: Vector3;
   /** `quaternion` only preferred: the tip turned toward it as far as its last joint goes, the bend kept on the pole's plane for it, and
    * met there once it no longer turns, however far short (a handle's palm: the hand round the handle as the wrist lets it) */
   preferred?: boolean;
@@ -39,17 +37,17 @@ export interface Motion {
 export type FollowOptions<V> = Pick<Motion, 'accel' | 'speed'> & {
   /** the goal's own velocity (per s; for a rotation its angular velocity, rad/s), followed without lag (default still) */
   velocity?: V;
-  /** the goal (and its velocity) is in this carrier's frame, placed so at the step's time and the two before (its `at`): the value is followed relative to it */
+  /** the goal (and its velocity) is in this moving frame, placed so at the step's time and the two before (its `at`): the value is followed relative to it */
   on?: Trail;
 };
 
-/** how long after a hand's planned arrival an unmet position or turn fails its request and the unmet constraints are logged (s) */
+/** how long after a hand's planned arrival an unmet position or turn misses (s) */
 export const REACHING = 4;
-/** what reaching a goal allows: m, rad, m/s */
-export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05 };
+/** what reaching a goal allows: m, rad, m/s; and how near, and how near its turn (rad), a tip or a carried thing that has stopped short counts as there (on a goal riding a swaying body it never stands still within `distance`), past which it missed */
+export const REACHED = { distance: 0.01, angle: (2 * Math.PI) / 180, speed: 0.05, close: 0.015, closeTurn: 0.15 };
 
 /** a point moving with bone `bone` of a body (`offset` from it, turned by `turn`), its velocity read off where it was a sub-step before */
-export function movingPoint(person: { readonly pose: ReadonlyPose; readonly scale: number }, bone: number, offset: () => Goal, turn: () => Quaternion) {
+export function movingPoint(person: { readonly pose: ReadonlyBonePose; readonly scale: number }, bone: number, offset: () => Goal, turn: () => Quaternion) {
   let last: { time: number; position: Vector3 } | null = null;
   const velocity = new Vector3();
   return (f: Frame) => {

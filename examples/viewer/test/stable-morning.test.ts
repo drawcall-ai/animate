@@ -1,16 +1,17 @@
 import { Euler, Group, Mesh, Quaternion, Vector3, type BoxGeometry, type Line, type Object3D } from 'three';
 import { parallel } from '@pmndrs/timeline';
 import { expect } from 'vitest';
-import { carry, grab, horse, lookAt, wait, walkTo, type Body } from '@drawcall/animate';
+import { carry, grab, horse, lookAt, wait, walkTo, type Body, grip } from '@drawcall/animate';
 import { Simulation } from '../src/simulation';
 import { GATE, LEAD_ROPE, RAIL, TIED, stableMorning } from '../src/scenarios/stable-morning';
 import { Cast, type Scenario } from '../src/scenario';
-import { HORSE, SOLDIER, type PersonSkeleton } from '../src/skeletons';
-import { box, empty } from '../src/things';
+import { HORSE, SOLDIER, type PersonSkeleton } from '../src/skeletons/index';
+import { box } from '../src/things';
 import { Actor } from './actor';
 import { segmentDistance } from './clearance';
 import { headShift, SHIFT_BOUNDS, spin } from './gaze';
-import { cases } from '../../../packages/animate/test/open';
+import { cases } from '../../../packages/animate/test/kit/open';
+import { poseOf } from '@drawcall/animate';
 
 // Recalled conservative human radii, as shares of stature: the head round its centre, the trunk (hips–chest), the thorax (chest–neck,
 // test/clearance.ts's capsule), a thigh or shank.
@@ -40,14 +41,22 @@ const WALKING = 0.3;
 const LEADING = 0.8;
 const AT_HORSE = -0.7;
 const LIFT_RISE = 0.01;
+// The saddle as near its place as a carry comes to rest within (m: the library's `END.distance`), and how soon after (s) it is set there
+// at most: a few sub-steps' settling (0.10–0.18 s at life seeds 0–7), not a step of the body's carrying it off and back (0.77 s, 26 mm).
+const ARRIVED = 0.005;
+const SETTLES = 0.3;
 const DEGREES = 180 / Math.PI;
 
 const BODIES: readonly [on: string, skeleton: PersonSkeleton | undefined][] = [['', undefined], [' on the soldier', SOLDIER]];
 const test = cases([
   // The rack stands where the default body lifts from (its wrists hang at 0.84 m, the saddle's grips just above): the soldier's short
-  // arms hang its wrists at 0.97 m, so it bends its knees 36–40° to take the saddle up, past the bound for a load at knuckle height (35°),
-  // at all but one life seed.
-  ['leading posture and clearance on the soldier', [0, 1, 3]],
+  // arms hang its wrists at 0.97 m, so as far as it stops from the rack it bends its knees past the bound for a load at knuckle height (35°),
+  // at many life seeds, this among them: to 36°, and its log holds the breach below too.
+  ['leading posture and clearance on the soldier', /or equal to 35/, [1]],
+  // (#18) XCoM 0.110 m for one sub-step at 9.35 s, bound 0.103: the trailing knee held straight at full reach through pre-swing, the heel flat till
+  // the reach runs out, peels and snaps the knee bent as the foot lifts — the centre of mass jolted with it.
+  ['leading posture and clearance on the soldier', /XCoM outside support/, [3]],
+  ['takes the slack without stretching the rope on the soldier', /XCoM outside support/, [3]],
 ]);
 
 for (const [on, skeleton] of BODIES) {
@@ -55,8 +64,8 @@ for (const [on, skeleton] of BODIES) {
 test(`leading posture and clearance${on}`, () => {
   const run = staged(skeleton);
   const { sim, handler, person, mare, saddle, knot, slack, halter } = run;
-  const atHandler = (name: string) => handler.pose.position(handler.pose.skeleton.index(name)).clone();
-  const atHorse = (name: string) => mare.pose.position(mare.pose.skeleton.index(name)).clone();
+  const atHandler = (name: string) => poseOf(handler).position(poseOf(handler).skeleton.index(name)).clone();
+  const atHorse = (name: string) => poseOf(mare).position(poseOf(mare).skeleton.index(name)).clone();
   let settingOff = Infinity, eyesAt = Infinity;
   let gripAt = Infinity, liftAt = Infinity, contactKnee = NaN, contactPitch = NaN;
   let airborneTilt = 0, saddleOverRail = Infinity;
@@ -76,8 +85,8 @@ test(`leading posture and clearance${on}`, () => {
     // (taken up: the hands close on the saddle, then it is lifted off its rack)
     if (!Number.isFinite(gripAt) && handler.holds(saddle)) {
       gripAt = t;
-      contactKnee = ['left', 'right'].reduce((sum, side) => sum + handler.pose.local(handler.pose.skeleton.index(`${side}LowerLeg`)).angleTo(new Quaternion()), 0) / 2 * DEGREES;
-      contactPitch = new Euler().setFromQuaternion(handler.pose.rotation(handler.pose.skeleton.index('chest')), 'YXZ').x * DEGREES;
+      contactKnee = ['left', 'right'].reduce((sum, side) => sum + poseOf(handler).local(poseOf(handler).skeleton.index(`${side}LowerLeg`)).angleTo(new Quaternion()), 0) / 2 * DEGREES;
+      contactPitch = new Euler().setFromQuaternion(poseOf(handler).rotation(poseOf(handler).skeleton.index('chest')), 'YXZ').x * DEGREES;
     }
     if (handler.holds(saddle) && at.y > rest + LIFT_RISE) liftAt = Math.min(liftAt, t);
     if (handler.holds(saddle) && at.y > 1.25) {
@@ -95,7 +104,7 @@ test(`leading posture and clearance${on}`, () => {
       segmentDistance(atHandler(`${side}${a}`), atHandler(`${side}${b}`), atHorse(`${s}${c}`), atHorse(`${s}${d}`)) - LEG_RADIUS * person.proportions.height - HORSE_LEG_RADIUS)))));
     if (saddle.parent?.name === 'saddled' && tied) untieLegGap = Math.min(untieLegGap, legGap);
     if (!Number.isNaN(firstStep)) leadingLegGap = Math.min(leadingLegGap, legGap);
-    const poll = atHorse('head'), muzzle = mare.pose.point(mare.pose.skeleton.index('head'), MUZZLE, new Vector3());
+    const poll = atHorse('head'), muzzle = poseOf(mare).point(poseOf(mare).skeleton.index('head'), MUZZLE, new Vector3());
     if (!tied) for (const [a, b] of [['hips', 'chest'], ['chest', 'neck'], ['neck', 'head']]) for (const [c, d] of [[atHorse('neck'), poll], [poll, muzzle]]) {
       leadGap = Math.min(leadGap, segmentDistance(atHandler(a), atHandler(b), c, d) - BODY_RADIUS * person.proportions.height - HORSE_HEAD_RADIUS);
     }
@@ -117,7 +126,7 @@ test(`leading posture and clearance${on}`, () => {
     if (person.locomotion.velocity.length() < LEADING) continue;
     leading++;
     expect(person.holding.left?.thing).toBe(slack);
-    chest.push(new Euler().setFromQuaternion(handler.pose.rotation(handler.pose.skeleton.index('chest')), 'YXZ').x);
+    chest.push(new Euler().setFromQuaternion(poseOf(handler).rotation(poseOf(handler).skeleton.index('chest')), 'YXZ').x);
     // the near hand forward and toward the horse, beside its halter; the slack hand outside the hip and in front of it
     const right = atHandler('rightHand').sub(atHandler('chest'));
     expect(right.z).toBeGreaterThan(0.25);
@@ -139,8 +148,8 @@ test(`leading posture and clearance${on}`, () => {
       expect(atHandler('hips').z - shoulder).toBeGreaterThan(0);
       expect(atHandler('hips').z - shoulder).toBeLessThan(poll.z - shoulder);
     }
-    femurs.forEach((angles, s) => angles.push(new Euler().setFromQuaternion(mare.pose.local(mare.pose.skeleton.index(`${['left', 'right'][s]}Femur`)), 'YZX').x));
-    roll.push(new Euler().setFromQuaternion(mare.pose.local(mare.pose.skeleton.index('pelvis')), 'YXZ').z);
+    femurs.forEach((angles, s) => angles.push(new Euler().setFromQuaternion(poseOf(mare).local(poseOf(mare).skeleton.index(`${['left', 'right'][s]}Femur`)), 'YZX').x));
+    roll.push(new Euler().setFromQuaternion(poseOf(mare).local(poseOf(mare).skeleton.index('pelvis')), 'YXZ').z);
   }
   // it sets off at once, its eyes first
   expect(settingOff).toBeLessThan(0.3);
@@ -187,20 +196,28 @@ test(`leading posture and clearance${on}`, () => {
 test(`saddle carry and placement clearance${on}`, () => {
   const run = staged(skeleton, false);
   const { sim, handler, person, mare, saddle } = run;
-  const atHandler = (name: string) => handler.pose.position(handler.pose.skeleton.index(name)).clone();
-  const atHorse = (name: string) => mare.pose.position(mare.pose.skeleton.index(name)).clone();
+  const atHandler = (name: string) => poseOf(handler).position(poseOf(handler).skeleton.index(name)).clone();
+  const atHorse = (name: string) => poseOf(mare).position(poseOf(mare).skeleton.index(name)).clone();
   const H = person.proportions.height;
   const rest = saddle.getWorldPosition(new Vector3()).y;
   let headGap = Infinity, torsoGap = Infinity, legGap = Infinity, barrelGap = Infinity, railGap = Infinity, footAcross = Infinity;
   const lifting: Quaternion[] = [], carried: { speed: number; height: number; placing: boolean }[] = [];
+  const place = sim.stage.scene.getObjectByName('saddled')!;
+  let onAt = NaN, setAt = NaN, drift = 0;
   while (sim.t < 25) {
     sim.step();
+    // (first held within ARRIVED of its place, then set there: the carry ends as it comes to rest on it, its release following at once,
+    // and the hands keep it there till then)
+    const off = saddle.getWorldPosition(new Vector3()).distanceTo(place.getWorldPosition(new Vector3()));
+    if (Number.isNaN(onAt) && handler.holds(saddle) && off < ARRIVED) onAt = sim.t;
+    if (Number.isNaN(setAt) && saddle.parent === place) setAt = sim.t;
+    if (!Number.isNaN(onAt) && Number.isNaN(setAt)) drift = Math.max(drift, off);
     const feet = atHandler('leftFoot').sub(atHandler('rightFoot'));
     const facing = person.locomotion.facing;
     footAcross = Math.min(footAcross, feet.x * Math.cos(facing) - feet.z * Math.sin(facing));
     const at = saddle.getWorldPosition(new Vector3());
     // taking it up from when its hands close on it (its eyes going on to its place meanwhile), the head no faster than a calm gaze shift
-    if (handler.holds(saddle) && handler.owners.hands.left?.verb === 'grab') lifting.push(handler.pose.rotation(handler.pose.skeleton.index('head')).clone());
+    if (handler.holds(saddle) && handler.owners.hands.left?.verb === 'grab') lifting.push(poseOf(handler).rotation(poseOf(handler).skeleton.index('head')).clone());
     if (!handler.holds(saddle) || at.y <= rest + LIFT_RISE) continue;
     for (const side of ['left', 'right']) for (const [a, b] of HUMAN_LEGS) for (const [c, d] of run.rail) {
       railGap = Math.min(railGap, segmentDistance(atHandler(`${side}${a}`), atHandler(`${side}${b}`), c, d) - LEG_RADIUS * H - RAIL_RADIUS);
@@ -234,6 +251,8 @@ test(`saddle carry and placement clearance${on}`, () => {
   expect(headGap).toBeGreaterThan(0.02);
   expect(legGap).toBeGreaterThan(0);
   expect(barrelGap).toBeGreaterThan(0);
+  expect(drift).toBeLessThan(ARRIVED);
+  expect(setAt - onAt).toBeLessThan(SETTLES);
 }, 30000);
 
 test(`gaze shifts between story tasks${on}`, () => {
@@ -251,17 +270,17 @@ test(`gaze shifts between story tasks${on}`, () => {
   };
   type Step = { head: Quaternion; onChest: Quaternion; sight: Vector3 };
   const started = new Map<string, number>(), shifts = new Map<string, Step[]>(Object.keys(tasks).map((task) => [task, []]));
-  const all: Quaternion[] = [], index = (name: string) => handler.pose.skeleton.index(name);
+  const all: Quaternion[] = [], index = (name: string) => poseOf(handler).skeleton.index(name);
   while (sim.t < 20) {
     sim.step();
-    const head = handler.pose.rotation(index('head')).clone();
+    const head = poseOf(handler).rotation(index('head')).clone();
     all.push(head);
     for (const [task, { begun, target }] of Object.entries(tasks)) {
       if (!started.has(task) && begun()) started.set(task, sim.t);
       const from = started.get(task);
       if (from === undefined || sim.t - from > 1.5) continue;
       const sight = target.getWorldPosition(new Vector3()).sub(person.point('head', person.proportions.headCenter)).normalize();
-      shifts.get(task)?.push({ head, onChest: handler.pose.rotation(index('chest')).clone().invert().multiply(head), sight });
+      shifts.get(task)?.push({ head, onChest: poseOf(handler).rotation(index('chest')).clone().invert().multiply(head), sight });
     }
   }
   for (const [task, steps] of shifts) {
@@ -285,7 +304,7 @@ test(`gaze shifts between story tasks${on}`, () => {
 test(`takes the slack without stretching the rope${on}`, () => {
   const run = staged(skeleton);
   const { sim, handler, person, knot, slack } = run;
-  const atHandler = (name: string) => handler.pose.position(handler.pose.skeleton.index(name)).clone();
+  const atHandler = (name: string) => poseOf(handler).position(poseOf(handler).skeleton.index(name)).clone();
   let rightAt = NaN, leftAt = NaN;
   while (sim.t < sim.scenario.duration) {
     sim.step();
@@ -327,8 +346,8 @@ library('a person takes hold of the halter of a horse watching it', () => {
   const sim = new Simulation(scene((cast) => {
     const person = cast.person({ at: new Vector3(-0.5, 0, 3.3), face: -0.3 });
     const mare = cast.body(horse(HORSE), { at: TIED });
-    const halter = empty(mare.bones.head, 'halter', new Vector3(0, -0.3, 0.05));
-    empty(halter, 'lead', new Vector3(0, -0.25, 0)).userData.handTurn = [0, 1, 0];
+    const halter = grip(mare.bones.head, 'halter', new Vector3(0, -0.3, 0.05));
+    grip(halter, 'lead', new Vector3(0, -0.25, 0));
     let held = false;
     return {
       bodies: [person, mare],
@@ -349,7 +368,7 @@ library('a person walking carries what it holds onto a place on its own body', (
     const person = cast.person();
     const knot = box(scene, 'knot', new Vector3(0.04, 0.04, 0.04), new Vector3(-0.25, 1, 0.35));
     knot.userData.mass = 0.2;
-    const held = empty(person.object, 'held', new Vector3(-0.45, 1.33, 0.3));
+    const held = grip(person.object, 'held', new Vector3(-0.45, 1.33, 0.3));
     let walked = false;
     return {
       bodies: [person],

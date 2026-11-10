@@ -1,24 +1,36 @@
 ---
 name: animate
-description: Write or review code that moves bodies with @drawcall/animate (`Body`, `walkTo`, `grab`, `lookAt`, stories on `runTimeline`), including custom species, crowds and player-driven bodies. Not for rigging a mesh (@drawcall/rig's skill) or playing baked animation clips.
+description: Write or review code that moves bodies with @drawcall/animate (`Body`, `walkTo`, `grab`, `pose`, stories on `runTimeline`), including custom species, crowds and player-driven bodies. Not for rigging a mesh (@drawcall/rig's skill) or playing baked animation clips.
 ---
 
 # @drawcall/animate
 
-A story runs on the app's `runTimeline` from @pmndrs/timeline; advance it before updating each body. The body supplies idle motion and balance, so a pause usually needs only `wait`. Units are metres, seconds and radians; +Y is up, +Z forward, +X the body's left.
+A story is a generator on the app's `runTimeline` from @pmndrs/timeline; advance it before updating each body. The body supplies idle motion and balance, so a pause usually needs only `wait`. Units are metres, seconds and radians; +Y is up, +Z forward, +X the body's left. Each verb's doc comment has its options and exact behaviour; this skill covers which to reach for and how they combine.
 
-A mover (`walkTo`, `reach`, `grab`, `carry`, `throwAt`) ends when its goal is met and returns whether it was. An aimer (`lookAt`, `track`, `pose`) runs until it is raced or given an `until`. A verb asks for the body parts it is about and borrows the others it needs, as a grab borrows the legs to walk up and the eyes to find the grips.
+Your app and this library must share one copy of three; a second copy breaks every `instanceof`, and the first target or `Body` built from it throws saying so.
 
-## Compose around contact
+A verb does nothing until `yield*`ed. A mover (`walkTo`, `reach`, `grab`, `carry`, `throwAt`, `sit`, `stand`) ends when its goal is met. An aimer (`lookAt`, `track`, `pose`) returning `true` says only that it ended, not that it got there: a look turns the head only so far and never the body, so turn the body for what is behind it. An aimer never ends by itself, so `yield*` one alone runs for ever: race it or give it `until`, and give a `pose` that should end once it has come a `stay`.
 
-A grab or carry's outcome is the proof of contact; a time-based `until` ending is not. For a hand-over, give the prop grips for each body, since two hands cannot share one spot; keep the giver carrying while the receiver grabs, confirm the receiver holds it, then release the giver. To start a beat already holding something, `grab` it with `speed: Infinity` as the story starts.
+A verb returns `true` when what it moved stands there within its tolerance as it ends (an aimer when it ends), and `false` only when your own `until` cut a mover short: nothing has gone wrong. When it cannot get there it throws `Missed`, `until` or not, whose message says where it stopped and what to change. That reaches your `update` once and ends the story, so where a miss is an ordinary turn of events, take it with `attempt` and go on (`attempt` discards the verb's return, so a `false` reads as `null`; `release` is no verb, and throws its `Missed` at the call, so take that with `try`):
 
-This complete headless example uses the shipped [person skeleton](references/person.ts); copy that file beside your script. The box has constructed grip empties; no model or renderer is required.
+```ts
+import { attempt, grab, type Body, type Verb } from '@drawcall/animate';
+import type { Object3D } from 'three';
+
+function* takeIfNear(body: Body, cup: Object3D): Verb {
+  const miss = yield* attempt(grab(body, cup, { right: 'handle' }, { step: false }));
+  return miss === null;
+}
+```
+
+## A whole story
+
+This headless hand-over uses the shipped [person skeleton](references/person.ts); copy that file to `references/` beside your script. The box has constructed grip empties; no model or renderer is required. Two hands cannot share a spot, so the box has grips for each body, and the giver lets go only once the receiver holds it.
 
 ```ts
 import { Group, Object3D, Vector3 } from 'three';
-import { parallel, runTimeline } from '@pmndrs/timeline';
-import { arriving, Body, carry, grab, humanoid, release, wait } from '@drawcall/animate';
+import { parallel } from '@pmndrs/timeline';
+import { arriving, Body, carry, grab, grip, humanoid, play, release, wait } from '@drawcall/animate';
 import { PERSON } from './references/person';
 
 const giver = new Body(humanoid(PERSON), { dev: true });
@@ -29,166 +41,150 @@ const box = new Object3D();
 box.name = 'box';
 box.userData.mass = 2;
 box.position.set(0, 0.9, 0.45);
-// (where each palm closes: the giver's at the box's sides, the receiver's beside them by its own end; facing the giver, its left is the
-// giver's right)
-for (const [name, x, z] of [['left', 0.15, 0], ['right', -0.15, 0], ['receiver left', -0.15, 0.08], ['receiver right', 0.15, 0.08]] as const) {
-  const grip = new Object3D();
-  grip.name = name;
-  grip.position.set(x, 0, z);
-  box.add(grip);
-}
+// (where each palm closes; facing the giver, the receiver's left is the giver's right)
+grip(box, 'left', new Vector3(0.15, 0, 0));
+grip(box, 'right', new Vector3(-0.15, 0, 0));
+grip(box, 'receiver left', new Vector3(-0.15, 0, 0.08));
+grip(box, 'receiver right', new Vector3(0.15, 0, 0.08));
 const shelf = new Object3D();
 shelf.name = 'shelf';
 shelf.position.set(0.8, 1, 1.2);
 scene.add(box, shelf);
 scene.updateMatrixWorld(true);
 
-let finished = false;
-const updateStory = runTimeline(function* () {
-  if (!(yield* grab(giver, box, { left: 'left', right: 'right' }))) throw new Error('Giver could not grab the box');
+play([giver, receiver], function* () {
+  yield* grab(giver, box, { left: 'left', right: 'right' });
   yield* parallel('race', carry(giver, box, new Vector3(0, 1.05, 0.8), { until: Infinity }), function* () {
-    yield* wait(arriving(giver, 0)); // the offer at rest; acquisition below, not this wait, authorizes release
-    if (!(yield* grab(receiver, box, { left: 'receiver left', right: 'receiver right' }))) throw new Error('Receiver could not grab the box');
-    if (!receiver.holds(box)) throw new Error('Receiver has no contact');
+    yield* wait(arriving(giver, 0)); // the offer at rest
+    yield* grab(receiver, box, { left: 'receiver left', right: 'receiver right' });
   });
   release(giver, box);
-  if (!(yield* carry(receiver, box, shelf))) throw new Error('Receiver could not reach the shelf');
+  yield* carry(receiver, box, shelf);
   release(receiver, box, shelf);
-  finished = true;
-});
-for (let frame = 0; frame < 20 * 60 && !finished; frame++) {
-  updateStory(undefined, 1 / 60);
-  giver.update(1 / 60);
-  receiver.update(1 / 60);
-}
-if (!finished) throw new Error('Story did not finish within 20 seconds');
+}, { limit: 20 });
 if (giver.holds(box) || receiver.holds(box) || box.parent !== shelf) throw new Error('Box was not placed');
 if (giver.log.length || receiver.log.length) throw new Error(JSON.stringify([...giver.log, ...receiver.log]));
 ```
 
-## Overlap the tasks
+In an app the story runs on `runTimeline` instead, its step called each frame before each body's `update`; `play` is that loop headless, for verification.
 
-Use `parallel('all', …)` when every branch must finish, and `'race'` to cancel the rest when one finishes: race an aimer against the sequence that ends it, or a verb against `wait(3)`. Natural motion starts the next task's preparation before the current one ends: the eyes first, then the turn, then the hands. Strict walk-then-look-then-reach reads as mechanical, and a walk ends only once its feet are squared, so what follows it in plain sequence starts from a dead stop. `arriving(body, seconds)` times the overlap; it counts only movers begun once it is made, so make it before or beside the verb it times (for rest, `body.settled`).
+Write each beat as a `function* (…): Verb` that takes the bodies and things it acts on, and work out marks that depend on where bodies stand when the beat reaches them. `parallel('race', …)` returns what the winning branch returned and `'all'` returns `false` if any branch did; a `Missed` in a branch ends the `parallel`, so `attempt` takes one round it too. To start a beat already holding something, `grab` it with `already: true` as the story starts.
 
-A hand verb that may walk (`reach`, `grab`, `carry`) picks where to stand when it starts. So put eyes, poses and hands-up preparation beside a walk on `arriving`, but start a hand verb once its target has come to rest, and after a walk to a mark end that walk on `until: arriving(body, 0.5)` and start the hand verb then. With no particular mark to stand on, skip the `walkTo`: `grab` walks up on its own and already overlaps walking, looking and reaching.
+## Choosing a verb
 
-Each body part does one thing at a time. An asked part beats a borrowed one, and a newer asked verb overrides an older one until it ends, so a look beside a grab directs the eyes without interrupting the hands. Inspect `body.owners` when that surprises you.
+To go somewhere, `walkTo`. To take a thing, `grab`, which walks up, looks and reaches by itself: skip a `walkTo` unless the body must stand on a particular mark. To move what is held, `carry`; to let go, `release`. A `grab` leaves the body where it stood to take the thing, so `walkTo` afterwards if where it ends up matters. To bring a hand to a place without holding (a touch, a point), `reach`, which has a reach's timing and can fail. To keep hands on something moving (a clap, XR controllers), `track`, which never arrives. For where the eyes go, `lookAt`. For the shape of the body (a nod, a bow, a wave, a crouch), `pose`, which adds onto whatever else runs; a tilted look is a `lookAt` raced with a head `pose`.
 
-The two hands are separate parts too, so overlap their verbs as a person does rather than finishing one hand before the other starts: `yield* parallel('all', carry(body, grenade, ready), grab(body, pin, { left: 'ring' }))` brings the ring hand in while the grenade is still coming up.
+A gesture is a loop of short poses, each held long enough to arrive, since a pose ended early comes out smaller: `stay` ends one that long after it has come. A pose's arms give way to a hand verb or a held thing. A pose's `fingers` need a skeleton with finger bones: the shipped person has none, and a pose of them throws there, saying so. To set how a body's hands rest, race a `pose` of `fingers` against its story, listed first: a `grab` takes the fingers from it for its reach and they go back to it as the hand lets go. A pose started after the `grab` keeps them on the way in, or give the grip `digits` with values.
 
-## Choose the verb by what it is judged on
+To sit a person, `sit` it on an empty on the chair where its hips go, its +Z the way the sitter faces; seated, its eyes, hands and trunk go on as usual until `stand` or a verb needing its legs stands it. Nothing collides, so its way round a seat goes through a wall behind it: bring a walled seat from the front. A creature does not sit.
 
-`reach` takes the hands to a target with a human reach's timing and fails, saying why, when it cannot get there. `track` keeps each hand on a moving target at once, without arriving, and never ends on its own: a clap, a fist pump, XR controllers.
+To brace a person, a fighter's stance or a lunge, stand its feet apart with a pose's `stagger` and race it with what goes on over it: `parallel('race', pose(body, { stagger: 0.2 }), reach(…))`. A walk keeps its own stride.
 
-For a nod, a bow, an arched back, a head tilt or a gesture of the arms, use `pose`; `lookAt` says only where the eyes go and how much of the turn the head and trunk take. A pose's head sits on top of the gaze: race a `lookAt` with a head `pose` to tilt a look. The trunk is one part: a `lookAt` given `trunk` and a trunk `pose` take it from each other, the newer winning, so a look restarted in a loop takes it back from a coil you posed. `throwAt` takes the trunk from a running look itself and hands it back after: leave the look running. A pose's arms give way to a hand verb or a held thing, and each part eases in at its own pace, so a short pose comes out smaller. No body kneels, sits or lies down; a pose's `lower` is the nearest to a kneel, and anything further is a puppet (below).
+No body kneels, lies or climbs. A pose's `lower` is a deep crouch on both feet and reads as one. For those, use a puppet: stop updating the body and write its `bones` from its last pose yourself, placing each hand with `@drawcall/animate/puppet` every frame, with a grip empty wherever a hand holds. To hand back, create a fresh body where it stands and blend from your pose onto it.
 
-## Hands on props
+## Knowing when something has finished
 
-Give a movable prop its `userData.mass` and named grip empties, and declare on each empty what of the hand's placement is fixed and what is free, describing what the hand touches, not where the wrist goes. A grab picks what is free as it starts, from where the body stands, and keeps it while it holds; the arm brings the hand there and a skeleton with finger bones closes its fingers round the prop's meshes, the fingers never moving the hand. Leave free what any way round will do, and fix what the hand must keep. Choose the grip by what the hand does:
-
-- Laid on a surface (a box's side, a tabletop): a plain empty where the palm's middle goes; add a facing where the palm must lie flat on it.
-- Round something (a handle, a rung, a can in the fist, the wire of a ring): `userData.handle`, the line pointing out of the fist at the thumb's end. Fix its roll with a facing on anything held one way (a weapon's grips), and check the wrist reaches that turn from where the body holds it. `radius` says how far the palm lies off the line where the meshes do not show it (alone, without a handle: a ball held all over), and `length` lets the hand slide along it (a rail, a rope). To pinch something flat (a magazine, a book), put the handle along an edge, facing onto that edge.
-- A fingertip (a button, a switch): `userData.point` names the digit, with a facing. Make the button a massless thing of its own, its cap's mesh beside it rather than under it, and move it in as it is pressed.
-- A digit apart from the rest (a trigger finger, a thumb on a spoon): `userData.digits` names an empty its pad goes to; move that empty to move the digit. It moves only the digit, never the hand, so fix the grip's facing so the digit already lies over its empty.
-
-`userData.facing` points from the hand into the prop, the way the touching palm or pad faces: a hand coming at a ring from its +X side gives −X.
+- A thing is held: `grab` returned `true`, or `body.holds(thing)`.
+- A walk has ended: only once its feet are squared, a second or two after it stands there, so `arriving(body, 2)` is about when it gets there. Make an `arriving` before or beside the verb it times.
+- A body stands on its mark: `body.feet`. `body.position` is its hips, which sway.
+- A body is at rest: `body.settled`. This is about the feet only, and is true while a pose is still easing in or out.
+- A pose has arrived: give it `stay`. Eased back: nothing reports it, so read the bone you care about.
 
 ```ts
-import type { Object3D } from 'three';
-declare const pistolGrip: Object3D, button: Object3D, grenadeBody: Object3D, ringEdge: Object3D, aiming: boolean;
+import { Vector3 } from 'three';
+import { parallel } from '@pmndrs/timeline';
+import { pose, wait, type Body, type Verb } from '@drawcall/animate';
 
-Object.assign(pistolGrip.userData, { handle: [0, 1, 0.18], facing: [1, 0, 0.3] }); // palm on the grip's right, thumb up and round its back
-Object.assign(button.userData, { point: 'index', facing: [0, 0, -1] });
-pistolGrip.userData.digits = { index: aiming ? 'trigger' : 'frame' };
-Object.assign(grenadeBody.userData, { handle: [0, 1, 0], facing: [0, 0, -1], radius: 0.032 }); // fuze up, the palm over a spoon on its +Z side
-Object.assign(ringEdge.userData, { handle: [0, 1, 0], facing: [-1, 0, 0], radius: 0.0015 });  // a ring standing upright (its hole along Z), held by its wire on its +X edge from outside
-```
-
-`grab` ends once the fingers have closed, so what follows may pull at once; `reach` and `track` refuse a grip with a handle or a point. A part of a held thing (a magazine in its rifle, a grenade's pin) is a thing of its own with its own mass and grips under its parent: the other hand grabs it where it sits, `carry` lifts it off, and a release onto an empty puts it back — a one-handed carry to an empty ends with the thing seated on it, so the release puts it there exactly (unless its grip declares its contact, a `point` or a digit on an empty: then the arm alone puts it there). To slide a held part along its parent, move its local position yourself and the hand follows; a part the hand carries is first put onto an empty there with that hand kept on it (`release`'s `keep`).
-
-A hand holding something lets go of it as `grab` sets off, and a two-handed weapon left by both hands stays where its mount holds it, in mid-air if that is where the mount is. So before both hands leave it, `orient` its mount to hang the weapon muzzle down and across the body, below the chest, turned the least way from the aim; work on what the hands hold up before the chest, clear of what hangs there. Take it back with one `grab` of both grips as soon as the hands are free, easing the mount back to the aim meanwhile: taken one hand at a time, the other hangs idle at the thigh.
-
-Targets for what a person does about itself (holding something up to look at it, drawing a pin out) come from `body.armPoint`.
-
-To throw what one hand holds, `throwAt` it and give its `released` motion to your physics. Turn the body toward the target first and let a two-handed weapon hang, since the trunk's coil swings what the other hand holds; take the weapon back once the throw has ended.
-
-```ts
-import { Vector3, type Object3D } from 'three';
-import { carry, grab, release, throwAt, type Body } from '@drawcall/animate';
-declare function throwInto(thing: Object3D, velocity: Vector3, spin: Vector3): void; // your physics
-
-function* pullAndThrow(soldier: Body, grenade: Object3D, pin: Object3D, target: Vector3) {
-  if (!(yield* grab(soldier, grenade, { right: 'body' }))) return false;
-  if (!(yield* grab(soldier, pin, { left: 'ring' }))) return false; // the pin: a thing of its own (its own mass) under the grenade
-  // (drawn out and let go on the way once clear of the grenade, as a soldier drops it, not waiting to arrive)
-  const clear = () => pin.getWorldPosition(new Vector3()).distanceTo(grenade.getWorldPosition(new Vector3())) > 0.08;
-  yield* carry(soldier, pin, () => soldier.armPoint('left', new Vector3(1, -0.5, 0.7), 0.75), { step: false, until: clear });
-  release(soldier, pin);                                            // left in the world where it is: it falls in your physics
-  return yield* throwAt(soldier, grenade, target, { released: ({ velocity, spin }) => throwInto(grenade, velocity, spin) });
+function* crouchAndLook(body: Body, look: () => Verb): Verb {
+  const hips = () => body.bones.hips.getWorldPosition(new Vector3()).y, standing = hips();
+  const result = yield* parallel('race', pose(body, { lower: 0.4 }), function* () {
+    yield* wait(() => hips() < standing - 0.35); // down
+    return yield* look();
+  });
+  yield* wait(() => hips() > standing - 0.02); // back up: `body.settled` would pass at once
+  return result;
 }
 ```
 
-## Puppets
+Check a story with `play`, which throws for one still running at its `limit`. A headless run does not refresh `matrixWorld`, so read a bone with `getWorldPosition` or `getWorldQuaternion`, which do; `localToWorld` needs `updateWorldMatrix(true, false)` first. Make bodies with `dev: true` while you work and read `body.log` after it: one row per motion check, place and running verbs (balance, feet, joint speed), each with its worst value. It holds what a step of motion got wrong, not failures, which throw whether dev is on or not. A row marginally over its `limit` for a few sub-steps (`count`) is rarely visible: watch it and move on. One well over, or for many, usually means the verb in its `beat` asks too much of that part: ask less, or more slowly. An app with dev on only in development has it off in its tests, so pass it there. A verb called but never `yield*`ed, and a fallback the body took, are said once on the console. `body.owners` shows who holds each part, but empties once a race ends, so signal moments from the beat after the verb.
 
-For what no verb does (sitting at a wheel, climbing a ladder), stop updating the body and write its `bones` yourself from its last pose, each hand where `body.gripOn` puts it on a placement and its fingers shaped every frame with `body.shapeHand` on the same placement. Make grip empties wherever a hand holds (each rung, the rim at ten to two) and take each hand's placement from `body.placement`, or give a `HandPlacement` yourself for exact control. A body you stop updating keeps its state where it stopped, so to hand it back create a fresh body where it now stands, step it until it has settled and blend from your pose onto it.
+## Overlapping
 
-## Stories that compose
+Natural motion starts the next task's preparation before the current one ends: the eyes, then the turn, then the hands. Plain walk-then-look-then-reach reads as mechanical. So put eyes, poses and hands-up preparation beside a walk, timed on `arriving`. A hand verb that may walk picks where to stand as it starts, so start it once its target has come to rest, and after a walk to a mark end that walk on `until: arriving(body, 0.5)` and start the hand verb then. The two hands are separate parts too: `parallel('all', carry(body, cup, ready), grab(body, lid, { left: 'rim' }))` brings the other hand in while the first is still moving.
 
-Write each beat as a generator function (`function* (…): Verb`) that takes the bodies and props it acts on and returns whether it succeeded. Make the bodies, props and marks once, outside every beat; work out marks that depend on where bodies stand inside the story, when the beat reaches them. `yield* parallel('race', …)` returns what the branch that ended it returned, and `'all'` returns `false` if any branch did, so check outcomes on the `parallel` itself. Signal moments other parts of the scene key off (a camera cut when the medal is hung) from the beat after the verb that does it, not by reading `body.owners`, which empties once a race ends.
+Each part does one thing at a time. An asked part beats a borrowed one and a newer asked verb overrides an older one until it ends, so a look beside a grab directs the eyes without interrupting the hands. The trunk is one part: a `lookAt` given `trunk` and a trunk `pose` take it from each other, so a look restarted in a loop takes back a coil you posed.
 
-## Bodies
+## Hands on things
 
-A bare body and a skinned body use the same skeleton. To skin a mesh, follow the installed `@drawcall/rig` package's skill (`skills/rig/SKILL.md`), and pass the rigged scene as the body's `model` and the skin report as its `mass`. A humanoid's bones take the `HumanoidBone` names (VRM style: `hips`, `leftUpperArm`, …), whatever a rig guide suggests. The skeleton is in model space facing +Z, in metres at real size, since sizes set strides and reach. The [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) skeletons are starting points; another height is the person's positions scaled.
+Give a movable thing its `userData.mass` (and `userData.centre` if its mass is off its origin) and grips: `grip(thing, name, at, spec)`, or in a model an empty with the same keys in its extras. A key on a grip's empty that no grip reads is said once on the console: it may be a typo. What a thing gripped by its own name holds in its `userData` is its own. Declare on each grip what the hand touches, not where the wrist goes: leave free what any way round will do, and fix what the hand must keep. Two grips choose the side the body stands on, the left hand's on its left: named the other way round they walk it to the far side of the thing, said once on the console.
 
-Bodies of one size that start together move in sync and read as copies: give each its own `life.seed`, and do not start identical bodies' walks on the same frame. A person at attention takes `life: { steady: 1 }`.
-
-## Spring bones
-
-For hair, tails, antennae and other freely swinging bone chains, add `springs` to the species, keyed by an existing root bone; one setting covers the whole hierarchy below it:
+- Laid on a surface (a box's side): a plain empty where the palm's middle goes, with a facing if the palm must lie flat.
+- Round something (a handle, a rung, a rail): `handle`, the line pointing out of the fist at the thumb's end. Add a facing for anything held one way; `radius` where the meshes do not show how far the palm lies off the line (alone: a ball); `length` to slide along it. To pinch something flat, put the handle along an edge, facing onto it.
+- A fingertip (a button): `point` names the digit, with a facing. A facing the wrist cannot turn to leaves the pad off, and the `grab` misses a moment after touching, saying so. Make the button a massless thing of its own, its cap's mesh beside it, and move it in as it is pressed.
+- One digit apart from the rest (a trigger, a thumb on a spoon): `digits` names an empty its pad goes to; move the empty to move the digit. Fix the grip's facing so the digit already lies over it.
 
 ```ts
-import { Body, humanoid, type HumanoidBone } from '@drawcall/animate';
-import type { SkeletonBone } from '@drawcall/rig';
-import type { Object3D } from 'three';
+import { Vector3, type Object3D } from 'three';
+import { grip } from '@drawcall/animate';
+declare const mug: Object3D, panel: Object3D;
 
-declare const skeleton: readonly SkeletonBone<HumanoidBone | 'braid' | 'braidTip'>[];
-declare const model: Object3D;
-
-const fighter = {
-  ...humanoid(skeleton),
-  springs: { braid: { stiffness: 18, damping: 0.55, hang: [-2.2, 0, 0] as const } },
-};
-const body = new Body(fighter, { model });
+grip(mug, 'handle', new Vector3(-0.06, 0, 0), { handle: [0, 1, 0], facing: [1, 0, 0], radius: 0.012 }); // for a hand from -X: thumb up, palm toward the mug
+grip(panel, 'button', new Vector3(), { point: 'index', facing: [0, 0, 1] }); // on a wall ahead, its face to -Z
 ```
 
-A joint with several bone children keeps its input rotation while each child chain swings on its own; a leaf is an endpoint. A person's springs keep out of its own head and trunk, and nothing else, but for a chain that already rests within that coarse volume as rigged, such as hair at the nape, which swings free of it; other species' springs collide with nothing. A body refuses springs on bones it poses itself. Skin hair standing clear of the body, so its weights do not bleed into the head or torso, and give its root the `hang` turn it falls from.
+If a carry misses `held off by a joint's range`, the wrist cannot turn that far from how it holds: change the grip's roll or the target's turn, not its position.
 
-## Places and paths
+A part of a held thing (a lid, a pin) is a thing of its own with its own mass and grips, parented where it sits: the other hand grabs it, `carry` lifts it off, and `release` onto an empty puts it back. A hand holding something lets go of it when it grabs something else, and a thing both hands leave stays where it is, even in mid-air: put it down first, or if it rides on an empty under the body, aim it with `body.orient` each frame before `update`. Targets for what a person does about itself come from `body.armPoint`.
 
-A point in a body's frame is `body.object.localToWorld(new Vector3(x, y, z))`; an empty parented to `body.object` turns with it. A mark is an empty on the floor where a body is to stand, its +Z the way it should face, at the floor's height. Grips and approach empties belong to the prop, so the same story works with moved furniture. Build hand targets from `body.species.person`'s measures (`armLength`, …), not in metres.
+A `grab` or `reach` that no stand brings there tries, then misses: for a jar on too high a shelf, walk under it and `attempt` the reach, and the try shows. The try costs its time, a second or more, and there is no instant test of whether something is in reach.
 
-A raised stage, a dais or stairs is the body's `floor` function, the same for every body on the set. Walks the story drives do not handle ramps or shallow treads: use level areas and treads sized for the largest foot in the cast.
+To throw what one hand holds, turn the body toward the target first, `throwAt` it, and give its `released` motion to your physics. No verb catches: raise the hand with `reach`, stop the thing yourself as it touches, then `grab` it.
 
-Bodies keep their feet clear of each other but do not plan paths around props, and hands and carried things pass through other bodies and props alike: route a carry past a head or a table with waypoints.
+A hold does not bring the feet: a thing your story moves (a door on its hinge) leaves a body standing still behind, its hand off the grip and `holds` still `true`, a `held grip distance` row in `body.log` from 8 cm off and said once on the console from 15. Walk the body with it, keeping its facing, at a pace the swing keeps to (0.4 rad/s beside a walk of `speed: 0.4` stays on); to keep them in step whatever the walk does, set the door's angle each frame from how far the body has come; or `release`.
 
-## Moving together
+A carry's or reach's hold ends with the verb and the thing rides the hand, so `release` onto the target as the carry ends; to keep it exactly there, race it with `until: Infinity`. A held thing's `.position` is local to the hand that holds it, or to the hips in both hands: read it with `getWorldPosition`.
 
-To move bodies together (a line abreast, an escort, a horse led), give each the same explicit `speed`: by default bodies of different sizes walk at different paces and string out. To keep a formation on a leader, walk each follower to a target in its own lane (an empty parented to the leader's `object`, or a function of time), ending when the leader arrives; give the followers' speed a little headroom over the shared pace, and start each near its lane, since a lane target behind a follower turns it round. To lead a horse, take the rope first; a tether limits its head's reach but does not make it follow, and the scene draws the rope.
+What is held rides the hands through a walk, swinging with them: a tray sinks and bobs some 10 cm and tips by several degrees; a thing raised stays raised, and a `carry` to where it goes brings it down itself. To keep a thing level or steady as the body walks, or to route it, walk beside a raced `carry` (`until: Infinity`, `step: false`) to an empty on `body.object` where it should ride, with one walk after another for a way round something, since a list of targets given to `carry` routes the thing and not the feet.
 
-## Many bodies
+### Bringing something to the face
 
-A body costs about 0.1 ms of CPU a frame (some 120 fit 60 fps in a browser), and `update` always simulates whole 1/60 s ticks, so updating a distant body less often saves nothing. For hundreds, simulate the bodies the camera sees closely and let copies replay a nearby body's pose (its `object`'s transform and its `bones`' local transforms), drawing a block of copies as one skinned mesh over one skeleton. A copy repeats its source's gaze and turns, so vary which body and how many frames behind each copy follows, and keep real bodies where eyes must meet something.
+To bring one point of a carried thing (a rim) to the face, offset the target by that point. A target on the `head` bone moves with the head and needs tilting to be reachable: a cup level at the mouth is held off by the wrist. A thing brought to the face stops clear of it, and a target nearer than that misses, naming the clearance. An 8 × 10 cm cup tilted 0.9 rad comes no nearer than its rim 11 cm before the nose, level 15 cm; a smaller thing comes nearer. A head `pose` closes only millimetres of that. It reads as a sip from a distance; no verb gives contact with the lips.
 
-## Players and custom species
+```ts
+import { Object3D, Quaternion, Vector3 } from 'three';
+import type { Body } from '@drawcall/animate';
 
-Use a body's `drive` for a player-controlled root with procedural legs, and `track` for its headset and controllers; scripted hands and eyes can still act on that body. When a physics controller owns movement, give the body the same world-space `floor` as its colliders, and keep `body.object` under a parent at the world's frame rather than parenting it to a moving platform: the root's `platform` carries it; move the platform before updating the body. When a foot can land on another moving surface, give the floor a `platform(x, z)` method selecting the same surface as the height, for example `Object.assign(heightAt, { platform: bodyAt })`. Do not animate takeoff or landing yourself. For a hit or recoil, `body.applyImpulse` rocks the torso while the hands keep their grips.
+// (made once per body and cup: `yield* carry(body, cup, lips)` at each sip; the hand keeps to it until its next verb, so it stays)
+function lipsFor(body: Body, rim: Object3D): Object3D {
+  const tilt = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.9), head = body.species.person!.head;
+  const lips = new Object3D();
+  lips.quaternion.copy(tilt);
+  lips.position.set(0, head.nose.y - 0.03, head.nose.z + 0.12).sub(rim.position.clone().applyQuaternion(tilt));
+  body.bones.head.add(lips);
+  return lips;
+}
+```
 
-To aim something mounted on the body (a rifle on an empty under the chest), call `body.orient(mount, rotation)` before each `update` with the rotation you want, instead of setting its local rotation from the chest as last posed. While the hands work on the mount itself (a magazine swap), release it with `orient(mount, null)` so it rides the chest, then ease back to the aim from the turn it rode at.
+## Walking and running
 
-A body's pose changes only once a tick, so a first-person camera on it must blend the body's nodes and the eye between its last two ticks for display, and turn the shown body about the eye to the mouse's current yaw and pitch every rendered frame.
+There is no run verb: a walk's `speed` sets its gait, and is an upper limit a walk needs room to reach, so a short walk never comes up to a fast one.
 
-For a custom creature, start from [lion-species.ts](references/lion-species.ts). Every leg must be able to lift and place its foot, even on a creature that never walks. A creature without a `carriage` has no idle life of its own, so give it life from the story with `pose` and `lookAt`. For mouth contact (a horse's or dog's `jaw`), use `reach` with a point. Check a new gait by counting the frames each foot of `body.feet` spends unplanted.
+Bodies of different sizes walk at different paces, and `speed` holds them together only once each is up to it: a person reaches 90% of 1.3 m/s in 1.5 s and of 3.5 m/s in 2.2 s, a dog in 2.8 s and 4.3 s, so a dog started beside a person falls behind. To hold a formation, walk followers to targets in their own lanes, ending when the leader arrives; give the slower starter that lead, since a lane target behind a follower turns it round. To lead a horse, take the rope first: a tether limits its head's reach but does not make it follow.
 
-## Check the story
+To walk beside a body (a dog at heel, a guard, a child, a crowd after its leader), follow an empty parented to its `object`, racing the leader's story: `heel.position.set(-0.6, 0, 0); person.object.add(heel); yield* parallel('race', function* () { yield* walkTo(person, yard, { speed: 3 }); yield* wait(2); }, walkTo(rex, heel, { speed: 4, until: Infinity }))`. Its `speed` is an honest limit: give it about a third above the leader's or it never closes (`walk cannot keep up` in `body.log` says so). Keep a mark still otherwise: without `until` a walk to an empty on a body stalls and misses as that body breathes. A mark is an empty on the floor, its +Z the way to face. Grips and approach empties belong to the thing, so the story survives moved furniture; build hand targets from `body.species.person`'s measures, not metres.
 
-A verb that fails says why only in development: make bodies with `dev: true` while you work on a story and print each new `body.log` entry as it arrives (an app that turns it on only in development, e.g. from `import.meta.env.DEV`, has it off in its tests and builds: run them with `--mode development` or pass `dev: true` there); an entry's `detail` says what limited it and by how much (a hand off its goal: beyond the arm's reach, against the trunk, or held by a joint's range), and `dev: { notes: true }` adds what is only reported, such as each walk-up. Headless runs need a bounded duration and an explicit completion check, as above. Put scene-specific observations in `watch(body, …)` beside the story, raced against its completion. Judge the final pose and actual ownership rather than elapsed time, and whether a body stands on its mark by `body.feet`.
+A stage or stairs is the `floor` function, the same for every body on the set; walks do not handle ramps or shallow treads, so use level areas and treads sized for the largest foot. Bodies keep their feet clear of each other but plan no path round things, and hands and carried things pass through anything: route a body with one `walkTo` after another. End a walk on how near the body has come when another walk follows, so it flows on; end it on `arriving` when the body must stop for what is next (a `grab`, a `carry`), since a walk ended on nearness overruns by its braking, a metre at 3.5 m/s. Swinging arms are wider than the feet, so give a way round something that much more room.
+
+## Skeletons and species
+
+A bare body and a skinned body use the same skeleton. Only skinning a mesh needs `@drawcall/rig`; a bare body and the skeleton files here do not. To skin one, install it, follow its skill, and pass the rigged scene as `model` and the skin report as `mass`. A humanoid's bones take the `HumanoidBone` names whatever a rig guide suggests. Skeletons face +Z in metres at real size, since sizes set strides and reach. The [person](references/person.ts), [horse](references/horse.ts), [dog](references/dog.ts) and [lion](references/lion.ts) are starting points; another height is the person's positions scaled. Bodies that start together read as copies: give each its own `life.seed`, and do not start identical walks on one frame. A person at attention takes `life: { steady: 1 }`.
+
+For hair, tails and other swinging chains, spread the species and add `springs: { braid: { stiffness: 18, damping: 0.55, hang: [-2.2, 0, 0] as const } }`, keyed by an existing root bone; one setting covers the hierarchy below it. Skin hair standing clear of the body and give its root the `hang` turn it falls from. A person's springs keep out of its own head and trunk; nothing else collides.
+
+For a custom creature, start from [lion-species.ts](references/lion-species.ts); `@drawcall/animate/species` has what its definition needs. Every leg must be able to lift and place its foot. A creature without a `trunk` has no idle life, so give it life from the story. A creature's hand is its mouth (`jaw`), named in `grab` and `reach`; a person's hand keys are `left` and `right`. Check a new gait by counting the frames each foot of `body.feet` spends unplanted.
+
+## Players and crowds
+
+Use `drive` when an app owns the root, a player's input or its own physics, the legs following it through running and jumping, and `track` for a headset and controllers; scripted hands and eyes still act on that body. When a physics controller owns movement, give the body the same world-space `floor` as its colliders and keep `body.object` at the world's frame rather than parenting it to a moving platform: use the root's `platform`, moved before the body updates, and a floor's `platform(x, z)` method where a foot lands on another moving surface. Do not animate takeoff or landing yourself. For a hit, `body.applyImpulse`. A first-person camera must blend the body's nodes and the eye between its last two ticks, since a pose changes once a tick.
+
+A body costs about 0.1 ms a frame (some 120 fit 60 fps in a browser), and updating a distant one less often saves nothing. For hundreds, simulate those the camera sees closely and let copies replay a nearby body's bones, varying which body and how many frames behind, and keep real bodies where eyes must meet something.

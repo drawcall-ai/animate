@@ -1,7 +1,8 @@
 import { AdditiveBlending, BoxGeometry, DoubleSide, Group, type Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, PlaneGeometry, RepeatWrapping, SRGBColorSpace, type Texture, TextureLoader, Vector3 } from 'three';
 
 // The Grand Audience Chamber of the Massassi temple on Yavin 4 (A New Hope, final scene), laid out in metres.
-// The doors are at the origin and the hall runs along +Z to the dais; +Y is up and +X is the left of someone walking in.
+// The doors are at the origin and the hall runs along +Z to the dais; +Y is up and +X is the left of someone walking in. The viewer lights
+// the chamber with sun and sky and gives polished surfaces (C-3PO, R2's dome, the medals) an environment of the hall's colours to mirror.
 
 export const HALL = {
   /** the floor's extent: x from -width/2 to width/2, z from 0 (the doors) to length */

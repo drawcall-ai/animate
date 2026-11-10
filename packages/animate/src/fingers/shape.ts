@@ -23,7 +23,7 @@ export interface Thumb {
   spread?: number;
 }
 
-/** A hand's fingers, each digit as `Finger` or `Thumb` has it, a digit left out as relaxed (`RELAXED`). */
+/** A hand's fingers, each digit as `Finger` or `Thumb` has it, a digit left out as relaxed. */
 export interface Fingers {
   thumb?: Thumb;
   index?: Finger;
@@ -51,7 +51,7 @@ export const RELAXED = {
   thumb: { curl: 0.25, oppose: 0.15, spread: 0.3 }, index: digit(0.3, 0.08, 0.08), middle: digit(0.36, 0.1), ring: digit(0.42, 0.11, 0.08), little: digit(0.48, 0.12, 0.12),
 } as const satisfies Shape;
 /** Every finger folded into the palm, the thumb across them. */
-export const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
+const FIST = { thumb: { curl: 0.7, oppose: 0.7, spread: 0.5 }, index: digit(1), middle: digit(1), ring: digit(1), little: digit(1) } as const satisfies Shape;
 /**
  * The index pointing, as a hand presses a button: nearly straight, each joint given a little as a relaxed finger's is (straight as a rod,
  * it reads as a stick); the other fingers curled into the palm, each a little more than the one before; the thumb resting along the
@@ -61,19 +61,39 @@ export const POINT = {
   thumb: { curl: 0.3, oppose: 0.45, spread: 0.25 }, index: digit(0.05, 0.1), middle: digit(0.8, 0.3), ring: digit(0.85, 0.3), little: digit(0.9, 0.3),
 } as const satisfies Shape;
 
+/** A hand pressing with `digit`'s pad: `POINT`, with that digit out where the index is and the index curled in with the others (the
+ * thumb's own: every finger curled, the thumb as `POINT` holds it). */
+export function pointingWith(digit: Digit): Shape {
+  const shape: Shape = structuredClone(POINT);
+  if (digit === 'index') return shape;
+  shape.index = { ...POINT.middle };
+  if (digit !== 'thumb') shape[digit] = { ...POINT.index };
+  return shape;
+}
+
 /** The thumb's and the index's pads brought together in front of the palm, as a hand pinches a small thing; the other fingers curled
  * out of their way. */
-export const PINCH = {
+const PINCH = {
   thumb: { curl: 0.35, oppose: 0.6, spread: 0.5 }, index: digit(0.45, 0.25), middle: digit(0.6, 0.2), ring: digit(0.7, 0.2), little: digit(0.8, 0.2),
 } as const satisfies Shape;
 
-/** `fingers` over `base`: each value given replaces `base`'s (see `valuesOf`) */
-export function shapeOf(fingers: Fingers, base: Shape = RELAXED): Shape {
+/** A hand's shape: each digit as asked (`Fingers`), or by name: `fist` (every finger folded into the palm, the thumb across them), `point`
+ * (the index nearly straight, the others curled), `pinch` (the thumb's and the index's pads together). */
+export type HandShape = Fingers | keyof typeof NAMED;
+
+const NAMED = { fist: FIST, point: POINT, pinch: PINCH } as const;
+
+/** `fingers`, by name or over `RELAXED`: each value given replaces `RELAXED`'s (see `valuesOf`) */
+export function shapeOf(fingers: HandShape): Shape {
+  if (typeof fingers === 'string') {
+    if (!(fingers in NAMED)) throw new Error(`fingers: "${String(fingers)}" is none of ${Object.keys(NAMED).join(', ')}`);
+    return structuredClone(NAMED[fingers]);
+  }
   for (const [name, values] of Object.entries(fingers)) valuesOf(digitOf(name, 'fingers'), values);
   return {
-    thumb: { ...base.thumb, ...fingers.thumb },
-    index: { ...base.index, ...fingers.index }, middle: { ...base.middle, ...fingers.middle },
-    ring: { ...base.ring, ...fingers.ring }, little: { ...base.little, ...fingers.little },
+    thumb: { ...RELAXED.thumb, ...fingers.thumb },
+    index: { ...RELAXED.index, ...fingers.index }, middle: { ...RELAXED.middle, ...fingers.middle },
+    ring: { ...RELAXED.ring, ...fingers.ring }, little: { ...RELAXED.little, ...fingers.little },
   };
 }
 

@@ -1,16 +1,10 @@
-import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
+import { Euler, Matrix4, Object3D, Quaternion, Vector3 } from 'three';
 
 /** standard gravity (m/s²) */
 export const GRAVITY = 9.81;
 
 export const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-/** 0 below `e0`, 1 above `e1`, smooth between */
-export function smoothstep(e0: number, e1: number, x: number): number {
-  const t = clamp((x - e0) / (e1 - e0), 0, 1);
-  return t * t * (3 - 2 * t);
-}
 
 /** Flash & Hogan's minimum-jerk position profile, `t` in [0, 1] */
 export function minimumJerk(t: number): number {
@@ -112,4 +106,16 @@ export function bisect(clear: (value: number) => boolean, free: number, hit: num
     else hit = mid;
   }
   return free;
+}
+
+/**
+ * `value`, said at once if it comes from another copy of three than this library's: every `instanceof` here fails it, and bodies then miss
+ * things or crash with no word of why.
+ */
+export function sameThree<T>(value: T): T {
+  const made = value as { isVector3?: boolean; isObject3D?: boolean } | undefined;
+  if ((made?.isVector3 && !(value instanceof Vector3)) || (made?.isObject3D && !(value instanceof Object3D))) {
+    throw new Error('this value is from another copy of three than @drawcall/animate\'s: install one copy (`pnpm dedupe`, or alias `three` in your bundler)');
+  }
+  return value;
 }

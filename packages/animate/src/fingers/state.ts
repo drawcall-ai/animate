@@ -1,17 +1,15 @@
-import { Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
-import { smoothstep } from '../kernel/math';
+import { MathUtils, Matrix4, Object3D, Quaternion, SkinnedMesh, Vector3 } from 'three';
 import type { Triangles } from '../kernel/triangles';
 import type { Placement } from '../kernel/goal';
-import { inFrame, placedOf, toWorld, within, worldOf, type Placed } from '../kernel/scene';
-import type { Hold } from '../things/resolve';
-import type { DigitBones } from './bones';
+import { inFrame, placedOf, toWorld, within, worldOf, type Placed, vectorOf } from '../kernel/scene';
+import type { Hold } from '../things/hold';
+import type { DigitBones } from './digit-bones';
 import { closedOn, PAD_DEPTH } from './closing';
 import { meet, type Contact } from './contact';
 import { Guard, nearHand } from './guard';
 import { digitsOf, handOn, type HandPart, type HandPlacement, type HandPoint } from './placement';
-import { Joints, FLAT } from './joints';
-import { blendShape, digitOf, DIGITS, POINT, RELAXED, shapeOf, withValues, type Digit, type Fingers, type Shape } from './shape';
-import { vectorOf } from '../things/thing';
+import { Joints, FLAT_PAD } from './joints';
+import { blendShape, digitOf, DIGITS, POINT, pointingWith, RELAXED, shapeOf, withValues, type Digit, type HandShape, type Shape } from './shape';
 
 /** A placement as a hand takes it: the shape its fingers close to there and the thing's triangles about it (the thing's frame), worked
  * out once, as it is first asked for; and the digits it puts apart (a hold's read from its grip every update). */
@@ -23,9 +21,9 @@ interface Taken {
 }
 
 /** One hand's fingers: its bones, its shape as last written and what keeps it out of things; what a pose asks of it this update; the
- * placements it has taken; the placement a hand verb brings it to, the shape it set off in and, for a fingertip's, how far it points
- * (0 … 1, as the verb has its way gone; none, as it gets there); the shape its digits' contacts were last met in. */
-interface Hand {
+ * placements it has taken; the placement a hand verb brings it to and the shape it set off in; the shape its digits' contacts were last
+ * met in. */
+interface HandFingers {
   joints: Joints;
   guard: Guard;
   /** the body's own skinned meshes, which the hand never closes on */
@@ -40,7 +38,6 @@ interface Hand {
   hung: WeakMap<HandPlacement, Taken & { local: Placement }>;
   coming: HandPlacement | null;
   from: Shape | null;
-  pointing: number | null;
   met: { shape: Shape; digits: readonly Digit[] } | null;
   /** its last solve (`solved`): what it was given, the shape it found and how far it missed, kept once it no longer closes in while nothing
    * it was given has moved */
@@ -51,11 +48,14 @@ interface Hand {
  * How a hand shapes for what it takes on its way (Jeannerod 1984: the grip opens wider than the object late in the reach, closing on it
  * as the hand arrives): relaxed until its wrist is `NEARING` from where it goes, preshaped from `NEAR` (m) — each digit turned as it will
  * hold the thing, the thumb already in opposition, but opened, curled only `OPEN` as far — and closing on it within `ARRIVED` (m), each
- * digit then only curling on (from an open hand, the thumb swung round through the thing it opposes); a fingertip's hand points as it
- * nears instead.
+ * digit then only curling on (from an open hand, the thumb swung round through the thing it opposes); a fingertip's hand comes as a loose
+ * fist and points from `POINTS` instead.
  */
 const OPEN = 0.3;
 const NEARING = 0.4, NEAR = 0.2, ARRIVED = 0.015;
+/** how far its wrist stands off where it goes as a fingertip's digit sets off pointing, and as it points (m, default body): pointed before
+ * its run in, so the pad goes along the run as the wrist does (a finger straightening over the run would swing its pad off the line) */
+const POINTS = { from: 0.27, to: 0.17 };
 /** how little a hand and its contacts move on what it holds for its last solve to stand (m, rad) */
 const STILL = 1e-4;
 /** how much nearer its contacts a solve must come than the last to go on solving (m) */
@@ -78,15 +78,15 @@ const INTO = 0.02;
  * mesh its hands bend) measures how thick each finger and the palm are.
  */
 export class FingerState {
-  private readonly hands: Record<'left' | 'right', Hand>;
+  private readonly hands: Record<'left' | 'right', HandFingers>;
 
-  constructor(bones: { left: DigitBones; right: DigitBones }, nodes: Readonly<Record<string, Object3D>>, private readonly holding: Readonly<Record<string, Hold | null>>, model: Object3D) {
-    const hand = (side: 'left' | 'right'): Hand => {
+  constructor(bones: { left: DigitBones; right: DigitBones }, nodes: Readonly<Record<string, Object3D>>, private readonly holding: Readonly<Record<string, Hold | null>>, model: Object3D, private readonly warn: (check: string, message: string) => void) {
+    const hand = (side: 'left' | 'right'): HandFingers => {
       const node = nodes[`${side}Hand`];
       if (!node) throw new Error(`fingers: no bone "${side}Hand"`);
       // (its bones left as they stand: eased from there by its first update)
       const skins = skinsOf(model, node), joints = new Joints(node, bones[side], nodes, side, skins), shape = shapeOf({});
-      return { joints, guard: new Guard(joints, skins), skins, shape, posing: null, posed: false, taken: new WeakMap(), hung: new WeakMap(), coming: null, from: null, pointing: null, met: null, solve: null };
+      return { joints, guard: new Guard(joints, skins), skins, shape, posing: null, posed: false, taken: new WeakMap(), hung: new WeakMap(), coming: null, from: null, met: null, solve: null };
     };
     this.hands = { left: hand('left'), right: hand('right') };
   }
@@ -97,12 +97,12 @@ export class FingerState {
   }
 
   /** `side`'s free hand keeps the shape it has this update, as a pose asked it (a fingertip drawing back off its button) */
-  keep(side: 'left' | 'right'): void {
+  holdShape(side: 'left' | 'right'): void {
     this.hands[side].posing = structuredClone(this.hands[side].shape);
   }
 
   /** where `part` of `side`'s hand is as `shape` has it (see `HandPoint`; the hand's node's frame) */
-  point(side: 'left' | 'right', part: HandPart, shape: Shape = POINT): HandPoint {
+  point(side: 'left' | 'right', part: HandPart, shape: Shape = part === 'palm' ? POINT : pointingWith(part)): HandPoint {
     return this.hands[side].joints.point(part, shape);
   }
 
@@ -153,23 +153,19 @@ export class FingerState {
   }
 
   /** a hand verb is bringing `side` to `placement`, or no longer is (null): until it holds it, the hand shapes for it as it comes (`onto`),
-   * from the shape it sets off in if a pose asked it of it — a fist kept back from a button — else from relaxed */
+   * from the shape it has as it sets off if a pose shaped it so — a fist kept back from a button — else from relaxed: a pose begun as
+   * it sets off has not shaped it yet */
   toward(side: 'left' | 'right', placement: HandPlacement | null): void {
     const hand = this.hands[side];
     if (placement) this.take(hand, placement);
-    [hand.coming, hand.from, hand.pointing] = [placement, placement && hand.posed ? structuredClone(hand.shape) : null, null];
-  }
-
-  /** how far `side`'s hand, on its way to a fingertip's placement, points (0 … 1): as far as the verb bringing it has gone toward its run */
-  pointAt(side: 'left' | 'right', share: number): void {
-    this.hands[side].pointing = share;
+    [hand.coming, hand.from] = [placement, placement && hand.posed ? structuredClone(hand.shape) : null];
   }
 
   /** `side`'s fingers eased `seconds` on toward `to`, for a hand its app poses: a placement as they come to it and take it (`onto`), its
    * digits' contacts met from where the hand is; a shape; or relaxed */
-  set(side: 'left' | 'right', to: HandPlacement | Fingers | null, seconds: number): void {
+  set(side: 'left' | 'right', to: HandPlacement | HandShape | null, seconds: number): void {
     const hand = this.hands[side];
-    if (to === null || !('on' in to)) return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds, null);
+    if (to === null || typeof to === 'string' || !('on' in to)) return this.ease(hand, to === null ? RELAXED : shapeOf(to), seconds, null);
     const taken = this.take(hand, to), thing = to.on, goal = this.onto(hand, to), contacts = contactsOf(to, to.digits);
     if (!this.arrived(hand, taken)) return this.ease(hand, goal, seconds, thing);
     // (there, it holds it, as `update` has a hand holding: closed round it, kept out of it by its shape, not by where its digits came in)
@@ -178,7 +174,7 @@ export class FingerState {
     this.ease(hand, this.solved(hand, taken, inFrame(placedOf(hand.joints.hand), worldOf(thing)), contacts), seconds, false, contacts.map((c) => c.part));
   }
 
-  /** where hand `side`'s bone goes for `placement`: its wrist and its node's rotation (world) — see `Body.gripOn` */
+  /** where hand `side`'s bone goes for `placement`: its wrist and its node's rotation (world) — see `gripOn` */
   gripOn(side: 'left' | 'right', placement: HandPlacement): { wrist: Vector3; rotation: Quaternion } {
     const at = toWorld(this.nodeOf(this.hands[side], placement), worldOf(placement.on));
     return { wrist: at.position, rotation: at.quaternion };
@@ -195,8 +191,8 @@ export class FingerState {
 
   /** `placement` as `hand` takes it — what hangs from the hand closed on where the hand holds it, which may be turned off its placement
    * (a reach's turn is only preferred), so the fingers meet its faces as it hangs; closed afresh once it has moved in the hand (a regrip,
-   * a seat on its place) */
-  private hung(hand: Hand, placement: HandPlacement): Taken {
+   * a nudge onto its place) */
+  private hung(hand: HandFingers, placement: HandPlacement): Taken {
     if (!within(placement.on, hand.joints.hand)) return this.take(hand, placement);
     const known = hand.hung.get(placement), { position, quaternion } = placement.on;
     if (known && known.local.position.distanceTo(position) < MOVED && known.local.quaternion.angleTo(quaternion) < MOVED) return known;
@@ -209,7 +205,7 @@ export class FingerState {
    * `placement` as `hand` takes it, worked out the first time it is asked for: where its node goes, and the shape its fingers take there
    * — closed round the thing (`closedOn`) from the hand placed so (or at `at`, the thing's frame), or the shape it holds
    */
-  private take(hand: Hand, placement: HandPlacement, at?: Placement): Taken {
+  private take(hand: HandFingers, placement: HandPlacement, at?: Placement): Taken {
     const known = at ? undefined : hand.taken.get(placement);
     if (known) return known;
     const thing = placement.on, { joints, skins } = hand;
@@ -220,7 +216,7 @@ export class FingerState {
     let shape = held ?? RELAXED;
     if (!held) {
       const world = toWorld(node, frame), matrix = new Matrix4().compose(world.position, world.quaternion, _scale.setScalar(scale));
-      shape = closedOn(joints, thing, lineOf(placement, frame), skins, matrix);
+      shape = closedOn(joints, thing, lineOf(placement, frame), skins, this.warn, matrix);
     }
     const taken = { placement, shape, near, digits: placement.digits };
     if (!at) hand.taken.set(placement, taken);
@@ -228,14 +224,14 @@ export class FingerState {
   }
 
   /** where `hand`'s node goes for `placement`, in its thing's frame: its point on its target */
-  private nodeOf(hand: Hand, placement: HandPlacement): Placement {
+  private nodeOf(hand: HandFingers, placement: HandPlacement): Placement {
     const held = placement.fingers === 'close' ? null : shapeOf(placement.fingers);
     return handOn(hand.joints.point(placement.point, held ?? POINT), placement, placedOf(hand.joints.hand).scale);
   }
 
   /** `taken`'s shape with the digits its placement presses on empties met where `at` places the hand (`meet`; the thing's frame), from
    * where they were last met */
-  private solved(hand: Hand, taken: Taken, at: Placed, contacts: readonly Contact[]): Shape {
+  private solved(hand: HandFingers, taken: Taken, at: Placed, contacts: readonly Contact[]): Shape {
     const preferred = goalOf(taken);
     // (as last solved while the hand and its contacts stay where they were on the thing: a hand held still on it, however it turns)
     const last = hand.solve;
@@ -254,33 +250,39 @@ export class FingerState {
   }
 
   /** whether `hand`'s node is within `ARRIVED` of where `taken` puts it */
-  private arrived(hand: Hand, taken: Taken): boolean {
+  private arrived(hand: HandFingers, taken: Taken): boolean {
     const wrist = toWorld(this.nodeOf(hand, taken.placement), worldOf(taken.placement.on)).position;
     return hand.joints.hand.getWorldPosition(_at).distanceTo(wrist) <= ARRIVED;
   }
 
   /**
-   * the shape `side` takes for the placement it comes to as its wrist stands off where it goes: relaxed, preshaped as it nears (`OPEN`;
-   * a fingertip's pointing), and within `ARRIVED` the shape it takes there
+   * the shape `side` takes for the placement it comes to as its wrist stands off where it goes: relaxed, preshaped as it nears (`OPEN`),
+   * and within `ARRIVED` the shape it takes there; a fingertip's hand a loose fist, pointing as it nears (`POINTS`)
    */
-  private onto(hand: Hand, placement: HandPlacement): Shape {
+  private onto(hand: HandFingers, placement: HandPlacement): Shape {
     const taken = this.take(hand, placement);
     const wrist = toWorld(this.nodeOf(hand, placement), worldOf(placement.on)).position, distance = hand.joints.hand.getWorldPosition(_at).distanceTo(wrist);
-    const point = taken.placement.point, pad = point !== 'palm' ? point : null;
-    // (a fingertip's hand comes as a loose fist, its digit curled with the others, and points before its way's final run alone, as its
-    // verb says how far it has gone; any other hand keeps the shape it set off in and opens as it nears)
-    if (pad) {
-      const open = goalOf(taken);
-      return hand.pointing === null || hand.pointing >= 1 ? open : blendShape(pad === 'thumb' ? open : { ...open, [pad]: open.middle }, open, hand.pointing);
+    // (a fingertip's hand comes as a loose fist, its digit curled with the others, and points before its way's final run alone — a digit
+    // pressing on an empty comes relaxed, to close on it as the hand holds; any other hand keeps the shape it set off in and opens as it nears)
+    const pad = taken.placement.point;
+    if (pad !== 'palm') {
+      const there = goalOf(taken);
+      for (const [name, value] of Object.entries(taken.digits ?? {})) {
+        const digit = digitOf(name, 'digits');
+        if (value instanceof Object3D) withValues(there, digit, RELAXED[digit]);
+      }
+      if (pad === 'thumb') return there;
+      const left = distance / placedOf(hand.joints.hand).scale;
+      return blendShape({ ...there, [pad]: POINT.middle }, there, 1 - MathUtils.smoothstep(left, POINTS.to, POINTS.from));
     }
     const closed = goalOf(taken);
-    if (distance > ARRIVED) return blendShape(hand.from ?? RELAXED, preshaped(closed), 1 - smoothstep(NEAR, NEARING, distance));
+    if (distance > ARRIVED) return blendShape(hand.from ?? RELAXED, preshaped(closed), 1 - MathUtils.smoothstep(distance, NEAR, NEARING));
     return closed;
   }
 
   /** `hand` eased `seconds` on toward `goal`, the digits `at` put there at once (their contacts met), kept out of what it comes to (`on`;
    * `false`: it holds something), and written */
-  private ease(hand: Hand, goal: Shape, seconds: number, on: Object3D | null | false, at: readonly Digit[] = []): void {
+  private ease(hand: HandFingers, goal: Shape, seconds: number, on: Object3D | null | false, at: readonly Digit[] = []): void {
     hand.guard.ease(hand.shape, goal, seconds, on, at);
     hand.joints.write(hand.shape, seconds);
   }
@@ -327,7 +329,7 @@ function contactsOf(placement: HandPlacement, digits: HandPlacement['digits']): 
     if (!(empty instanceof Object3D)) continue;
     const at = new Vector3().setFromMatrixPosition(empty.matrixWorld).applyMatrix4(back), facing: unknown = empty.userData.facing;
     const toward = facing === undefined ? centre.clone().sub(at).projectOnPlane(line) : vectorOf(facing, `"${empty.name}" userData.facing`).normalize().applyQuaternion(empty.getWorldQuaternion(new Quaternion()).premultiply(turn));
-    contacts.push({ part: digitOf(digit, 'digits'), at, round: FLAT, ...(toward.lengthSq() > 1e-8 && { facing: toward.normalize() }) });
+    contacts.push({ part: digitOf(digit, 'digits'), at, round: FLAT_PAD, ...(toward.lengthSq() > 1e-8 && { facing: toward.normalize() }) });
   }
   return contacts;
 }

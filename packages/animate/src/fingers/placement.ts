@@ -1,7 +1,7 @@
 import { Vector3, type Object3D, type Quaternion } from 'three';
 import type { Placement } from '../kernel/goal';
 import { turnOnto } from '../kernel/math';
-import type { Grip } from '../things/thing';
+import type { GripOn } from '../things/thing';
 import { digitOf, valuesOf, type Digit, type Finger, type Fingers, type Thumb } from './shape';
 
 /** A point of a hand that goes on what it holds: the palm's middle, or a digit's pad. */
@@ -44,7 +44,7 @@ export function handOn(point: HandPoint, placement: Pick<HandPlacement, 'positio
 }
 
 /** the digits `grip`'s `userData.digits` puts apart on `thing`, each its values or the empty its pad presses on (none: no digit apart) */
-export function digitsOf(thing: Object3D, grip: Grip): HandPlacement['digits'] {
+export function digitsOf(thing: Object3D, grip: GripOn): HandPlacement['digits'] {
   const asked: unknown = grip.node.userData.digits;
   if (asked === undefined) return undefined;
   if (typeof asked !== 'object' || asked === null) throw new Error(`"${grip.node.name}" userData.digits is neither digits' values nor empties' names`);

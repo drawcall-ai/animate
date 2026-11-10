@@ -3,7 +3,7 @@ import { Group, Matrix4, Quaternion, Vector3, type Object3D } from 'three';
 import { anglesOf, lookDirection, wrapAngle } from './angles';
 import type { Avatar } from './avatar';
 import type { Look } from './playback';
-import { RIFLE } from './weapon';
+import { RIFLE } from './weapon/index';
 
 type Bone = keyof Avatar['body']['bones'];
 type Side = 'left' | 'right';

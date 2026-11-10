@@ -1,11 +1,11 @@
 // A complete custom species: the lion skeleton given its roles and tuning. `new Body(LION_SPECIES)` walks, trots, looks and takes things in its jaw.
-import { carriages, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate';
+import { trunkMotions, footfalls, powerGait, species, swing, type Range } from '@drawcall/animate/species';
 import { LION } from './lion';
 
 type LionBone = (typeof LION)[number]['name'];
 const DEG = Math.PI / 180;
 
-/** the legs in the order a four-legged gait and carriage read them: fore-left, fore-right, hind-left, hind-right */
+/** the legs in the order a four-legged gait and trunk motion read them: fore-left, fore-right, hind-left, hind-right */
 const LEGS = ['leftFore', 'rightFore', 'leftHind', 'rightHind'] as const;
 const JOINTS = [0, 1, 2, 3] as const;
 /** each leg joint's range (°): sideways, fore and aft (back, forth), twist; for its top, elbow or stifle, wrist or hock, paw */
@@ -40,13 +40,13 @@ export const LION_SPECIES = species(LION, {
     toe: [0, -0.06, 0.08],
   })),
   // what the gait carries (four legs only), and its quiet life standing: the tail swishing now and then
-  carriage: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
+  trunk: { spine: 'spine', pelvis: 'pelvis', neck: 'neck', head: 'head', tail: 'tail', swish: { amplitude: 0.4, period: 0.5, cycles: 3 },
     life: [['tail', { every: [3, 7], rate: 1, pick: swing }]] },
 }, {
   gait: {
     // hip height 0.92 m; walking from 0.6 m/s, trotting from a Froude number of 0.6
     ...powerGait({ height: 0.92, slowest: 0.6, offsets: footfalls([[0.3, WALK], [0.6, TROT]]), stride: 2.3, stance: 0.93, clearance: [0.06, 0.06, 0.06, 0.06] }),
-    body: carriages([[0.3, WALKING], [0.6, TROTTING]]),
+    trunk: trunkMotions([[0.3, WALKING], [0.6, TROTTING]]),
   },
   masses: MASSES,
   limits: LIMITS,

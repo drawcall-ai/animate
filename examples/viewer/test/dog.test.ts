@@ -1,12 +1,13 @@
 import { Euler, Group, Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Body, dog, grab, walkTo } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
-import { play } from '../../../packages/animate/test/bodies';
-import { DOG } from '../src/skeletons';
+import { selfOf } from '../../../packages/animate/src/body';
+import { play } from '../../../packages/animate/test/kit/bodies';
+import { DOG } from '../src/skeletons/index';
 import { dogFetch } from '../src/scenarios/dog';
 import { Simulation } from '../src/simulation';
 import { ball } from '../src/things';
+import { poseOf } from '@drawcall/animate';
 
 const DEG = Math.PI / 180, dt = 1 / 60;
 
@@ -21,7 +22,7 @@ const SHORT_NECKED = DOG.map((bone) => bone.name === 'head' ? { ...bone, positio
 function fetching() {
   const sim = new Simulation(dogFetch(), { dev: true });
   const [labrador] = sim.stage.bodies, toy = sim.stage.scene.getObjectByName('ball')!;
-  return { sim, labrador, toy, bone: (name: string) => labrador.pose.skeleton.index(name) };
+  return { sim, labrador, toy, bone: (name: string) => poseOf(labrador).skeleton.index(name) };
 }
 
 it.each([-1e-6, 0, 1e-6])('trots to a ball, takes it in its jaw and carries it back, its whole body riding on the trot (offset %s m)', (offset) => {
@@ -35,9 +36,9 @@ it.each([-1e-6, 0, 1e-6])('trots to a ball, takes it in its jaw and carries it b
     sim.step();
     if (labrador.holds(toy)) {
       if (Number.isNaN(taken)) taken = sim.t;
-      off = Math.max(off, labrador.pose.position(jaw).distanceTo(toy.getWorldPosition(new Vector3())));
+      off = Math.max(off, poseOf(labrador).position(jaw).distanceTo(toy.getWorldPosition(new Vector3())));
     }
-    const speed = paceOf(labrador), trotting = speed > 1.2, now = paws.map((paw) => labrador.pose.position(paw).y > 0.038);
+    const speed = paceOf(labrador), trotting = speed > 1.2, now = paws.map((paw) => poseOf(labrador).position(paw).y > 0.038);
     now.forEach((lifted, leg) => { if (up[leg] && !lifted) landed[leg].push([sim.t, trotting]); });
     up = now;
     // (the bounce read trotting on at its pace — not speeding up or slowing down, by less than 0.3 m/s² — its lean into a change of pace
@@ -46,8 +47,8 @@ it.each([-1e-6, 0, 1e-6])('trots to a ball, takes it in its jaw and carries it b
     pace = speed;
     if (cruising < 0.6) continue;
     steady.push(sim.t);
-    withers.push(labrador.pose.position(withersAt).y); croup.push(labrador.pose.position(pelvis).y);
-    const turned = new Euler().setFromQuaternion(labrador.pose.local(pelvis), 'YXZ');
+    withers.push(poseOf(labrador).position(withersAt).y); croup.push(poseOf(labrador).position(pelvis).y);
+    const turned = new Euler().setFromQuaternion(poseOf(labrador).local(pelvis), 'YXZ');
     roll.push(turned.z / DEG); yaw.push(turned.y / DEG);
   }
   expect(sim.stage.done()).toBe(true);
@@ -82,11 +83,11 @@ it('leads a turn with its head, bends into it and leans into its speeding up and
   const body: number[] = [], gaze: number[] = [], neckYaw: number[] = [], pelvisYaw: number[] = [], pitch: number[] = [], speed: number[] = [];
   while (sim.t < sim.scenario.duration && !sim.stage.done()) {
     sim.step();
-    body.push(yawOf(labrador.pose.rotation(0)));
-    gaze.push(yawOf(labrador.pose.rotation(head)));
-    neckYaw.push(new Euler().setFromQuaternion(labrador.pose.local(neck), 'YXZ').y);
-    pelvisYaw.push(new Euler().setFromQuaternion(labrador.pose.local(pelvis), 'YXZ').y);
-    pitch.push(new Euler().setFromQuaternion(labrador.pose.rotation(0), 'YXZ').x);
+    body.push(yawOf(poseOf(labrador).rotation(0)));
+    gaze.push(yawOf(poseOf(labrador).rotation(head)));
+    neckYaw.push(new Euler().setFromQuaternion(poseOf(labrador).local(neck), 'YXZ').y);
+    pelvisYaw.push(new Euler().setFromQuaternion(poseOf(labrador).local(pelvis), 'YXZ').y);
+    pitch.push(new Euler().setFromQuaternion(poseOf(labrador).rotation(0), 'YXZ').x);
     speed.push(paceOf(labrador));
   }
   expect(sim.stage.done()).toBe(true);
@@ -130,7 +131,7 @@ it('leads a turn with its head, bends into it and leans into its speeding up and
 // stifle and hock bent as a Labrador's — the references at the library's `dog`)
 it('trots as a Labrador does: its stride, its duty and its carpus and hock folding', () => {
   const labrador = new Body(dog(DOG), { dev: true });
-  const at = (name: string) => labrador.pose.position(labrador.pose.skeleton.index(name));
+  const at = (name: string) => poseOf(labrador).position(poseOf(labrador).skeleton.index(name));
   // (a segment's lean forward from plumb, and a joint's flexion as the lean between its segments, ° in the sagittal plane)
   const lean = (a: string, b: string) => Math.atan2(at(b).z - at(a).z, at(a).y - at(b).y) / DEG;
   const angle = (a: string, b: string, c: string) => at(a).clone().sub(at(b)).angleTo(at(c).clone().sub(at(b))) / DEG;
@@ -141,7 +142,7 @@ it('trots as a Labrador does: its stride, its duty and its carpus and hock foldi
   expect(angle('leftHind1', 'leftHind2', 'leftHind3')).toBeLessThan(145);
   const lands: number[] = [], carpus: number[] = [], hock: number[] = [];
   let up = false, planted = 0, sampled = 0;
-  play(() => walkTo(labrador, new Vector3(0, 0, 40), { speed: 2, accel: 2 }), [labrador], 14, (time) => {
+  play(() => walkTo(labrador, new Vector3(0, 0, 40), { speed: 2 }), [labrador], 14, (time) => {
     const lifted = at('leftFore3').y > 0.038;
     if (time > 6) {
       if (up && !lifted) lands.push(time);
@@ -175,14 +176,14 @@ it.each([['the dog', DOG], ['a short-necked one', SHORT_NECKED]] as const)('%s l
   const room = new Group().add(labrador.object);
   const toy = ball(room, 'ball', 0.04, new Vector3(1.5, 0.04, 1.5));
   toy.userData.mass = 0.06;
-  const head = labrador.pose.skeleton.index('head'), was = labrador.pose.rotation(head).clone(), side = new Vector3();
+  const head = poseOf(labrador).skeleton.index('head'), was = poseOf(labrador).rotation(head).clone(), side = new Vector3();
   let taken = NaN, fastest = 0, roll = 0;
   play(function* () {
     yield* grab(labrador, toy, { jaw: 'ball' });
     yield* walkTo(labrador, new Vector3(0, 0, 0.5));
   }, [labrador], 12, (time) => {
     if (Number.isNaN(taken) && labrador.holds(toy)) taken = time;
-    const turn = labrador.pose.rotation(head), still = paceOf(labrador) <= 0.1;
+    const turn = poseOf(labrador).rotation(head), still = paceOf(labrador) <= 0.1;
     if (still) fastest = Math.max(fastest, was.angleTo(turn) / dt);
     if (still) roll = Math.max(roll, Math.abs(Math.asin(side.set(1, 0, 0).applyQuaternion(turn).y)));
     was.copy(turn);

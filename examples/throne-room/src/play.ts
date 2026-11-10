@@ -1,7 +1,7 @@
 import { Group, type Object3D, PerspectiveCamera } from 'three';
 import { runTimeline } from '@pmndrs/timeline';
 import type { Body } from '@drawcall/animate';
-import type { Beat, Staged } from './beats';
+import type { Beat, Staged } from './beats/index';
 import { castBodies, createCast, type Dress } from './cast';
 import { createMarks } from './hall';
 import { Sound } from './film/sound';

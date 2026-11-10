@@ -1,7 +1,7 @@
 import { Group, MathUtils, Vector3 } from 'three';
 import { horse, type Body, type Root } from '@drawcall/animate';
 import type { Scenario } from '../scenario';
-import { HORSE } from '../skeletons';
+import { HORSE } from '../skeletons/index';
 
 /** A route a root is scripted along: its top pace (m/s), when it sets off (s), how long it takes to stop (s), its bend's radius (m). */
 export interface Route {

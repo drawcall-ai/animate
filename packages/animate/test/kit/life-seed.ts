@@ -1,0 +1,23 @@
+import { vi } from 'vitest';
+import { seedOf } from '../../src/kernel/random';
+import { standingFeet } from '../../src/person/anatomy/stance';
+
+// Vary geometry-derived idle motion; an explicit seed remains reproducible. (The walking is imported here once mocked: had its
+// module moved, the mock would hold for nothing and every run would quietly be seed 0's.)
+vi.mock('../../src/person/legs/walking', async (original) => {
+  const offset = Number(process.env.LIFE_SEED_OFFSET ?? 0);
+  if (!Number.isInteger(offset)) throw new Error('LIFE_SEED_OFFSET must be an integer');
+  const actual = await original<typeof import('../../src/person/legs/walking')>();
+  const { walking } = actual;
+  return { ...actual, walking: ((h, options = {}) => walking(h, { ...options,
+    seed: options.seed ?? seedOf(h.proportions.height, ...leftAnkle(h)) + offset,
+  })) satisfies typeof walking };
+});
+const { walking } = await import('../../src/person/legs/walking');
+if (typeof walking !== 'function') throw new Error('life-seed: the walking it varies is not where it mocks it');
+
+/** where a person's left ankle stood as it was made (its stance under its root) */
+function leftAnkle(h: { proportions: Parameters<typeof standingFeet>[0]; pose: { position(bone: number): { x: number; z: number } }; yaw: number }): [number, number] {
+  const root = h.pose.position(0), { position } = standingFeet(h.proportions, root.x, root.z, h.yaw)[0];
+  return [position.x, position.z];
+}

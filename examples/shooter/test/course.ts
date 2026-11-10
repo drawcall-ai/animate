@@ -8,6 +8,7 @@ import type { Sound } from '../src/audio';
 import { GRAVITY, Movement } from '../src/movement';
 import { Soldier, type SoldierOptions } from '../src/soldier';
 import { Terrain } from '../src/terrain';
+import { gripOn, placement } from '@drawcall/animate/puppet';
 
 export const DT = 1 / 60;
 
@@ -130,7 +131,7 @@ export function soles(body: Body, side: 'left' | 'right') {
 
 /** How far hand `side`'s wrist is from where its grip `empty` puts it (m): off the rifle, by that much. */
 export function offGrip(body: Body, side: 'left' | 'right', empty: Object3D) {
-  return body.bones[`${side}Hand`].getWorldPosition(new Vector3()).distanceTo(body.gripOn(side, body.placement(side, empty)).wrist);
+  return body.bones[`${side}Hand`].getWorldPosition(new Vector3()).distanceTo(gripOn(body, side, placement(body, side, empty)).wrist);
 }
 
 /**

@@ -1,0 +1,204 @@
+// How far a leg reaches and where its hip is: the geometry the stepper decides its steps by.
+import { MathUtils, Vector3 } from 'three';
+import { forwardOf, leftOf, lerp, minimumJerk } from '../kernel/math';
+import { xcomOf } from './support';
+import { FLAT, foothold, LEVEL } from './floor';
+import type { Stepper } from './stepper';
+import type { Leg, Reading, Timing, Stepping } from './types';
+
+/** the place of a leg's hip, the pelvis turned with the stride */
+export function hipOf(stepper: Stepper, leg: Leg): Vector3 {
+  const { feet } = stepper, build = feet.legs[leg.i], facing = stepper.input.yaw + stepper.turn, out = leg.sign * (build.hip ?? feet.hip);
+  return stepper.hipScratch.copy(stepper.pelvis).addScaledVector(leftOf(facing), out).addScaledVector(forwardOf(facing, _o), build.ahead ?? 0);
+}
+
+/** How high a leg's hip reaches its foot (m): planted as rolled as it may be, or with its ankle `given`. */
+export function legReach(stepper: Stepper, leg: Leg, given?: Vector3): number {
+  const { st, feet } = stepper, { yaw } = stepper.input, build = feet.legs[leg.i], up = build.up ?? 0;
+  const pitch = given ? 0 : rolled(stepper, leg);
+  const ankle = given ?? feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a);
+  const at = hipOf(stepper, leg), horizontal = Math.hypot(ankle.x - at.x, ankle.z - at.z), depth = build.depth;
+  // (its joints' own reach where they reach at all; past that, as a sphere of its length: the stray check steps it)
+  if (depth) {
+    const out = (ankle.x - at.x) * leftOf(yaw, _l).x * leg.sign + (ankle.z - at.z) * leftOf(yaw, _l).z * leg.sign;
+    const down = depth(out, _o.subVectors(ankle, at).dot(forwardOf(yaw, _f)), pitch);
+    if (down > -Infinity) return ankle.y + down - up;
+  }
+  return ankle.y + Math.sqrt(Math.max(0, (st.reach * lengthOf(stepper, leg)) ** 2 - horizontal ** 2)) - up;
+}
+
+export function lengthOf(stepper: Stepper, leg: Leg): number { return stepper.feet.legs[leg.i].length ?? stepper.feet.length; }
+/** how far ahead along `forward` of root `at` a foot's home is, past its `sitting` (m): its build's, put ahead as staggered — standing,
+ * about where the feet stood as the stagger began, not about the root settling over them */
+export function homeOf(stepper: Stepper, leg: Leg, at: Readonly<Vector3>, forward: Readonly<Vector3>): number {
+  const { staggeredAt, feet } = stepper, home = (i: number) => feet.legs[i].home ?? 0;
+  const about = staggeredAt ? _h.subVectors(staggeredAt, at).setY(0).dot(forward) - stepper.input.sitting - feet.legs.reduce((sum, _, i) => sum + home(i), 0) / feet.legs.length : 0;
+  return home(leg.i) + (stepper.stagger?.[leg.i] ?? 0) + about;
+}
+
+/** a foot's home `ahead` s on: where its leg sets it off the root as the root goes, the stance's width out */
+export function home(stepper: Stepper, leg: Leg, ahead: number, out: Vector3): Vector3 {
+  const { r, yaw, width, sitting } = stepper.input;
+  const root = r.forecast ? out.copy(r.forecast(ahead).position) : out.copy(r.position).addScaledVector(r.velocity, ahead);
+  const forward = forwardOf(yaw, _hf);
+  return root.addScaledVector(leftOf(yaw), leg.sign * width).addScaledVector(forward, sitting + homeOf(stepper, leg, root, forward)).setY(stepper.feet.ankleHeight);
+}
+
+/** how far a foot is from its home `ahead` s on (m): on a floor that is not level, from where that home fits onto it (a foot that cannot go
+ * nearer — a tread's edge before it — is home where it fits, and does not step again for it) */
+export function offHome(stepper: Stepper, leg: Leg, ahead: number): number {
+  const at = home(stepper, leg, ahead, _v);
+  if (stepper.floor !== FLAT) {
+    // (where the body stands, its home on the level the foot stands on — over its edge, a tread shorter than the foot: not the one below)
+    const level = leg.anchor.y - stepper.feet.ankleHeight, stays = staysOn(stepper, level, ahead);
+    foothold(stepper.floor, stepper.feet, leg.i, at, stepper.input.yaw + leg.sign * stepper.st.toeOut, undefined, stays ? level : undefined, stays);
+  }
+  return at.sub(leg.anchor).setY(0).length();
+}
+
+/** whether a foot on level `level` steps where the body stands: its root over that level, now and `ahead` s on, gone no further than
+ * `IN_PLACE` (m, default body) — turning, squaring, not a step up or down a flight */
+export function staysOn(stepper: Stepper, level: number, ahead: number): boolean {
+  const { input } = stepper;
+  if (stepper.floor === FLAT) return false;
+  const { contact, r } = input, at = travelOf(input, ahead, _stay);
+  const on = ({ x, z }: Vector3) => Math.abs(stepper.floor(x, z) - level) <= LEVEL;
+  const near = Math.hypot(at.x - r.position.x, at.z - r.position.z) < IN_PLACE * stepper.st.scale;
+  if (!contact) return near && on(r.position) && on(at);
+  // (standing on physics' support, the level it stands on; going on, the way it goes from there)
+  if (near) return Math.abs(contact.y - level) <= LEVEL;
+  return on(contact) && on(at.add(contact).sub(r.position));
+}
+/** Tuned (m, default body): a root going no further than this as a foot lands steps it where it stands (a stair's tread is ~0.25–0.45) */
+const IN_PLACE = 0.15;
+const _stay = new Vector3(), _h = new Vector3(), _hf = new Vector3();
+
+/** a planted foot as far rolled as it may be; with the hip over it, no further than its strike's roll: there it changes ends */
+function rolled(stepper: Stepper, leg: Leg): number {
+  const { input } = stepper;
+  const s = stepper.st.scale, limit = pivotLimit(stepper, leg);
+  // (standing, from further: a quiet stance holds its centre of mass ~4–6 cm ahead of the ankles and sways about it — read: Winter 1995 —
+  // which would roll the feet up and down, the pelvis bobbing with them)
+  const from = lerp(STANDING_PIVOT, PIVOT, input.moving) * s;
+  return lerp(rollOf(leg), limit, Math.max(Number(input.tiptoe > 0), MathUtils.smoothstep(Math.abs(aheadOf(stepper, leg)), from, from + PIVOT * s)));
+}
+
+/** the most a planted foot rolls to help the hip reach it: onto its heel when it is ahead, its ball when behind */
+export function pivotLimit(stepper: Stepper, leg: Leg): number {
+  // (it changes ends only while it needs no roll past its strike's: changed mid-roll, the roll would jump)
+  if (leg.free) leg.heel = stepper.input.tiptoe === 0 && aheadOf(stepper, leg) < 0;
+  // (just landed, it first rolls off its strike: the pivot is given over as the roll ends)
+  return pointed(stepper, leg, lerp(rollOf(leg), leg.heel ? stepper.st.pitch.heel : stepper.st.pitch.ball, minimumJerk(leg.planted / ROLL)));
+}
+
+export function pointed(stepper: Stepper, leg: Leg, pitch: number, at?: Vector3): number {
+  const { st, feet } = stepper;
+  if (st.plantarflexion === undefined) return pitch;
+  // (the shank as the last pose stood it does not turn with the roll: once is enough)
+  if (!at) return Math.max(pitch, -st.plantarflexion - feet.lean(leg.i, stepper.input.f.prev, leg.yaw));
+  // (rolling moves the ankle and turns the shank: enforce the pointing limit at that new position too)
+  for (let pass = 0; pass < 3; pass++) pitch = Math.max(pitch, -st.plantarflexion - shankLean(stepper, at, feet.ankle(leg.i, leg.anchor, leg.yaw, pitch, _a), leg.yaw));
+  return pitch;
+}
+
+export function aheadOf(stepper: Stepper, leg: Leg): number {
+  return _v.subVectors(hipOf(stepper, leg), leg.anchor).dot(forwardOf(leg.yaw));
+}
+
+/** how far the shank leans forward over a foot heading `yaw` with the hip at `hip` and the ankle at `ankle`, the knee bent toward the toes (rad) */
+export function shankLean(stepper: Stepper, hip: Vector3, ankle: Vector3, yaw: number): number {
+  const { feet } = stepper;
+  const along = _b.subVectors(ankle, hip), l = along.length();
+  along.divideScalar(l);
+  const a = (feet.thigh ** 2 - feet.shin ** 2 + l * l) / (2 * l), rise = Math.sqrt(Math.max(0, feet.thigh ** 2 - a * a));
+  const fw = forwardOf(yaw, _f), side = _m.copy(fw).addScaledVector(along, -fw.dot(along)).normalize();
+  const shin = _l.copy(hip).addScaledVector(along, a).addScaledVector(side, rise).sub(ankle);
+  return Math.atan2(shin.dot(fw), shin.y);
+}
+
+/** The pelvis' height: let down walking, bobbing lowest after contact (running: mid-stance) — on stairs less, its legs bent over the
+ * treads, `STAIRS` of the bob gone on a flight's slope — the leap's rise on it. */
+export function nominal(stepper: Stepper): number {
+  const { st, legs, input } = stepper, { standing, rise, run, Ts, v, climb } = input;
+  const moving = input.moving * (1 - STAIRS.bob * MathUtils.smoothstep(Math.abs(climb) / Math.max(v, STAIRS.slow), 0, STAIRS.slope));
+  const swinging = 1 - Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? Math.sin(Math.PI * leg.swing.u) ** 2 : 0), 0));
+  const planted = Math.min(1, legs.reduce((sum, leg) => sum + (leg.swing ? 0 : Math.sin(Math.PI * Math.min(1, leg.planted / Ts)) ** 2), 0));
+  return standing + rise - (dropOf(st, input) + st.bob * lerp(swinging, planted, run)) * st.scale * moving;
+}
+
+/**
+ * The pelvis' height its legs folded hold it at: crouching too, no lower than a leg folds, as it stood last — its knee bent its most, a
+ * planted foot would slide, a swinging one would be held into the floor; deep in a crouch a step lifts the hips as it lifts the foot.
+ */
+export function foldOf(stepper: Stepper): number {
+  const { feet, legs } = stepper;
+  const folded = foldLength(stepper);
+  return Math.max(-Infinity, ...legs.map((leg, i) => {
+    if (stepper.input.contact && leg.swing) return -Infinity;
+    const ankle = stepper.poses[i]?.ankle ?? feet.ankle(leg.i, leg.anchor, leg.yaw, leg.pitch, _a), at = hipOf(stepper, leg);
+    return ankle.y + Math.sqrt(Math.max(0, folded ** 2 - (ankle.x - at.x) ** 2 - (ankle.z - at.z) ** 2)) - (feet.legs[i].up ?? 0);
+  }));
+}
+
+/** The hip-to-ankle distance with the knee bent as far as its joints allow. */
+export function foldLength({ feet }: Stepper): number {
+  return Math.sqrt(feet.thigh ** 2 + feet.shin ** 2 + 2 * feet.thigh * feet.shin * Math.cos(feet.fold));
+}
+
+/** How far the hips travel up and down over a planted foot (m): from the legs' reach to fully folded. */
+export function strokeOf(stepper: Stepper): number {
+  return stepper.st.reach * stepper.feet.length - foldLength(stepper);
+}
+
+/** the extrapolated centre of mass `ahead` s on: the root carried on, the centre of mass where it is over it — as `r.xcom` is */
+export function xcomAhead(stepper: Stepper, ahead: number, out: Vector3): Vector3 {
+  const { input } = stepper;
+  const at = travelOf(input, ahead, out).add(input.over).addScaledVector(forwardOf(input.yaw, _f), input.sitting);
+  return xcomOf(at, velocityAhead(input, ahead, _x), stepper.feet.length, out);
+}
+
+/** Where the root will be `ahead` s on: follow its forecast, or keep its pace with braking bounded by a stop. */
+export function travelOf({ r, accel }: Reading, ahead: number, out: Vector3): Vector3 {
+  if (r.forecast) return out.copy(r.forecast(ahead).position);
+  const changing = brakingTime(r.velocity, accel, ahead);
+  return out.copy(r.position).addScaledVector(r.velocity, ahead).addScaledVector(accel, changing * (ahead - changing / 2));
+}
+
+/** Its velocity then: a walker's as foreseen, or its current pace bounded by a braking stop. */
+export function velocityAhead({ r, accel, dt }: Reading, ahead: number, out: Vector3): Vector3 {
+  if (r.forecast) return out.subVectors(r.forecast(ahead + dt).position, r.forecast(ahead).position).divideScalar(dt).setY(0);
+  return out.copy(r.velocity).addScaledVector(accel, brakingTime(r.velocity, accel, ahead)).setY(0);
+}
+
+/** Without a forecast, keep the current pace except for a braking stop; one frame's acceleration is not a sustained command. */
+function brakingTime(velocity: Vector3, accel: Vector3, ahead: number): number {
+  const slowing = -velocity.dot(accel), change = accel.lengthSq();
+  return slowing >= 0 && change > 0 ? Math.min(ahead, slowing / change) : 0;
+}
+
+/** half the feet's spread at `speed` (m): side-stepping, the feet open wider and close in to the narrowest: their travel never crosses */
+export function widthAt(stepper: Stepper, { across, Ts, crouch }: Reading & Timing, speed: number): number {
+  const { st } = stepper, s = st.scale, { width } = st;
+  const gait = lerp(lerp(width.stand, width.walk * s, MathUtils.smoothstep(speed, 0, 1)), width.run * s, MathUtils.smoothstep(speed, st.run[0], st.run[1]));
+  return Math.max(gait, (width.narrowest * s + Math.abs(across) * speed * Ts) / 2) + st.crouch.wider * s * crouch;
+}
+
+/** Tuned: on a slope of `slope` (rise per run) or steeper — a stair's (recalled ~0.4–0.7) — the walking bob is `bob` less; read at no
+ * slower than `slow` (m/s) */
+const STAIRS = { bob: 0.6, slope: 0.3, slow: 0.3 };
+/** Tuned: within `PIVOT` (m) of being over a planted foot the hip lets it settle flat to change the end it rolls on */
+const PIVOT = 0.03;
+/** Tuned: standing, a planted foot rolls only with the hip this far (m, default body) off it: past a quiet stance's sway over the feet */
+const STANDING_PIVOT = 0.08;
+const [_v, _a, _b, _x, _l, _f, _m, _o] = Array.from({ length: 8 }, () => new Vector3());
+
+export const dropOf = (st: Stepping, { across, run }: Timing & Reading) => lerp(lerp(st.drop.walk, st.drop.side, Math.abs(across)), st.drop.run, run);
+/** how far `x` (rad) is past 0, easing in from `BEND`/2 before it (C¹: the heel starts lifting at rest) */
+export const overbend = (x: number) => x <= -BEND / 2 ? 0 : x < BEND / 2 ? (x + BEND / 2) ** 2 / (2 * BEND) : x;
+/** a planted foot's roll off its strike (rad): flat after `ROLL` */
+export const rollOf = (leg: Leg) => leg.strike * (1 - minimumJerk(leg.planted / ROLL));
+/** Tuned: a strike rolls flat in `ROLL` s */
+const ROLL = 0.1;
+
+/** Tuned: the heel's lift eases in over `BEND` (rad) of a lean past the ankle's bend */
+const BEND = 0.15;

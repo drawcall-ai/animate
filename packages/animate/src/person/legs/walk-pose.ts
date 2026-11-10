@@ -1,0 +1,209 @@
+// The body over its feet: the gait's oscillations.
+import { MathUtils, Quaternion, Vector3 } from 'three';
+import type { Frame } from '../../kernel/frame';
+import type { ReadonlyBonePose } from '../../kernel/bone-pose';
+import type { QuietStance } from './quiet-stance';
+import { INDEX } from '../anatomy/bones';
+import { clamp, forwardOf, leftOf, lerp, quatYXZ, wrapAngle } from '../../kernel/math';
+import { DEFAULT_HEIGHT, type Proportions } from '../anatomy/proportions';
+import { pelvisTilt } from './lowering';
+import type { Stride } from '../anatomy/humanoid';
+import { strideTurn, type Turn } from './turn';
+import { Inertia, type Inertial } from '../../kernel/inertia';
+import { follow } from '../../kernel/follow';
+/** the pelvis's list, the swing side dropping (rad; ~4°, Perry), and its sway over the stance foot each way (× height), walking and running */
+const LIST = 0.05, SWAY = 0.0085, RUN_SWAY = 0.008;
+/** the walking pelvis's dip in double support below mid-stance (× height, of the default body's: × its legs; Orendurff 2004) */
+const BOB = 0.016;
+/** the trunk pitches forward at each double support and back over mid-stance (rad; CMU mocap); running, forward as the stance leg compresses */
+const NOD = { walk: 0.02, run: 0.06 };
+/**
+ * Running, the pelvis tips forward this much further (rad), room for the hip to extend behind: recalled (Novacheck 1998, Gait Posture
+ * 7:77), anterior pelvic tilt grows with speed, ~5° walking to ~15° running; tuned 0.25 (the walking tilt not taken up: a walk keeps
+ * the pelvis as it stands). The thorax keeps its own lean over it: the lower back takes the difference.
+ */
+const TILT = 0.25;
+/** how far the pelvis shifts back as the trunk nods forward (× height per rad): the body's centre of mass stays */
+const NOD_SHIFT = 0.1;
+/** how firmly the stride's phase is pulled into step with the feet (1/s) */
+const ENTRAIN = 4;
+// Tuned quiet shift: unload one knee while keeping both soles planted.
+const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
+/**
+ * How quickly (1/s, critically damped: 90% in ~0.4 s) the weight goes off a foot before it lifts, standing: recalled (Jian et al. 1993,
+ * Gait Posture 1:9; Halliday et al. 1998): gait initiation's anticipatory postural adjustment moves the body toward the stance limb over
+ * ~0.3–0.5 s before the swing foot leaves the floor, a few cm. The foot lifts once the weight is no longer on it (`bears`, step/support.ts).
+ */
+const UNLOAD = 10;
+/** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
+export const LOWER = { accel: 3, speed: 0.6 };
+/** Standing planted reach (× leg length): nearly extended, without a singular knee. */
+export const STANDING_REACH = 0.995;
+
+/**
+ * The trunk leans forward with the pace it goes forward at (rad, the chest's; × the speed ahead up to 1 m/s), a run more: read (Thorstensson
+ * et al. 1984, Acta Physiol Scand 121:9, abstract), the trunk's mean forward inclination grows from 6° walking to ~13° running fast. Tuned:
+ * its hips → neck ~4.5–5° at 1.3 m/s (the chest ~9°); eased in and out within `LEANING` (rad/s², rad/s), no quicker than the stride's
+ * own nod as it sets off or stops; and given up as the trunk bows or the knees bend for a reach (`BOWED`, rad; `LOWERED`, × height): the
+ * bow leans it instead.
+ */
+const LEAN = { walk: 0.14, run: 0.15 }, LEANING = { accel: 1, speed: 0.1 }, BOWED = 0.15, LOWERED = 0.05;
+/** Tuned: how far it walks (0 … 1), blended into and out of walking at 6/s, decaying exactly at a finite step `dt`. */
+export const walkBlend = (walk: number, speed: number, dt: number) => walk + (MathUtils.smoothstep(speed, 0.08, 0.6) - walk) * (1 - Math.exp(-dt * 6));
+/** the stride's phase (rad) run on at `rate` (rad/s) and pulled toward the feet's (`goal`) at `ENTRAIN` (1/s) */
+export const entrain = (phase: number, goal: number, rate: number, dt: number) => phase + dt * (rate + ENTRAIN * wrapAngle(goal - phase));
+
+/** The trunk's posture for a sub-step: the chest's world rotation, the pelvis's and the thorax's turn with the stride. */
+export interface TrunkPose { chest: Quaternion; pelvisYaw: number; thoraxYaw: number }
+
+/** The body upright over its legs: the root and the posture state the legs and `WalkPose` share. */
+export interface WalkPoseState {
+  p: Proportions; root: Vector3;
+  /** how it strides: its `width` sways and lists the pelvis further, its `bob` bobs it further */
+  stride: Stride;
+  /** the root's ground velocity (m/s) */
+  velocity: Vector3;
+  offset: Vector3; yaw: number; walk: number; run: number; moving: boolean;
+  /** where the feet stood or, swinging, were to land as the sub-step began */
+  feet: readonly { readonly anchor: Vector3 }[];
+  /** the weight going off a foot, standing, for it to lift and as it swings: where the centre of mass goes (`Stepper.onto`), whether the
+   * foot has lifted; none */
+  unloading: { onto: Vector3; lifted: boolean } | null;
+  pelvis: Vector3; pelvisRotation: Quaternion;
+  /** neither arm free to swing: both hands hold something */
+  held: boolean;
+}
+
+/** The stride as the feet have it: its phase (rad), the swing's bob and nod (0 … 1), a runner's compression, a foot's share of it standing. */
+interface Cycle { phase: number; bob: number; nod: number; compression: number; stance: number }
+
+/**
+ * The walking body over its feet, posed each sub-step: the pelvis carried over the root (bobbing,
+ * swaying over the stance foot, rotating with the legs, as high as the legs reach, as low as
+ * asked), the thorax counter-rotating and rolling with it, the trunk nodding and bowing, and leaning into the root's acceleration as
+ * the body's `inertia` has it.
+ */
+export class WalkPose {
+  /** a runner's leg compression through stance (0 … 1) */
+  private comp = 0;
+  private readonly weight = new Vector3();
+  /** the pelvis shifted off a foot to lift it, standing (m, on the floor) */
+  readonly unloaded: Shift = { at: new Vector3(), speed: new Vector3() };
+  /** the pelvis shifted over its planted feet, standing (m, on the floor): onto a foot as the weight shifts, and off a foot to lift it */
+  readonly shifted = new Vector3();
+  private offset: Vector3 | null = null;
+  readonly quiet = new Vector3();
+  /** how far (rad) the pelvis is rolled onto a foot as the weight shifts onto it, standing (its share of the pelvis's roll) */
+  shiftRoll = 0;
+  private readonly turn: Turn = { pelvis: 0, thorax: 0, roll: 0 };
+  private readonly leans = [0, 0];
+  private readonly inertia: Inertia | null;
+
+  constructor(inertia?: Inertial) {
+    this.inertia = inertia ? new Inertia(inertia) : null;
+  }
+
+  /** the pelvis's goal into `state.pelvis` / `state.pelvisRotation` and the trunk's into `out`; `lower` (m), `bow`, `twist`, `lean`
+   * (rad, sideways: + its left side up) and the pelvis's turn off the facing (`hips`) as balance has them */
+  place(f: Pick<Frame, 'prev' | 'dt'>, state: WalkPoseState, asks: { lower: number; bow: number; twist: number; lean: number; hips?: number }, out: TrunkPose, life: Pick<QuietStance, 'drift' | 'breath' | 'onto'>, cycle: Cycle) {
+    const { lower, bow, twist, lean: bent, hips = 0 } = asks, { onto } = life, { p: proportions, walk, run } = state, dt = f.dt;
+    // (the legs set how far the pelvis rises and falls: as they would for the default body of their length)
+    const H = proportions.height, L = DEFAULT_HEIGHT * proportions.legs;
+    const fwd = forwardOf(state.yaw, _f), left = leftOf(state.yaw, _l);
+
+    // the pelvis and the thorax turned with the stride, the thorax rolling with its turn
+    const ahead = _v.subVectors(f.prev.position(INDEX.leftFoot), f.prev.position(INDEX.rightFoot)).dot(fwd);
+    const { pelvis: pelvisYaw, thorax: thoraxYaw, roll: thoraxRoll } = strideTurn(ahead, proportions.legs, walk, run, state.held, this.turn);
+    const { bob, nod: nodPhase, compression: comp, phase: stride } = cycle;
+    const wide = state.stride.width ?? 1;
+    let roll = -LIST * wide * Math.sin(stride) * (1 - run) * walk;
+    // (over the stance foot at its mid-stance: walking a quarter stride on from the other's lift, as a walk has it; running, its stance
+    // short, half the swing on — π(1 − stance share))
+    const side = -lerp(SWAY, RUN_SWAY, run) * wide * H * Math.sin(stride + run * (Math.PI / 2 - Math.PI * (1 - cycle.stance))) * walk;
+    // inverted-pendulum bob: lowest in double support; running, the leg compresses through stance
+    const walkLift = -(0.001 + BOB * (state.stride.bob ?? 1) * (1 - bob)) * L * walk;
+    this.comp += (comp - this.comp) * Math.min(1, 40 * dt);
+    const lift = lerp(walkLift, -(0.025 + 0.03 * this.comp) * L, run);
+    const nod = lerp(NOD.walk * (nodPhase - 0.2), NOD.run * (this.comp * this.comp - 0.35), run) * walk;
+    const shift = -NOD_SHIFT * nod * H;
+
+    // the pelvis where it puts the centre of mass over the root (its ground point, swayed, shifted
+    // back under a nod), as high as the legs reach, and as low as asked
+    const pelvis = state.pelvis.copy(state.root).add(state.offset).addScaledVector(left, side).addScaledVector(fwd, shift);
+    this.quiet.copy(left).multiplyScalar(life.drift.x * proportions.scale).addScaledVector(fwd, life.drift.z * proportions.scale);
+    const weight = _v.set(0, 0, 0);
+    if (onto && !state.moving) {
+      weight.addVectors(state.feet[0].anchor, state.feet[1].anchor).multiplyScalar(0.5);
+      weight.subVectors(state.feet[onto === 'left' ? 0 : 1].anchor, weight).multiplyScalar(SHIFT.share);
+    }
+    this.weight.lerp(weight, 1 - Math.exp(-dt));
+    // (and off a foot for it to lift, standing — an anticipatory shift, quicker — onto the others: the centre of mass carried toward where
+    // it goes, from wherever it stands — a reach's lean, a stance aside — not by a set share, till the foot lifts; then held where it is
+    // through the swing: recalled, gait initiation moves it only a few cm toward the stance foot; carried on, it swung the body about the
+    // stance foot, and the feet landed by a body swung aside, re-stepping)
+    const unloading = state.unloading, goal = _g.copy(this.unloaded.at);
+    if (!unloading) goal.set(0, 0, 0);
+    else if (!unloading.lifted) goal.add(_s.subVectors(unloading.onto, f.prev.com(_s)).setY(0));
+    followShift(this.unloaded, goal, UNLOAD, dt);
+    pelvis.add(this.quiet.add(this.weight)).add(this.unloaded.at);
+    this.shifted.addVectors(this.weight, this.unloaded.at);
+    // The unloaded knee unlocks as that side of the pelvis drops, with both feet planted.
+    const shifted = this.shifted.dot(left) / Math.max(proportions.hipHalfWidth, 1e-6);
+    this.shiftRoll = SHIFT.roll * shifted;
+    roll += this.shiftRoll;
+    const onward = MathUtils.smoothstep(Math.max(0, state.velocity.dot(fwd)), 0, 1);
+    const pace = follow(this.leans[0], this.leans[1], lerp(LEAN.walk * walk, LEAN.run, run) * onward, LEANING, dt);
+    [this.leans[0], this.leans[1]] = [this.leans[1], pace];
+    // (given up at once as a bow or a squat comes in — as smoothly as they come — not after it: the bow leans it instead)
+    const forward = pace * (1 - MathUtils.smoothstep(bow, 0, BOWED)) * (1 - MathUtils.smoothstep(lower, 0, LOWERED * H));
+    // A tucked pelvis must still leave the spine and chest enough flexion for the requested bow.
+    const tilt = 0.5 * nod + pelvisTilt(proportions, lower, bow) + TILT * run;
+    quatYXZ(state.yaw + pelvisYaw + hips, tilt, roll, state.pelvisRotation);
+    pelvis.y = proportions.hipHeight - lower + lift - SHIFT.drop * proportions.scale * Math.abs(shifted);
+
+    // the trunk: the thorax counter-rotating and rolling, leaning (with the gait, against a load, into the root's acceleration),
+    // nodding, bowing and bent sideways
+    this.inertia?.step(state.velocity, state.yaw, dt);
+    const lean = this.inertia ?? { pitch: 0, roll: 0 };
+    const pitch = forward + nod + bow - loadLean(f.prev, proportions, fwd) + life.breath + lean.pitch;
+    quatYXZ(state.yaw + thoraxYaw, pitch, thoraxRoll + lean.roll + bent, out.chest);
+    out.chest.multiply(_twist.setFromAxisAngle(UP, twist));
+    [out.pelvisYaw, out.thoraxYaw] = [pelvisYaw, thoraxYaw];
+  }
+
+  /** where the root (the centre of mass a planner follows) leaves the pelvis, read off the last final pose */
+  center(f: Frame): Vector3 {
+    const offset = f.prev.com(_o).sub(f.prev.position(0)).negate().setY(0);
+    // Under-relax the pose-to-CoM feedback rather than apply the full knee response again.
+    return (this.offset ??= offset.clone()).lerp(offset, 0.95);
+  }
+}
+
+
+/** Counter the hand-carried moment with the trunk, before centring the full loaded CoM with the pelvis. */
+export function loadLean(pose: ReadonlyBonePose, proportions: Proportions, forward: Readonly<Vector3>): number {
+  const hips = pose.position(0);
+  let moment = 0, mass = 0;
+  pose.skeleton.bones.forEach((bone, i) => {
+    const load = pose.load(i);
+    // The counter-moment comes from the trunk above the hips, not the whole body.
+    if (i === INDEX.spine || i === INDEX.chest || i === INDEX.neck || i === INDEX.head) mass += bone.mass;
+    if (!load.mass || (i !== INDEX.leftHand && i !== INDEX.rightHand)) return;
+    const at = pose.point(i, load.at, _v).sub(hips);
+    moment += load.mass * (at.x * forward.x + at.z * forward.z);
+  });
+  // Read: Anderson et al. 2007, doi:10.1080/00140130701403005, Fig. 5: anterior
+  // loads produce trunk extension. Tuned effective trunk CoM lever (80% of its height),
+  // capped at 10.3 degrees; the study is not an 8 kg dose-response law.
+  return clamp(Math.atan2(moment, mass * (proportions.eyeHeight - proportions.hipHeight) * 0.8), -0.18, 0.18);
+}
+const UP = new Vector3(0, 1, 0), _twist = new Quaternion(), _f = new Vector3(), _l = new Vector3(), _v = new Vector3(), _o = new Vector3(), _s = new Vector3(), _g = new Vector3();
+
+/** a shift of the pelvis (m, on the floor) followed to `goal`, critically damped at `rate` (1/s): its speed carried on from one to the next */
+function followShift(weight: Shift, goal: Vector3, rate: number, dt: number) {
+  weight.speed.addScaledVector(goal.sub(weight.at).multiplyScalar(rate * rate).addScaledVector(weight.speed, -2 * rate), dt);
+  weight.at.addScaledVector(weight.speed, dt).setY(0);
+}
+
+/** a shift of the pelvis and how fast it goes (m, m/s; on the floor) */
+interface Shift { at: Vector3; speed: Vector3 }

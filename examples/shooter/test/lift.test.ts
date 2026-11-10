@@ -4,6 +4,7 @@ import { Lift } from '../src/lift';
 import { SPEED } from '../src/movement';
 import { box, cleanup, DT, soldierOn, soles } from './course';
 import { expectSmooth, Motion } from './motion';
+import { gripOn, placement } from '@drawcall/animate/puppet';
 
 const sides = ['left', 'right'] as const;
 
@@ -144,11 +145,34 @@ it('stays until its panel\'s button is pressed with the index fingertip, then ri
   let off = Infinity;
   avatar.press(button.part, () => {
     lift.press(button);
-    off = avatar.body.gripOn('left', avatar.body.placement('left', face)).wrist.distanceTo(avatar.body.bones.leftHand.getWorldPosition(new Vector3()));
+    off = gripOn(avatar.body, 'left', placement(avatar.body, 'left', face)).wrist.distanceTo(avatar.body.bones.leftHand.getWorldPosition(new Vector3()));
   });
   advance(3);
   expect(off).toBeLessThan(0.01);
   advance(6);
   expect(lift.body.position.y).toBeCloseTo(foot + 2.2, 3);
   expect(avatar.pressing).toBe(false);
+});
+
+it('a press the soldier is carried off from goes unpressed and the hand back to the rifle, the game going on', async () => {
+  const { world, avatar, movement, acquire, advance, built: lift } = await soldierOn((scene) => {
+    box(scene, [40, 1, 40], [0, -0.5, 0], 'static', 'Ground');
+    const landing = { at: new Vector3(3, 0, 3), yaw: 0 };
+    return new Lift(box(scene, [3.2, 0.25, 3.2], [0, 0.125, 0], 'kinematic', 'Lift'), new MeshStandardMaterial(), { down: landing, up: landing });
+  }, { spawn: new Vector3(1, 0.27, 0.45), yaw: Math.PI / 2, pitch: -0.7 });
+  cleanup(lift.bind(world));
+  avatar.lower(true);
+  acquire();
+  advance(1);
+  const button = lift.within(movement.position, Math.PI / 2);
+  if (!button) throw new Error('No button in reach');
+  let pressed = false;
+  avatar.press(button.part, () => { pressed = true; });
+  movement.input.move.set(-0.8, 0, -0.6);
+  advance(1.5);
+  movement.input.move.set(0, 0, 0);
+  advance(8);
+  expect(pressed).toBe(false);
+  expect(avatar.pressing).toBe(false);
+  expect(avatar.acquired).toBe(true);
 });

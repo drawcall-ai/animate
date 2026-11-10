@@ -113,7 +113,7 @@ export class FreeArms {
         elbow: 180 - shoulder.clone().sub(elbow).angleTo(hand.clone().sub(elbow)) * DEG,
       };
     });
-    this.samples.push({ t, phase: h.body.gait.phase, walking: into === 'walking', sides });
+    this.samples.push({ t, phase: h.self.gaitState.phase, walking: into === 'walking', sides });
   }
 }
 

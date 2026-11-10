@@ -1,10 +1,10 @@
 import { BufferGeometry, Group, Line, LineBasicMaterial, Vector3, type Object3D } from 'three';
 import { action, parallel } from '@pmndrs/timeline';
-import { arriving, carry, grab, horse, lookAt, reach, release, wait, walkTo } from '@drawcall/animate';
+import { arriving, carry, grab, horse, lookAt, reach, release, wait, walkTo, grip } from '@drawcall/animate';
 import type { Scenario, Solid } from '../scenario';
-import { HORSE } from '../skeletons';
+import { HORSE } from '../skeletons/index';
 import { Rope } from '../stage/rope';
-import { box, empty } from '../things';
+import { box } from '../things';
 
 /** where the horse stands tied, facing +Z (m, on the floor) */
 export const TIED = new Vector3(-1.2, 0, 3);
@@ -52,9 +52,9 @@ export function stableMorning(): Scenario {
       const rail = yard(scene);
       const saddle = saddleOn(scene);
       // (the lead's knot on the rail, its slack coiled in it)
-      const knot = empty(rail, 'knot', KNOT.clone().sub(rail.position));
-      const slack = empty(knot, 'slack', new Vector3(0, -0.06, 0));
-      for (const [part, mass] of [[knot, ROPE_MASS.knot], [slack, ROPE_MASS.slack]] as const) Object.assign(part.userData, { mass, free: true });
+      const knot = grip(rail, 'knot', KNOT.clone().sub(rail.position));
+      const slack = grip(knot, 'slack', new Vector3(0, -0.06, 0));
+      for (const [part, mass] of [[knot, ROPE_MASS.knot], [slack, ROPE_MASS.slack]] as const) part.userData.mass = mass;
       const tied = () => knot.parent === rail;
       let startle: Vector3 | undefined;
       const mare = cast.body(horse(HORSE), {
@@ -62,22 +62,22 @@ export function stableMorning(): Scenario {
         life: { tether: () => (tied() ? { position: KNOT, length: KNOT_AT } : undefined), startle: () => startle },
       });
       // (its saddle's place on its back, turned the way the handler faces setting it there; the halter its lead hangs from)
-      const saddled = empty(mare.bones.trunk, 'saddled', new Vector3(0, 0.23, 0));
+      const saddled = grip(mare.bones.trunk, 'saddled', new Vector3(0, 0.23, 0));
       saddled.rotation.y = -Math.PI / 2;
-      const halter = empty(mare.bones.head, 'halter', new Vector3(0, -0.3, 0.05));
+      const halter = grip(mare.bones.head, 'halter', new Vector3(0, -0.3, 0.05));
       const lead = leadRope(scene, [[0, halter], [KNOT_AT, knot], [SLACK_AT, slack]]);
       // (where the eyes go checking the fit, and the near skirt the hand touches)
-      const glance = empty(saddle, 'glance', new Vector3());
-      const skirt = empty(saddle, 'near skirt', new Vector3(0, -0.2, -0.32));
+      const glance = grip(saddle, 'glance', new Vector3());
+      const skirt = grip(saddle, 'near skirt', new Vector3(0, -0.2, -0.32));
       // (where the hands keep the lead walking out, steady as the body goes: the near hand forward of the chest toward the horse, the
       // slack in front of the hip, held up a little below the elbow — the forearm forward, not the arm hanging at its full length, which
       // a short-armed body could only hold by bowing and squatting; where the eyes go; and where the horse walks led, in its lane at the
       // handler's side a little behind)
       const height = (bone: Object3D) => bone.getWorldPosition(new Vector3()).y;
-      const nearHand = empty(handler.object, 'near hand', new Vector3(-0.5, height(handler.bones.chest) + 0.1, 0.35));
-      const slackHand = empty(handler.object, 'slack hand', new Vector3(0.22, height(handler.bones.leftLowerArm) - 0.08, 0.22));
-      const ahead = empty(handler.object, 'ahead', new Vector3(0, height(handler.bones.head), 4));
-      const horseDestination = empty(scene, 'led', TIED);
+      const nearHand = grip(handler.object, 'near hand', new Vector3(-0.5, height(handler.bones.chest) + 0.1, 0.35));
+      const slackHand = grip(handler.object, 'slack hand', new Vector3(0.22, height(handler.bones.leftLowerArm) - 0.08, 0.22));
+      const ahead = grip(handler.object, 'ahead', new Vector3(0, height(handler.bones.head), 4));
+      const horseDestination = grip(scene, 'led', TIED);
       const besideHandler = () => {
         horseDestination.position.z = Math.max(TIED.z, handler.position.z - HANDLER_LEAD_DISTANCE);
         return horseDestination;
@@ -160,8 +160,8 @@ function saddleOn(scene: Group): Object3D {
   const saddle = box(scene, 'saddle', SEAT, RACK);
   saddle.userData.mass = MASS;
   for (const side of [-1, 1]) box(saddle, 'skirt', SKIRT, new Vector3(0, -0.13, side * 0.27));
-  empty(saddle, 'left', new Vector3(SEAT.x / 2 + 0.015, 0, 0));
-  empty(saddle, 'right', new Vector3(-SEAT.x / 2 - 0.015, 0, 0));
+  grip(saddle, 'left', new Vector3(SEAT.x / 2 + 0.015, 0, 0));
+  grip(saddle, 'right', new Vector3(-SEAT.x / 2 - 0.015, 0, 0));
   return saddle;
 }
 

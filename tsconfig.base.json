@@ -6,7 +6,6 @@
     "customConditions": ["source"],
     "strict": true,
     "noUnusedLocals": true,
-    "noUncheckedIndexedAccess": false,
     "noEmit": true,
     "skipLibCheck": true,
     "esModuleInterop": true,

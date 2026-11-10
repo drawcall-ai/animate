@@ -1,7 +1,7 @@
 // Reference curves: a value over one gait cycle, read off published plots as keyframes.
+import { MathUtils } from 'three';
 
-/** degrees to radians */
-export const DEG = Math.PI / 180;
+const DEG = Math.PI / 180;
 
 /**
  * A value over one cycle of a leg: keyframes `[u, value]` (u in [0, 1), rising), periodic, a
@@ -23,7 +23,7 @@ function valueAt(keys: JointCycle['keys'], u: number): number {
   const x = u - Math.floor(u);
   let i = n - 1;
   for (let k = 0; k < n; k++) if (keys[k][0] <= x) i = k;
-  const at = (k: number) => keys[((k % n) + n) % n];
+  const at = (k: number) => keys[MathUtils.euclideanModulo(k, n)];
   // (the keys' u unwrapped around x: before the first key, the last one's is a cycle back)
   let u0 = at(i)[0];
   if (u0 > x) u0 -= 1;

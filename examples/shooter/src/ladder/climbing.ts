@@ -63,7 +63,7 @@ export function heights(ladder: Ladder): Record<End, number> {
 }
 
 /**
- * The next height (m) at or past the hips' `height` up `ladder`, climbing up (`going` > 0) or down, at which all four limbs hold, as
+ * The next height (m) at or past the hips' `height` up `ladder`, climbing up (`legGoal` > 0) or down, at which all four limbs hold, as
  * `heights`' are: where a climb let go of on the way is carried on to, so that no hand or foot is left in the air between rungs.
  */
 export function rest(ladder: Ladder, height: number, going: number) {

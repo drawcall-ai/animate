@@ -8,13 +8,15 @@ permissions:
   contents: read
 
 jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
   publish:
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    env:
-      LIFE_SEED_OFFSET: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -34,7 +36,9 @@ jobs:
             exit 1
           fi
           pnpm --dir packages/animate exec npm pkg set version="$version"
-      - run: pnpm check
+      # (`source` is how this workspace runs the package from its sources; a tarball has none, so an installer must not resolve it)
+      - name: Drop the workspace's source exports
+        run: pnpm --dir packages/animate exec npm pkg delete 'exports[.].source' 'exports[./species].source' 'exports[./puppet].source'
       # npm trusted publisher: drawcall-ai/animate, publish-package.yml, no environment.
       - name: Publish @drawcall/animate
         working-directory: packages/animate

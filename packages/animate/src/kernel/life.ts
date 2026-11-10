@@ -3,13 +3,13 @@ import { lerp } from './math';
 
 /**
  * One kind of change in a body's quiet life: every `every` s (seeded; the first after `first`) it turns to a new aim (`pick`, from the
- * last one), held `hold` s if given and then let go to 0 until the next; followed at `rate` (1/s), or at once without one. With
+ * last one), kept `stay` s if given and then let go to 0 until the next; followed at `rate` (1/s), or at once without one. With
  * `quiet`, it changes only while the body is quiet: any activity puts the next change `quiet` s off and lets the aim go.
  */
 export interface Rhythm {
   every: readonly [number, number];
   first?: readonly [number, number];
-  hold?: readonly [number, number];
+  stay?: readonly [number, number];
   rate?: number;
   quiet?: number;
   pick(last: number, rand: () => number): number;
@@ -42,12 +42,12 @@ export class Life<Name extends string = string> {
       if ((r.quiet === undefined || quiet) && time >= c.next) {
         c.aim = r.pick(c.aim, this.rand);
         c.fired = true;
-        if (r.hold) {
-          c.until = time + lerp(r.hold[0], r.hold[1], this.rand());
+        if (r.stay) {
+          c.until = time + lerp(r.stay[0], r.stay[1], this.rand());
           c.next = c.until + lerp(r.every[0], r.every[1], this.rand());
         } else c.next = time + r.every[0] + (r.every[1] - r.every[0]) * this.rand();
       }
-      const aim = r.hold && time >= c.until ? 0 : c.aim;
+      const aim = r.stay && time >= c.until ? 0 : c.aim;
       c.value = r.rate === undefined ? aim : c.value + (aim - c.value) * (1 - Math.exp(-r.rate * dt));
     }
   }

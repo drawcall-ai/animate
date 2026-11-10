@@ -1,5 +1,5 @@
 // A crowd of complete scenarios stepped at 60 Hz, without rendering.
-import { SCENARIOS } from '../src/scenarios';
+import { SCENARIOS } from '../src/scenarios/index';
 import { FIXED_DT, type Scenario } from '../src/scenario';
 import { Simulation } from '../src/simulation';
 

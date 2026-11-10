@@ -1,0 +1,43 @@
+import type { Frame } from '../kernel/frame';
+import type { Goal } from '../kernel/goal';
+import type { Binding } from '../body/binding';
+import type { HandStaging } from '../body/hand-staging';
+import { Self, type Behaviours } from '../body/self';
+import { nameOf, type AnySpecies } from '../species/define';
+import { checkParents } from '../things/hold';
+import { bear } from '../things/bearing';
+import { creature } from './balance';
+import { creatureHands, idleHold } from './hands';
+import type { SelfOptions } from '../body/setup';
+
+/** Any species but a person: its legs and trunk motion, and hands that are each the tip of a chain. */
+export class Creature extends Self {
+  constructor(species: AnySpecies, options: SelfOptions, binding: Binding) {
+    if (options.life?.steady !== undefined) throw new Error(`life.steady: a person's; a ${nameOf(species)} has no such setting`);
+    super(species, options, binding);
+    // (made now, so that legs that cannot stand fail before the first update)
+    this.behaviours = this.behave();
+  }
+
+  /** a creature's, wherever it reaches */
+  canHold(_f: Frame, _hand: string, _wrist: Goal): boolean {
+    return true;
+  }
+
+  /** one at a time, each the tip of its chain */
+  protected stageHands(): HandStaging {
+    return creatureHands(this);
+  }
+
+  /** its legs and trunk motion, its jaw keeping hold */
+  protected behave(): Behaviours {
+    return {
+      balance: this.species.legs ? creature(this) : undefined,
+      idleHold: idleHold(this),
+      things: (f) => {
+        checkParents(this);
+        bear(this, f, this.worn, this.borne);
+      },
+    };
+  }
+}

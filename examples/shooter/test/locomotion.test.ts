@@ -1,6 +1,10 @@
 import { expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { box, DT, node, ramp, soldierOn, soles } from './course';
+import { selfOf } from '../../../packages/animate/src/body';
+import type { Body } from '@drawcall/animate';
+
+const airborne = (body: Body) => selfOf(body).stepper?.airborne ?? false;
 
 async function setup(surface: 'flat' | 'ramp' = 'flat', spawn = new Vector3(0, 0.02, -1), yaw = 0) {
   const run = await soldierOn((scene) => {
@@ -55,7 +59,7 @@ it('does not plant walking steps while the capsule is airborne', async () => {
   expect(movement.grounded).toBe(false);
   let airFrames = 0;
   while (!movement.grounded && airFrames < 180) {
-    expect(avatar.body.airborne).toBe(true);
+    expect(airborne(avatar.body)).toBe(true);
     expect(avatar.body.feet.every((foot) => !foot.planted)).toBe(true);
     world.update(DT);
     airFrames++;
@@ -64,7 +68,7 @@ it('does not plant walking steps while the capsule is airborne', async () => {
   expect(airFrames).toBeLessThan(180);
   let planted = false;
   for (let frame = 0; frame < 60; frame++) {
-    expect(avatar.body.airborne).toBe(false);
+    expect(airborne(avatar.body)).toBe(false);
     const standing = avatar.body.feet.some((foot) => foot.planted);
     if (planted || frame >= 6) expect(standing, `Landing recovery frame ${frame}`).toBe(true);
     planted ||= standing;

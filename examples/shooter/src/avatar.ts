@@ -6,10 +6,10 @@ import { anglesOf, lookDirection, wrapAngle } from './angles';
 import type { Look } from './playback';
 import { SOLDIER } from './skeleton';
 import { onBone } from './bones';
-import { empty, RIFLE, rifleOn } from './weapon';
+import { empty, RIFLE, rifleOn } from './weapon/index';
 import { Litter } from './weapon/litter';
 import { WeaponMotion } from './weapon/motion';
-import type { Grenades } from './grenade';
+import type { Grenades } from './grenade/index';
 import { GrenadeMotion } from './grenade/motion';
 import { Press } from './press';
 import { Reload } from './reload';
@@ -33,9 +33,10 @@ export interface AvatarState {
 /** a hand's finger bones, by name (VRM's) */
 const FINGER = /(Thumb|Index|Middle|Ring|Little)(Metacarpal|Proximal|Intermediate|Distal)$/;
 const SPRINTING = new Vector3(0.22, 0.2, 0);
-/** How the rifle turns through a reload (rad, as `SPRINTING`): up before the chest, canted 9° toward the support hand — canted 23°, an
- * upright magazine from the pouch had 24° to turn under the well, which the arm took 0.15 s over; at 9°, 13°. */
-const RELOADING = new Vector3(-0.05, 0, 0.15);
+/** How the rifle is turned on the shoulder pocket through a reload (the chest's frame): ahead of the chest, up a little and canted 9°
+ * toward the support hand — canted 23°, an upright magazine from the pouch had 24° to turn under the well, which the arm took 0.15 s
+ * over; at 9°, 13°. */
+const RELOADING = new Quaternion().setFromEuler(new Euler(-0.05, 0, 0.15));
 /** How far the rifle turns in toward the support side (rad, about its up) as that hand goes back onto its front after a reload, as a
  * soldier brings it in close for the hand. */
 const RETURNING = 0.3;
@@ -220,30 +221,20 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const view = () => {
     let pitch = kicked(), yaw = input.yaw;
     if (input.aimPoint) ({ yaw, pitch } = anglesOf(input.aimPoint.clone().sub(look.eye)));
-    // Reload in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body.
-    const before = Math.max(smooth(reloaded), smooth(slung));
+    // Sling the rifle in front of the chest even while the camera looks at the ground or sky, or turns ahead of the body.
+    const before = smooth(slung);
     pitch *= 1 - before;
     yaw += wrapAngle(person.facing - yaw) * before;
     return new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ'));
   };
   const ahead = () => new Vector3(0, 0, ZERO).applyQuaternion(view()).add(look.eye);
 
-  /** How the rifle rode the chest through a reload (its turn on the shoulder pocket), to ease back to the aim from. */
-  let rode: Quaternion | undefined;
   const hold = () => {
     if (slung > 0) {
       // Hanging from its shoulder sling, muzzle down across the left side, clear of the grenade at the right chest.
       const hanging = pocket.getWorldQuaternion(new Quaternion()).multiply(new Quaternion().setFromEuler(new Euler(1.25, 0, 0.4)));
       const aimed = view();
       person.orient(mount, aimed.slerp(hanging, smooth(slung)));
-      return;
-    }
-    // Through the swap the rifle rides the chest as it sways and twists under a running body, its well where the hand last found it. As
-    // the support hand goes back onto its front it is held as it rode, turned in toward that side (`RETURNING`): the body keeps it within
-    // that arm's reach as it turns, and it eases out to the aim from there as the reload ends.
-    if (reload.riding && reloaded === 1) {
-      person.orient(mount, null);
-      rode = mount.quaternion.clone();
       return;
     }
     const facing = view();
@@ -258,13 +249,15 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
     // The rifle points where the view does, from the hip and down the sights: the trunk turns after it, and the body only brings it back
     // within the arms' reach where the trunk has not yet come round (`Body.orient`).
     const aimed = new Quaternion().setFromEuler(new Euler(-pitch, pointed.yaw, 0, 'YXZ'));
-    const turn = SPRINTING.clone().multiplyScalar(smooth(sprinted)).addScaledVector(RELOADING, smooth(reloaded)).addScaledVector(LOWERED, smooth(lowered))
+    const turn = SPRINTING.clone().multiplyScalar(smooth(sprinted)).addScaledVector(LOWERED, smooth(lowered))
       .add(new Vector3(motion.recoil.position.x - 2 * drift.y, 2 * drift.x, -3 * drift.x));
-    aimed.slerp(facing, smooth(reloaded));
     const turned = aimed.multiply(new Quaternion().setFromEuler(new Euler(turn.x, turn.y, turn.z)));
-    if (rode) turned.slerp(pocket.getWorldQuaternion(new Quaternion()).multiply(rode), smooth(reloaded));
+    // Through the swap the rifle rides the chest as it sways and twists under a running body, turned `RELOADING` on the shoulder pocket
+    // whatever the view and however far the trunk has turned from the hips: the well stays before the support hand's shoulder. As that
+    // hand goes back onto its front it is turned in toward that side (`RETURNING`): the body keeps it within that arm's reach as it
+    // turns, and it eases out to the aim from there as the reload ends.
+    turned.slerp(pocket.getWorldQuaternion(new Quaternion()).multiply(RELOADING), smooth(reloaded));
     if (returned > 0) turned.multiply(new Quaternion().setFromAxisAngle(UP, RETURNING * smooth(returned)));
-    if (reloaded === 0) rode = undefined;
     person.orient(mount, turned);
   };
 
@@ -314,7 +307,6 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
   const step = runTimeline(() => parallel('all',
     function* () {
       acquired = yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, snatch ? SNATCH : {});
-      if (!acquired) throw new Error('The soldier could not acquire both rifle grips');
       for (;;) {
         yield* wait(() => reload.wanted || press.wanted !== null || throwing);
         if (throwing && grenade) {
@@ -322,7 +314,7 @@ function animate(species: Species<string, 'left' | 'right'>, model: Object3D | u
           release(person, rifle);
           yield* grenade.throw(() => lookDirection(input.yaw, input.pitch), () => look.eye.clone(), () => input.velocity);
           returning = true;
-          if (!(yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, QUICK))) throw new Error('Could not take rifle after grenade throw');
+          yield* grab(person, rifle, { right: 'pistol', left: 'foregrip' }, QUICK);
           throwing = returning = false;
           continue;
         }

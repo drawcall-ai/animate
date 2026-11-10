@@ -1,20 +1,18 @@
 import { Group, Object3D, Vector3 } from 'three';
 import { action, parallel, runTimeline, type NonReuseableTimeline } from '@pmndrs/timeline';
 import { expect, it } from 'vitest';
-import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, wait, walkTo, type Species } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
-import { cases } from '../../../packages/animate/test/open';
-import { DOG, HORSE, PERSON, scaled } from '../src/skeletons';
-import { ball, box, cylinder, empty } from '../src/things';
+import { Body, carry, dog, grab, horse, humanoid, lookAt, reach, release, wait, walkTo, type Species, attempt, Missed, grip, poseOf } from '@drawcall/animate';
+import { selfOf } from '../../../packages/animate/src/body';
+import { cases } from '../../../packages/animate/test/kit/open';
+import { DOG, HORSE, PERSON, scaled } from '../src/skeletons/index';
+import { ball, box, cylinder } from '../src/things';
 
 // Each verb on each body, off the demo cases: goals at angles round the body, near and far, things high and low. Every run must
 // finish its story within its time, throw nothing and leave the dev log empty. The cases that do not yet are listed open (expected
 // to fail: each one fixed comes off the list).
 const check = cases([
-  // Turns instead of backing up.
-  'a dog walks 0.5 m back, keeping its facing',
-  // Placement ends 9 mm off its empty (5 mm limit).
-  'a dog takes a ball, puts it down 1 m off, takes it again and puts it back',
+  // Turns on the spot, its facing to 2.7 rad, rather than back up, so it comes no nearer for 6 s and misses 0.28 m short; it expects to arrive, facing as it did.
+  ['a dog walks 0.5 m back, keeping its facing', /no nearer its goal/],
 ]);
 
 type Story = NonReuseableTimeline<unknown, unknown>;
@@ -60,8 +58,8 @@ function cupIn(room: Object3D, at: Vector3) {
 function boxIn(room: Object3D, at: Vector3) {
   const thing = box(room, 'box', new Vector3(0.3, 0.2, 0.2), at);
   thing.userData.mass = 2;
-  empty(thing, 'left', new Vector3(0.165, 0, 0));
-  empty(thing, 'right', new Vector3(-0.165, 0, 0));
+  grip(thing, 'left', new Vector3(0.165, 0, 0));
+  grip(thing, 'right', new Vector3(-0.165, 0, 0));
   return thing;
 }
 
@@ -158,7 +156,7 @@ for (const height of [0.3, 0.5, 0.75, 0.8, 1.0, 1.2]) {
 for (const height of [0.3, 0.5, 0.8, 1.1]) {
   check(`a person puts a box down on a table ${height} m high`, () => {
     const body = person(), room = roomWith(body), parcel = boxIn(room, around(0, 1.2, 0.8));
-    const table = empty(room, 'table top', around(90, 1.5, height + 0.1));
+    const table = grip(room, 'table top', around(90, 1.5, height + 0.1));
     expect(run(body, function* () {
       yield* grab(body, parcel, { left: 'left', right: 'right' });
       yield* carry(body, parcel, table);
@@ -171,7 +169,7 @@ for (const height of [0.3, 0.5, 0.8, 1.1]) {
 // (every hand verb takes any body: a dog's jaw carries, puts down, lets go and reaches as a person's hands do)
 check('a dog takes a ball, puts it down 1 m off, takes it again and puts it back', () => {
   const body = creature(dog(DOG)), room = roomWith(body), toy = ballIn(room, around(0, 1.5, 0.04));
-  const down = empty(room, 'down', around(90, 1, 0.04)), back = empty(room, 'back', around(0, 1.5, 0.04));
+  const down = grip(room, 'down', around(90, 1, 0.04)), back = grip(room, 'back', around(0, 1.5, 0.04));
   expect(run(body, function* () {
     yield* grab(body, toy, { jaw: 'ball' });
     yield* carry(body, toy, down);
@@ -183,7 +181,7 @@ check('a dog takes a ball, puts it down 1 m off, takes it again and puts it back
   expect(toy.parent).toBe(back);
 });
 check('a dog carries a ball onto a step 0.3 m up, 2.5 m ahead', () => {
-  const body = creature(dog(DOG)), room = roomWith(body), toy = ballIn(room, around(0, 1.5, 0.04)), step = empty(room, 'step', around(0, 2.5, 0.3));
+  const body = creature(dog(DOG)), room = roomWith(body), toy = ballIn(room, around(0, 1.5, 0.04)), step = grip(room, 'step', around(0, 2.5, 0.3));
   expect(run(body, function* () {
     yield* grab(body, toy, { jaw: 'ball' });
     yield* carry(body, toy, step);
@@ -202,7 +200,7 @@ check('a short-necked creature reaches a bowl on the floor, letting itself down 
   const body = creature(dog(shortNecked));
   let lowest = Infinity;
   const result = run(body, function* () {
-    yield* parallel('race', reach(body, { jaw: around(10, 1.2, 0.03) }), action({ update: () => void (lowest = Math.min(lowest, body.pose.position(0).y)) }));
+    yield* parallel('race', reach(body, { jaw: around(10, 1.2, 0.03) }), action({ update: () => void (lowest = Math.min(lowest, poseOf(body).position(0).y)) }));
   }, 10);
   expect(result).toEqual(ok);
   expect(lowest).toBeLessThan(0.4);
@@ -238,18 +236,17 @@ check('a person takes a ball the scene slides along, the frames uneven', () => {
   expect(taken).toBe(true);
   expect(body.log).toEqual([]);
 });
-// (a goal in the head is held clear in front of it: noted, never silent)
-it('a cup carried to the mouth stops in front of the face, and the notes say so', () => {
-  const body = new Body(humanoid(PERSON), { dev: { notes: true } }), cup = cupIn(roomWith(body), around(0, 0.6, 0.9));
-  const mouth = empty(body.bones.head, 'mouth', new Vector3(0, -0.06, 0.08));
-  expect(run(body, function* () {
+// (a goal in the head is held clear in front of it)
+it('a cup carried to the mouth stops in front of the face, and misses naming the head\'s clearance', () => {
+  const body = new Body(humanoid(PERSON), { dev: true }), cup = cupIn(roomWith(body), around(0, 0.6, 0.9));
+  const mouth = grip(body.bones.head, 'mouth', new Vector3(0, -0.06, 0.08));
+  let missed: Missed | null = null;
+  const seen = run(body, function* () {
     yield* grab(body, cup, { right: 'cup' });
-    yield* carry(body, cup, mouth, { until: 2 });
-  }, 15)).toEqual(ok);
-  // (and that the grab walked up to the cup first)
-  expect([...new Set(body.notes.map((note) => note.check))]).toEqual([
-    'approach: walks up to stand in reach, staying there (m to walk; `step: false` keeps the feet)', 'held goal moved clear of the head (m)',
-  ]);
+    missed = yield* attempt(carry(body, cup, mouth));
+  }, 15);
+  expect(seen).toEqual(ok);
+  expect((missed as Missed | null)?.why).toMatch(/head's clearance holds it [\d.]+ cm off its end/);
 });
 it('a hand a body does not have fails to compile', () => {
   const body = person(), toy = ballIn(roomWith(body), around(0, 1.5, 0.04));
@@ -274,26 +271,25 @@ check('a dog carries a ball up to a point until told, bearing its weight', () =>
 });
 check('a dog follows a point on a moving cart with its jaw', () => {
   // (the point just ahead of where the jaw rests)
-  const body = creature(dog(DOG)), cart = empty(roomWith(body), 'cart', new Vector3(0, 0.47, 0.52)), point = empty(cart, 'point', new Vector3(0, 0.05, 0));
+  const body = creature(dog(DOG)), cart = grip(roomWith(body), 'cart', new Vector3(0, 0.47, 0.52)), point = grip(cart, 'point', new Vector3(0, 0.05, 0));
   let time = 0;
   expect(run(body, () => parallel('race',
     action({ update: (_, clock) => { time += clock.delta; cart.position.x = 0.1 * Math.sin(Math.min(time, 2) * 2); } }),
     reach(body, { jaw: point }, { until: 3 }),
   ), 4)).toEqual(ok);
-  expect(body.pose.position(body.pose.skeleton.index('jaw')).distanceTo(point.getWorldPosition(new Vector3()))).toBeLessThan(0.05);
+  expect(poseOf(body).position(poseOf(body).skeleton.index('jaw')).distanceTo(point.getWorldPosition(new Vector3()))).toBeLessThan(0.05);
 });
 check('a horse looks at a point without a neck chain', () => {
   const body = creature(horse(HORSE));
   expect(run(body, () => lookAt(body, around(60, 3, 1), { until: 0.5 }), 10)).toEqual(ok);
 });
 
-// (a body asked for what it can never get to says so in the dev log, once, and stands where it is: no throw, nothing searched for it)
-it('a dog asked to take a ball 1.5 m up, beyond its jaw, logs it once and stands', () => {
+// (a body asked for what it can never get to misses, and stands where it is: nothing searched for it)
+it('a dog asked to take a ball 1.5 m up, beyond its jaw, misses and stands', () => {
   const body = creature(dog(DOG)), toy = ballIn(roomWith(body), around(0, 1, 1.5)), start = body.position;
-  let taken: boolean | undefined;
-  run(body, function* () { taken = yield* grab(body, toy, { jaw: 'ball' }); }, 10);
-  expect(taken).toBe(false);
-  expect(body.log.length).toBe(1);
+  let miss: Missed | null = null;
+  run(body, function* () { miss = yield* attempt(grab(body, toy, { jaw: 'ball' })); }, 10);
+  expect(miss).toBeInstanceOf(Missed);
   expect(body.position.distanceTo(start)).toBeLessThan(0.05);
 });
 
@@ -307,16 +303,14 @@ it('a dog puts a ball down under its chest without an unnecessary approach', () 
   expect(outcome).toBe(true);
 });
 
-// (a walk no nearer its goal for a while logs it once and ends false)
-it('a dog asked to walk up to a goal that keeps ahead of it logs that it stalled', () => {
+// (a walk no nearer its goal for a while misses)
+it('a dog asked to walk up to a goal that keeps ahead of it misses as it stalls', () => {
   const body = creature(dog(DOG));
-  let outcome: boolean | undefined;
-  const result = run(body, function* () {
-    outcome = yield* walkTo(body, () => body.position.add(new Vector3(0, 0, 1)));
+  let miss: Missed | null = null;
+  run(body, function* () {
+    miss = yield* attempt(walkTo(body, () => body.position.add(new Vector3(0, 0, 1))));
   }, 30);
-  expect(outcome).toBe(false);
-  expect(result.log.length).toBe(1);
-  expect(result.log[0]).toMatch(/^stalled walk/);
+  expect(miss).toMatchObject({ verb: 'walkTo', why: expect.stringContaining('no nearer') });
 });
 
 // (a walk asked for what can be no walk throws, for any body: misuse, not lateness — a facing at once, a goal that is no point as it is read)

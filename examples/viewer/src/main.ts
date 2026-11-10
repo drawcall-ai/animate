@@ -4,10 +4,10 @@ import { Framing, placeCamera, VIEWS } from './stage/camera';
 import { byId } from './dom';
 import { Playback } from './playback';
 import { FIXED_DT, type Scenario } from './scenario';
-import { DOG, HORSE, LION, OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from './skeletons';
-import { SCENARIOS } from './scenarios';
+import { DOG, HORSE, LION, OUTLIER, PERSON, SOLDIER, type PersonSkeleton } from './skeletons/index';
+import { SCENARIOS } from './scenarios/index';
 import { Simulation } from './simulation';
-import { Stage } from './stage';
+import { Stage } from './stage/index';
 import { drawTrail } from './stage/trail';
 import { Panel, type Settings } from './ui';
 

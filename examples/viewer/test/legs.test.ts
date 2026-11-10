@@ -1,16 +1,17 @@
 import { Quaternion, Vector3 } from 'three';
 import { expect, it } from 'vitest';
 import { Body, horse, humanoid, walkTo } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
+import { selfOf } from '../../../packages/animate/src/body';
 import { clampRotation } from '../../../packages/animate/src/kernel/limits';
-import { INDEX } from '../../../packages/animate/src/species/humanoid/bones';
-import { solePoints } from '../../../packages/animate/src/species/humanoid/landmarks';
-import { cases } from '../../../packages/animate/test/open';
-import { play } from '../../../packages/animate/test/bodies';
+import { INDEX } from '../../../packages/animate/src/person/anatomy/bones';
+import { solePoints } from '../../../packages/animate/src/person/anatomy/landmarks';
+import { cases } from '../../../packages/animate/test/kit/open';
+import { play } from '../../../packages/animate/test/kit/bodies';
 import { Playback } from '../src/playback';
 import { Simulation } from '../src/simulation';
-import { HORSE, PERSON } from '../src/skeletons';
+import { HORSE, PERSON } from '../src/skeletons/index';
 import { legsHorse, scripted, type Route } from '../src/scenarios/legs';
+import { poseOf } from '@drawcall/animate';
 
 // The legs on scripted roots: a person and two horses (walk, trot) carried along a straight, a bend and a stop by the scene.
 
@@ -47,25 +48,26 @@ it('plays back creatures on driven roots, no person among them', () => {
 // joints no faster than a snap, a horse's walk in its lateral sequence, every foot down at the end and the dev log empty.
 const person = (brake: number) => { const body: Body = new Body(humanoid(PERSON), { dev: true, drive: scripted({ pace: 1.3, start: 1, brake }, () => body) }); return body; };
 const horseOn = (gait: 'walk' | 'trot', route: Route) => { const body: Body = new Body(horse(HORSE, gait), { dev: true, drive: scripted(route, () => body) }); return body; };
-/**
- * Open: a person's leg joints at 1.3 m/s reach a p99 of ~610 °/s (~600 stopping hard) against a ceiling of 500 (the gait's swing is
- * 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise.
- */
-const test = cases(['a person walking', 'a person stopping hard']
-  .map((name) => `${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`));
+const title = (name: string) => `${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`;
+const test = cases([
+  // Its leg joints reach a p99 of 573 °/s, ceiling 500 (the gait's swing is 0.355 s of a 0.935 s stride, shorter than a person's ~0.4 s of ~1.05 s): a gait to tune, not a ceiling to raise.
+  [title('a person walking'), /joint speed/],
+  // A landing moves 7 mm past mid-swing as the root brakes in 0.5 s; it expects a landing frozen from there on.
+  [title('a person stopping hard'), /landing past mid-swing/],
+]);
 for (const [name, make] of [['a person walking', () => person(3)], ['a person stopping hard', () => person(0.5)], ['a horse walking', () => horseOn('walk', { pace: 1.6 })],
   ['a horse trotting, braking in 2 s', () => horseOn('trot', { pace: 3.7 })], ['a horse trotting, braking in 3 s', () => horseOn('trot', { pace: 3.7, brake: 3 })],
   ['a horse walking a 3 m turn', () => horseOn('walk', { pace: 1.6, radius: 3 })]] as const) {
-  test(`${name}: soles on the floor, planted pivots, frozen landings, joints in range and no faster than a snap`, () => {
+  test(title(name), () => {
     const body = make(), chains = body.species.legs?.chains, proportions = body.species.person;
-    const sole = (leg: number) => proportions ? solePoints(proportions, body.pose, leg ? 'right' : 'left')
-      : [chains![leg].heel, chains![leg].toe].map((at) => body.pose.point(chains![leg].joints[chains![leg].joints.length - 1].bone, at, new Vector3()));
+    const sole = (leg: number) => proportions ? solePoints(proportions, poseOf(body), leg ? 'right' : 'left')
+      : [chains![leg].heel, chains![leg].toe].map((at) => poseOf(body).point(chains![leg].joints[chains![leg].joints.length - 1].bone, at, new Vector3()));
     const bones = (leg: number) => proportions ? (['UpperLeg', 'LowerLeg', 'Foot'] as const).map((part) => INDEX[`${leg ? 'right' : 'left'}${part}`]) : chains![leg].joints.map((joint) => joint.bone);
     let ground = 0, pivot = 0, outOfRange = 0, drift = 0;
-    const landings: number[] = [], speeds: number[] = [], was = body.pose.skeleton.bones.map(() => new Quaternion());
+    const landings: number[] = [], speeds: number[] = [], was = poseOf(body).skeleton.bones.map(() => new Quaternion());
     const before: { sole: Vector3[]; swing: boolean; anchor: Vector3 }[] = [];
     for (let tick = 0; tick < 16 * 60; tick++) {
-      body.pose.skeleton.bones.forEach((_, bone) => was[bone].copy(body.pose.local(bone)));
+      poseOf(body).skeleton.bones.forEach((_, bone) => was[bone].copy(poseOf(body).local(bone)));
       body.update(1 / 60);
       legsOf(body).forEach((leg, i) => {
         const points = sole(i), last = before[i];
@@ -74,9 +76,9 @@ for (const [name, make] of [['a person walking', () => person(3)], ['a person st
         if (last?.swing && leg.swing && leg.swing.u > 0.55) drift = Math.max(drift, leg.anchor.distanceTo(last.anchor));
         if (last?.swing && !leg.swing) landings.push(i);
         for (const bone of bones(i)) {
-          const limit = body.pose.skeleton.limits[bone], turn = new Quaternion().copy(body.pose.local(bone)), kept = turn.clone();
+          const limit = poseOf(body).skeleton.limits[bone], turn = new Quaternion().copy(poseOf(body).local(bone)), kept = turn.clone();
           if (limit) { clampRotation(kept, limit); outOfRange = Math.max(outOfRange, turn.angleTo(kept)); }
-          if (tick > 0) speeds.push(was[bone].angleTo(body.pose.local(bone)) * 60 * 180 / Math.PI);
+          if (tick > 0) speeds.push(was[bone].angleTo(poseOf(body).local(bone)) * 60 * 180 / Math.PI);
         }
         before[i] = { sole: points, swing: !!leg.swing, anchor: leg.anchor.clone() };
       });
@@ -85,11 +87,11 @@ for (const [name, make] of [['a person walking', () => person(3)], ['a person st
     expect(ground).toBeLessThan(1e-5);
     // (a person's planted foot stays put; a hoof pivots in place as the body turns — the user's decision, 2026-10-20 — by under a mm a sub-step)
     expect(pivot).toBeLessThan(proportions ? 1e-5 : 1e-3);
-    expect(drift).toBe(0);
+    expect(drift, 'landing past mid-swing').toBe(0);
     expect(outOfRange).toBeLessThan(1e-6);
     expect(landings.length).toBeGreaterThan(10);
     expect(legsOf(body).every((leg) => !leg.swing)).toBe(true);
-    expect(speeds[Math.floor(speeds.length * 0.99)]).toBeLessThan(proportions ? 500 : 800);
+    expect(speeds[Math.floor(speeds.length * 0.99)], 'p99 joint speed').toBeLessThan(proportions ? 500 : 800);
     expect(body.log).toEqual([]);
     // (Hildebrand's lateral sequence: left hind, left fore, right hind, right fore — the chains fore-left, fore-right, hind-left, hind-right)
     if (name === 'a horse walking') {
@@ -116,7 +118,7 @@ it('a horse walks a 2 m circle at 1.6 m/s after a carrot, its legs keeping up, i
     last = angle;
     return swept > 2 * Math.PI;
   };
-  play(function* () { circled = yield* walkTo(mare, carrot, { speed: 1.6, accel: 1.2, until: once }); }, [mare], 40, () => {
+  play(function* () { yield* walkTo(mare, carrot, { speed: 1.6, until: once }); circled = true; }, [mare], 40, () => {
     lag = Math.max(lag, Math.abs(mare.position.distanceTo(centre) - radius));
     return circled;
   });

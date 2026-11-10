@@ -13,7 +13,8 @@ import { MEDAL_BEARER } from './skeletons/bearer';
 // whole front rank and every other soldier of the second are bodies (78 in all), each with its own seed, reaction and clapping. Every
 // other soldier is an "echo": a copy of the trooper model that replays the pose of one of its block's soldier bodies (picked at random)
 // a little later (each echo with its own delay), so neighbours never move in lockstep and a turn ripples back through the ranks. Echoes
-// exist only when the viewer dresses bodies in models; headless runs have the bodies alone.
+// exist only when the viewer dresses bodies in models; headless runs have the bodies alone. The viewer runs the troops without development
+// checks (the headless tests keep them) to hold 60 Hz.
 
 const SPACING = { file: 0.9, rank: 1.0 };
 /** soldiers per rank along the aisle, and ranks from the aisle outward, in each block */

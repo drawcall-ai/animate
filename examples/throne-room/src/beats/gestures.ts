@@ -60,7 +60,7 @@ export function hangMedal(leia: Body, hero: Body, held?: Medal): Verb {
     if (held) {
       // the medal's way hangs `ribbon` below its ends, and its ends are a little behind it (`createMedal`)
       const medalAt = (end: Vector3) => besides(hero, 0, 0, 0.04).sub(hero.position).add(end).setY(end.y - ribbon);
-      if (!(yield* carry(leia, held.medal, [medalAt(raised), medalAt(over), held.place], { speed: 0.35, step: false }))) throw new Error(`Leia could not hang ${held.medal.name}`);
+      yield* carry(leia, held.medal, [medalAt(raised), medalAt(over), held.place], { speed: 0.35, step: false });
       release(leia, held.medal, held.place);
       return yield* wait(HANGING * 0.15);
     }

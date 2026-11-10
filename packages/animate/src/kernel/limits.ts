@@ -1,7 +1,7 @@
-import { clamp, smoothstep } from './math';
-import { Quaternion } from 'three';
+import { clamp } from './math';
+import { MathUtils, Quaternion } from 'three';
 import type { Limit, Skeleton } from './skeleton';
-import type { ReadonlyPose } from './pose';
+import type { ReadonlyBonePose } from './bone-pose';
 import type { Dev } from './dev';
 
 /**
@@ -39,7 +39,7 @@ export function coordinatesOf(q: Quaternion, limit: Limit, out: Coordinates = co
   out.range[0] = limit.swing[0];
   out.range[1] = limit.swing[1];
   // (the twist's range, written into `out`'s own: opening up past `TWIST_FADE`)
-  const open = smoothstep(TWIST_FADE, Math.PI, phi), lo = limit.twist[0], hi = limit.twist[1];
+  const open = MathUtils.smoothstep(phi, TWIST_FADE, Math.PI), lo = limit.twist[0], hi = limit.twist[1];
   out.range[2][0] = lo - (Math.PI + lo) * open;
   out.range[2][1] = hi + (Math.PI - hi) * open;
   return out;
@@ -62,7 +62,7 @@ export function clampRotation(q: Quaternion, limit: Limit): boolean {
   const swing = Math.hypot(t1, t2);
   if (swing > Math.PI) [t1, t2] = [(t1 * Math.PI) / swing, (t2 * Math.PI) / swing];
   // the twist's range as the clamped swing has it
-  const open = smoothstep(TWIST_FADE, Math.PI, Math.min(swing, Math.PI)), [lo, hi] = limit.twist;
+  const open = MathUtils.smoothstep(Math.min(swing, Math.PI), TWIST_FADE, Math.PI), [lo, hi] = limit.twist;
   const tt = clamp(value[2], lo - (Math.PI + lo) * open, hi + (Math.PI - hi) * open);
   if (t1 === value[0] && t2 === value[1] && tt === value[2]) return false;
   // swing · twist, from the swing's rotation vector and the twist's angle
@@ -93,7 +93,7 @@ export function limited(skeleton: Skeleton, bone: number, q: Quaternion): Quater
 }
 
 /** how far (rad) `q` is beyond `limit`: the angle to its clamp (0 within it) */
-export function beyond(q: Quaternion, limit: Limit): number {
+export function pastLimit(q: Quaternion, limit: Limit): number {
   const r = _beyond.copy(q);
   if (!clampRotation(r, limit)) return 0;
   const d = r.invert().multiply(q);
@@ -106,10 +106,10 @@ const TWIST_FADE = 0.75 * Math.PI;
 const _c = coordinates(), _abc = [0, 0, 0], _beyond = new Quaternion(), _checked = new Quaternion();
 
 /** Range checks read the completed pose, including writes after a solve. Half a degree allows numerical settling. */
-export function checkLimits(pose: ReadonlyPose, dev: Dev, time: number): void {
+export function checkLimits(pose: ReadonlyBonePose, dev: Dev, time: number): void {
   pose.skeleton.limits.forEach((limit, bone) => {
     if (!limit) return;
-    const value = beyond(_checked.copy(pose.local(bone)), limit) * 180 / Math.PI;
+    const value = pastLimit(_checked.copy(pose.local(bone)), limit) * 180 / Math.PI;
     if (value > 0.5) dev.append(time, { check: 'joint range (°)', value, limit: 0.5, where: pose.skeleton.bones[bone].name });
   });
 }

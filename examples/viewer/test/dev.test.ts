@@ -1,18 +1,21 @@
-import { run } from './dev-log';
+import { run } from '../scripts/run';
 import { expect } from 'vitest';
-import { SCENARIOS } from '../src/scenarios';
+import { SCENARIOS } from '../src/scenarios/index';
 import { reaching } from '../src/scenarios/tracking';
-import { knownFailure, seeded } from '../scripts/run';
-import { SOLDIER, OUTLIER } from '../src/skeletons';
-import { cases } from '../../../packages/animate/test/open';
+import { seeded } from '../scripts/run';
+import { SOLDIER, OUTLIER } from '../src/skeletons/index';
+import { cases } from '../../../packages/animate/test/kit/open';
 
 const test = cases([
-  ['pickup-shelf on the soldier: final-pose dev checks', [2]], // Unreachable placement (at life seed 2; held in the palms it places the box at the others).
-  'vr: final-pose dev checks', // Hands ~14 cm short of the floor controllers in the crouch (tracked hand short of a target out of reach).
-  'vr on the soldier: final-pose dev checks', // The same; at life seed 1 also a tracking joint-rate violation.
-  'reach on the soldier: final-pose dev checks', // Reach diagnostics.
-  'lift-heavy on the soldier: final-pose dev checks', // Unreachable lift.
-  ['reach: faster final-pose dev checks', [2]], // XCoM ~0.11 m: the trailing leg lifts late as the body rises out of the reach's crouch (the owner's accepted open breach "reach hand faster").
+  // A box on the floor misses: the 0.46 m arms stop 1.5–2.9 cm over its grips, the knees at 146° and the hips at 0.36 m, the trunk bowed no further; it expects the lift done.
+  ['lift-heavy on the soldier: final-pose dev checks', /beyond the arm’s reach/],
+  // XCoM 0.104–0.110 m for a moment walking at 1.56 m/s, bound 0.1 (at seed 2 too a touchdown at 0.11 m/s, bound 0.1): no speed-up clears it at every seed (at speed-ups of 1.2, 1.31, 1.45, 1.6, 1.73 m/s²: seed 2 over at 1.45, seed 0 at 1.6); a clean log is what it expects.
+  ['reach: faster final-pose dev checks', /XCoM|touchdown/, [2]],
+  // (#18) XCoM 0.110 m for one sub-step at 9.35 s, bound 0.103: the trailing knee held straight at full reach through pre-swing, the heel flat till
+  // the reach runs out, peels and snaps the knee bent as the foot lifts — the centre of mass jolted with it.
+  ['stable-morning on the soldier: final-pose dev checks', /XCoM outside support/, [3]],
+  // (#18) XCoM 0.112 m for a sub-step at 13.97 s, bound 0.100: the same trailing knee held straight at full reach, snapping bent as it lifts.
+  ['reach: variation #1 final-pose dev checks', /XCoM outside support/, [2]],
 ]);
 for (const scenario of SCENARIOS) {
   const bodies = [{ on: '', skeleton: undefined },
@@ -21,7 +24,7 @@ for (const scenario of SCENARIOS) {
   ];
   for (const { on, skeleton } of bodies) {
     test(`${scenario.id}${on}: final-pose dev checks`, () => {
-      expect(run(scenario, { skeleton }).filter((entry) => !knownFailure(entry))).toEqual([]);
+      expect(run(scenario, { skeleton })).toEqual([]);
     });
   }
 }

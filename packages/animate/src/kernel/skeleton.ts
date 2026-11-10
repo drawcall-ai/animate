@@ -1,5 +1,18 @@
 import type { Quaternion, Vector3 } from 'three';
 
+/** A bone as a skeleton is written, by name and parent at an absolute position: what @drawcall/rig's `SkeletonBone` declares of one, without depending on it. */
+export interface SkeletonBone<Name extends string = string> {
+  readonly name: Name;
+  readonly parent?: NoInfer<Name>;
+  readonly position: readonly [number, number, number];
+}
+
+/** What a body reads off @drawcall/rig's `SkinReport`: whether its mesh is closed, and if so the volume it encloses. */
+export interface SkinVolume {
+  closed: boolean;
+  volume: number | null;
+}
+
 /** A bone of a rig: rest local rotation is identity (+Y up, facing +Z, left +X). */
 export interface BoneDef {
   name: string;

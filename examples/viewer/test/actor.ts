@@ -1,9 +1,10 @@
-// Pose metrics use public bones, proportions and feet. Grip ownership, borne loads and quiet-stance intent still need the runtime.
+// Pose metrics use public bones, proportions and feet. Grip ownership, borne loads and quiet-stance intent still need the body's self.
 import { Quaternion, Vector3, type Object3D } from 'three';
 import type { HumanoidBone } from '@drawcall/animate';
-import { selfOf } from '../../../packages/animate/src/body/body';
-import { personOf, type Person as Insides } from '../../../packages/animate/src/body/person';
+import { personOf } from '../../../packages/animate/src/verbs/person-of';
+import type { Person as PersonSelf } from '../../../packages/animate/src/person/person';
 import type { Person } from '../src/scenario';
+import { poseOf } from '@drawcall/animate';
 
 type Proportions = NonNullable<Person['species']['person']>;
 type BoneName = HumanoidBone | 'leftToes' | 'rightToes';
@@ -25,11 +26,11 @@ export interface Foot {
 
 /** A person read for the metrics: its bones and landmarks (world), its walk, its feet and what its hands hold and its body bears. */
 export class Actor {
-  readonly insides: Insides;
+  readonly self: PersonSelf;
   private readonly points: Record<string, { bone: BoneName; at: Vector3 }>;
 
   constructor(readonly body: Person) {
-    this.insides = personOf(selfOf(body));
+    this.self = personOf(body, 'Actor');
     this.points = pointsOf(this.proportions);
   }
 
@@ -41,7 +42,7 @@ export class Actor {
 
   /** Locomotion intent: public velocity/facing include pose sway and cannot classify steady strides. */
   get locomotion() {
-    return this.insides.locomotion;
+    return this.self.locomotion;
   }
 
   get feet(): Foot[] {
@@ -51,7 +52,7 @@ export class Actor {
   /** what each hand holds (the scene's world matrices as of its last update) */
   get holding(): Record<Side, Held | null> {
     const held = (side: Side): Held | null => {
-      const hold = this.insides.holding[side];
+      const hold = this.self.holding[side];
       if (!hold) return null;
       const grip = hold.thing.grip(hold.grip).node.getWorldPosition(new Vector3());
       return { thing: hold.thing.object, grip, mass: hold.thing.mass };
@@ -61,12 +62,12 @@ export class Actor {
 
   /** what it bears of the things it holds and wears: each one's centre of mass (world) and the share it bears (kg) */
   get borne(): { centre: Vector3; kg: number }[] {
-    return [...this.insides.borne].map(([thing, { kg }]) => ({ centre: thing.object.localToWorld(thing.centre.clone()), kg }));
+    return [...this.self.borne].map(([thing, { kg }]) => ({ centre: thing.object.localToWorld(thing.centre.clone()), kg }));
   }
 
   /** where a bone (by its humanoid name) or a landmark (`leftEye`, `leftHeel`, `leftBigToe`, `nose`, …) is (world) */
   joint(name: string, out = new Vector3()): Vector3 {
-    const pose = this.body.pose;
+    const pose = poseOf(this.body);
     const index = pose.skeleton.bones.findIndex((bone) => bone.name === name);
     if (index >= 0) return out.copy(pose.position(index));
     const point = this.points[name];
@@ -76,12 +77,12 @@ export class Actor {
 
   /** a bone's turn (world; identity standing in the T-pose facing +Z) */
   turn(name: BoneName, out = new Quaternion()): Quaternion {
-    return out.copy(this.body.pose.rotation(this.body.pose.skeleton.index(name)));
+    return out.copy(poseOf(this.body).rotation(poseOf(this.body).skeleton.index(name)));
   }
 
   /** a point fixed in a bone's frame, where it is now (world) */
   point(name: BoneName, local: Vector3, out = new Vector3()): Vector3 {
-    return this.body.pose.point(this.body.pose.skeleton.index(name), local, out);
+    return poseOf(this.body).point(poseOf(this.body).skeleton.index(name), local, out);
   }
 }
 
@@ -117,13 +118,6 @@ export const jointOf = (h: Actor, name: string, out = new Vector3()) => h.joint(
 /** the eyes' midpoint (where a head target goes) */
 export const eyesOf = (h: Actor, out = new Vector3()) => h.joint('leftEye', out).add(h.joint('rightEye', _v)).multiplyScalar(0.5);
 
-/** the unit vector a facing of `yaw` points along (rad about +Y; 0 faces +Z) */
-export const forwardOf = (yaw: number) => new Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-
-/** the unit vector to the left of a facing of `yaw` */
-export const leftOf = (yaw: number) => new Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-
-/** `angle` wrapped into (−π, π] */
-export const wrapAngle = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
-
 const _v = new Vector3();
+
+export { forwardOf, leftOf, wrapAngle } from '../../../packages/animate/test/kit/angles';

@@ -5,7 +5,7 @@ import { proportions } from './proportions';
 import { pickupShelf } from './pickup';
 import { reachOverride } from './handover';
 import { lookAround, reaching, vr } from './tracking';
-import { knightArming } from './knight';
+import { knightArming } from './knight/index';
 import { legsBiped, legsHorse } from './legs';
 import { dogFetch } from './dog';
 import { lionRun } from './lion';

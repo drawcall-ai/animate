@@ -1,5 +1,4 @@
 // Absolute model-space positions in metres: +Y up, +Z forward, +X left.
-import type { SkeletonBone } from '@drawcall/rig';
 
 /** A person of the default proportions, 1.75 m tall (Drillis & Contini's shares of the height), standing in a T-pose. */
 export const PERSON = [
@@ -29,4 +28,4 @@ export const PERSON = [
   { name: 'rightFoot', parent: 'rightLowerLeg', position: [-0.0875, 0.06825, 0] },
   { name: 'rightToes', parent: 'rightFoot', position: [-0.0875, 0, 0.14] },
   { name: 'rightToes_end', parent: 'rightToes', position: [-0.0875, 0, 0.1925] },
-] as const satisfies readonly SkeletonBone[];
+] as const;

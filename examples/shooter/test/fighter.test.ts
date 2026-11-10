@@ -3,6 +3,7 @@ import { Quaternion, Scene, Vector3 } from 'three';
 import { Avatar, type AvatarState } from '../src/avatar';
 import { fighter } from '../src/fighter';
 import { node, offGrip } from './course';
+import { gripOn, placement } from '@drawcall/animate/puppet';
 
 /** how far (rad) arm `side`'s elbow is swung round the line from its shoulder to its wrist off straight down */
 function swivel(avatar: Avatar, side: 'left' | 'right') {
@@ -25,7 +26,7 @@ it('holds its rifle aimed with both hands on their grips, the arms within their 
   expect(avatar.acquired).toBe(true);
   const body = avatar.body;
   for (const [side, grip] of [['left', 'foregrip'], ['right', 'pistol']] as const) {
-    const placed = body.gripOn(side, body.placement(side, node(avatar.group, grip)));
+    const placed = gripOn(body, side, placement(body, side, node(avatar.group, grip)));
     expect(offGrip(body, side, node(avatar.group, grip)), `${side} wrist`).toBeLessThan(0.002);
     expect(body.bones[`${side}Hand`].getWorldQuaternion(new Quaternion()).angleTo(placed.rotation), `${side} hand's turn`).toBeLessThan(0.02);
     expect(swivel(avatar, side), `${side} elbow`).toBeLessThan(0.4);

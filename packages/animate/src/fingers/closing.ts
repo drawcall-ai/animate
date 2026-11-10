@@ -2,7 +2,7 @@ import { Matrix4, Mesh, Quaternion, Ray, Vector3, type Object3D, type SkinnedMes
 import type { Placement } from '../kernel/goal';
 import { bisect } from '../kernel/math';
 import { surfaceOf, Triangles } from '../kernel/triangles';
-import { FLAT, type Joints } from './joints';
+import { FLAT_PAD, type Joints } from './joints';
 import { DIGITS, SPLAYED, type DigitName, type Shape } from './shape';
 
 /**
@@ -40,7 +40,7 @@ const REACHING = 8;
 const SUNK = 0.001, WEB = 4;
 
 /** A grasp's line through what it holds, toward the thumb, and a point on it (the world). */
-export interface Line {
+interface Line {
   at: Vector3;
   axis: Vector3;
 }
@@ -50,6 +50,8 @@ interface Closing {
   joints: Joints;
   near: Triangles;
   world: Matrix4;
+  /** says no shape of the thumb keeps it out of the thing, once */
+  warn: () => void;
 }
 
 /**
@@ -61,11 +63,11 @@ interface Closing {
  * The thumb then opposes them across the grasp (`opposite`; `line`: the grasp's line through the thing, the world's). It touches what
  * `trianglesAbout` gathers.
  */
-export function closedOn(joints: Joints, object: Object3D, line: Line, skins: readonly SkinnedMesh[], world: Matrix4 = joints.hand.matrixWorld): Shape {
+export function closedOn(joints: Joints, object: Object3D, line: Line, skins: readonly SkinnedMesh[], warn: (check: string, message: string) => void, world: Matrix4 = joints.hand.matrixWorld): Shape {
   joints.hand.updateWorldMatrix(true, false);
   object.updateWorldMatrix(true, true);
   const near = trianglesAbout(object, skins, WORLD, _centre.setFromMatrixPosition(world), joints.span * _scale.setFromMatrixScale(world).x + SLACK);
-  const shape = structuredClone(WRAP), at: Closing = { joints, near, world };
+  const shape = structuredClone(WRAP), at: Closing = { joints, near, world, warn: () => warn(`thumb on ${object.name}`, `no way of laying the thumb keeps it out of "${object.name}": it goes through it. Give the grip a facing, or a thumb in \`digits\``) };
   for (const digit of DIGITS) {
     const finger = shape[digit];
     const curl = (value: number) => (finger.curl = value), hook = (value: number) => (finger.hook = value);
@@ -129,7 +131,7 @@ function opposite(hand: Closing, shape: Shape, line: Line): Shape['thumb'] {
   const { joints, near, world } = hand;
   const palm = joints.point('palm', shape);
   const at = palm.at.applyMatrix4(world), faces = palm.facing.transformDirection(world), axis = line.axis;
-  const thumb = joints.pad('thumb', shape, new Vector3(), _facing, FLAT).applyMatrix4(world);
+  const thumb = joints.pad('thumb', shape, new Vector3(), _facing, FLAT_PAD).applyMatrix4(world);
   // (how far the surface is from `from` along `way`: where a line in from `GIRTH` out first meets it)
   const out = (from: Vector3, way: Vector3) => {
     const hit = near.first(_ray.set(from.clone().addScaledVector(way, GIRTH), way.clone().negate()), GIRTH);
@@ -175,7 +177,7 @@ function reached(hand: Closing, shape: Shape, face: { way: Vector3; end: Vector3
     // metre off the face, how far off `WRAP`'s it is)
     let score = 1 + Math.hypot(curl - wrap.curl, oppose - wrap.oppose, spread - wrap.spread) / 100;
     if (face && into) {
-      const pad = joints.pad('thumb', tried, new Vector3(), _facing, FLAT).applyMatrix4(world);
+      const pad = joints.pad('thumb', tried, new Vector3(), _facing, FLAT_PAD).applyMatrix4(world);
       const hit = near.first(_ray.set(pad.clone().addScaledVector(face.way, GIRTH), into), 2 * GIRTH);
       if (hit !== null && pad.clone().addScaledVector(face.way, GIRTH - hit).distanceTo(face.end) <= face.width) {
         score = Math.abs(hit - GIRTH) + 0.01 * _facing.transformDirection(world).distanceTo(into);
@@ -184,7 +186,9 @@ function reached(hand: Closing, shape: Shape, face: { way: Vector3; end: Vector3
     if ((best && score >= best.score) || sinks(hand, tried)) continue;
     best = { thumb: { ...tried.thumb }, score };
   }
-  return best?.thumb ?? { ...wrap };
+  if (best) return best.thumb;
+  hand.warn();
+  return { ...wrap };
 }
 
 /**
@@ -209,7 +213,7 @@ function padsOn(at: Closing, shape: Shape): Vector3 {
   const tips = met.filter((digit) => touches(at, digit, shape, PAD_DEPTH).includes(2));
   const pressing = tips.length ? tips : met.length ? met : DIGITS;
   const sum = new Vector3();
-  for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, FLAT).applyMatrix4(world));
+  for (const digit of pressing) sum.add(joints.pad(digit, shape, _pad, _facing, FLAT_PAD).applyMatrix4(world));
   return sum.divideScalar(pressing.length);
 }
 
