@@ -5,7 +5,7 @@
 import { MathUtils, Matrix4, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
 import { follow } from '../kernel/follow';
-import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, mod, wrapAngle } from '../kernel/math';
+import { clamp, forwardOf, GRAVITY, leftOf, lerp, minimumJerk, wrapAngle } from '../kernel/math';
 import { LOWEST, PASSING, PIVOTED, PIVOTING, SETTLED_AFTER, SPUN, THRESHOLDS, TURN, turnTo } from './thresholds';
 import { lengthOf, nominal, strokeOf, widthAt, dropOf } from './leg-reach';
 import { swingOn } from './swing';
@@ -116,11 +116,11 @@ export class Stepper {
       planted: 1, lifted: 1, strike: 0, landed: false, swing: null,
     }));
     // (each leg's one before it: the one whose offset comes round last before its own)
-    const sooner = (o: number, p: number, best: number) => best < 0 || mod(o - p) < mod(o - st.offsets[best]);
+    const sooner = (o: number, p: number, best: number) => best < 0 || MathUtils.euclideanModulo(o - p, 1) < MathUtils.euclideanModulo(o - st.offsets[best], 1);
     this.before = st.offsets.map((o, i) => st.offsets.reduce((best, p, j) => j !== i && sooner(o, p, best) ? j : best, -1));
-    this.gap = st.offsets.map((o, i) => mod(o - st.offsets[this.before[i]]));
+    this.gap = st.offsets.map((o, i) => MathUtils.euclideanModulo(o - st.offsets[this.before[i]], 1));
     this.pair = feet.legs.map((leg, i) => leg.partner ?? this.before[i]);
-    this.apart = st.offsets.map((o, i) => mod(o - st.offsets[this.pair[i]]));
+    this.apart = st.offsets.map((o, i) => MathUtils.euclideanModulo(o - st.offsets[this.pair[i]], 1));
     this.yaw = this.rootYaw = yaw;
     this.yaws = [yaw, yaw];
     if (st.gait) this.pace = this.clock = new GaitClock(st.gait, st.offsets, feet, this.legs, foreseen);

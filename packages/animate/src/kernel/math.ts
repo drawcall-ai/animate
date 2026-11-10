@@ -119,6 +119,3 @@ export function sameThree<T>(value: T): T {
   }
   return value;
 }
-
-/** `x` wrapped into a cycle (0 … 1) */
-export const mod = (x: number) => ((x % 1) + 1) % 1;

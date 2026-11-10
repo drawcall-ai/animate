@@ -1,7 +1,7 @@
 // The clock a gait's feet keep (a four-legged one's), and a person's cadence in its place: how long a stride takes, and for a gait whose turn each foot's lift is.
 import { MathUtils, Vector3 } from 'three';
 import type { Frame } from '../kernel/frame';
-import { clamp, lerp, mod } from '../kernel/math';
+import { clamp, lerp } from '../kernel/math';
 import { offsetAt, strideAt, type Gait } from '../species/gait';
 import { velocityAhead } from './leg-reach';
 import { STROLL } from './leg-goal';
@@ -120,11 +120,11 @@ export class GaitClock {
     const { gait, legs } = this;
     this.footfalls = legs.map((leg) => {
       const at = this.footfalls[leg.i], to = offsetAt(gait, pacing, leg.i), off = to - at - Math.round(to - at);
-      return mod(at + clamp(off, -SHIFT * dt / C, SHIFT * dt / C));
+      return MathUtils.euclideanModulo(at + clamp(off, -SHIFT * dt / C, SHIFT * dt / C), 1);
     });
     this.lifts = legs.map((leg) => this.footfalls[leg.i] + (strideAt(gait, pacing, leg.i).duty - duty) * Ts / (duty * C));
     // (each in the air for its swing's share after its own turn comes round)
-    const down = (leg: Leg) => legs.filter((other) => other !== leg && mod(this.lifts[leg.i] - this.lifts[other.i]) >= Tsw / C - 1e-9);
+    const down = (leg: Leg) => legs.filter((other) => other !== leg && MathUtils.euclideanModulo(this.lifts[leg.i] - this.lifts[other.i], 1) >= Tsw / C - 1e-9);
     this.scheduled = legs.map((leg) => down(leg).length);
   }
 
@@ -139,14 +139,14 @@ export class GaitClock {
     this.at = (this.at + dt / C) % 1;
     this.since += dt / C;
     for (const leg of this.legs) {
-      const passed = was[leg.i] && mod(this.at - this.lifts[leg.i]) >= SLOT;
+      const passed = was[leg.i] && MathUtils.euclideanModulo(this.at - this.lifts[leg.i], 1) >= SLOT;
       if (!leg.swing && passed && this.stood(input, leg) && moving > 0) this.owed[leg.i] = true;
     }
   }
 
   /** whether a foot's turn has come round since it set off, within `SLOT` of a cycle */
   inTurn(leg: Leg): boolean {
-    const into = mod(this.at - this.lifts[leg.i]);
+    const into = MathUtils.euclideanModulo(this.at - this.lifts[leg.i], 1);
     return into < SLOT && into <= this.since + 1e-9;
   }
 
@@ -167,7 +167,7 @@ export class GaitClock {
 
   /** whether two feet are never in the air together: their turns a swing or more apart either way round */
   exclusive(a: Leg, b: Leg, { Tsw, C }: Pick<Timing, 'Tsw' | 'C'>): boolean {
-    const d = mod(this.lifts[a.i] - this.lifts[b.i]);
+    const d = MathUtils.euclideanModulo(this.lifts[a.i] - this.lifts[b.i], 1);
     return Math.min(d, 1 - d) >= Tsw / C - 1e-9;
   }
 
@@ -201,7 +201,7 @@ export class GaitClock {
    */
   wait(leg: Leg, cycle: number, moving: number, input: Pick<Timing, 'Tsw' | 'C'>): number {
     const { legs } = this, landed = Math.max(0, ...legs.map((l) => l.swing ? remaining(l.swing) : 0));
-    const own = mod(this.lifts[leg.i] - this.at) * cycle;
+    const own = MathUtils.euclideanModulo(this.lifts[leg.i] - this.at, 1) * cycle;
     let wait = Math.max(Math.min(landed, this.scheduled[leg.i] < STANDING ? own : Infinity), moving > 0.05 ? 0 : own);
     if (!this.walking) return wait;
     if (!this.owed[leg.i]) wait = Math.max(wait, this.inTurn(leg) ? 0 : Math.min(own, AWAIT * cycle));
@@ -227,7 +227,7 @@ export class GaitClock {
     // (a walk — more than half a cycle on the floor as it steps now, each foot in a turn of its own — lifts none while the one half a cycle
     // from it, a girdle's, is in the air; a stance cut short past half the cycle is a run's, and a pair a run lifted not the walk's after)
     if (input.Ts / input.C >= 0.5 && this.walking) for (const a of left) for (const b of legs) {
-      const d = mod(this.footfalls[a.i] - this.footfalls[b.i]), value = Math.min(d, 1 - d);
+      const d = MathUtils.euclideanModulo(this.footfalls[a.i] - this.footfalls[b.i], 1), value = Math.min(d, 1 - d);
       if (b === a || !aloft[b.i] || value < 0.5 - TOGETHER) continue;
       f.dev.append(f.time - f.dt, { check: 'walk pair in the air together (cycle apart)', value, limit: 0.5 - TOGETHER, where: `${name(a)} with ${name(b)}` });
     }
