@@ -43,7 +43,7 @@ export function seating(person: Person, at: Readonly<Vector3>, yaw: number): Sea
 
 /**
  * A person's weight going onto a seat, resting there and going back over its feet, kept with the person until it has stood: the legs asked
- * elsewhere (`Go`), or `rising`, stand it. Its feet stay planted throughout; balance carries its hips over `hips` by `share`, lets them down
+ * elsewhere (a `LegGoal`), or `rising`, stand it. Its feet stay planted throughout; balance carries its hips over `hips` by `share`, lets them down
  * `lower` by it, bows the trunk over the feet on the way (the same way down and up) and lays its free arms in its lap.
  */
 export class Seat {

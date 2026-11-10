@@ -22,7 +22,7 @@ import type { Leg, Steering } from '../../step/types';
  * acceleration (`Inertia`) and its walking lean — however quick the root: read (Leteneur et al. 2013, PLoS ONE 8:e55256), setting off the
  * centre of mass is at 1.0 m/s by the first heel strike 0.96 s on, ~1 m/s², the trunk leaning ~7° over that step; read (Crenna, Cuong &
  * Brenière 2001, J Physiol, PMC2279001), stopping from a fast walk takes one stride in 98% of trials (30% from a natural one); recalled,
- * people brake about twice as hard as they speed up (the planner's `BRAKE_FACTOR` 2.2). Tuned: 1.5 and 3.3 — a player's 10 m/s² set-off
+ * people brake about twice as hard as they speed up. Tuned: 1.5 and 3.3, braking 2.2 times as hard — a player's 10 m/s² set-off
  * does not throw the trunk forward at ~100°/s, nor a stop back at ~45°/s; a planner's root, paced already, is carried as it goes.
  */
 const PACE = { push: 1.5, brake: 3.3 };

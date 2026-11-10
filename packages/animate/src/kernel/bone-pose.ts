@@ -2,7 +2,7 @@ import { Matrix4, Quaternion, Vector3 } from 'three';
 import { yawOf } from './math';
 import type { Skeleton } from './skeleton';
 
-/** A pose to read: by bone index, the transforms of `Pose`. */
+/** A pose to read: by bone index, the transforms of `BonePose`. */
 export type ReadonlyBonePose = Readonly<Pick<BonePose, 'skeleton' | 'facing' | 'local' | 'position' | 'rotation' | 'point' | 'com' | 'load'>>;
 
 /** Root world position and parent-relative bone rotations (the root rotation is world-relative), with lazy forward kinematics. Weighted writes

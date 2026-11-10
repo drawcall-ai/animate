@@ -32,7 +32,7 @@ const SHIFT = { share: 0.65, roll: 0.06, drop: 0.012 };
 /**
  * How quickly (1/s, critically damped: 90% in ~0.4 s) the weight goes off a foot before it lifts, standing: recalled (Jian et al. 1993,
  * Gait Posture 1:9; Halliday et al. 1998): gait initiation's anticipatory postural adjustment moves the body toward the stance limb over
- * ~0.3–0.5 s before the swing foot leaves the floor, a few cm. The foot lifts once the weight is no longer on it (cues.ts `bears`).
+ * ~0.3–0.5 s before the swing foot leaves the floor, a few cm. The foot lifts once the weight is no longer on it (`bears`, step/support.ts).
  */
 const UNLOAD = 10;
 /** Squat translation pace (m/s², m/s), also used by the tracked-head predictor. */
