@@ -94,7 +94,7 @@ function spanOf(depth: (out: number, ahead: number, pitch?: number) => number, o
  * `SPANNING` of how far its legs reach fore and aft let down on them as the gait has it (`drop`) — running (the gait's `run`), let down
  * further and reaching as far as they reach so; feet landing a little ahead (`LANDS_AHEAD` of the stance), as wide apart as they stand; a swing lifting
  * `LIFT` × the gait's clearance at its height; the legs reaching `REACH` of their length; a foot landing turned from the body no
- * further than `twist` (rad: as far as its legs stand turned, `ChainLeg.turn`), the body turning on over a planted one
+ * further than `twist` (rad: as far as its legs stand turned, `LegPoser.turn`), the body turning on over a planted one
  * as its foot pivots; behind, rolling over its toe as far as `ball` (rad, − toes down: its rocker's breakover) as the leg needs. No heel
  * strike or crouch: a hoof or paw lands flat.
  */

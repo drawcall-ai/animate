@@ -14,7 +14,7 @@ import { Inertia } from '../kernel/inertia';
 import type { Self } from '../body/self';
 import type { LegChain } from '../species/leg-chain';
 import type { Feet, Steering } from '../step/types';
-import { ChainLeg } from './chain-leg';
+import { LegPoser } from './leg-poser';
 
 /**
  * A creature's balance, a sub-step at a time: its species' legs carry it where the request that has its legs asks (`legGoal`) — the planner takes its root
@@ -26,7 +26,7 @@ export function creature(body: Self): Behaviour {
   const kind = body.species.legs;
   if (!kind) throw new Error('creature: the species has no legs');
   const gait = kind.gait, attention = body.life, driven = body.drive && drivenRoot(body);
-  const skeleton = body.pose.skeleton, rest = new BonePose(skeleton), posers = kind.chains.map((chain) => new ChainLeg(chain, rest, body.floor));
+  const skeleton = body.pose.skeleton, rest = new BonePose(skeleton), posers = kind.chains.map((chain) => new LegPoser(chain, rest, body.floor));
   const feet = feetOf(kind.chains, rest, posers.map((poser) => poser.depth));
   const turn = Math.min(...posers.map((poser) => poser.turn)), ball = Math.max(...posers.map((poser) => poser.ball));
   const record = steppingOf(gait, feet, turn, ball);

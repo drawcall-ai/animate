@@ -19,7 +19,7 @@ const TAKING = 0.3;
  * A leg posed over its foot: its joints solved to the foot's place and turn (rigid planted, compliant swinging, the sole kept above
  * the floor), each following its stride cycle at the leg's phase as far as the body is walking, its rest pose standing.
  */
-export class ChainLeg {
+export class LegPoser {
   readonly solver: Solver;
   private readonly cycles: (JointCycle | null)[];
   private readonly rest: Float64Array;
