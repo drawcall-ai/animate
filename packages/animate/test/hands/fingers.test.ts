@@ -212,6 +212,29 @@ describe('fingers', () => {
     expect(bent(body, 'rightMiddleIntermediate')).toBeGreaterThan(0.8);
   });
 
+  it('are not needed to place a hand its app poses: one without them goes where a grab puts it, though shaping it is a misuse', () => {
+    /** a 3 cm rod upright before `body`'s right side, its handle along its length, the palm facing in */
+    const rodFor = (body: Body) => {
+      const room = roomOf(body), rod = new Mesh(new CylinderGeometry(0.015, 0.015, 0.3, 16));
+      rod.position.set(-0.25, 1, 0.4);
+      Object.assign(empty(rod, 'grip', new Vector3()).userData, { handle: [0, 1, 0], facing: [1, 0, 0] });
+      room.add(rod);
+      room.updateMatrixWorld(true);
+      return rod;
+    };
+    const grabbing = person(), rod = rodFor(grabbing);
+    let held = false;
+    play(function* () { held = yield* grab(grabbing, rod, { right: 'grip' }, { step: false }); }, [grabbing], 5, () => held);
+    const hand = grabbing.bones.rightHand, at = hand.getWorldPosition(new Vector3()), turn = hand.getWorldQuaternion(new Quaternion());
+    const posed = person(), grip = rodFor(posed).getObjectByName('grip')!;
+    posed.update(1 / 60);
+    const on = placement(posed, 'right', grip), { wrist, rotation } = gripOn(posed, 'right', on);
+    expect(held).toBe(true);
+    expect(wrist.distanceTo(at)).toBeLessThan(0.01);
+    expect(rotation.angleTo(turn)).toBeLessThan(0.05);
+    expect(() => shapeHand(posed, 'right', on, 0.1)).toThrow(/no finger bones/);
+  });
+
   it('take a grip the same however the hand comes to it, the fingers never moving the hand', () => {
     /** where the right hand ends on a rod that leaves its roll free, and how far its middle finger closes, the arm first raised `raised` */
     const taken = (raised: number) => {

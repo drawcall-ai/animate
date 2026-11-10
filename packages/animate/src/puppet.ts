@@ -2,9 +2,10 @@ import { Object3D, Quaternion, Vector3 } from 'three';
 import { nameOf } from './species/define';
 import { selfOf, type Body } from './body';
 import type { Self } from './body/self';
-import type { HandPlacement } from './fingers/placement';
 import type { HandShape } from './fingers/shape';
-import { handPlanOf } from './person/hands/plan';
+import { handPlanOf, pointOf } from './person/hands/plan';
+import { handOn, type HandPlacement } from './fingers/placement';
+import { toWorld, worldOf } from './kernel/scene';
 import { Thing } from './things/thing';
 import { personOf } from './verbs/person-of';
 
@@ -40,9 +41,13 @@ export function shapeHand(body: Body, side: 'left' | 'right', to: HandPlacement 
 }
 
 /** Where hand `side` goes for `placement`: the wrist, and the world rotation to give the hand bone (`bones.leftHand`) — the placement's
- * point of the hand on its target, turned as it asks. */
+ * point of the hand on its target, turned as it asks. A hand without finger bones is placed by a nominal one's point, as a grab places it. */
 export function gripOn(body: Body, side: 'left' | 'right', on: HandPlacement): { wrist: Vector3; rotation: Quaternion } {
-  return fingersOf(body).gripOn(side, on);
+  const fingers = selfOf(body).fingers;
+  if (fingers) return fingers.gripOn(side, on);
+  const self = personOf(body, 'gripOn'), bone = self.hands[side], hand = handOn(pointOf(self, side, on.point), on);
+  const at = toWorld({ position: hand.position, quaternion: hand.quaternion.multiply(self.restOf(bone)) }, worldOf(on.on));
+  return { wrist: at.position, rotation: at.quaternion };
 }
 
 /** the fingers of `body`; a skeleton without finger bones has none, a misuse said at once */

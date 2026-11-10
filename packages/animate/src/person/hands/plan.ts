@@ -90,7 +90,7 @@ export function fixes(grip: GripOn): boolean {
  * for a hand without them a nominal one (its palm's centre beyond the wrist on its skin, the palm facing down and the grasp line ahead,
  * as the T-pose has a hand; a pad at the fingertips)
  */
-function pointOf(person: Person, side: Side, part: HandPart, shape?: Shape): HandPoint {
+export function pointOf(person: Person, side: Side, part: HandPart, shape?: Shape): HandPoint {
   const bone = person.hands[side], rest = person.restOf(bone), scale = person.scaleOf(bone);
   if (person.fingers) {
     const { at, axis, facing, palmFacing } = person.fingers.point(side, part, shape);
