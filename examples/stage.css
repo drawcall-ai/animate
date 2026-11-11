@@ -1,0 +1,28 @@
+:root {
+  color-scheme: light dark;
+  font: 15px/1.5 system-ui, sans-serif;
+}
+body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+canvas {
+  display: block;
+  width: 100%;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+}
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+}
+pre {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+  font-size: 13px;
+}
