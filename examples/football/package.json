@@ -6,7 +6,10 @@
     "dev": "vite"
   },
   "dependencies": {
-    "animate-2d": "workspace:*"
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "@pmndrs/timeline": "^0.5.0",
+    "animate-2d": "workspace:*",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "vite": "^8.3.8"

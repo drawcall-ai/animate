@@ -1,29 +1,21 @@
-import { type Mass, type Round, advance, len, mass, mul } from 'animate-2d'
+import { ColliderDesc, type RigidBody, RigidBodyDesc, World } from '@dimforge/rapier3d-compat'
 
-export const GOAL = { away: 11, high: 2.44, deep: 1.6 }
+export const BALL = { radius: 0.11, kg: 0.43, spot: { x: -0.15, y: 0.11, z: 4.6 } }
 
-export type Ball = Mass & Round & { spot: number; result: 'in the goal' | 'over the bar' | 'short of the goal' | null }
-export type Strike = { time: number; speed: number; angle: number; foot: number }
-/** what the player acts on: the ball, and how it was struck */
-export type Pitch = { ball: Ball; struck: Strike | null }
+/** a flat pitch with a ball lying a run-up ahead of where a humanoid stands, in the line of its right foot */
+export function pitch() {
+  const world = new World({ x: 0, y: -9.81, z: 0 })
+  world.createCollider(ColliderDesc.cuboid(100, 0.5, 100).setTranslation(0, -0.5, 0).setFriction(1))
+  const { x, y, z } = BALL.spot
+  const ball = world.createRigidBody(RigidBodyDesc.dynamic().setTranslation(x, y, z).setCcdEnabled(true))
+  world.createCollider(ColliderDesc.ball(BALL.radius).setMass(BALL.kg).setRestitution(0.6), ball)
+  return { world, ball }
+}
 
-export const ballAt = (x: number): Ball => ({ ...mass(x, 0.11, 0.43), radius: 0.11, spot: x, result: null })
-
-export function fly(ball: Ball, dt: number) {
-  advance([ball], [], dt)
-  if (ball.p.y < ball.radius) {
-    ball.p.y = ball.radius
-    if (ball.v.y < 0) ball.v.y = ball.v.y < -0.8 ? -0.55 * ball.v.y : 0
-    ball.v.x *= 1 - 0.5 * dt
-  }
-  const line = ball.spot + GOAL.away
-  if (!ball.result && ball.p.x >= line) ball.result = ball.p.y < GOAL.high ? 'in the goal' : 'over the bar'
-  if (!ball.result && ball.p.x > ball.spot + 0.3 && len(ball.v) < 0.3) ball.result = 'short of the goal'
-  if (ball.result !== 'in the goal') return
-  // the net takes the ball's speed
-  ball.v = mul(ball.v, 1 - Math.min(1, 9 * dt))
-  if (ball.p.x > line + GOAL.deep) {
-    ball.p.x = line + GOAL.deep
-    ball.v.x = 0
-  }
+/** how fast the ball left its spot (m/s), once it has */
+export function launch(ball: RigidBody) {
+  const at = ball.translation()
+  if (Math.hypot(at.x - BALL.spot.x, at.z - BALL.spot.z) < 0.3) return undefined
+  const v = ball.linvel()
+  return Math.hypot(v.x, v.y, v.z)
 }

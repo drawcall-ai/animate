@@ -1,32 +1,46 @@
-import { type Actor, STEP, V, deg, leaning } from 'animate-2d'
+import RAPIER from '@dimforge/rapier3d-compat'
+import { Humanoid, type Solution } from 'animate-2d'
+import { CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { run } from '../stage'
-import { FOUL_LINE, type Field, JAVELIN, end, fly } from './field'
-import { javelinThrow, thrower } from './throw'
+import { type Held, JAVELIN, field, flight, hold, released } from './field'
+import { javelinThrow } from './throw'
 
-let actor: Actor<Field>
+await RAPIER.init()
+
+const TARGET = 12
+const javelinMesh = new Mesh(
+  new CylinderGeometry(JAVELIN.radius, JAVELIN.radius, JAVELIN.length),
+  new MeshStandardMaterial({ color: 0xffd060 }),
+)
+let human: Humanoid
+let held: Held
+let thrown: Solution | undefined
+let left: { speed: number; angle: number } | undefined
 
 run({
   begin() {
-    actor = thrower()
-    actor.play(javelinThrow(actor))
+    const made = field()
+    human = new Humanoid(made.world)
+    held = hold(human, made.javelin)
+    thrown = undefined
+    left = undefined
+    human.play(function* () {
+      thrown = yield* javelinThrow(human, held, TARGET)
+    })
+    return new Group().add(human, javelinMesh)
   },
-  tick() {
-    actor.update(STEP)
-    fly(actor.world.javelin, STEP)
+  update(delta) {
+    human.update(delta)
+    javelinMesh.position.copy(held.javelin.translation())
+    javelinMesh.quaternion.copy(held.javelin.rotation())
+    if (!left && released(human.world, held) !== undefined) left = flight(held.javelin)
   },
-  draw(view) {
-    const { figure, world } = actor
-    const { javelin, released } = world
-    view.begin(figure.hips.p.x - 3, figure.hips.p.x + 3.6)
-    view.line([V(FOUL_LINE, 0), V(FOUL_LINE, 0.12)], 0.03, 0.6)
-    view.line([end(javelin, -JAVELIN.behind), end(javelin, JAVELIN.ahead)], 0.02, 0.7)
-    view.figure(figure)
-    const speed = released ? Math.hypot(released.velocity.x, released.velocity.y) : null
+  readout() {
     return [
-      `release   ${released && speed ? `${speed.toFixed(1)} m/s, ${deg(Math.atan2(released.velocity.y, released.velocity.x)).toFixed(1)}° up, at ${released.time.toFixed(2)} s` : '…'}`,
-      `thrown    ${javelin.stuck ? `${(end(javelin, JAVELIN.ahead).x - FOUL_LINE).toFixed(1)} m past the line (no air)` : '…'}`,
-      `trunk     ${leaning(figure).toFixed(0)}° forward`,
-      `story     ${actor.playing ? 'playing' : 'over'}`,
+      `asked     ${TARGET} m/s`,
+      `rehearsed ${thrown ? `${thrown.outcome.toFixed(1)} m/s at ${(100 * thrown.power).toFixed(0)}% of the arm's strength; ${thrown.reachable.map((v) => v.toFixed(1)).join(' to ')} m/s is in reach` : '…'}`,
+      `released  ${left ? `${left.speed.toFixed(1)} m/s, ${((left.angle * 180) / Math.PI).toFixed(0)}° up` : '…'}`,
+      `timeline  ${human.playing ? 'playing' : 'over'}`,
     ].join('\n')
   },
 })

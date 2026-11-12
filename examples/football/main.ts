@@ -1,36 +1,42 @@
-import { type Actor, STEP, V, leaning } from 'animate-2d'
+import RAPIER from '@dimforge/rapier3d-compat'
+import { Humanoid, type Solution } from 'animate-2d'
+import { Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three'
 import { run } from '../stage'
-import { instep } from './kick'
-import { GOAL, type Pitch, fly } from './pitch'
-import { player, shot } from './shot'
+import { BALL, launch, pitch } from './pitch'
+import { shot } from './shot'
 
-let actor: Actor<Pitch>
+await RAPIER.init()
+
+const TARGET = 20
+const ballMesh = new Mesh(new SphereGeometry(BALL.radius), new MeshStandardMaterial({ color: 0xffd060 }))
+let human: Humanoid
+let ball: RAPIER.RigidBody
+let kick: Solution | undefined
+let left: number | undefined
 
 run({
   begin() {
-    actor = player()
-    actor.play(shot(actor))
+    const made = pitch()
+    ball = made.ball
+    human = new Humanoid(made.world)
+    kick = undefined
+    left = undefined
+    human.play(function* () {
+      kick = yield* shot(human, ball, TARGET)
+    })
+    return new Group().add(human, ballMesh)
   },
-  tick() {
-    actor.update(STEP)
-    fly(actor.world.ball, STEP)
+  update(delta) {
+    human.update(delta)
+    ballMesh.position.copy(ball.translation())
+    left ??= launch(ball)
   },
-  draw(view) {
-    const { figure, world } = actor
-    const { ball, struck } = world
-    view.begin(figure.hips.p.x - 2.6, figure.hips.p.x + 3.4)
-    const post = ball.spot + GOAL.away
-    view.line([V(post, 0), V(post, GOAL.high), V(post + GOAL.deep, GOAL.high * 0.55), V(post + GOAL.deep, 0)], 0.04, 0.6)
-    view.dot(ball.p, ball.radius, 0.7)
-    view.figure(figure)
-    // the kicking foot, pointed
-    const kicking = figure.legs.find((leg) => leg.driven)
-    if (kicking) view.line([kicking.foot.p, instep(kicking).p], 0.05)
+  readout() {
     return [
-      `ball      ${struck ? `${struck.speed.toFixed(1)} m/s, ${struck.angle.toFixed(1)}° up, struck at ${struck.time.toFixed(2)} s by a foot going ${struck.foot.toFixed(1)} m/s` : '…'}`,
-      `result    ${ball.result ?? '…'}`,
-      `trunk     ${leaning(figure).toFixed(0)}° forward`,
-      `story     ${actor.playing ? 'playing' : 'over'}`,
+      `asked     ${TARGET} m/s`,
+      `rehearsed ${kick ? `${kick.outcome.toFixed(1)} m/s at ${(100 * kick.power).toFixed(0)}% of the leg's strength; ${kick.reachable.map((v) => v.toFixed(1)).join(' to ')} m/s is in reach` : '…'}`,
+      `ball      ${left === undefined ? '…' : `${left.toFixed(1)} m/s`}`,
+      `timeline  ${human.playing ? 'playing' : 'over'}`,
     ].join('\n')
   },
 })

@@ -1,21 +1,37 @@
+import RAPIER from '@dimforge/rapier3d-compat'
 import { expect, test } from 'vitest'
-import { STEP, leaning } from '../src'
-import { fly } from '../examples/football/pitch'
-import { player, shot } from '../examples/football/shot'
+import { pitch, launch } from '../examples/football/pitch'
+import { shot } from '../examples/football/shot'
+import { Humanoid, STEP, type Solution } from '../src'
 
-test('the shot leaves at the speed asked, goes in, and he ends standing upright', () => {
-  const actor = player()
-  const { ball } = actor.world
-  actor.play(shot(actor))
-  let lowest = Infinity
-  for (let n = 0; n < 4 / STEP && (actor.playing || !ball.result); n++) {
-    actor.update(STEP)
-    fly(ball, STEP)
-    lowest = Math.min(lowest, actor.figure.hips.p.y)
+await RAPIER.init()
+
+function shoot(speed: number) {
+  const { world, ball } = pitch()
+  const human = new Humanoid(world)
+  let kick: Solution | undefined
+  let left: number | undefined
+  human.play(function* () {
+    kick = yield* shot(human, ball, speed)
+  })
+  for (let n = 0; n < 5 / STEP && human.playing; n++) {
+    human.step()
+    left ??= launch(ball)
   }
-  expect(actor.world.struck?.speed).toBeCloseTo(27, 0)
-  expect(ball.result).toBe('in the goal')
-  expect(actor.playing).toBe(false)
-  expect(lowest).toBeGreaterThan(0.7)
-  expect(Math.abs(leaning(actor.figure))).toBeLessThan(15)
+  return { human, kick, left }
+}
+
+test('the ball leaves at the speed asked and the player ends standing', () => {
+  const { human, kick, left } = shoot(20)
+  expect(kick?.ok).toBe(true)
+  expect(Math.abs((left ?? 0) - 20)).toBeLessThan(0.5)
+  expect(human.playing).toBe(false)
+  expect(human.parts.head.body.translation().y).toBeGreaterThan(1.6)
+})
+
+test('a speed out of reach is reported, with what is in reach, and no shot is taken', () => {
+  const { kick, left } = shoot(40)
+  expect(kick?.ok).toBe(false)
+  expect(kick?.reachable[1]).toBeLessThan(40)
+  expect(left).toBeUndefined()
 })

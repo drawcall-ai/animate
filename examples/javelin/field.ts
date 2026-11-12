@@ -1,34 +1,59 @@
-import { type Actor, GRAVITY, KG, type Vec, V, add, mul, out, rad } from 'animate-2d'
+import {
+  ColliderDesc,
+  type ImpulseJoint,
+  JointData,
+  type RigidBody,
+  RigidBodyDesc,
+  World,
+} from '@dimforge/rapier3d-compat'
+import type { Humanoid } from 'animate-2d'
 
-export const JAVELIN = { ahead: 1.05, behind: 1.55, kg: 0.8 }
-/** where the throw is measured from, and what the thrower must not cross (m) */
-export const FOUL_LINE = 8
+export const JAVELIN = { length: 2.6, radius: 0.012, kg: 0.8 }
+/** how far up from level the javelin points while it is carried (rad) */
+const CARRIED = 0.5
+/** the javelin touches the ground but not the thrower */
+const GROUPS = (0x0002 << 16) | 0x0002
 
-/** `speed` is null while it is in the hand */
-export type Javelin = { at: Vec; angle: number; speed: Vec | null; stuck: boolean }
-/** what the thrower acts on: the javelin, and how it left the hand */
-export type Field = { javelin: Javelin; released: { time: number; velocity: Vec } | null }
+export type Held = { javelin: RigidBody; grip: ImpulseJoint }
 
-export const javelin = (): Javelin => ({ at: V(), angle: 0.1, speed: null, stuck: false })
-export const end = (j: Javelin, along: number) => add(j.at, out(j.angle, along))
-
-export function fly(j: Javelin, dt: number) {
-  if (!j.speed || j.stuck) return
-  j.speed.y -= GRAVITY * dt
-  j.at = add(j.at, mul(j.speed, dt))
-  j.angle = Math.atan2(j.speed.y, j.speed.x)
-  if (end(j, JAVELIN.ahead).y <= 0) j.stuck = true
+/** a flat field and a javelin in the right hand of the humanoid that will stand at its origin */
+export function field() {
+  const world = new World({ x: 0, y: -9.81, z: 0 })
+  world.createCollider(ColliderDesc.cuboid(100, 0.5, 100).setTranslation(0, -0.5, 0).setFriction(1))
+  const tilt = Math.PI / 2 - CARRIED
+  const pointing = { x: Math.sin(tilt / 2), y: 0, z: 0, w: Math.cos(tilt / 2) }
+  const javelin = world.createRigidBody(
+    RigidBodyDesc.dynamic().setTranslation(-0.2, 0.87, 0).setRotation(pointing).setCcdEnabled(true),
+  )
+  const shaft = ColliderDesc.capsule(JAVELIN.length / 2 - JAVELIN.radius, JAVELIN.radius).setMass(JAVELIN.kg)
+  world.createCollider(shaft.setCollisionGroups(GROUPS), javelin)
+  return { world, javelin }
 }
 
-/** the right hand takes the javelin: it weighs on the hand and goes where the hand goes, pointing `angle` up, until it is released */
-export function hold(thrower: Actor<Field>, angle: number) {
-  const hand = thrower.figure.arms[0].hand
-  hand.kg = KG.hand + JAVELIN.kg
-  thrower.act((dt) => {
-    const { javelin, released } = thrower.world
-    if (released) return false
-    javelin.at = V(hand.p.x, hand.p.y)
-    javelin.angle += (rad(angle) - javelin.angle) * Math.min(1, dt * 30)
-    return true
-  })
+/** the right hand closes round the middle of the javelin, which stays free to point where it points */
+export function hold(human: Humanoid, javelin: RigidBody): Held {
+  const hand = { x: 0, y: -0.16, z: 0 }
+  const grip = human.world.createImpulseJoint(
+    JointData.spherical(hand, { x: 0, y: 0, z: 0 }),
+    human.parts.rightForearm.body,
+    javelin,
+    true,
+  )
+  return { javelin, grip }
 }
+
+/** the same javelin and grip in a copy of their world */
+export const heldIn = (world: World, { javelin, grip }: Held): Held => ({
+  javelin: world.getRigidBody(javelin.handle),
+  grip: world.getImpulseJoint(grip.handle),
+})
+
+/** how fast the javelin goes and how far up from level (m/s, rad) */
+export function flight(javelin: RigidBody) {
+  const v = javelin.linvel()
+  return { speed: Math.hypot(v.x, v.y, v.z), angle: Math.atan2(v.y, Math.hypot(v.x, v.z)), forward: v.z > 0 }
+}
+
+/** how fast the javelin left the hand (m/s), once it has */
+export const released = (world: World, { javelin, grip }: Held) =>
+  world.impulseJoints.contains(grip.handle) ? undefined : flight(world.getRigidBody(javelin.handle)).speed
