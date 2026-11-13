@@ -1,11 +1,9 @@
-import { Vector3 } from 'three'
+import { type Object3D, Vector3 } from 'three'
 
 /** `velocity` is none while it is in the hand */
 export type Ball = { position: Vector3; velocity: Vector3 | null }
 
 export const RADIUS = 0.108
-/** how far below the wrist the middle of the ball hangs: the hand on top of it, the fingers in it (m) */
-export const HANG = 0.19
 /** where the foul line is, ahead of where the bowler starts, and how long and wide the lane is beyond it (m) */
 export const LINE = 4.5
 export const LANE = { length: 18.3, width: 1.05 }
@@ -15,16 +13,19 @@ const DRAG = 0.04
 
 export const ball = (): Ball => ({ position: new Vector3(), velocity: null })
 
-/** where the wrist is as the hand lets the ball go `ahead` of the origin (m), in the line of a right arm: the ball just clear of the boards */
-export const release = (ahead: number) => new Vector3(-0.2, RADIUS + HANG + 0.02, ahead)
+/** where the middle of the ball is as the hand lets it go `ahead` of the origin (m), in the line of a right arm: a hand above the boards */
+export const release = (ahead: number) => new Vector3(-0.2, RADIUS + 0.09, ahead)
 
-/** in the hand it hangs from the wrist; let go, it drops onto the boards and rolls on down the lane, to its end */
-export function carry(b: Ball, hand: Vector3, dt: number) {
-  if (!b.velocity) {
-    b.position.copy(hand).y -= HANG
-    return
-  }
-  if (b.position.z >= LINE + LANE.length) return
+/** it leaves the grip that holds it, moving so */
+export function letGo(b: Ball, grip: Object3D, velocity: Vector3) {
+  grip.updateWorldMatrix(true, false)
+  grip.getWorldPosition(b.position)
+  b.velocity = velocity.clone()
+}
+
+/** let go, it drops onto the boards and rolls on down the lane, to its end */
+export function roll(b: Ball, dt: number) {
+  if (!b.velocity || b.position.z >= LINE + LANE.length) return
   b.velocity.y -= GRAVITY * dt
   b.position.addScaledVector(b.velocity, dt)
   if (b.position.y > RADIUS) return

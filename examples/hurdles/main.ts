@@ -1,5 +1,6 @@
 import { Body } from 'animate-2d'
 import { Group } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { race } from './race'
 import { type Hurdle, draw, over, track } from './track'
@@ -11,11 +12,12 @@ let cleared: (number | undefined)[]
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     hurdles = track()
     cleared = hurdles.map(() => undefined)
     body.play(race(body, hurdles))
-    return new Group().add(body, draw(hurdles))
+    return new Group().add(man, draw(hurdles))
   },
   update(delta) {
     body.update(delta)

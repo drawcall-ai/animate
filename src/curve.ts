@@ -3,7 +3,6 @@ import type { Xyz } from './world'
 
 /** how far a value goes, along or about any of x, y and z: from the least to the most */
 export type Range = Partial<Record<'x' | 'y' | 'z', [number, number]>>
-/** where something is and how it moves */
 export type State = { value: Xyz; velocity: Xyz }
 
 export const AXES = ['x', 'y', 'z'] as const
@@ -45,8 +44,8 @@ export function hardest(from: State, to: State, seconds: number, strength: numbe
   return Math.max(times(6, -4, -2), times(-6, 2, 4)) / seconds
 }
 
-/** the longest time that `holds` and the shortest that does not, between one that does and one that does not: halving */
-function between(short: number, long: number, holds: (seconds: number) => boolean) {
+/** the most that `holds` and the least that does not, between one that does and one that does not: halving */
+export function between(short: number, long: number, holds: (value: number) => boolean) {
   for (let k = 0; k < TIMES.halvings; k++) {
     const middle = (short + long) / 2
     if (holds(middle)) short = middle
@@ -55,9 +54,17 @@ function between(short: number, long: number, holds: (seconds: number) => boolea
   return [short, long]
 }
 
-/** whether a value is within a range: what is at an end of it still is */
+/** how far a value goes along or about an axis: what is at an end of its range still is within it */
+export function bounds(range: Range, axis: (typeof AXES)[number]) {
+  const [least, most] = range[axis] ?? [-Infinity, Infinity]
+  return [least - PAST, most + PAST]
+}
+
 export const inside = (value: Xyz, range: Range) =>
-  AXES.every((axis) => !range[axis] || (value[axis] >= range[axis][0] - PAST && value[axis] <= range[axis][1] + PAST))
+  AXES.every((axis) => {
+    const [least, most] = bounds(range, axis)
+    return value[axis] >= least && value[axis] <= most
+  })
 
 /**
  * Whether that curve keeps within a range. The more time it takes, the further it draws back first. One that starts

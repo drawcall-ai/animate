@@ -1,5 +1,6 @@
 import { Body } from 'animate-2d'
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { BAG, type Bag, bagAt, swing } from './bag'
 import { combination } from './combination'
@@ -22,12 +23,13 @@ let most = 0
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     bag = bagAt(1.2)
     most = 0
     hanging.position.copy(bag.pivot)
     body.play(combination(body, bag))
-    return new Group().add(body, hanging)
+    return new Group().add(man, hanging)
   },
   update(delta) {
     body.update(delta)

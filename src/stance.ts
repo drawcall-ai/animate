@@ -1,49 +1,41 @@
 import { Vector3 } from 'three'
 import type { End } from './end'
-import { type Footing, socket } from './hips'
+import { type Footing, UP } from './hips'
 import { RANGE } from './joints'
 import { type Limb, SLACK } from './limb'
-import { HEEL, LEG, SIZE, SOLE, type Side, raised } from './size'
-import { TICK, clamp } from './world'
+import type { Way } from './way'
+import { HEEL, SOLE, type Side, type Size, raised } from './size'
+import { clamp } from './world'
 
-/** how fast a heel comes down again, and comes up (rad/s) */
-const ROLL = { down: 6, up: 30 }
+/** how fast a heel comes down again, and comes up (rad a beat) */
+const ROLL = { down: 1.8, up: 9 }
 /** how finely a heel is brought up to where its leg reaches, at first and in the end (rad) */
 const [FINE, EXACT] = [0.01, 1e-4]
-/** how many times a second an ankle eases to where it is to be, from where it was as its foot came down or left the ground */
-const EASE = 20
-/** how many times a second a foot in the air comes round to how it hangs */
-const DROOP = 30
-const hip = new Vector3()
+/** how many times a beat an ankle eases to where it is to be, from where it was as its foot came down or left the ground */
+const EASE = 6
+/** how many times a beat a foot in the air comes round to how it hangs */
+const DROOP = 9
 const from = new Vector3()
 const ankle = new Vector3()
-const aside = new Vector3()
+const hip = new Vector3()
+const holds = new Vector3()
 
 /** how far a foot turns at the most with its ankle this high above where it stands, before the end of its sole so far along from the ankle is on the ground (rad) */
-function tipped(high: number, sole: number) {
-  const up = (high + SIZE.ankle) / Math.hypot(sole, SIZE.ankle)
-  return up < 1 ? Math.asin(up) - Math.atan2(SIZE.ankle, sole) : Infinity
+function tipped(ankle: number, high: number, sole: number) {
+  const up = (high + ankle) / Math.hypot(sole, ankle)
+  return up < 1 ? Math.asin(up) - Math.atan2(ankle, sole) : Infinity
 }
 
 /**
  * Where the ankle of a foot on the ground is: where the ground holds it, or up and on from there, the heel
  * coming up as far as the leg needs to reach it from a hip that has gone on ahead, and as far as keeps the shin
  * from leaning further over the foot than an ankle bends and the thigh from going further back than a hip lets it:
- * no less and no more than a `least` and a `most`. Tells how far up the heel is (rad). The hip is `aside` of the hips.
+ * no less and no more than a `least` and a `most`. Tells how far up the heel is (rad).
  */
-export function stood(
-  leg: Limb,
-  anchor: Vector3,
-  hips: Vector3,
-  aside: Vector3,
-  least: number,
-  most: number,
-  to: Vector3,
-) {
-  hip.copy(hips).add(aside)
-  const short = () => hip.distanceTo(to) > LEG
+export function stood(size: Size, leg: Limb, anchor: Vector3, hip: Vector3, least: number, most: number, to: Vector3) {
+  const short = () => hip.distanceTo(to) > leg.length
   const fits = (angle: number) => {
-    const { y, z } = raised(Math.max(0, angle))
+    const { y, z } = raised(size, Math.max(0, angle))
     to.set(anchor.x, anchor.y + y, anchor.z + z)
     if (short()) return false
     const { first, fold } = leg.reach(from.copy(to).sub(hip))
@@ -65,22 +57,26 @@ export class Stance {
   private pitch = 0
   /** how far from where it is to be its ankle still is, since its foot last came down or left the ground */
   private readonly eased = new Vector3()
-  /** how it was last posed: standing on the ground, sent by the story, or stepped by the body */
   private posed: 'stood' | 'sent' | 'stepped' = 'stood'
 
   /** a leg, and the foot at its end as the story has it and as the ground has it */
   constructor(
+    private readonly size: Size,
     private readonly side: Side,
     private readonly leg: Limb,
     private readonly end: End,
     private readonly footing: Footing,
   ) {}
 
-  /** the leg reaches from its hip, where the hips, the pelvis turned and listing as it is, have it, for where its foot is: on the ground, or the body's own in a step */
-  pose({ value: hips, turn, list }: { value: Vector3; turn: number; list: number }, delta: number) {
-    const { leg, end, footing } = this
-    socket(this.side, turn, list, aside)
-    const { anchor } = end
+  /**
+   * the leg reaches from its hip, where the hips, the pelvis turned and listing as it is, have it, for where its foot
+   * is: on the ground, or the body's own in a step. It faces as its foot points, and all of it is told as it faces
+   */
+  pose(hips: Way, delta: number) {
+    const { size, leg, end, footing, side } = this
+    const round = -hips.heading - footing.toes
+    hips.hip(side, hip).applyAxisAngle(UP, round)
+    const anchor = end.anchor && holds.copy(end.anchor).applyAxisAngle(UP, round)
     // (it comes down as it hung in the air)
     if (!anchor) this.heel = this.pitch
     const posed = anchor ? 'stood' : end.held ? 'sent' : 'stepped'
@@ -89,24 +85,25 @@ export class Stance {
     // a foot the story has in the air its joints turn as it has sent them
     if (posed === 'sent') return
     // the heel comes down no faster than a foot rolls, and up no faster, from where it was
-    const down = ROLL.down * TICK
-    const [least, most] = [this.heel - clamp(this.heel, -down, down), Math.min(HEEL, this.heel + ROLL.up * TICK)]
-    if (anchor) this.heel = stood(leg, anchor, hips, aside, least, most, ankle)
-    else ankle.copy(footing.at)
+    const [down, up] = [(ROLL.down * delta) / size.beat, (ROLL.up * delta) / size.beat]
+    const [least, most] = [this.heel - clamp(this.heel, -down, down), Math.min(HEEL, this.heel + up)]
+    if (anchor) this.heel = stood(size, leg, anchor, hip, least, most, ankle)
+    else hips.scene(footing.at, side, ankle).applyAxisAngle(UP, round)
     // coming down, or leaving the ground heel up, it goes on from where its ankle was, and eases to where it is to be
-    if (posed !== was) this.eased.copy(end.value).sub(ankle)
-    ankle.add(this.eased.multiplyScalar(Math.exp(-EASE * delta)))
-    from.copy(ankle).sub(hips).sub(aside)
-    if (anchor && footing.put && from.length() > LEG + SLACK.reach) {
-      throw new Error(
-        `the ${this.side} foot is to stay where it was sent, and the hips have gone further from it than its leg reaches: let it free`,
-      )
-    }
+    if (posed !== was) this.eased.copy(end.value).applyAxisAngle(UP, round).sub(ankle)
+    ankle.add(this.eased.multiplyScalar(Math.exp((-EASE * delta) / size.beat)))
+    from.copy(ankle).sub(hip)
+    const lost = anchor && footing.put && from.length() > leg.length + SLACK.reach * size.leg
     const { first, fold } = leg.reach(from)
     // (let go by the story, a leg swings out and comes round in time for its foot to come down)
     const within = footing.down ? 0 : footing.step?.remains
     leg.first.follow(first, delta, within)
     leg.second.follow(from.set(fold, 0, 0), delta, within)
+    if (lost) {
+      throw new Error(
+        `the ${this.side} foot is to stay where it was sent, and the hips have gone further from it than its leg reaches: it is let free`,
+      )
+    }
   }
 
   /**
@@ -115,10 +112,12 @@ export class Stance {
    * ground under it lets its toe or its heel, and as far as an ankle bends.
    */
   foot(thigh: number, shin: number, falls: boolean, delta: number) {
-    const high = Math.max(0, this.end.value.y - SIZE.ankle)
-    const [toe, heel] = [Math.min(HEEL, tipped(high, SOLE.ball)), tipped(high, SOLE.behind)]
-    const hangs = this.pitch + ((falls ? toe : thigh + shin) - this.pitch) * Math.min(1, DROOP * delta)
-    this.pitch = this.end.anchor ? this.heel : clamp(hangs, -heel, tipped(high, SOLE.ball))
+    const { ankle, leg, beat } = this.size
+    const high = Math.max(0, this.end.value.y - ankle)
+    const [toe, heel] = [tipped(ankle, high, SOLE.ball * leg), tipped(ankle, high, SOLE.behind * leg)]
+    const hangs =
+      this.pitch + ((falls ? Math.min(HEEL, toe) : thigh + shin) - this.pitch) * Math.min(1, (DROOP * delta) / beat)
+    this.pitch = this.end.anchor ? this.heel : clamp(hangs, -heel, toe)
     const [least, most] = RANGE.ankle.x
     return clamp(this.pitch - thigh - shin, -most, -least)
   }

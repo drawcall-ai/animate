@@ -20,9 +20,9 @@ export function* race(body: Body, hurdles: Hurdle[], speed = SPEED): Story {
     body.run({ speed, at: z - OFF, plant: 'left' })
     body.jump({ x: 0, y: height + HIPS, z })
     // the lead foot goes over the bar ahead of him, and the trail foot comes through folded up at his side
-    body.foot.right.to({ x: -0.09, y: height + CLEAR, z }, { velocity: { x: 0, y: 0, z: speed } })
+    body.foot.right.to({ x: -body.size.hip, y: height + CLEAR, z }, { velocity: { x: 0, y: 0, z: speed } })
     const top = body.highest()
-    body.foot.left.by(top, TUCK, { carried: true, velocity: { x: 0, y: 0, z: speed } })
+    body.foot.left.by(top, TUCK, { on: body, velocity: { x: 0, y: 0, z: speed } })
     // from the top on he is on his way to the next
     yield* body.until(top)
   }

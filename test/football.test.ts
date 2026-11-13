@@ -1,13 +1,14 @@
 import { expect, test } from 'vitest'
 import { ballAt, fly } from '../examples/football/pitch'
 import { shot } from '../examples/football/shot'
-import { Body, STAND } from '../src'
-import { SIDES } from '../src/size'
+import { Body } from '../src'
+import { person } from '../examples/person'
+import { SIDES, tick } from '../src/size'
 
 const degrees = (angle: number) => (angle * 180) / Math.PI
 
 test('the shot: what is written holds at the strike, the body does the rest, and he ends standing', () => {
-  const body = new Body()
+  const body = new Body(person())
   const ball = ballAt(5.2)
   body.play(shot(body, ball))
   let struck: { speed: number; up: number; plant: number } | undefined
@@ -15,8 +16,8 @@ test('the shot: what is written holds at the strike, the body does the rest, and
   const steps: string[] = []
   const stood = { left: true, right: true }
   for (let n = 0; n < 2000 && body.playing; n++) {
-    body.update(1 / 200)
-    fly(ball, 1 / 200)
+    body.update(tick(body.size))
+    fly(ball, tick(body.size))
     for (const side of SIDES) {
       const stands = body.foot[side].anchor !== undefined
       if (stands && !stood[side] && !struck) steps.push(side)
@@ -42,7 +43,7 @@ test('the shot: what is written holds at the strike, the body does the rest, and
   expect(risen).toBeGreaterThan(0.3)
   expect(back).toBeLessThan(-10)
   expect(body.playing).toBe(false)
-  expect(body.hips.value.y).toBeCloseTo(STAND, 1)
+  expect(body.hips.value.y).toBeCloseTo(body.size.stand, 1)
   // feet side by side: within a tenth of a metre of each other
   expect(Math.abs(body.foot.left.value.z - body.foot.right.value.z)).toBeLessThan(0.11)
 })

@@ -1,11 +1,12 @@
 import { Body } from 'animate-2d'
 import { CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, TorusGeometry } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
-import { BALL, type Ball, RACKET, ballAt, fly, strings } from './ball'
+import { BALL, type Ball, RACKET, ballAt, fly } from './ball'
 import { forehand } from './forehand'
 
 const sphere = new Mesh(new SphereGeometry(BALL.radius), new MeshStandardMaterial({ color: 0xd8e830 }))
-// the racket, from the wrist along z to the middle of its strings
+// the racket, from where it is held along z to the middle of its strings
 const grip = new Mesh(
   new CylinderGeometry(0.015, 0.015, RACKET.reach - RACKET.head),
   new MeshStandardMaterial({ color: 0x303030 }),
@@ -23,11 +24,13 @@ let left = 0
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     ball = ballAt()
     left = 0
     body.play(forehand(body, ball))
-    return new Group().add(body, sphere, racket)
+    body.hand.right.grip.add(racket)
+    return new Group().add(man, sphere)
   },
   update(delta) {
     body.update(delta)
@@ -35,8 +38,6 @@ run({
     fly(ball, delta)
     if (ball.struck > struck || (ball.struck && !left)) left = ball.velocity.length()
     sphere.position.copy(ball.position)
-    racket.position.copy(body.hand.right.value)
-    racket.lookAt(strings(body))
   },
   focus: () => body.hips.value.z,
   readout() {

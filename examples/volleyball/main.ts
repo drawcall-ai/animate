@@ -1,5 +1,6 @@
 import { Body } from 'animate-2d'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { type Ball, NET, RADIUS, ball, fly } from './ball'
 import { spike } from './spike'
@@ -19,12 +20,13 @@ let over: number | undefined
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     hit = ball()
     left = undefined
     over = undefined
     body.play(spike(body, hit))
-    return new Group().add(body, ballMesh, net)
+    return new Group().add(man, ballMesh, net)
   },
   update(delta) {
     const before = hit.position.z < NET.z

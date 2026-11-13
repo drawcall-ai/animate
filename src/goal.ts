@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
-import { AXES, type Range, type State, cubic, hardest, quickest } from './curve'
-import type { Story, Xyz } from './world'
+import { AXES, type Range, type State, bounds, cubic, hardest, quickest } from './curve'
+import { type Story, type Xyz, waits } from './world'
 
 export const REST = { x: 0, y: 0, z: 0 }
 /** how much of its strength a part is pushed with that is not sent anywhere: coming round after it has arrived moving, or reacting */
@@ -18,7 +18,6 @@ const then = state()
 const push = new Vector3()
 const pushed = new Vector3()
 
-/** an error if a part is sent somewhere in what is no time */
 export function timed(name: string, seconds: number | undefined) {
   if (seconds !== undefined && !(seconds > 0 && seconds < Infinity)) {
     throw new Error(`the ${name} is sent somewhere in ${seconds} s`)
@@ -53,15 +52,21 @@ export class Goal {
 
   /**
    * `name` is what the part is called when it cannot do what is asked; it goes only within its `range`, and draws
-   * back no further than that.
+   * back no further than that; free, it comes round `rate` times a second.
    */
   constructor(
     readonly name: string,
     value: Xyz,
     readonly strength: number,
     readonly range: Range,
+    readonly rate = 0,
   ) {
     this.value.copy(value)
+  }
+
+  /** a part like it, turned so: for what this one would do to be told */
+  like(value: Xyz = REST) {
+    return new Goal(this.name, value, this.strength, this.range, this.rate)
   }
 
   /**
@@ -81,7 +86,6 @@ export class Goal {
       )
     }
     const to = { value: target, velocity }
-    // it takes `seconds`, or as long as it needs: if it is strong enough for that
     const needs = quickest(this, to, this.strength, this.range)
     const takes = this.takes(to, seconds ?? needs)
     if (takes <= MOST) return this.drive(to, seconds ?? needs)
@@ -98,7 +102,15 @@ export class Goal {
   /** Sends the value somewhere in `seconds`, however hard that is: what a limb does with its joints, having seen to their strength itself. */
   drive(to: State, seconds: number): Story<boolean> {
     this.loose = false
-    return this.arrival(this.leave(to, seconds))
+    const way = this.leave(to, seconds)
+    return waits(
+      () => this.way === way,
+      () => way.arrived,
+    )
+  }
+
+  get arrived() {
+    return this.way?.arrived === true
   }
 
   /** how hard it is pushed at the most to get somewhere in `seconds`, from how it is now or `from` how it will be: in times its strength */
@@ -132,7 +144,11 @@ export class Goal {
     this.loose = true
   }
 
-  /** let go, it makes for what the body now wants of it in the time it has left to come round, and no longer than `within`: true until that is up, or with no such time to keep to, what is wanted has changed so late that it would have to be pushed harder than it can be, and it is the body's at once */
+  /**
+   * let go, it makes for what the body now wants of it in the time it has left to come round, and no longer than
+   * `within`: true until that is up, or with no such time to keep to, what is wanted has changed so late that it would
+   * have to be pushed harder than it can be, and it is the body's at once
+   */
   private comes(wanted: Xyz, within = Infinity) {
     this.wanted.copy(wanted)
     const remains = Math.min(this.seconds - this.gone, within)
@@ -147,7 +163,7 @@ export class Goal {
   /** what comes to the end of its range is stopped there, however hard that is */
   private stopped() {
     for (const axis of AXES) {
-      const [least, most] = this.range[axis] ?? [-Infinity, Infinity]
+      const [least, most] = bounds(this.range, axis)
       if (this.value[axis] >= least && this.value[axis] <= most) continue
       this.value[axis] = Math.min(most, Math.max(least, this.value[axis]))
       this.velocity[axis] = 0
@@ -184,12 +200,6 @@ export class Goal {
     return way
   }
 
-  private *arrival(way: Way): Story<boolean> {
-    while (!way.arrived && this.way === way) yield
-    return way.arrived
-  }
-
-  /** time goes on by `dt`, for a part that is sent */
   advance(dt: number) {
     if (this.moved !== 'sent') return
     const remains = this.seconds - this.gone
@@ -218,10 +228,10 @@ export class Goal {
     this.value.copy(value)
   }
 
-  /** a free part goes after what the body wants of it like a weight on a spring, `rate` times a second, without overshooting: let go, it first comes round to it */
-  react(wanted: Xyz, rate: number, dt: number) {
+  /** a free part goes after what the body wants of it like a weight on a spring, without overshooting: let go, it first comes round to it */
+  react(wanted: Xyz, dt: number) {
     if (this.comes(wanted) || this.moved !== 'free') return
-    const pull = 2 * Math.PI * rate
+    const pull = 2 * Math.PI * this.rate
     // stepped so that it holds for any step of time
     push.subVectors(this.wanted, this.value).multiplyScalar(pull * pull * dt)
     pushed.addVectors(this.velocity, push).divideScalar((1 + pull * dt) ** 2)

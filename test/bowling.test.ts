@@ -1,16 +1,18 @@
 import { expect, test } from 'vitest'
 import { bowl } from '../examples/bowling/bowl'
 import { ball as ballAt } from '../examples/bowling/lane'
-import { Body, STAND } from '../src'
+import { Body } from '../src'
+import { tick } from '../src/size'
+import { person } from '../examples/person'
 
 test('the delivery: the ball leaves as written, the body does the rest, and he ends standing', () => {
-  const body = new Body()
+  const body = new Body(person())
   const ball = ballAt()
   body.play(bowl(body, ball))
   let released: { left: number; right: number } | undefined
   let back = 0
   for (let n = 0; n < 2000 && body.playing; n++) {
-    body.update(1 / 200)
+    body.update(tick(body.size))
     if (!ball.velocity) back = Math.min(back, body.hand.right.value.z - body.hips.value.z)
     else released ??= { left: body.foot.left.value.z, right: body.foot.right.value.z }
   }
@@ -21,6 +23,6 @@ test('the delivery: the ball leaves as written, the body does the rest, and he e
   expect(back).toBeLessThan(-0.1)
   expect(released?.left).toBeGreaterThan((released?.right ?? NaN) + 0.45)
   expect(body.playing).toBe(false)
-  expect(body.hips.value.y).toBeCloseTo(STAND, 1)
+  expect(body.hips.value.y).toBeCloseTo(body.size.stand, 1)
   expect(Math.abs(body.foot.left.value.z - body.foot.right.value.z)).toBeLessThan(0.11)
 })

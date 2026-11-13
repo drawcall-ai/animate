@@ -6,8 +6,6 @@ export type Ball = { position: Vector3; velocity: Vector3 | null }
 export const RADIUS = 0.105
 /** where the net stands ahead of where the hitter starts, and how high its top edge is (m) */
 export const NET = { z: 5.75, y: 2.24 }
-/** where the wrist is from the middle of the ball as the hand meets it: behind and a little under it (m) */
-export const PALM = new Vector3(0, -0.05, -0.15)
 const GRAVITY = 9.81
 
 /** a ball hanging on the hitter's side of the net, in the line of a right hand */

@@ -1,8 +1,9 @@
 import { Body } from 'animate-2d'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { bowl } from './bowl'
-import { type Ball, LANE, LINE, RADIUS, ball, carry } from './lane'
+import { type Ball, LANE, LINE, RADIUS, ball, roll } from './lane'
 
 const ballMesh = new Mesh(new SphereGeometry(RADIUS), new MeshStandardMaterial({ color: 0x3060c0 }))
 // the boards beyond the foul line, a little proud of the floor, and the line itself
@@ -10,22 +11,29 @@ const boards = new Mesh(new BoxGeometry(LANE.width, 0.01, LANE.length), new Mesh
 boards.position.set(-0.2, 0, LINE + LANE.length / 2)
 const line = new Mesh(new BoxGeometry(LANE.width, 0.012, 0.03), new MeshStandardMaterial({ color: 0x202020 }))
 line.position.set(-0.2, 0, LINE)
+let scene: Group
 let body: Body
 let bowled: Ball
 let left: number | undefined
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     bowled = ball()
     left = undefined
     body.play(bowl(body, bowled))
-    return new Group().add(body, ballMesh, boards, line)
+    ballMesh.position.set(0, 0, 0)
+    body.hand.right.grip.add(ballMesh)
+    return (scene = new Group().add(man, boards, line))
   },
   update(delta) {
     body.update(delta)
-    carry(bowled, body.hand.right.value, delta)
-    if (bowled.velocity) left ??= bowled.velocity.length()
+    if (!bowled.velocity) return
+    left ??= bowled.velocity.length()
+    // let go, it rolls on its own
+    if (ballMesh.parent !== scene) scene.add(ballMesh)
+    roll(bowled, delta)
     ballMesh.position.copy(bowled.position)
   },
   focus: () => body.hips.value.z,

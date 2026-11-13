@@ -14,8 +14,9 @@ const BACK = 0.35
 /** From a guard he steps in, jabs with the left hand, throws a cross with the right, and steps back out into his guard. */
 export function* combination(body: Body, bag: Bag): Story {
   const out = body.hips.value.z
-  body.hand.left.to(GUARD.left, { carried: true })
-  yield* body.hand.right.to(GUARD.right, { carried: true })
+  for (const hand of [body.hand.left, body.hand.right]) hand.shape('fist')
+  body.hand.left.to(GUARD.left, { on: body })
+  yield* body.hand.right.to(GUARD.right, { on: body })
 
   // he steps in, and the left hand is on the bag
   const jab = meeting(bag, 'left', HIGH, 6)
@@ -24,12 +25,13 @@ export function* combination(body: Body, bag: Bag): Story {
   hit(bag, body.hand.left.value, body.hand.left.velocity)
 
   // it comes back to the guard as the right hand goes, to where the bag has swung to by then
-  body.hand.left.to(GUARD.left, { carried: true, seconds: BEAT })
+  body.hand.left.to(GUARD.left, { on: body, seconds: BEAT })
   const cross = meeting(later(bag, BEAT), 'right', HIGH, 8)
   yield* body.hand.right.to(cross.at, { ...cross, seconds: BEAT })
   hit(bag, body.hand.right.value, body.hand.right.velocity)
 
   // and he steps back out behind his guard
-  body.hand.right.to(GUARD.right, { carried: true, seconds: BACK })
+  body.hand.right.to(GUARD.right, { on: body, seconds: BACK })
   yield* body.walk(out)
+  yield* body.stand()
 }

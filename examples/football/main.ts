@@ -1,5 +1,6 @@
 import { Body } from 'animate-2d'
 import { Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { type Ball, RADIUS, ballAt, fly } from './pitch'
 import { shot } from './shot'
@@ -10,10 +11,11 @@ let ball: Ball
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     ball = ballAt(5.2)
     body.play(shot(body, ball))
-    return new Group().add(body, ballMesh)
+    return new Group().add(man, ballMesh)
   },
   update(delta) {
     body.update(delta)

@@ -1,5 +1,6 @@
 import { Body } from 'animate-2d'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
+import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { BOX, type Box, SHELF, boxAt, carry } from './box'
 import { shelve } from './shelve'
@@ -21,10 +22,11 @@ let box: Box
 
 run({
   begin() {
-    body = new Body()
+    const man = mannequin()
+    body = new Body(man)
     box = boxAt(2)
     body.play(shelve(body, box))
-    return new Group().add(body, boxMesh, board, back)
+    return new Group().add(man, boxMesh, board, back)
   },
   update(delta) {
     body.update(delta)
