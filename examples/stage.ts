@@ -9,6 +9,7 @@ import {
   Scene,
   WebGLRenderer,
 } from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 
 function element<T extends Element>(id: string, kind: new () => T): T {
   const found = document.getElementById(id)
@@ -16,15 +17,16 @@ function element<T extends Element>(id: string, kind: new () => T): T {
   return found
 }
 
-/** Shows a scene from the side, +z to the right: `begin` starts it over and returns what to show, `update` advances it, `readout` says what happened. */
-export function run(stage: { begin(): Object3D; update(delta: number): void; readout(): string }) {
+/** Shows a scene, at first from the side with +z to the right, keeping `focus` (z) in view as the view is dragged round it: `begin` starts it over and returns what to show, `update` advances it, `readout` says what happened. */
+export function run(stage: { begin(): Object3D; update(delta: number): void; focus(): number; readout(): string }) {
   const canvas = element('stage', HTMLCanvasElement)
   const speed = element('speed', HTMLSelectElement)
   const readout = element('readout', HTMLPreElement)
   const renderer = new WebGLRenderer({ canvas, antialias: true })
   const camera = new PerspectiveCamera(30, 1 / 0.42)
-  camera.position.set(-5.5, 1.3, 1.2)
-  camera.lookAt(0, 1, 1.2)
+  camera.position.set(-6, 1.3, 0.6)
+  const controls = new OrbitControls(camera, canvas)
+  controls.target.set(0, 1, 0.6)
   const scene = new Scene()
   scene.background = new Color(0x202020)
   const sun = new DirectionalLight(0xffffff, 2.5)
@@ -41,6 +43,11 @@ export function run(stage: { begin(): Object3D; update(delta: number): void; rea
   renderer.setAnimationLoop((now) => {
     stage.update(last === undefined ? 0 : Math.min(0.05, (now - last) / 1000) * Number(speed.value))
     last = now
+    // the view goes along with what it keeps in view, turned and as near as it was left
+    const along = stage.focus() + 0.6 - controls.target.z
+    camera.position.z += along
+    controls.target.z += along
+    controls.update()
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.setSize(canvas.clientWidth, Math.round(canvas.clientWidth * 0.42), false)
     renderer.render(scene, camera)

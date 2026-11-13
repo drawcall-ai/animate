@@ -8,12 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@dimforge/rapier3d-compat':
-        specifier: ^0.21.0
-        version: 0.21.0
-      '@pmndrs/timeline':
-        specifier: ^0.5.0
-        version: 0.5.0(three@0.187.0)
       three:
         specifier: ^0.187.0
         version: 0.187.0
@@ -28,14 +22,73 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(vite@8.3.8)
 
+  examples/basketball:
+    dependencies:
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/bowling:
+    dependencies:
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/boxing:
+    dependencies:
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/fencing:
+    dependencies:
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
   examples/football:
     dependencies:
-      '@dimforge/rapier3d-compat':
-        specifier: ^0.21.0
-        version: 0.21.0
-      '@pmndrs/timeline':
-        specifier: ^0.5.0
-        version: 0.5.0(three@0.187.0)
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/hurdles:
+    dependencies:
       animate-2d:
         specifier: workspace:*
         version: link:../..
@@ -49,12 +102,45 @@ importers:
 
   examples/javelin:
     dependencies:
-      '@dimforge/rapier3d-compat':
-        specifier: ^0.21.0
-        version: 0.21.0
-      '@pmndrs/timeline':
-        specifier: ^0.5.0
-        version: 0.5.0(three@0.187.0)
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/shelf:
+    dependencies:
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/tennis:
+    dependencies:
+      animate-2d:
+        specifier: workspace:*
+        version: link:../..
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/volleyball:
+    dependencies:
       animate-2d:
         specifier: workspace:*
         version: link:../..
@@ -70,9 +156,6 @@ packages:
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
-
-  '@dimforge/rapier3d-compat@0.21.0':
-    resolution: {integrity: sha512-tCl1HPGwOhn5aCQbgqWbOH+Nx/5fnr3IPAnzQuR7zIhC/raqi2yxC6LhvZqjdI2El5hQgY5RDAwDrAjAi2FdPA==}
 
   '@emnapi/core@2.0.0-beta.2':
     resolution: {integrity: sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A==}
@@ -102,11 +185,6 @@ packages:
 
   '@oxc-project/types@0.156.0':
     resolution: {integrity: sha512-1Duyg48TdJNdyhEB8Xn1L36bT9Pv6GUtlKjHxOys8xkaF/rQq3XJE+bAurSK/AgIz5mGFsb77cn9Pb20+WCScw==}
-
-  '@pmndrs/timeline@0.5.0':
-    resolution: {integrity: sha512-Nq5yCghl4NXgskGu38Cza35eOruEkXKicuaAWK3wQwqaaTypPhma0XgvvqbuJP6A4HFch8O8VT0yG0Ki6dyIfw==}
-    peerDependencies:
-      three: '*'
 
   '@rolldown/binding-android-arm-eabi@1.2.19':
     resolution: {integrity: sha512-e+Ebe0WT+9tbXmNKPIiC8YrWAHYwug3m6i4p3rZGGulfZri1jtI4HslT+OZnFf/OIHowWF71DTlHwXBP2SiA7A==}
@@ -627,8 +705,6 @@ snapshots:
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
-  '@dimforge/rapier3d-compat@0.21.0': {}
-
   '@emnapi/core@2.0.0-beta.2':
     dependencies:
       '@emnapi/wasi-threads': 2.2.0
@@ -662,10 +738,6 @@ snapshots:
     optional: true
 
   '@oxc-project/types@0.156.0': {}
-
-  '@pmndrs/timeline@0.5.0(three@0.187.0)':
-    dependencies:
-      three: 0.187.0
 
   '@rolldown/binding-android-arm-eabi@1.2.19':
     optional: true

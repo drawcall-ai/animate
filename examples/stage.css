@@ -1,6 +1,8 @@
 :root {
   color-scheme: light dark;
-  font: 15px/1.5 system-ui, sans-serif;
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
 }
 body {
   max-width: 960px;

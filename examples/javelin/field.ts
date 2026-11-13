@@ -1,59 +1,26 @@
-import {
-  ColliderDesc,
-  type ImpulseJoint,
-  JointData,
-  type RigidBody,
-  RigidBodyDesc,
-  World,
-} from '@dimforge/rapier3d-compat'
-import type { Humanoid } from 'animate-2d'
+import { Vector3 } from 'three'
 
-export const JAVELIN = { length: 2.6, radius: 0.012, kg: 0.8 }
-/** how far up from level the javelin points while it is carried (rad) */
-const CARRIED = 0.5
-/** the javelin touches the ground but not the thrower */
-const GROUPS = (0x0002 << 16) | 0x0002
+/** `velocity` is none while it is in the hand; `angle` is how far up from level it points (rad) */
+export type Javelin = { position: Vector3; velocity: Vector3 | null; angle: number; landed: boolean }
 
-export type Held = { javelin: RigidBody; grip: ImpulseJoint }
+export const LENGTH = { ahead: 1.05, behind: 1.55 }
+const GRAVITY = 9.81
 
-/** a flat field and a javelin in the right hand of the humanoid that will stand at its origin */
-export function field() {
-  const world = new World({ x: 0, y: -9.81, z: 0 })
-  world.createCollider(ColliderDesc.cuboid(100, 0.5, 100).setTranslation(0, -0.5, 0).setFriction(1))
-  const tilt = Math.PI / 2 - CARRIED
-  const pointing = { x: Math.sin(tilt / 2), y: 0, z: 0, w: Math.cos(tilt / 2) }
-  const javelin = world.createRigidBody(
-    RigidBodyDesc.dynamic().setTranslation(-0.2, 0.87, 0).setRotation(pointing).setCcdEnabled(true),
-  )
-  const shaft = ColliderDesc.capsule(JAVELIN.length / 2 - JAVELIN.radius, JAVELIN.radius).setMass(JAVELIN.kg)
-  world.createCollider(shaft.setCollisionGroups(GROUPS), javelin)
-  return { world, javelin }
+export const javelin = (): Javelin => ({ position: new Vector3(), velocity: null, angle: 0.5, landed: false })
+
+/** an end of the javelin, `along` it from where it is held (m) */
+export const end = (j: Javelin, along: number) =>
+  j.position.clone().add(new Vector3(0, Math.sin(j.angle) * along, Math.cos(j.angle) * along))
+
+/** in the hand it goes where the hand goes; let go, it flies point first until its point comes down */
+export function carry(j: Javelin, hand: Vector3, dt: number) {
+  if (!j.velocity) {
+    j.position.copy(hand)
+    return
+  }
+  if (j.landed) return
+  j.velocity.y -= GRAVITY * dt
+  j.position.addScaledVector(j.velocity, dt)
+  j.angle = Math.atan2(j.velocity.y, j.velocity.z)
+  j.landed = end(j, LENGTH.ahead).y <= 0
 }
-
-/** the right hand closes round the middle of the javelin, which stays free to point where it points */
-export function hold(human: Humanoid, javelin: RigidBody): Held {
-  const hand = { x: 0, y: -0.16, z: 0 }
-  const grip = human.world.createImpulseJoint(
-    JointData.spherical(hand, { x: 0, y: 0, z: 0 }),
-    human.parts.rightForearm.body,
-    javelin,
-    true,
-  )
-  return { javelin, grip }
-}
-
-/** the same javelin and grip in a copy of their world */
-export const heldIn = (world: World, { javelin, grip }: Held): Held => ({
-  javelin: world.getRigidBody(javelin.handle),
-  grip: world.getImpulseJoint(grip.handle),
-})
-
-/** how fast the javelin goes and how far up from level (m/s, rad) */
-export function flight(javelin: RigidBody) {
-  const v = javelin.linvel()
-  return { speed: Math.hypot(v.x, v.y, v.z), angle: Math.atan2(v.y, Math.hypot(v.x, v.z)), forward: v.z > 0 }
-}
-
-/** how fast the javelin left the hand (m/s), once it has */
-export const released = (world: World, { javelin, grip }: Held) =>
-  world.impulseJoints.contains(grip.handle) ? undefined : flight(world.getRigidBody(javelin.handle)).speed

@@ -1,57 +1,23 @@
-import type { ActionUpdate } from '@pmndrs/timeline'
-import { action, timePassed } from '@pmndrs/timeline'
-import { type Humanoid, muscles, pose, solve } from 'animate-2d'
-import { Euler } from 'three'
-import { type Held, flight, heldIn, released } from './field'
+import type { Body, Story } from 'animate-2d'
+import { Vector3 } from 'three'
+import type { Javelin } from './field'
 
-/** how far up from level the javelin is to leave (rad) */
-const RELEASE = 0.6
+const degrees = (angle: number) => (angle * Math.PI) / 180
+const place = (x: number, y: number, z: number) => new Vector3(x, y, z)
+/** where the front foot comes down, ahead of where the thrower starts (m) */
+const PLANT = 10
 
-/** a limb or the trunk swung in the plane the humanoid faces: limbs go back with a positive angle, the trunk leans forward (rad) */
-const swing = (angle: number) => new Euler(angle, 0, 0)
+/** A run-up and a throw with the right arm: the javelin leaves the hand at 20 m/s, 30° up. */
+export function* javelinThrow(body: Body, javelin: Javelin): Story {
+  // the javelin is carried over the shoulder, the hand beside his head
+  body.hand.right.to(place(-0.05, 0.3, -0.1), { carried: true })
+  // he brakes onto the front leg, and as he comes over it the hand lets go, above and behind the shoulder, moving across the arm:
+  // the run, the trunk and the arm make up that speed between them
+  body.run({ speed: 5.5, plant: 'left', at: PLANT, arrive: 3 })
+  const [speed, up] = [20, degrees(30)]
+  const flying = place(0, speed * Math.sin(up), speed * Math.cos(up))
+  yield* body.hand.right.by(body.when(PLANT), place(0, 0.46, -0.3), { velocity: flying, carried: true })
+  javelin.velocity = body.hand.right.velocity.clone()
 
-/** A standing throw with the right arm, as hard as it takes for the javelin to leave at `speed` (m/s). */
-export function* javelinThrow(human: Humanoid, held: Held, speed: number) {
-  const { chest, rightUpperArm, leftUpperArm } = human.parts
-
-  // draw: the throwing arm goes long behind, the trunk back, the other arm ahead
-  const draw = [
-    pose(rightUpperArm, swing(1.2)),
-    pose(chest, swing(-0.35)),
-    pose(leftUpperArm, swing(-1.2), muscles.loose),
-  ]
-  yield* action({ update: draw, until: timePassed(0.8, 'seconds') })
-
-  const thrown = solve(human, (trial, power) => sling(trial, heldIn(trial.world, held), power), {
-    measure: (trial) => released(trial.world, held),
-    target: speed,
-    within: 0.5,
-    powers: [0.1, 1],
-  })
-  if (!thrown.ok) return thrown
-  yield* sling(human, held, thrown.power)
-
-  // the arm comes down
-  yield* action({ until: timePassed(1.5, 'seconds') })
-  return thrown
-}
-
-/**
- * The trunk comes forward and the shoulder pulls the arm over the top, both with `power` of their strength; the hand
- * lets go when the javelin flies at the release angle.
- */
-function* sling(human: Humanoid, held: Held, power: number) {
-  const { chest, rightUpperArm } = human.parts
-  const hard = { frequency: 10, damping: 0.4, strength: power }
-  const over = [pose(chest, swing(0.4), hard), pose(rightUpperArm, swing(4.2), hard), letGo(human, held)]
-  yield* action({ update: over, until: timePassed(0.5, 'seconds') })
-}
-
-/** opens the hand once the javelin flies forward and no steeper than the release angle */
-function letGo(human: Humanoid, { javelin, grip }: Held): ActionUpdate<unknown> {
-  return () => {
-    if (!human.world.impulseJoints.contains(grip.handle)) return
-    const { angle, forward } = flight(javelin)
-    if (forward && angle <= RELEASE) human.world.removeImpulseJoint(grip, true)
-  }
+  yield* body.stand()
 }

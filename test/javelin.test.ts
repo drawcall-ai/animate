@@ -1,25 +1,24 @@
-import RAPIER from '@dimforge/rapier3d-compat'
 import { expect, test } from 'vitest'
-import { field, flight, hold, released } from '../examples/javelin/field'
+import { carry, javelin } from '../examples/javelin/field'
 import { javelinThrow } from '../examples/javelin/throw'
-import { Humanoid, STEP } from '../src'
+import { Body, STAND } from '../src'
 
-await RAPIER.init()
-
-test('the javelin leaves at the speed asked, forward and up, and the thrower ends standing', () => {
-  const { world, javelin } = field()
-  const human = new Humanoid(world)
-  const held = hold(human, javelin)
-  let left: ReturnType<typeof flight> | undefined
-  human.play(javelinThrow(human, held, 12))
-  for (let n = 0; n < 5 / STEP && human.playing; n++) {
-    human.step()
-    if (!left && released(world, held) !== undefined) left = flight(javelin)
+test('the throw: the javelin leaves the hand as written, and he ends standing', () => {
+  const body = new Body()
+  const thrown = javelin()
+  body.play(javelinThrow(body, thrown))
+  let left: { speed: number; up: number } | undefined
+  for (let n = 0; n < 600 && body.playing; n++) {
+    body.update(1 / 60)
+    carry(thrown, body.hand.right.value, 1 / 60)
+    if (thrown.velocity && !left)
+      left = { speed: thrown.velocity.length(), up: (Math.atan2(thrown.velocity.y, thrown.velocity.z) * 180) / Math.PI }
   }
-  expect(Math.abs((left?.speed ?? 0) - 12)).toBeLessThan(0.5)
-  expect(left?.forward).toBe(true)
-  expect(left?.angle).toBeGreaterThan(0.3)
-  expect(left?.angle).toBeLessThan(0.65)
-  expect(human.playing).toBe(false)
-  expect(human.parts.head.body.translation().y).toBeGreaterThan(1.6)
+  // written: 20 m/s, 30° up; read after it has flown for one update, which has taken 0.16 m/s off its speed up
+  expect(left?.speed).toBeCloseTo(20, 0)
+  expect(Math.abs((left?.up ?? 0) - 30)).toBeLessThan(1)
+  expect(body.playing).toBe(false)
+  expect(body.hips.value.y).toBeCloseTo(STAND, 1)
+  // feet side by side: within a tenth of a metre of each other
+  expect(Math.abs(body.foot.left.value.z - body.foot.right.value.z)).toBeLessThan(0.11)
 })
