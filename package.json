@@ -1,23 +1,15 @@
 {
-  "name": "animate-2d",
+  "name": "animate-monorepo",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts",
   "scripts": {
-    "test": "vitest run",
-    "check": "tsc --noEmit"
+    "test": "pnpm -F @drawcall/animate test",
+    "check": "tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p examples"
   },
   "devDependencies": {
     "@drawcall/rig": "^0.7.0",
     "@types/three": "^0.187.0",
-    "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
-  },
-  "dependencies": {
-    "three": "^0.187.0"
-  },
-  "files": [
-    "src",
-    "skills"
-  ]
+    "three": "^0.187.0",
+    "typescript": "^7.0.2"
+  }
 }

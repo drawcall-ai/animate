@@ -1,4 +1,4 @@
-import type { Body, Story } from 'animate-2d'
+import type { Body, Story } from '@drawcall/animate'
 import { PANEL, type Panel } from './panel'
 
 /** how far short of the button he comes to rest, and how long the finger stays on it (m, s) */

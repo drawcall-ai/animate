@@ -1,4 +1,4 @@
-import { Body, type Story, type Xyz } from 'animate-2d'
+import { Body, type Story, type Xyz } from '@drawcall/animate'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, Vector3 } from 'three'
 
 /** what leads him: how far he is asked to go forward and to his left, how he turns his aim (left positive), how far up he aims (rad), and what he is asked to do */

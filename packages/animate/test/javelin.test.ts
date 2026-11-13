@@ -1,8 +1,8 @@
 import { expect, test } from 'vitest'
-import { fly, javelin } from '../examples/javelin/field'
-import { javelinThrow } from '../examples/javelin/throw'
+import { fly, javelin } from '../../../examples/javelin/field'
+import { javelinThrow } from '../../../examples/javelin/throw'
 import { Body } from '../src'
-import { person } from '../examples/person'
+import { person } from '../../../examples/person'
 
 test('the throw: the javelin leaves the hand as written, and he ends standing', () => {
   const body = new Body(person())

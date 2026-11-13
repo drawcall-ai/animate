@@ -1,4 +1,4 @@
-import { Body } from 'animate-2d'
+import { Body } from '@drawcall/animate'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'

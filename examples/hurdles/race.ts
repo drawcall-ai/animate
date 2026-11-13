@@ -1,4 +1,4 @@
-import type { Body, Story } from 'animate-2d'
+import type { Body, Story } from '@drawcall/animate'
 import type { Hurdle } from './track'
 
 /** how fast he sprints (m/s) */

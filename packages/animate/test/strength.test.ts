@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { Body } from '../src'
 import { tick } from '../src/size'
-import { person } from '../examples/person'
+import { person } from '../../../examples/person'
 
 const step = (body: Body, seconds: number) => {
   for (let n = 0; n < seconds * 60; n++) body.update(1 / 60)

@@ -1,4 +1,4 @@
-import type { Story } from 'animate-2d'
+import type { Story } from '@drawcall/animate'
 import { Vector3 } from 'three'
 import type { Soldier } from './soldier'
 

@@ -1,9 +1,9 @@
 import { expect, test } from 'vitest'
-import { bowl } from '../examples/bowling/bowl'
-import { ball as ballAt } from '../examples/bowling/lane'
+import { bowl } from '../../../examples/bowling/bowl'
+import { ball as ballAt } from '../../../examples/bowling/lane'
 import { Body } from '../src'
 import { tick } from '../src/size'
-import { person } from '../examples/person'
+import { person } from '../../../examples/person'
 
 test('the delivery: the ball leaves as written, the body does the rest, and he ends standing', () => {
   const body = new Body(person())

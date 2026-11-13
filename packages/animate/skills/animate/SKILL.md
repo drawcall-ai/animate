@@ -1,6 +1,6 @@
 ---
-name: animate-2d
-description: Write natural human motion for animate-2d's `Body` — walking, running, jumping, kicks, throws, reaches, holding and using things, a character led by a game. Use when authoring or fixing a story or a frame loop, or when one throws or looks unnatural; not for changing the library itself.
+name: animate
+description: Write natural human motion for `@drawcall/animate`'s `Body` — walking, running, jumping, kicks, throws, reaches, holding and using things, a character led by a game. Use when authoring or fixing a story or a frame loop, or when one throws or looks unnatural; not for changing the library itself.
 ---
 
 # Writing a motion

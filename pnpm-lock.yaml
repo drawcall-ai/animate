@@ -7,6 +7,216 @@ settings:
 importers:
 
   .:
+    devDependencies:
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
+      '@types/three':
+        specifier: ^0.187.0
+        version: 0.187.0
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+
+  examples/basketball:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/bowling:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/boxing:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/button:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/fencing:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/football:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/hurdles:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/javelin:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/led:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/patrol:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/rifleman:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/shelf:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/shooter:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/tennis:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/volleyball:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  packages/animate:
     dependencies:
       three:
         specifier: ^0.187.0
@@ -18,207 +228,18 @@ importers:
       '@types/three':
         specifier: ^0.187.0
         version: 0.187.0
-      typescript:
-        specifier: ^7.0.2
-        version: 7.0.2
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(vite@8.3.8)
 
-  examples/basketball:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
+  packages/hand:
+    devDependencies:
+      '@types/three':
+        specifier: ^0.187.0
+        version: 0.187.0
       three:
         specifier: ^0.187.0
         version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/bowling:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/boxing:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/button:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/fencing:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/football:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/hurdles:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/javelin:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/led:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/patrol:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/rifleman:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/shelf:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/shooter:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/tennis:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
-
-  examples/volleyball:
-    dependencies:
-      animate-2d:
-        specifier: workspace:*
-        version: link:../..
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      vite:
-        specifier: ^8.3.8
-        version: 8.3.8
 
 packages:
 

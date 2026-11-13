@@ -1,4 +1,4 @@
-import type { Side } from 'animate-2d'
+import type { Side } from '@drawcall/animate'
 import { Vector3 } from 'three'
 
 /** `held` while it is between the hands, where it lies against them; let go it has a `velocity` until it lies on something */

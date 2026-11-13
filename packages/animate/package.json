@@ -1,0 +1,22 @@
+{
+  "name": "@drawcall/animate",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@drawcall/rig": "^0.7.0",
+    "@types/three": "^0.187.0",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "files": [
+    "src",
+    "skills"
+  ]
+}

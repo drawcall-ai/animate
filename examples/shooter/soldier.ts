@@ -1,4 +1,4 @@
-import { Body, type Side, type Story } from 'animate-2d'
+import { Body, type Side, type Story } from '@drawcall/animate'
 import { Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three'
 import { grenade, reload, press, type Panel } from './actions'
 import { MAGAZINE, MAGAZINE_WRIST, magazine, RIFLE, rifle } from './rifle'

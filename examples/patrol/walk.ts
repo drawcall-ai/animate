@@ -1,4 +1,4 @@
-import type { Body, Story } from 'animate-2d'
+import type { Body, Story } from '@drawcall/animate'
 
 /** the corners of the square he walks round, on the ground, in the order he comes to them (m) */
 export const CORNERS = [

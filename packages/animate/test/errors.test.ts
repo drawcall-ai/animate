@@ -1,6 +1,6 @@
 import { Group, Object3D } from 'three'
 import { expect, test } from 'vitest'
-import { person } from '../examples/person'
+import { person } from '../../../examples/person'
 import { Body, type Story } from '../src'
 import { tick } from '../src/size'
 

@@ -1,4 +1,4 @@
-import type { Side } from 'animate-2d'
+import type { Side } from '@drawcall/animate'
 import { Vector3 } from 'three'
 
 /** a heavy bag: where it hangs from, how far its middle has swung from under there and how that changes (along the ground), and how many punches have landed on it */

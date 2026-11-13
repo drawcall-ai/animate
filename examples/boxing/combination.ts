@@ -1,4 +1,4 @@
-import type { Body, Story } from 'animate-2d'
+import type { Body, Story } from '@drawcall/animate'
 import { Vector3 } from 'three'
 import { type Bag, hit, later, meeting } from './bag'
 

@@ -1,6 +1,6 @@
 import { Group, Object3D, Quaternion, Vector3 } from 'three'
 import { expect, test } from 'vitest'
-import { person } from '../examples/person'
+import { person } from '../../../examples/person'
 import { Body } from '../src'
 
 const FRAME = 1 / 60

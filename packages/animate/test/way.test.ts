@@ -1,6 +1,6 @@
 import { type Object3D, Vector3 } from 'three'
 import { expect, test } from 'vitest'
-import { person } from '../examples/person'
+import { person } from '../../../examples/person'
 import { Body, type Story } from '../src'
 import { SIDES, SOLE, type Side, tick } from '../src/size'
 import { wrap } from '../src/world'

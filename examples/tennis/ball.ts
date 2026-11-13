@@ -1,4 +1,4 @@
-import type { Body } from 'animate-2d'
+import type { Body } from '@drawcall/animate'
 import { Vector3 } from 'three'
 
 /** a tennis ball: where it is and how it moves, whether it has been fed to him yet, and how often the strings have met it */
