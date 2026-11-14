@@ -5,7 +5,7 @@ export type Target = { at: Vector3; on: boolean; touches: number }
 
 /** how wide the pad is across and how thick, and how high its middle is (m) */
 export const PAD = { radius: 0.2, thick: 0.08, middle: 1.15 }
-/** how long the foil is from where it is held to its point (m) */
+/** how long the foil is from the middle of its handle, where it is held, to its point (m) */
 export const FOIL = 0.9
 /** how near the pad's face the point counts as on it (m) */
 const TOUCH = 0.03

@@ -12,9 +12,6 @@ const BOXES = [
 ]
 /** the button: how thick it is, its radius, and how far it stands out of the wall (m) */
 const BUTTON = { radius: 0.02, proud: 0.015 }
-/** how near the button he has to be to press it, along the ground (m) */
-const NEAR = 0.75
-
 const clamp = (value: number, least: number, most: number) => Math.min(most, Math.max(least, value))
 
 /** where the boxes let the middle of his hips be, that would be at a place: out of each, the shortest way */
@@ -33,7 +30,7 @@ export function clear({ x, z }: { x: number; z: number }) {
   return { x, z }
 }
 
-/** The floor's boxes and the wall with its panel: what is drawn, the panel, and whether he is near enough to press its button. */
+/** The floor's boxes and the wall with its panel: what is drawn, the panel, and whether he is near enough to press its button: within an arm's length of it along the ground. */
 export function level() {
   const wall = BOXES[0]
   const panel: Panel = {
@@ -61,7 +58,8 @@ export function level() {
   return {
     drawn,
     panel,
-    near: (hips: { x: number; z: number }) => Math.hypot(hips.x - panel.button.x, hips.z - panel.button.z) < NEAR,
+    near: (hips: { x: number; z: number }, arm: number) =>
+      Math.hypot(hips.x - panel.button.x, hips.z - panel.button.z) < arm,
     update() {
       button.position.copy(panel.button).z += BUTTON.proud / 2 + (panel.pressed ? TRAVEL : 0)
       button.material.color.set(panel.pressed ? 0x30d030 : 0xd03030)

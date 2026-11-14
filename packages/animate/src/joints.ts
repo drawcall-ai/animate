@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import type { Range } from './curve'
 import { Goal, REST } from './goal'
-import { type Finger, Fingers } from './hand'
+import { FINGERS, type Finger, Fingers } from './hand'
 import { Limb } from './limb'
 import { HEEL, SIDES, SIGN, type Side, type Size, TICKS, both } from './size'
 
@@ -68,7 +68,7 @@ export function joints(
       const beside = { beside: SIGN[side] * shoulder, long: trunk, thick: THICK * shoulder }
       // hanging, a palm faces the trunk
       const palm = new Vector3(-SIGN[side], 0, 0)
-      const fingers = chains[side] && new Fingers(`${side} hand`, palm, chains[side], beat)
+      const fingers = chains[side] && new Fingers(`${side} hand`, side, chains[side], beat)
       const hand = { wrist: part('wrist', `${side} wrist`), palm, fingers }
       const [arm, fore] = [part('arm', `${side} arm`), part('forearm', `${side} forearm`)]
       return new Limb(arm, fore, upperArm, forearm, false, beside, hand)
@@ -82,5 +82,8 @@ export const parts = ({ trunk, head, legs, arms }: Joints) => [
   trunk,
   head,
   ...SIDES.flatMap((side) => [arms[side].first, arms[side].second, legs[side].first, legs[side].second]),
-  ...SIDES.flatMap((side) => [arms[side].hand.wrist, ...Object.values(arms[side].hand.fingers?.curl ?? {})]),
+  ...SIDES.flatMap((side) => {
+    const { wrist, fingers } = arms[side].hand
+    return [wrist, ...FINGERS.flatMap((finger) => (fingers ? [fingers.spread[finger], fingers.bend[finger]] : []))]
+  }),
 ]

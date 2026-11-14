@@ -1,7 +1,7 @@
 import { Euler, Matrix3, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
 import { AXES, type State, between, bounds, inside, longest } from './curve'
 import { EASY, type Goal, MOST, REST } from './goal'
-import { DOWN, type Touch, bends, bent, rests } from './hand'
+import { DOWN, type Finger, bends, bent } from './hand'
 import type { Ahead } from './ahead'
 import type { Limb } from './limb'
 import type { Root } from './roots'
@@ -12,8 +12,9 @@ import { EXACT, GRAVITY, NUDGE, type Xyz, clamp, steps } from './world'
 
 /**
  * where an end is sent, and how it is to move there: a place `on` him is counted from where its limb starts, as he
- * faces, and one on a thing in its frame. A hand may be turned for its `palm` to face and for it to be `pointing` a
- * way, and be sent to be there `with` a part of it other than the wrist
+ * faces, and one on a thing in its frame. A hand may be turned for its `palm` to face and for what lies `along` a way
+ * in it, the fingers unless that is said, to be `pointing` a way, and be sent to be there `with` a part of it other
+ * than the wrist: a fingertip, the palm, or a point of what it carries, from the wrist in the frame of the hand
  */
 export type Target = {
   place: Vector3
@@ -21,13 +22,15 @@ export type Target = {
   on?: 'him' | Object3D
   palm?: Vector3
   pointing?: Vector3
-  with?: Touch
+  along?: Vector3
+  with?: Finger | 'palm' | Vector3
 }
 /**
  * what a body's places are told against: what takes the scene to the frame they are told in, the rig, and the bone the
- * limb starts at; and the body, which a place is on that is on him
+ * limb starts at; the body, which a place is on that is on him; and how the bone at the limb's end is turned as the
+ * limb hangs straight down, and how large it is
  */
-export type Rigged = { frame: Matrix4; rig: Object3D; limb: Object3D; body: object }
+export type Rigged = { frame: Matrix4; rig: Object3D; limb: Object3D; body: object; hangs: Quaternion; large: number }
 /**
  * how an end gets to a target: the moment it is there, the moment it sets off, how long it swings into a fast arrival,
  * drawn back first (s), what the body gets down for it, and whether it was there at its moment once that has come
@@ -200,12 +203,21 @@ export class Planner {
 
   /** where what a target is sent with is `seconds` on, from where the end is, as its joints are turning: there, or at a part of the hand */
   protected tipped({ with: touch }: Target, seconds: number, at: Vector3) {
-    const { first, second, wrist, hand } = this.limb
-    if (!touch || !wrist || !hand?.fingers) return at
+    const { first, second, wrist } = this.limb
+    if (!touch || !wrist) return at
     const on = ({ value, velocity }: State) => new Vector3().copy(value).addScaledVector(velocity, seconds)
     this.root.at(seconds, start, turned)
     bent(fore(turned, on(first), on(second).x, forearm), on(wrist), bend)
-    return at.add(hand.fingers.tip(touch, seconds).applyQuaternion(bend))
+    return at.add(this.touch(touch, seconds).applyQuaternion(bend))
+  }
+
+  /** where a part of the hand is from the wrist `seconds` from now, in the frame of the hand */
+  private touch(touch: Finger | 'palm' | Vector3, seconds: number) {
+    if (touch instanceof Vector3) return touch.clone()
+    const fingers = this.limb.hand?.fingers
+    if (!fingers)
+      throw new Error(`the ${this.name} is to be somewhere with its ${touch}, and its rig has no finger bones`)
+    return fingers.tip(touch, seconds)
   }
 
   /**
@@ -275,11 +287,9 @@ export class Planner {
     const { hand } = limb
     this.root.at(seconds, start, turned)
     const [hangs, back] = [turned.clone(), turned.clone().invert()]
-    const tip = target.with && hand?.fingers?.tip(target.with, seconds)
+    const tip = target.with && this.touch(target.with, seconds)
     const [palm, pointing] = [target.palm, target.pointing].map((way) => way?.clone().applyQuaternion(ways))
     const turns = palm || pointing
-    // (closed around something, what points is what they hold)
-    const along = pointing && hand?.fingers?.held
     const lies = new Quaternion()
     const arm = (at: Vector3, far?: number) => {
       to.copy(at).sub(start).applyQuaternion(back)
@@ -299,11 +309,10 @@ export class Planner {
         fore(hangs, first, fold, posed.forearm)
         const clear = !limb.inside(first, fold)
         if (!hand || !posed.wrist) return clear
-        const turn = turns && bends(posed.forearm, hand.palm, palm, pointing, along)
+        const turn = turns && bends(posed.forearm, hand.palm, palm, pointing, target.along)
         posed.stuck =
           turns && !turn ? `the ${hand.wrist.name} cannot turn its hand so: say a palm across where it points` : ''
-        if (turn) posed.wrist.copy(turn)
-        else rests(hand, posed.wrist)
+        posed.wrist.copy(turn || REST)
         bent(posed.forearm, posed.wrist.add(whip ?? REST), lies)
         return clear && (!turn || inside(turn, hand.wrist.range))
       }

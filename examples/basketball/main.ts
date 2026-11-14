@@ -1,8 +1,9 @@
 import { Body } from '@drawcall/animate'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry, TorusGeometry } from 'three'
+import { carry } from '../carry'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
-import { type Ball, HOOP, RADIUS, ball, fly } from './court'
+import { type Ball, GRIP, HOOP, RADIUS, ball, fly } from './court'
 import { jumpShot } from './shot'
 
 const ballMesh = new Mesh(new SphereGeometry(RADIUS), new MeshStandardMaterial({ color: 0xe07020 }))
@@ -22,13 +23,12 @@ let past: number | undefined
 run({
   begin() {
     const man = mannequin()
+    const held = carry(man, 'right', ballMesh, GRIP)
     body = new Body(man)
     shot = ball()
     left = undefined
     past = undefined
-    body.play(jumpShot(body, shot))
-    ballMesh.position.set(0, 0, 0)
-    body.hand.right.grip.add(ballMesh)
+    body.play(jumpShot(body, shot, ballMesh, held))
     return (scene = new Group().add(man, ring, board))
   },
   update(delta) {

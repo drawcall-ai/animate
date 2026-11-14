@@ -1,9 +1,16 @@
+import type { Statement } from '@drawcall/hand'
 import { type Object3D, Vector3 } from 'three'
 
 /** `velocity` is none while it is in the hand */
 export type Ball = { position: Vector3; velocity: Vector3 | null }
 
 export const RADIUS = 0.12
+/** the shooting hand's palm under the ball, the fingers spread round it: the thumb does not reach round a ball so big */
+export const GRIP: Statement = {
+  at: new Vector3(0, -RADIUS, 0),
+  from: new Vector3(0, -1, 0),
+  using: ['palm', 'index', 'middle', 'ring', 'little'],
+}
 /** where the middle of the ring is, in the line of a right hand, above the floor and ahead of where the shooter starts, and how wide it is (m) */
 export const HOOP = { x: -0.1, y: 3.05, z: 6, radius: 0.225 }
 const GRAVITY = 9.81
@@ -17,10 +24,10 @@ export function arc(from: Vector3, up: number) {
   return new Vector3(0, speed * Math.sin(up), speed * Math.cos(up))
 }
 
-/** it leaves the grip that holds it, moving so */
-export function letGo(b: Ball, grip: Object3D, velocity: Vector3) {
-  grip.updateWorldMatrix(true, false)
-  grip.getWorldPosition(b.position)
+/** it leaves the hand that holds it, moving so */
+export function letGo(b: Ball, held: Object3D, velocity: Vector3) {
+  held.updateWorldMatrix(true, false)
+  held.getWorldPosition(b.position)
   b.velocity = velocity.clone()
 }
 

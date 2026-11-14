@@ -1,14 +1,18 @@
 import { expect, test } from 'vitest'
 import { bowl } from '../../../examples/bowling/bowl'
-import { ball as ballAt } from '../../../examples/bowling/lane'
+import { ball as ballAt, GRIP, sphere } from '../../../examples/bowling/lane'
+import { carry } from '../../../examples/carry'
 import { Body } from '../src'
 import { tick } from '../src/size'
 import { person } from '../../../examples/person'
 
 test('the delivery: the ball leaves as written, the body does the rest, and he ends standing', () => {
-  const body = new Body(person())
+  const man = person()
+  const drawn = sphere()
+  const held = carry(man, 'right', drawn, GRIP)
+  const body = new Body(man)
   const ball = ballAt()
-  body.play(bowl(body, ball))
+  body.play(bowl(body, ball, drawn, held))
   let released: { left: number; right: number } | undefined
   let back = 0
   for (let n = 0; n < 2000 && body.playing; n++) {

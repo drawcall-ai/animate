@@ -1,13 +1,17 @@
 import { expect, test } from 'vitest'
-import { fly, javelin } from '../../../examples/javelin/field'
+import { carry } from '../../../examples/carry'
+import { fly, GRIP, javelin, shaft } from '../../../examples/javelin/field'
 import { javelinThrow } from '../../../examples/javelin/throw'
 import { Body } from '../src'
 import { person } from '../../../examples/person'
 
 test('the throw: the javelin leaves the hand as written, and he ends standing', () => {
-  const body = new Body(person())
+  const man = person()
+  const drawn = shaft()
+  const held = carry(man, 'right', drawn, GRIP)
+  const body = new Body(man)
   const thrown = javelin()
-  body.play(javelinThrow(body, thrown))
+  body.play(javelinThrow(body, thrown, drawn, held))
   let left: { speed: number; up: number } | undefined
   for (let n = 0; n < 600 && body.playing; n++) {
     body.update(1 / 60)

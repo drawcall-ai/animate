@@ -1,11 +1,12 @@
 import type { Body, Story } from '@drawcall/animate'
+import { flat } from '@drawcall/hand'
 import { Vector3 } from 'three'
 import { type Box, PALM, SHELF, clear, grip, shelved, take } from './box'
 
 /** He walks up to a box on the floor, takes it up by its sides, carries it to the shelf, sets it down there and steps back. */
 export function* shelve(body: Body, box: Box): Story {
   // he walks up to the box, and the hands take it by its sides
-  for (const hand of [body.hand.left, body.hand.right]) hand.shape('flat')
+  for (const hand of [body.hand.left, body.hand.right]) hand.shape(flat)
   body.walk(box.position.z - 0.45)
   body.hand.left.to(grip(box.position, 'left'), PALM.left)
   yield* body.hand.right.to(grip(box.position, 'right'), PALM.right)

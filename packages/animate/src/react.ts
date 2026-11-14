@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import type { Ahead, Wound } from './ahead'
 import { AXES, cubic } from './curve'
-import { rests } from './hand'
+import { REST } from './goal'
 import { UP, WOUND, behind } from './hips'
 import { type Joints, RANGE } from './joints'
 import { sway } from './plan'
@@ -134,7 +134,7 @@ export class Reactions {
       // the trunk is in an arm's way, whatever swings it: it is held off, out to its side
       while (joints.arms[side].inside(arm.value, forearm.value.x) && Math.abs(arm.value.z) < RANGE.arm.z[1])
         arm.value.z += SIGN[side] * HAIR
-      hand.wrist.react(rests(hand, want), delta)
+      hand.wrist.react(REST, delta)
       hand.fingers?.react(delta)
     }
   }

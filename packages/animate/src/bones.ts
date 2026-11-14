@@ -1,4 +1,4 @@
-import { Euler, Bone as Joint, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
+import { Euler, Bone as Joint, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { State } from './curve'
 import { DOWN, FINGERS, type Finger, each } from './hand'
 import { UP } from './hips'
@@ -8,8 +8,7 @@ import { GRAVITY } from './world'
 
 /**
  * how much of its length a line across a rig at rest runs along what it is to run along, at the least: from right to
- * left along +x, from the hips up to the shoulders, from an ankle up to its hip, by the length of a leg, and across the
- * knuckles of a hand that hangs, from the little finger ahead to the index
+ * left along +x, from the hips up to the shoulders, and from an ankle up to its hip, by the length of a leg
  */
 const SQUARE = 0.97
 const euler = new Euler()
@@ -24,6 +23,7 @@ const trunk = new Quaternion()
 const turned = new Quaternion()
 const folded = new Quaternion()
 const round = new Quaternion()
+const twist = new Quaternion()
 
 /** how the pelvis is turned: about the vertical and listing as the hips have it, and about the line between the hips as the trunk is, which bends there */
 function pelvis(turn: number, list: number, trunk: Quaternion, to: Quaternion) {
@@ -54,19 +54,21 @@ class Bone {
   /** in that pose: how the part is turned from where the rig has it at rest, how the bone it hangs from in the rig is turned, and its own */
   private readonly straight = new Quaternion()
   private readonly rides = new Quaternion()
-  private readonly hangs = new Quaternion()
+  readonly hangs = new Quaternion()
   /** how large the bone is in the frame of the body */
-  private readonly large: number
+  readonly large: number
 
   /**
    * `frame` takes the world to the frame of the body; a part of a limb reaches from its joint to an `end`, the joint of
-   * the next: a hand, or a bone of a finger, is given a bone instead, and lies as it does against that
+   * the next, and hangs `twisted` so far about its length: a hand without knuckles, or a bone of a finger, is given a
+   * bone instead, and lies as it does against that
    */
   constructor(
     frame: Matrix4,
     readonly bone: Object3D,
     private readonly on?: Bone,
     end?: Object3D | Bone,
+    twisted = 0,
   ) {
     matrix.multiplyMatrices(frame, bone.matrixWorld).decompose(this.rest, this.hangs, scale)
     this.large = scale.x
@@ -74,20 +76,13 @@ class Bone {
     else if (end) {
       at.setFromMatrixPosition(matrix.multiplyMatrices(frame, end.matrixWorld))
       this.straight.setFromUnitVectors(at.sub(this.rest).normalize(), DOWN)
+      this.straight.premultiply(twist.setFromAxisAngle(DOWN, twisted))
     }
     this.hangs.premultiply(this.straight)
     matrix.multiplyMatrices(frame, above(bone).matrixWorld).decompose(at, this.rides, scale)
     if (!on) return
     this.rides.premultiply(on.straight)
     this.at.copy(this.rest).sub(on.rest).applyQuaternion(on.straight)
-  }
-
-  /** hangs a thing on the bone, in the frame the body counts it in and in the body's lengths */
-  hang(thing: Object3D) {
-    const frame = new Object3D().add(thing)
-    frame.quaternion.copy(this.hangs).invert()
-    frame.scale.setScalar(1 / this.large)
-    this.bone.add(frame)
   }
 
   carry(on: Bone) {
@@ -118,7 +113,7 @@ const DIGIT = { finger: ['Proximal', 'Intermediate', 'Distal'], thumb: ['Metacar
  * `right`, each hanging from the one before it. How they stand when the body is made is the rest pose, which it is
  * measured by: facing +z, its left at +x, upright on y = 0, in the frame the body's places are told in. That is where
  * the rig is, turned as it is, in the lengths of what holds it: the rig's own scale is part of how large he is. A hand
- * may have fingers: `Thumb`, `Index`, `Middle`, `Ring` and `Little`, each up to three bones hanging from one another,
+ * may have fingers: `Thumb`, `Index`, `Middle`, `Ring` and `Little`, each three bones hanging from one another,
  * `Proximal`, `Intermediate` and `Distal`, a thumb's `Metacarpal`, `Proximal` and `Distal`, with something hanging
  * from the last where the fingertip is. A bone the body does not turn stays as it is against the bone it hangs from.
  */
@@ -152,28 +147,41 @@ export class Bones {
       if (bone) return bone
       throw new Error(`the rig has no bone named ${name}${under === rig ? '' : ` hanging from its ${under.name}`}`)
     }
-    const bone = (name: string, on?: Bone, end?: string) =>
-      new Bone(frame, find(name, on?.bone), on, end === undefined ? undefined : find(end))
-    // (a foot stands as the rig has it on the ground, a hand lies as it has it against the forearm)
-    const limb = (names: string[], on: Bone, lies: boolean) =>
+    const bone = (name: string, on?: Bone, end?: string, twisted?: number) =>
+      new Bone(frame, find(name, on?.bone), on, end === undefined ? undefined : find(end), twisted)
+    const position = (bone: Object3D) =>
+      new Vector3().setFromMatrixPosition(matrix.multiplyMatrices(frame, bone.matrixWorld))
+    // a hand hangs in line with its forearm, the palm toward the thigh, as its knuckles tell: a rig may rest its hands
+    // bent at the wrist and its forearms turned any way, and the wrist turns from there; a hand without them lies as
+    // the rig has it against the forearm, and a foot stands as the rig has it on the ground
+    const limb = (names: string[], on: Bone, arm: boolean) =>
       both((side) => {
         const [first, second, end] = names.map((name) => side + name)
         const upper = bone(first, on, second)
-        const lower = bone(second, upper, end)
-        return [upper, lower, new Bone(frame, find(end, lower.bone), lower, lies ? lower : undefined)]
+        const hand = find(end, find(second, upper.bone))
+        const knuckle = (finger: string) => hand.getObjectByName(`${side}${finger}Proximal`)
+        const [index, middle, little] = ['Index', 'Middle', 'Little'].map(knuckle)
+        if (!arm || !index || !middle || !little) {
+          const lower = bone(second, upper, end)
+          return [upper, lower, new Bone(frame, hand, lower, arm ? lower : undefined)]
+        }
+        const hanging = twist.setFromUnitVectors(position(middle).sub(position(hand)).normalize(), DOWN)
+        const across = position(index).sub(position(little)).applyQuaternion(hanging)
+        const twisted = Math.atan2(across.x, across.z)
+        const lower = bone(second, upper, end, twisted)
+        return [upper, lower, new Bone(frame, hand, lower, middle, twisted)]
       })
     const named = (side: Side, name: Finger) =>
       DIGIT[name === 'thumb' ? 'thumb' : 'finger'].map(
         (part) => `${side}${name[0].toUpperCase()}${name.slice(1)}${part}`,
       )
     const finger = (side: Side, name: Finger, hand: Bone) => {
-      const names = named(side, name)
-      let last = new Bone(frame, find(names[0], hand.bone), hand, hand)
-      const chain = [last]
-      for (const name of names.slice(1)) {
-        const next = last.bone.getObjectByName(name)
-        if (next) chain.push((last = new Bone(frame, next, last, last)))
+      const chain: Bone[] = []
+      for (const part of named(side, name)) {
+        const on = chain.at(-1) ?? hand
+        chain.push(new Bone(frame, find(part, on.bone), on, hand))
       }
+      const last = chain[2]
       const [tip, more] = last.bone.children.filter((child) => child instanceof Joint)
       if (tip && !more) return [...chain, new Bone(frame, tip, last, last)]
       throw new Error(
@@ -217,10 +225,6 @@ export class Bones {
     if (askew(waist, shoulders, 'y')) refuse('the shoulders are not above the hips')
     if (SIDES.some((side) => askew(legs[side][2].rest, legs[side][0].rest, 'y', thigh + shin)))
       refuse('a leg is not straight down from its hip to its ankle')
-    for (const hand of SIDES.flatMap((side) => this.fingers[side] ?? [])) {
-      const across = at.copy(hand.index[0].at).sub(hand.little[0].at)
-      if (across.z <= SQUARE * across.length()) refuse('a palm does not face down with the arm out')
-    }
     const [leg, beat] = [thigh + shin, Math.sqrt((thigh + shin) / GRAVITY)]
     // (a heel comes up to bring its ankle up and nearer the hip: an ankle higher than the ball is ahead of it is carried on instead, and a foot that comes down ahead of him stays out of its leg's reach)
     if (feet.y <= 0 || feet.y >= SOLE.ball * leg)
@@ -250,9 +254,10 @@ export class Bones {
     return hand && each((name) => hand[name].map((bone) => bone.at))
   }
 
-  /** hangs a thing on a hand, in the frame of the hand as it hangs straight down */
-  hang(side: Side, thing: Object3D) {
-    this.arms[side][2].hang(thing)
+  /** how the bone at the end of a leg or an arm is turned in that pose, as its limb hangs straight down, and how large it is */
+  lies(end: 'foot' | 'hand', side: Side) {
+    const { hangs, large } = (end === 'foot' ? this.legs : this.arms)[side][2]
+    return { hangs, large }
   }
 
   /** where a shoulder is, the hips at a place, he `facing` a way there (rad about y), and against that the pelvis turned and listing and the trunk turned so */
@@ -304,17 +309,15 @@ export class Bones {
     }
   }
 
-  /** turns the bones of the fingers to how far they are folded, on hands turned as they were last */
+  /** turns the bones of the fingers to how they are spread and bent, on hands turned as they were last */
   grasp({ arms }: Joints) {
     for (const side of SIDES) {
-      const [folds, bones] = [arms[side].hand.fingers, this.fingers[side]]
-      if (!folds || !bones) continue
+      const [fingers, bones] = [arms[side].hand.fingers, this.fingers[side]]
+      if (!fingers || !bones) continue
       for (const name of FINGERS) {
-        const { axes } = folds.digits[name]
         turned.copy(this.arms[side][2].turned)
         // (what hangs from the last bone, where the fingertip is, goes with it)
-        for (let k = 0; k < axes.length; k++)
-          bones[name][k].turn(turned.multiply(folded.setFromAxisAngle(axes[k], folds.curl[name].value.getComponent(k))))
+        fingers.turns(name).forEach((by, k) => bones[name][k].turn(turned.multiply(by)))
       }
     }
   }

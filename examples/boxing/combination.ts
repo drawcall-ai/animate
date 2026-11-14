@@ -1,4 +1,5 @@
 import type { Body, Story } from '@drawcall/animate'
+import { fist } from '@drawcall/hand'
 import { Vector3 } from 'three'
 import { type Bag, hit, later, meeting } from './bag'
 
@@ -14,7 +15,7 @@ const BACK = 0.35
 /** From a guard he steps in, jabs with the left hand, throws a cross with the right, and steps back out into his guard. */
 export function* combination(body: Body, bag: Bag): Story {
   const out = body.hips.value.z
-  for (const hand of [body.hand.left, body.hand.right]) hand.shape('fist')
+  for (const hand of [body.hand.left, body.hand.right]) hand.shape(fist)
   body.hand.left.to(GUARD.left, { on: body })
   yield* body.hand.right.to(GUARD.right, { on: body })
 

@@ -1,15 +1,14 @@
 import type { Body } from '@drawcall/animate'
-import { Vector3 } from 'three'
+import { type Object3D, Vector3 } from 'three'
+import { RACKET } from './racket'
 
 /** a tennis ball: where it is and how it moves, whether it has been fed to him yet, and how often the strings have met it */
 export type Ball = { position: Vector3; velocity: Vector3; fed: boolean; struck: number }
 
 /** how big the ball is (m), and how much of its speed up and along comes back off the ground */
 export const BALL = { radius: 0.033, bounce: 0.72, slide: 0.7 }
-/** a racket: how far from where it is held the middle of its strings is, how wide its head is (m), and how much of the closing speed comes back off the strings */
-export const RACKET = { reach: 0.5, head: 0.14, spring: 0.4 }
 /** how the ball is fed to him: from where, and moving how (m, m/s) */
-const FEED = { from: new Vector3(-1.245, 1, 11.9), velocity: new Vector3(0, 4.5, -8) }
+const FEED = { from: new Vector3(-1, 1, 11.9), velocity: new Vector3(0, 4.5, -8) }
 /** how near the middle of the strings the ball counts as on them (m) */
 const TOUCH = 0.2
 const GRAVITY = 9.81
@@ -47,19 +46,16 @@ export function top(ball: Ball) {
   throw new Error('the ball does not bounce')
 }
 
-/** where the middle of the strings is, the racket in the grip of the right hand */
-export function strings(body: Body) {
-  const { grip } = body.hand.right
-  grip.updateWorldMatrix(true, false)
-  return grip.localToWorld(new Vector3(0, 0, RACKET.reach))
-}
+/** where the middle of the strings is */
+export const strings = (racket: Object3D) => racket.localToWorld(new Vector3(0, 0, RACKET.strings))
 
-/** where the racket is held as the strings meet a ball, the racket pointing a way */
-export const held = (ball: Vector3, way: Vector3) => way.clone().setLength(-RACKET.reach).add(ball)
+/** where the butt of the racket is as the strings meet a ball, the racket pointing a way */
+export const butt = (ball: Vector3, way: Vector3) => way.clone().setLength(-RACKET.strings).add(ball)
 
 /** strings that are on the ball send it off the way the hand is moving */
-export function strike(ball: Ball, body: Body) {
-  if (strings(body).distanceTo(ball.position) > TOUCH) return
+export function strike(ball: Ball, racket: Object3D, body: Body) {
+  racket.updateWorldMatrix(true, false)
+  if (strings(racket).distanceTo(ball.position) > TOUCH) return
   const { velocity } = body.hand.right
   const way = velocity.clone().normalize()
   const closing = velocity.dot(way) - ball.velocity.dot(way)

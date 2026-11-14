@@ -8,8 +8,8 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
-import { mannequin } from '../mannequin'
 import { clear, level } from './level'
+import { rig } from './skeleton'
 import { Soldier } from './soldier'
 
 /** how far the aim turns for the mouse and for an arrow key held (rad a pixel, rad/s), and how far up and down it goes (rad) */
@@ -32,7 +32,17 @@ scene.background = new Color(0x202020)
 const sun = new DirectionalLight(0xffffff, 2.5)
 sun.position.set(-3, 5, -2)
 const world = level()
-const soldier = new Soldier(mannequin(), clear)
+// the model is rigged as it loads, from what the vitecache plugin rigged ahead, or in the browser when that is missing
+readout.textContent = 'preparing the rig…'
+const rigged = await rig().catch((error: unknown) => {
+  readout.textContent = `could not rig him: ${error instanceof Error ? error.message : String(error)}`
+  throw error
+})
+rigged.scene.traverse((part) => {
+  // (the skinned meshes are bounded where the model rests, not where the body takes them)
+  part.frustumCulled = false
+})
+const soldier = new Soldier(rigged.scene, clear)
 scene.add(new HemisphereLight(0xffffff, 0x404040, 1.5), sun, new GridHelper(40, 40, 0x808080, 0x404040))
 scene.add(world.drawn, soldier.shown)
 
@@ -45,7 +55,7 @@ addEventListener('keydown', (event) => {
   if (event.code === 'KeyR') soldier.reload()
   if (event.code === 'KeyG') soldier.throw()
   if (event.code === 'Space' || event.code === 'KeyJ') soldier.jump()
-  if (event.code === 'KeyE' && world.near(soldier.body.hips.value)) soldier.press(world.panel)
+  if (event.code === 'KeyE' && world.near(soldier.body.hips.value, soldier.body.size.arm)) soldier.press(world.panel)
   // a blow from in front of him
   if (event.code === 'KeyH') soldier.hit({ x: -Math.sin(aim.yaw), z: -Math.cos(aim.yaw) })
   if (event.code === 'Space' || event.code.startsWith('Arrow')) event.preventDefault()
@@ -104,7 +114,7 @@ renderer.setAnimationLoop((now) => {
   renderer.render(scene, camera)
   const { x, z } = soldier.body.hips.velocity
   readout.textContent = [
-    `speed  ${Math.hypot(x, z).toFixed(1)} m/s   shots ${soldier.shots}   ${soldier.doing ?? ''}${world.near(hips) ? '   E: press the button' : ''}`,
+    `speed  ${Math.hypot(x, z).toFixed(1)} m/s   shots ${soldier.shots}   ${soldier.doing ?? ''}${world.near(hips, soldier.body.size.arm) ? '   E: press the button' : ''}`,
     ...soldier.errors.slice(-2).map((said) => `could not: ${said}`),
   ].join('\n')
 })

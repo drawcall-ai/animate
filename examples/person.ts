@@ -1,5 +1,5 @@
 import type { SkeletonBone } from '@drawcall/rig'
-import { Bone, Group, type Object3D } from 'three'
+import { Bone, Group, type Object3D, Vector3 } from 'three'
 
 const BODY = [
   { name: 'hips', position: [0, 0.95, 0] },
@@ -85,15 +85,15 @@ const fingers = <Side extends 'left' | 'right'>(side: Side, wrist: number) =>
 export const FINGERS = [...fingers('left', 0.81), ...fingers('right', -0.81)]
 export const PERSON = [...BODY, ...FINGERS] satisfies readonly SkeletonBone[]
 
-/** The person's bones with nothing skinned to them, each where his skeleton has its joint, on a person `scale` times as large: all a body needs of a rig. */
-export function person(scale = 1) {
+/** The person's bones with nothing skinned to them, each where his skeleton has its joint, or where `moved` puts it, on a person `scale` times as large: all a body needs of a rig. */
+export function person(scale = 1, moved = (_name: string, at: Vector3) => at) {
   const sized = new Group()
   const bones = new Map<string, Object3D>()
   const skeleton: readonly SkeletonBone[] = PERSON
   for (const { name, parent, position } of skeleton) {
     const bone = new Bone()
     bone.name = name
-    bone.position.set(...position)
+    bone.position.copy(moved(name, new Vector3(...position)))
     const on = parent === undefined ? sized : bones.get(parent)
     if (!on) throw new Error(`the person's ${name} hangs from ${parent}, which is not listed before it`)
     on.attach(bone)
@@ -101,4 +101,43 @@ export function person(scale = 1) {
   }
   sized.scale.setScalar(scale)
   return new Group().add(sized)
+}
+
+const [X, Y, Z] = [new Vector3(1, 0, 0), new Vector3(0, 1, 0), new Vector3(0, 0, 1)]
+/** where the joints of a thumb lying along the index are, out from the wrist and ahead of it (m): a centimetre under the palm */
+const ALONG = [
+  [0.03, 0.025],
+  [0.06, 0.035],
+  [0.083, 0.04],
+  [0.1, 0.043],
+]
+
+/**
+ * A made-up man unlike the person, as a rig may come for the tests to stand a body on: his arms a quarter shorter, the
+ * forearms reaching a little ahead and turned palm in, the hands bent back at the wrist, the fingers curled and the
+ * thumb lying along the index, a little under the palm.
+ */
+export function other() {
+  return person(1, (name, at) => {
+    const arm = /^(left|right)(LowerArm|Hand|Thumb|Index|Middle|Ring|Little)(\w*)$/.exec(name)
+    if (!arm) return at
+    const [, side, part, joint] = arm
+    const s = side === 'left' ? 1 : -1
+    const [shoulder, elbow, wrist] = [0.2, 0.49, 0.81].map((out) => new Vector3(out * s, 1.42, 0))
+    const turn = (axis: Vector3, angle: number, about: Vector3) => at.sub(about).applyAxisAngle(axis, angle).add(about)
+    const digit = NAMES.find((finger) => finger === part)
+    if (digit === 'Thumb') {
+      const [out, ahead] = ALONG[PARTS.thumb.findIndex((name) => name === joint)]
+      at.set(wrist.x + s * out, 1.41, ahead)
+    } else if (digit && joint !== 'Proximal') {
+      const [out, ahead] = HAND[digit][0]
+      turn(Z, -0.4 * s, new Vector3(wrist.x + s * out, 1.42, ahead))
+    }
+    if (digit) {
+      turn(Z, 0.35 * s, wrist)
+      turn(X, 0.5 * s, wrist)
+    }
+    if (part !== 'LowerArm') turn(Y, -0.35 * s, elbow)
+    return at.sub(shoulder).multiplyScalar(0.75).add(shoulder)
+  })
 }

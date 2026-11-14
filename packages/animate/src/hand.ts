@@ -1,7 +1,7 @@
-import { Euler, Line3, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
-import { type Range, between, quickest } from './curve'
+import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
+import { quickest } from './curve'
 import { Goal, REST } from './goal'
-import { EXACT, type Story, type Xyz, clamp, waits, wrap } from './world'
+import { EXACT, type Story, type Xyz, waits } from './world'
 
 export const FINGERS = ['thumb', 'index', 'middle', 'ring', 'little'] as const
 export type Finger = (typeof FINGERS)[number]
@@ -12,49 +12,50 @@ export const each = <T>(make: (finger: Finger) => T): Record<Finger, T> => ({
   ring: make('ring'),
   little: make('little'),
 })
-/** how the fingers of a hand are held: flat, in a fist, pointing with the index, or closed `around` something so thick, a handle or a ball (its radius, m) */
-const SHAPES = ['flat', 'fist', 'point'] as const
-export type Shape = (typeof SHAPES)[number] | { around: number }
-/** what of a hand can be where it is sent instead of its wrist: the tip of a finger, the middle of the palm, or where a handle crosses the palm */
-export type Touch = Finger | 'palm' | 'grip'
+/**
+ * How the fingers of a hand are held, finger by finger (rad): `spread` turns a finger at its knuckle toward the
+ * thumb's side, and `bend` folds its three joints toward the palm, from the knuckle out. The thumb's first bend lifts
+ * it to stand in front of the palm, its other two fold it toward the fingers. A left and a right hand in one pose
+ * mirror each other. The poses `@drawcall/hand` makes are such.
+ */
+export type Pose = Record<Finger, { spread: number; bend: readonly [number, number, number] }>
+/** a thing as it sits in a hand: where it is and how it is turned in the frame of the rig's hand bone */
+export type Held = { position: Xyz; quaternion: Xyz & { w: number } }
+/** what of a hand can be where it is sent instead of its wrist: the tip of a finger, the middle of the palm, or a thing it carries, as it sits in the hand */
+export type Touch = Finger | 'palm' | Held
 
 /** the way a part of a limb hangs, and a hand lies from its wrist in line with a forearm that hangs so */
 export const DOWN = new Vector3(0, -1, 0)
-/** how far the joints of a finger fold from straight, from the knuckle out; and a thumb stands up in front of the palm, and its two outer joints fold across the hand (rad) */
-const FOLDS = {
-  finger: { x: [0, Math.PI / 2], y: [0, 2.1], z: [0, 1.4] },
-  thumb: { x: [0, 1.1], y: [0, 1], z: [0, 1.4] },
-} satisfies Record<string, Range>
-/** how they hang, left alone: each finger a little more curled than the one before it, and the thumb against the side of the index (rad) */
-const RELAXED = {
-  thumb: new Vector3(0.35, 0.8, 0.5),
-  index: new Vector3(0.25, 0.35, 0.2),
-  middle: new Vector3(0.3, 0.45, 0.25),
-  ring: new Vector3(0.35, 0.55, 0.3),
-  little: new Vector3(0.4, 0.65, 0.35),
+/** how far a finger is spread, and each of its joints bends, from the knuckle out (rad): as far as a person's go */
+const RANGE = {
+  finger: { spread: [-0.35, 0.35], bend: [-0.35, 1.55], middle: [0, 1.9], end: [-0.1, 1.4] },
+  thumb: { spread: [-0.4, 0.5], bend: [-0.2, 1.5], middle: [-0.2, 1], end: [-0.3, 1.4] },
+} satisfies Record<string, Record<string, [number, number]>>
+/** what a pose's angles turn, as an error names them */
+const JOINTS = ['spread', 'bent at the knuckle', 'bent at the middle joint', 'bent at the last joint']
+/**
+ * how the fingers hang, left alone: each a little more curled than the one before it, and the thumb turned in to
+ * rest by the index
+ */
+const RELAXED: Pose = {
+  thumb: { spread: -0.35, bend: [0.15, 0, 0.4] },
+  index: { spread: 0.04, bend: [0.2, 0.3, 0.15] },
+  middle: { spread: 0, bend: [0.28, 0.4, 0.2] },
+  ring: { spread: -0.04, bend: [0.36, 0.5, 0.25] },
+  little: { spread: -0.08, bend: [0.44, 0.6, 0.3] },
 }
 /** how strong a finger is: the most its joints can accelerate (rad a beat, a beat), and how many times a beat it comes round to hanging, free */
 const FINGER = { strength: 27, rate: 1.8 }
-/** how far back from the knuckles what a hand closes around lies in the palm at the most, in shares of how far they are from the wrist: behind it the thumb stands up */
-const PALM = 0.25
-/** how much further back a handle lies under the little finger than under the index, in shares of how far their knuckles are apart: across the palm toward its heel */
-const SLANT = 0.5
-/** how thick a finger is, which keeps the bones of a thumb that far off the bones of the finger it closes on: in shares of how far the knuckles are from the wrist */
-const THICK = 0.18
-/** where along a bone it is looked at for whether it is clear of what the hand closes around, in shares of its length */
-const ALONG = [0.25, 0.5, 0.75, 1]
-const kind = (finger: Finger) => (finger === 'thumb' ? 'thumb' : 'finger')
+const near = new Vector3()
+const turn = new Quaternion()
 const euler = new Euler()
 const matrix = new Matrix4()
 const across = new Vector3()
-const along = new Vector3()
-const near = new Vector3()
-const spin = new Quaternion()
 const still = new Quaternion()
 
 /**
  * How a wrist bends against a forearm turned so, for the `palm` of its hand to face and what lies `along` a way in the
- * hand, the fingers or what they hold, to be `pointing` a way: what is not said lies as near as it can to how it does
+ * hand, the fingers or what it carries, to be `pointing` a way: what is not said lies as near as it can to how it does
  * in line with the forearm. About y, as the forearm twists, then x, toward the little finger, then z, folding (rad).
  * With the palm to face along the forearm, or to point the way the forearm has the palm face, nothing tells: none.
  */
@@ -62,219 +63,174 @@ export function bends(forearm: Quaternion, rest: Vector3, palm?: Vector3, pointi
   const lies = (way: Vector3) => way.clone().applyQuaternion(forearm)
   const square = (way: Vector3, to: Vector3) =>
     way.addScaledVector(to, -way.dot(to)).lengthSq() > EXACT ? way.normalize() : undefined
-  const point = pointing ?? lies(DOWN)
+  const point = pointing ?? lies(along)
   const face = palm ?? square(lies(rest), point)
   const long = face && square(point.clone(), face)
-  if (!face || !long) return undefined
+  // said a palm, the palm faces as said; else what lies along the way in the hand points as said
+  const [mine, lying] = palm ? [rest, square(along.clone(), rest)] : [square(rest.clone(), along), along]
+  if (!face || !long || !mine || !lying) return undefined
   const turned = (face: Vector3, long: Vector3, to: Quaternion) =>
     to.setFromRotationMatrix(matrix.makeBasis(face, long, across.crossVectors(face, long)))
-  const hand = turned(face, long, new Quaternion()).multiply(turned(rest, along, still).invert())
+  const hand = turned(face, long, new Quaternion()).multiply(turned(mine, lying, still).invert())
   return new Vector3().setFromEuler(euler.setFromQuaternion(hand.premultiply(still.copy(forearm).invert()), 'YXZ'))
-}
-
-/** a wrist that holds something rests toward the little finger, for what it holds to go on along the forearm */
-export function rests({ wrist, fingers }: { wrist: Goal; fingers?: Fingers }, to: Vector3) {
-  const held = fingers?.held
-  const [least, most] = wrist.range.x ?? [-Infinity, Infinity]
-  return to.set(held ? clamp(wrap(Math.PI - Math.atan2(held.z, held.y)), least, most) : 0, 0, 0)
 }
 
 /** how a hand is turned in the frame of the body, its wrist bent so against a forearm */
 export const bent = (forearm: Quaternion, wrist: Xyz, to: Quaternion) =>
   to.setFromEuler(euler.set(wrist.x, wrist.y, wrist.z, 'YXZ')).premultiply(forearm)
 
-/**
- * a finger, the hand lying as it rests against a forearm that hangs straight down: where its knuckle is from the wrist,
- * where each of its bones ends from where it starts, the last at the fingertip (m), and what each turns about to fold
- */
-type Digit = { knuckle: Vector3; bones: Vector3[]; axes: Vector3[] }
-
-/** a bone of a finger, from the wrist in the frame of the hand, its joints folded so */
-function span({ knuckle, bones, axes }: Digit, curl: Vector3, bone: number) {
-  const [line, turned] = [new Line3(undefined, knuckle.clone()), new Quaternion()]
-  for (let k = 0; k <= bone; k++) {
-    turned.multiply(spin.setFromAxisAngle(axes[k], curl.getComponent(k)))
-    line.start.copy(line.end)
-    line.end.add(along.copy(bones[k]).applyQuaternion(turned))
-  }
-  return line
-}
+/** `v` made square to the unit direction `to`, as a unit */
+const square = (v: Vector3, to: Vector3) => v.clone().addScaledVector(to, -v.dot(to)).normalize()
 
 /**
- * The fingers of a hand: each folds at up to three joints, from the knuckle out, and the thumb stands up in front of
- * the palm at its first. A shape they are given they hold until they are given another, whatever the hand does.
+ * The fingers of a hand, as the rig's bones have them: each is spread at its knuckle and bends at three joints from
+ * there out, about axes read from the rig's hand as `@drawcall/hand` reads them, so that a pose from it is had
+ * here as it is there. A pose they are given they hold until they are given another, whatever the hand does.
  */
 export class Fingers {
-  /** how far the joints of each are folded (rad): x, y and z from the knuckle out */
-  readonly curl: Record<Finger, Goal>
-  readonly digits: Record<Finger, Digit>
-  /** how far the joints of each are to fold, for the shape they were last given */
-  private shaped?: Record<Finger, Vector3>
-  /** a shape they are to have at a moment: how far each joint is to fold, how thick what they close around is, and how long until then (s) */
-  private due?: { curls: Record<Finger, Vector3>; thick: number; left: number }
-  /**
-   * where what the hand holds lies, for what the fingers last set off to close around: in the middle of the handle,
-   * its z along it the way it leaves the hand past the thumb and the index, its y out of the palm
-   */
-  readonly grip = new Object3D()
-  private readonly handle = new Line3()
-  private thick = 0
+  /** how far each is spread, along x, and its joints bent, along x, y and z from the knuckle out (rad) */
+  readonly spread: Record<Finger, Goal>
+  readonly bend: Record<Finger, Goal>
+  /** what each turns about, in the frame of the hand as it lies against a forearm that hangs straight down: its spread, then its bends */
+  private readonly axes: Record<Finger, Vector3[]>
+  /** what turns each of its bones from the rest to where a pose counts from, there */
+  private readonly straight: Record<Finger, Quaternion[]>
+  /** the pose they were last given, and when it is for one by a moment, how long until then (s) */
+  private posed?: { pose: Pose }
+  private due?: { pose: Pose; left: number }
   /** the middle of the palm: halfway from the wrist to the knuckles */
   private readonly centre: Vector3
 
-  /** `chains` tell each finger's knuckle and bones, and `palm` the way the palm faces, the forearm hanging down */
+  /**
+   * `chains` tell each finger's knuckle from the wrist and where each of its bones ends from where it starts, the
+   * fingertip last, the hand lying against a forearm that hangs straight down
+   */
   constructor(
     private readonly name: string,
-    private readonly palm: Vector3,
-    chains: Record<Finger, Vector3[]>,
+    side: 'left' | 'right',
+    private readonly chains: Record<Finger, Vector3[]>,
     beat: number,
   ) {
-    this.digits = each((finger) => {
-      const [knuckle, ...bones] = chains[finger]
-      const out = bones[0].clone().normalize()
-      // a finger folds toward the palm; a thumb stands up in front of the palm so, and its outer joints fold across the hand
-      const fold = new Vector3().crossVectors(out, palm).normalize()
-      const over = new Vector3().crossVectors(out, DOWN).normalize()
-      return { knuckle, bones, axes: bones.map((_, k) => (finger === 'thumb' && k > 0 ? over : fold)) }
+    const along = chains.middle[0].clone().normalize()
+    const thumbward = square(chains.index[0].clone().sub(chains.little[0]), along)
+    const normal = new Vector3().crossVectors(along, thumbward).multiplyScalar(side === 'right' ? -1 : 1)
+    // a pose counts a finger's angles from it straight in the palm's plane, pointing there as the rig points its first
+    // bone: whatever else the rest bends, the thumb lifted in front of the palm or a finger curled, is taken out
+    const ways = each((finger) => square(chains[finger][1], normal))
+    const from = (finger: Finger) => (step: Vector3) =>
+      new Quaternion().setFromUnitVectors(step.clone().normalize(), ways[finger])
+    this.straight = each((finger) => chains[finger].slice(1).map(from(finger)))
+    this.axes = each((finger) => {
+      const way = ways[finger]
+      // a spread turns a finger thumbward within the palm, and the thumb, lying out to the side, away from the fingertips
+      const outward = square(thumbward.clone().sub(along), way)
+      const spread = new Vector3().crossVectors(way, outward)
+      // a knuckle lifts its finger out of the palm; the thumb's other joints fold it within the palm toward the fingers
+      const lift = new Vector3().crossVectors(way, normal)
+      const fold = finger === 'thumb' ? new Vector3().crossVectors(outward, way) : lift
+      return [spread, lift, fold, fold]
     })
     const { strength, rate } = FINGER
-    this.curl = each(
-      (finger) =>
-        new Goal(`${name}'s ${finger}`, RELAXED[finger], strength / beat ** 2, FOLDS[kind(finger)], rate / beat),
-    )
-    const knuckles = FINGERS.slice(1).map((finger) => this.digits[finger].knuckle)
+    const goal = (finger: Finger, what: string, value: Xyz, range: Record<string, [number, number]>) =>
+      new Goal(`${name}'s ${finger}${what}`, value, strength / beat ** 2, range, rate / beat)
+    this.spread = each((finger) => goal(finger, ' spread', splay(RELAXED[finger]), { x: RANGE[kind(finger)].spread }))
+    this.bend = each((finger) => {
+      const { bend, middle, end } = RANGE[kind(finger)]
+      return goal(finger, '', curl(RELAXED[finger]), { x: bend, y: middle, z: end })
+    })
+    const knuckles = FINGERS.slice(1).map((finger) => chains[finger][0])
     this.centre = knuckles.reduce((sum, knuckle) => sum.add(knuckle), new Vector3()).divideScalar(2 * knuckles.length)
-    this.hold(0)
   }
 
-  /** the way the handle the fingers are closed around leaves the hand, if they are */
-  get held() {
-    return this.thick > 0 ? this.handle.delta(new Vector3()).normalize() : undefined
+  /** how each joint of a finger is turned against the one before it from the rest, spread and bent so (rad) */
+  turns(finger: Finger, spread = this.spread[finger].value.x, bend: Xyz = this.bend[finger].value) {
+    const [about, lift, ...folds] = this.axes[finger]
+    const [first, second, third] = this.straight[finger]
+    const by = (axis: Vector3, angle: number) => new Quaternion().setFromAxisAngle(axis, angle)
+    return [
+      by(about, spread).multiply(turn.setFromAxisAngle(lift, bend.x)).multiply(first),
+      first.clone().invert().multiply(by(folds[0], bend.y)).multiply(second),
+      second.clone().invert().multiply(by(folds[1], bend.z)).multiply(third),
+    ]
   }
 
-  /** a handle lies across the palm toward its heel, for it to leave the hand nearer along the forearm than straight across */
-  private lie(thick: number) {
-    const { index, little } = this.digits
-    const lies = ({ knuckle }: Digit, back: number) =>
-      knuckle
-        .clone()
-        .addScaledVector(DOWN, -Math.min(thick, PALM * knuckle.dot(DOWN)) - back)
-        .addScaledVector(this.palm, thick)
-    return new Line3(lies(little, SLANT * little.knuckle.distanceTo(index.knuckle)), lies(index, 0))
-  }
-
-  private hold(thick: number) {
-    const { handle, grip } = this
-    handle.copy(this.lie(thick))
-    const long = handle.delta(along).normalize()
-    grip.quaternion.setFromRotationMatrix(matrix.makeBasis(across.crossVectors(this.palm, long), this.palm, long))
-    handle.getCenter(grip.position)
-  }
-
-  /** Has the fingers take a shape, or with none relax, in the time fingers take or in so many `seconds` from now. */
-  shape(shape: Shape | undefined, seconds?: number): Story<boolean> {
-    // (a caller without types can say anything)
-    const thick =
-      shape === undefined ? 0 : typeof shape === 'string' ? (SHAPES.includes(shape) ? 0 : NaN) : shape?.around
-    if (!(thick >= 0 && thick < Infinity)) {
-      throw new Error(
-        `the ${this.name} is to take the shape ${JSON.stringify(shape)}, and a shape is 'flat', 'fist', 'point', { around: a radius of 0 m or more }, or none to relax`,
-      )
+  /**
+   * Has the fingers take a pose, or with none hang relaxed, in the time fingers take or in so many `seconds` from
+   * now: a pose they cannot take is an error.
+   */
+  shape(pose: Pose | undefined, seconds?: number): Story<boolean> {
+    const to = pose ?? RELAXED
+    for (const finger of FINGERS) {
+      const part = to[finger]
+      if (!part) throw new Error(`the ${this.name} is to take a pose that says nothing of its ${finger}`)
+      const { spread, bend, middle, end } = RANGE[kind(finger)]
+      ;[spread, bend, middle, end].forEach(([least, most], k) => {
+        const angle = k ? part.bend[k - 1] : part.spread
+        if (angle >= least && angle <= most) return
+        throw new Error(
+          `the ${this.name}'s ${finger} is to be ${JOINTS[k]} ${angle} rad, and goes only from ${least.toFixed(2)} to ${most.toFixed(2)}`,
+        )
+      })
     }
-    const curls = each((finger) => (shape === undefined ? RELAXED[finger].clone() : new Vector3()))
-    // the thumb closes last, onto what the fingers have closed on, or onto them
-    const [handle, closed]: [Line3, Line3[]] = [this.lie(thick), []]
-    for (const finger of shape === 'flat' || shape === undefined ? [] : [...FINGERS.slice(1), FINGERS[0]]) {
-      if (finger === 'index' && shape === 'point') continue
-      curls[finger] = this.close(finger, thick, handle, closed)
-      closed.push(...this.digits[finger].bones.map((_, k) => span(this.digits[finger], curls[finger], k)))
-    }
-    const needs = this.needs(curls)
+    const needs = this.needs(to)
     if (seconds !== undefined && !(seconds >= needs)) {
       throw new Error(
-        `the ${this.name} is to take a shape in ${seconds.toFixed(2)} s, and its fingers take ${needs.toFixed(2)} s to: give them that long`,
+        `the ${this.name} is to take a pose in ${seconds.toFixed(2)} s, and its fingers take ${needs.toFixed(2)} s to: give them that long`,
       )
     }
-    this.shaped = curls
-    this.due = seconds === undefined ? undefined : { curls, thick, left: seconds }
-    if (!this.due) this.set(curls, thick)
+    const posed = (this.posed = { pose: to })
+    this.due = seconds === undefined ? undefined : { pose: to, left: seconds }
+    if (!this.due) this.set(to, needs)
     return waits(
-      () => this.shaped === curls,
-      () => !this.due && FINGERS.every((finger) => this.curl[finger].arrived),
+      () => this.posed === posed,
+      () => !this.due && FINGERS.every((finger) => this.spread[finger].arrived && this.bend[finger].arrived),
     )
   }
 
-  private needs(curls: Record<Finger, Vector3>) {
-    const takes = (curl: Goal, value: Vector3) => quickest(curl, { value, velocity: REST }, curl.strength, curl.range)
-    return Math.max(...FINGERS.map((finger) => takes(this.curl[finger], curls[finger])))
+  private needs(pose: Pose) {
+    const takes = (goal: Goal, value: Xyz) => quickest(goal, { value, velocity: REST }, goal.strength, goal.range)
+    return Math.max(
+      ...FINGERS.flatMap((finger) => [
+        takes(this.spread[finger], splay(pose[finger])),
+        takes(this.bend[finger], curl(pose[finger])),
+      ]),
+    )
   }
 
-  private set(curls: Record<Finger, Vector3>, thick: number, seconds = this.needs(curls)) {
-    for (const finger of FINGERS) this.curl[finger].drive({ value: curls[finger], velocity: REST }, seconds)
-    // (what was held stays where it was as the fingers open to let it go)
-    if (thick > 0) this.hold(thick)
-    this.thick = thick
+  private set(pose: Pose, seconds: number) {
+    for (const finger of FINGERS) {
+      this.spread[finger].drive({ value: splay(pose[finger]), velocity: REST }, seconds)
+      this.bend[finger].drive({ value: curl(pose[finger]), velocity: REST }, seconds)
+    }
   }
 
   react(dt: number) {
     const { due } = this
-    // a shape for a moment is set off for as late as the fingers can still take it
-    if (due && (due.left -= dt) <= this.needs(due.curls)) {
+    // a pose for a moment is set off for as late as the fingers can still take it
+    if (due && (due.left -= dt) <= this.needs(due.pose)) {
       this.due = undefined
-      this.set(due.curls, due.thick, Math.max(0, due.left))
+      this.set(due.pose, Math.max(0, due.left))
     }
-    for (const finger of FINGERS) this.curl[finger].react(RELAXED[finger], dt)
+    for (const finger of FINGERS) {
+      this.spread[finger].react(splay(RELAXED[finger]), dt)
+      this.bend[finger].react(curl(RELAXED[finger]), dt)
+    }
   }
 
   /** where a part of the hand is from the wrist `seconds` from now, in the frame of the hand */
-  tip(touch: Touch, seconds: number) {
+  tip(touch: Finger | 'palm', seconds: number) {
     if (touch === 'palm') return this.centre.clone()
-    if (touch === 'grip') return this.grip.position.clone()
-    const [digit, curl] = [this.digits[touch], this.curl[touch]]
-    const folded = curl.reacts ? curl.value : curl.ahead(seconds, new Vector3(), near)
-    return span(digit, folded, digit.bones.length - 1).end
-  }
-
-  /**
-   * How far the joints of a finger fold to close on a `handle` so thick: one after another from the knuckle, each as
-   * far as keeps its bones off the handle and out of the palm; the thumb also a finger's thickness off the bones of the
-   * fingers that have `closed`, and folding over no further than it stands up.
-   */
-  private close(finger: Finger, thick: number, handle: Line3, closed: Line3[]) {
-    const { palm } = this
-    const digit = this.digits[finger]
-    const { knuckle } = this.digits[finger === 'thumb' ? 'index' : finger]
-    const [ahead, level] = [knuckle.dot(DOWN), knuckle.dot(palm)]
-    const low = Math.min(level, digit.knuckle.dot(palm)) - EXACT
-    const off = finger === 'thumb' ? THICK * ahead : 0
-    const range = FOLDS[kind(finger)]
-    const most = [range.x[1], range.y[1], range.z[1]]
-    const curl = new Vector3()
-    digit.bones.forEach((_, k) => {
-      const far = finger === 'thumb' && k > 0 ? (curl.x / most[0]) * most[k] : most[k]
-      /** what a bone of it is in, the joint folded so far, and what would help: the back of the hand, what the hand closes around, or a finger that has closed */
-      const meets = (angle: number) => {
-        curl.setComponent(k, angle)
-        for (let bone = 0; bone < digit.bones.length; bone++) {
-          const line = span(digit, curl, bone)
-          for (const share of ALONG) {
-            line.at(share, along)
-            if (along.dot(palm) < low)
-              return 'behind the palm: a rig rests its fingers level with the palm or in front of it'
-            if (handle.closestPointToPoint(along, false, near).distanceTo(along) < thick - EXACT)
-              return `in the ${thick} m thick thing the hand closes around: ask for something thinner`
-            if (closed.some((by) => by.closestPointToPoint(along, true, near).distanceTo(along) < off))
-              return `nearer than a finger is thick, ${off.toFixed(3)} m, to the bones of the fingers closed under it: a rig rests its thumb further from its index`
-          }
-        }
-        return undefined
-      }
-      const clear = (angle: number) => !meets(angle)
-      if (clear(far) || clear(between(0, far, clear)[0])) return
-      throw new Error(
-        `the ${this.name} takes a shape, and its ${finger}, as far open as it rests in the rig, is ${meets(0)}`,
-      )
-    })
-    return curl
+    const then = (goal: Goal) => (goal.reacts ? goal.value.clone() : goal.ahead(seconds, new Vector3(), near))
+    const [knuckle, ...bones] = this.chains[touch]
+    const [at, turned] = [knuckle.clone(), new Quaternion()]
+    this.turns(touch, then(this.spread[touch]).x, then(this.bend[touch])).forEach((by, k) =>
+      at.add(bones[k].clone().applyQuaternion(turned.multiply(by))),
+    )
+    return at
   }
 }
+
+const kind = (finger: Finger) => (finger === 'thumb' ? 'thumb' : 'finger')
+/** a finger's part of a pose as the values of what turns it */
+const splay = ({ spread }: Pose[Finger]) => ({ x: spread, y: 0, z: 0 })
+const curl = ({ bend: [x, y, z] }: Pose[Finger]) => ({ x, y, z })

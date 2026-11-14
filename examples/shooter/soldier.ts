@@ -1,7 +1,8 @@
 import { Body, type Side, type Story } from '@drawcall/animate'
+import { type Grip, grip, Hand } from '@drawcall/hand'
 import { Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three'
 import { grenade, reload, press, type Panel } from './actions'
-import { MAGAZINE, MAGAZINE_WRIST, magazine, RIFLE, rifle } from './rifle'
+import { ARM, fore, HOLD, magazine, pistol, RIFLE, rifle } from './rifle'
 
 /** what the player asks of him in a frame: `move` is across (to his right) and along the way he aims, `yaw` and `pitch` the aim (rad: about y from +z toward +x, and up) */
 export type Input = {
@@ -22,8 +23,9 @@ const TWIST = 0.9
 const SWING = 2.5
 /** how far the trunk is turned from the rifle, the left shoulder ahead (rad) */
 const BLADE = 0.3
-/** how many shots a second, and how fast a kick is over (1/s) */
+/** how many shots a second, how fast a kick comes on, as the hands on the rifle go with it, and how fast it is over (1/s) */
 const SHOTS = 7
+const KICK = 30
 const SETTLE = 14
 /** how high he jumps, and how low his hips are crouched, standing and going (of how high he stands) */
 const JUMP = 0.3
@@ -33,18 +35,18 @@ const TUCK = [0.62, 0.74, 0.86]
 /** a breath (s) and how far the chest turns with it (rad); a shift of his weight (s) and how far the trunk leans with it (rad) */
 const BREATH = { every: 3.6, chest: 0.025 }
 const SHIFT = { every: 9, lean: 0.03 }
-/** how each hand holds its grip, in the rifle's frame: the right palm to his left of the pistol grip, the left palm up under the foregrip */
-const GRIP = {
-  right: { palm: { x: 1, y: 0, z: 0 }, pointing: { x: 0, y: 0.4, z: 0.9 } },
-  left: { palm: { x: 0, y: 1, z: 0 } },
-}
+/** how far a magazine comes out of its well, and how long it takes to come out or go in (m, s) */
+const PULLED = 0.1
+const SLIDE = 0.3
+/** how big the grenade is: its radius (m) */
+const GRENADE = 0.035
 
-/** a way the rifle is carried: where its butt is from the right shoulder, x to his left, y up, z ahead as he aims (m), how it is turned from the aim (rad): to his left, up, and rolled, and how much of the aim it and the trunk follow */
+/** a way the rifle is carried: where its butt is from the right shoulder, x to his left, y up, z ahead as he aims (m, for the arm the rifle is drawn for), how it is turned from the aim (rad): to his left, up, and rolled, and how much of the aim it and the trunk follow */
 type Carry = { butt: Vector3; yaw: number; pitch: number; roll: number; aimed: number }
 export const CARRY = {
   ready: { butt: new Vector3(0.02, -0.06, 0.03), yaw: 0, pitch: 0, roll: 0, aimed: 1 },
   sights: { butt: new Vector3(0.07, 0.0, 0.06), yaw: 0, pitch: 0, roll: 0, aimed: 1 },
-  sprint: { butt: new Vector3(-0.04, -0.26, 0.16), yaw: 0.15, pitch: 0.1, roll: 0, aimed: 0 },
+  sprint: { butt: new Vector3(-0.04, -0.26, 0.16), yaw: 0.15, pitch: -0.3, roll: 0, aimed: 0 },
   reload: { butt: new Vector3(0.0, -0.1, 0.08), yaw: 0.25, pitch: 0.25, roll: 0, aimed: 1 },
   low: { butt: new Vector3(-0.05, -0.2, 0.12), yaw: 0.3, pitch: -0.8, roll: 0, aimed: 0 },
   sling: { butt: new Vector3(0.1, -0.12, 0.16), yaw: 1.35, pitch: -0.9, roll: 0, aimed: 0 },
@@ -67,10 +69,14 @@ export class Soldier {
   readonly rifle = rifle()
   readonly magazine = magazine()
   readonly spent = magazine()
-  readonly grenade = new Mesh(new SphereGeometry(0.035), new MeshStandardMaterial({ color: 0x405030 }))
-  /** where the left hand has the magazine, in the well and pulled out under it, in the rifle's frame */
-  readonly well = RIFLE.well.clone().add(MAGAZINE_WRIST)
-  readonly under = this.well.clone().setY(this.well.y - MAGAZINE.long - 0.03)
+  readonly grenade = new Mesh(new SphereGeometry(GRENADE), new MeshStandardMaterial({ color: 0x405030 }))
+  /** where the magazine sits in the rifle, which slides it out and in */
+  readonly well = new Object3D()
+  /** the hands, as they were read from the rig at rest, and how each takes hold of what it holds */
+  readonly hands: Record<Side, Hand>
+  readonly held: Record<'grip' | 'trigger' | 'fore' | 'magazine' | 'grenade', Grip>
+  /** how large the rifle and the places it is carried at are drawn for him: his arm against the arm they are drawn for */
+  readonly scale: number
   /** what the body could not do, as it said so */
   readonly errors: string[] = []
   /** how an action has the rifle carried, and what it is: one at a time */
@@ -78,16 +84,16 @@ export class Soldier {
   doing?: string
   /** whether he stays where he is for what he is doing */
   rooted = false
-  /** where the magazine and the grenade are */
-  loaded: 'rifle' | 'hand' | 'gone' = 'rifle'
-  armed: 'vest' | 'hand' | 'thrown' = 'vest'
+  /** whether the magazine is in the rifle */
+  loaded = true
   shots = 0
   /** the aim as last asked */
   aimed = { yaw: 0, pitch: 0 }
   private readonly carry: Carry = { ...CARRY.ready, butt: CARRY.ready.butt.clone() }
   private readonly loose: Loose[] = []
-  /** how much of a kick is left, and how long until the next shot (s) */
+  /** how far the rifle is kicked, how far the shots are kicking it, and how long until the next shot (s) */
   private kick = 0
+  private shot = 0
   private cool = 0
   /** how far a hit has knocked the trunk, forward and to his left, and how fast it is going (rad, rad/s) */
   private readonly knock = { x: 0, z: 0, vx: 0, vz: 0 }
@@ -98,27 +104,68 @@ export class Soldier {
   /** how low his hips are held, of how high he stands, and the trigger finger as it was last shaped */
   private low = 1
   private trigger = false
-  private sprints = false
+  /** whether the left hand is off the rifle: at the start, until the trunk has turned to bring it in reach, and in a
+   * sprint; and whether the trunk is turned as the rifle is carried */
+  private freed = true
+  private turned = false
+  /** how far the magazine was out, how far it is to be, and since when */
+  private slid = { from: 0, to: 0, since: 0 }
 
   /** `rig` is his rigged body, and `clear` tells where the world lets the middle of his hips be, that would be at a place */
   constructor(
     readonly rig: Object3D,
     private readonly clear = (place: { x: number; z: number }) => place,
   ) {
+    // (the hands are read while the rig is at rest, before the body poses it)
+    const hands = (this.hands = { right: new Hand(rig, 'right'), left: new Hand(rig, 'left') })
     this.body = new Body(rig)
-    this.shown.add(rig, this.rifle, this.magazine, this.spent, this.grenade)
+    this.scale = this.body.size.arm / ARM
+    this.rifle.scale.setScalar(this.scale)
+    this.well.position.copy(RIFLE.well)
+    this.well.add(this.magazine)
+    this.rifle.add(this.well)
+    const part = (name: string) => {
+      const found = this.rifle.getObjectByName(name)
+      if (!found) throw new Error(`the rifle has no ${name}`)
+      return found
+    }
+    const { held, trigger } = pistol(hands.right, this.rifle)
+    this.held = {
+      grip: held,
+      trigger,
+      fore: fore(hands.left, part('fore')),
+      magazine: grip(hands.left, this.magazine, HOLD.magazine),
+      grenade: grip(hands.right, this.grenade, { at: new Vector3(0, -GRENADE, 0), from: new Vector3(0, -1, 0) }),
+    }
+    this.shown.add(rig, this.rifle, this.spent, this.grenade)
     this.spent.visible = this.grenade.visible = false
     this.chest = this.bone('chest')
     this.chestRest = this.chest.rotation.x
     this.aim(0, { move: { x: 0, z: 0 }, yaw: 0, pitch: 0 }, false)
     this.hold('right')
-    this.hold('left')
   }
 
   /** a hand takes its grip on the rifle, and keeps it wherever the rifle goes */
   hold(side: Side) {
-    this.body.hand[side].to(RIFLE[side], { ...GRIP[side], on: this.rifle })
-    this.body.hand[side].shape(side === 'left' ? { around: 0.03 } : 'point')
+    const held = side === 'left' ? this.held.fore : this.trigger ? this.held.trigger : this.held.grip
+    this.body.hand[side].to(held, { on: held.target })
+    this.body.hand[side].shape(held.pose)
+    if (side === 'left') this.freed = false
+  }
+
+  /** the magazine is to slide out of its well, or back in */
+  slide(out: boolean) {
+    this.slid = { from: this.slid.to, to: out ? 1 : 0, since: this.body.time }
+    return this.body.until(this.body.time + SLIDE)
+  }
+
+  /** the magazine in the hand is pushed home: it sits in its well */
+  seat() {
+    this.well.add(this.magazine)
+    this.magazine.position.set(0, 0, 0)
+    this.magazine.quaternion.identity()
+    this.magazine.scale.setScalar(1)
+    this.magazine.visible = this.loaded = true
   }
 
   private bone(name: string) {
@@ -148,8 +195,9 @@ export class Soldier {
         } finally {
           self.doing = self.mode = undefined
           self.rooted = false
-          if (self.loaded !== 'rifle') self.loaded = 'rifle'
-          if (self.armed === 'hand') self.armed = 'vest'
+          if (!self.loaded) self.seat()
+          self.slid = { from: 0, to: 0, since: self.body.time }
+          if (self.grenade.parent !== self.shown) self.drop(self.grenade, new Vector3())
           for (const side of ['right', 'left'] as const) {
             try {
               self.hold(side)
@@ -215,8 +263,9 @@ export class Soldier {
     return Math.atan2(x, z)
   }
 
-  /** lets something go, moving so */
+  /** lets something go into the world, moving so */
   drop(drawn: Object3D, velocity: Vector3) {
+    this.shown.attach(drawn)
     const flying = this.loose.find((thing) => thing.drawn === drawn)
     if (flying) flying.velocity.copy(velocity)
     else this.loose.push({ drawn, velocity: velocity.clone() })
@@ -245,11 +294,13 @@ export class Soldier {
       body.go(going)
       if (sprints) body.face()
       else body.face(aim)
-      // sprinting, the rifle swings in the right hand alone, the left arm free to pump: it takes the rifle again once
-      // that is back up where it reaches
-      if (sprints && !this.sprints) body.hand.left.free()
-      if (!sprints && this.sprints && this.carry.aimed > 0.9) this.hold('left')
-      if (sprints || this.carry.aimed > 0.9) this.sprints = sprints
+      // sprinting, the rifle swings in the right hand alone, the left arm free to pump: it takes the rifle once that is
+      // up where it reaches and the trunk turned to it, as at the start
+      if (sprints && !this.freed) {
+        body.hand.left.free()
+        this.freed = true
+      }
+      if (!sprints && this.freed && !this.doing && this.carry.aimed > 0.9 && this.turned) this.hold('left')
     } catch (error) {
       this.note(error)
     }
@@ -272,10 +323,11 @@ export class Soldier {
   /** a shot kicks the rifle back and up, and the kick dies away */
   private fire(delta: number, held: boolean) {
     this.cool -= delta
-    this.kick *= Math.exp(-SETTLE * delta)
-    if (!held || this.cool > 0 || this.loaded !== 'rifle') return
+    this.shot *= Math.exp(-SETTLE * delta)
+    this.kick += (this.shot - this.kick) * (1 - Math.exp(-KICK * delta))
+    if (!held || this.cool > 0 || !this.loaded) return
     this.cool = 1 / SHOTS
-    this.kick = 1
+    this.shot = 1
     this.shots++
   }
 
@@ -283,7 +335,8 @@ export class Soldier {
   private aim(delta: number, input: Input, sprints: boolean) {
     const { body, carry, kick, knock } = this
     const to: Carry = CARRY[this.mode ?? (sprints ? 'sprint' : input.sights ? 'sights' : 'ready')]
-    const share = delta > 0 ? 1 - Math.exp(-10 * delta) : 1
+    // a carry comes on as fast as the hands holding the rifle can follow it
+    const share = delta > 0 ? 1 - Math.exp(-7 * delta) : 1
     carry.butt.lerp(to.butt, share)
     for (const key of ['yaw', 'pitch', 'roll', 'aimed'] as const) carry[key] += (to[key] - carry[key]) * share
 
@@ -311,6 +364,7 @@ export class Soldier {
       z: clamp(sway + knock.z, -0.4, 0.4),
     }
     const sighted = to === CARRY.sights ? 1 : 0
+    this.turned = Math.abs(body.trunk.value.y - trunk.y) < 0.05
     try {
       body.trunk.to(trunk)
       body.head.to({
@@ -329,12 +383,14 @@ export class Soldier {
     )
     rifle.position
       .copy(carry.butt)
+      .multiplyScalar(this.scale)
       .applyQuaternion(about(facing + off))
       .add(this.at('rightUpperArm'))
-      .add(new Vector3(0, 0, -0.05 * kick).applyQuaternion(rifle.quaternion))
+      .add(new Vector3(0, 0, -0.05 * this.scale * kick).applyQuaternion(rifle.quaternion))
     // the trigger finger lies along the frame, and is on the trigger for a shot
     const trigger = Boolean(input.fire) && !sprints && !this.doing
-    if (trigger !== this.trigger) body.hand.right.shape((this.trigger = trigger) ? { around: 0.02 } : 'point')
+    if (trigger !== this.trigger)
+      body.hand.right.shape(((this.trigger = trigger) ? this.held.trigger : this.held.grip).pose)
   }
 
   /** he breathes: the chest, which the body leaves alone, turns a little with each breath */
@@ -343,24 +399,13 @@ export class Soldier {
       this.chestRest - BREATH.chest * (0.5 + 0.5 * Math.sin((2 * Math.PI * this.body.time) / BREATH.every))
   }
 
-  /** what is in a hand or loose is where that has it */
+  /** the magazine is as far out of its well as it is sliding, and what is loose flies and falls */
   private place(delta: number) {
-    this.rig.updateMatrixWorld(true)
-    const { magazine, grenade, rifle } = this
-    const left = this.body.hand.left.value
-    magazine.visible = this.loaded !== 'gone'
-    magazine.quaternion.copy(rifle.quaternion)
-    if (this.loaded === 'hand')
-      magazine.position.copy(left).sub(MAGAZINE_WRIST.clone().applyQuaternion(rifle.quaternion))
-    else magazine.position.copy(RIFLE.well).applyQuaternion(rifle.quaternion).add(rifle.position)
-    if (this.armed !== 'thrown') {
-      grenade.visible = this.armed === 'hand'
-      grenade.position.copy(
-        this.bone('rightHand')
-          .localToWorld(new Vector3(0, 0, 0))
-          .lerp(this.at('rightMiddleProximal'), 0.8),
-      )
-    }
+    const { from, to, since } = this.slid
+    const share = Math.min(1, (this.body.time - since) / SLIDE)
+    this.well.position
+      .copy(RIFLE.well)
+      .setY(RIFLE.well.y - PULLED * (from + (to - from) * share * share * (3 - 2 * share)))
     for (const thing of this.loose) {
       if (thing.drawn.position.y <= 0.03) continue
       thing.velocity.y -= 9.81 * delta

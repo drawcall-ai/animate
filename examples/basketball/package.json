@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@drawcall/animate": "workspace:*",
+    "@drawcall/hand": "workspace:*",
     "three": "^0.187.0"
   },
   "devDependencies": {

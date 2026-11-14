@@ -87,10 +87,6 @@ export class Body {
       size,
       both((side) => bones.chains(side)),
     ))
-    for (const side of SIDES) {
-      const { fingers } = turning.arms[side].hand
-      if (fingers) bones.hang(side, fingers.grip)
-    }
     const mover = (this.mover = new Mover(size, new Stoops(size, turning.trunk)))
     const ahead = (this.ahead = new Ahead(this, mover, turning, bones))
     const reactions = (this.reactions = new Reactions((story) => this.stories.push(story), mover, turning, ahead))
@@ -99,6 +95,7 @@ export class Body {
       rig,
       limb: bones.starts[end][side],
       body: this,
+      ...bones.lies(end, side),
     })
     const foot = both(
       (side) =>

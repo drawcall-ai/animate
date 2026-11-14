@@ -4,6 +4,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
+    "test": "vitest run",
     "check": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -11,6 +12,11 @@
   },
   "devDependencies": {
     "@types/three": "^0.187.0",
-    "three": "^0.187.0"
-  }
+    "three": "^0.187.0",
+    "vitest": "^5.1.0"
+  },
+  "files": [
+    "src",
+    "skills"
+  ]
 }

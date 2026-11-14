@@ -1,6 +1,6 @@
 export { Body } from './body'
 export type { Foot, Hand } from './end'
 export type { Part } from './goal'
-export type { Finger, Shape } from './hand'
+export type { Finger, Held, Pose, Touch } from './hand'
 export type { Side, Size } from './size'
 export type { Story, Xyz } from './world'

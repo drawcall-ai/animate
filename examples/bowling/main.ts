@@ -1,11 +1,12 @@
 import { Body } from '@drawcall/animate'
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three'
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
+import { carry } from '../carry'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
 import { bowl } from './bowl'
-import { type Ball, LANE, LINE, RADIUS, ball, roll } from './lane'
+import { type Ball, GRIP, LANE, LINE, ball, roll, sphere } from './lane'
 
-const ballMesh = new Mesh(new SphereGeometry(RADIUS), new MeshStandardMaterial({ color: 0x3060c0 }))
+const ballMesh = sphere()
 // the boards beyond the foul line, a little proud of the floor, and the line itself
 const boards = new Mesh(new BoxGeometry(LANE.width, 0.01, LANE.length), new MeshStandardMaterial({ color: 0xc09050 }))
 boards.position.set(-0.2, 0, LINE + LANE.length / 2)
@@ -19,12 +20,11 @@ let left: number | undefined
 run({
   begin() {
     const man = mannequin()
+    const held = carry(man, 'right', ballMesh, GRIP)
     body = new Body(man)
     bowled = ball()
     left = undefined
-    body.play(bowl(body, bowled))
-    ballMesh.position.set(0, 0, 0)
-    body.hand.right.grip.add(ballMesh)
+    body.play(bowl(body, bowled, ballMesh, held))
     return (scene = new Group().add(man, boards, line))
   },
   update(delta) {

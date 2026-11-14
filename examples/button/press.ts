@@ -1,4 +1,5 @@
 import type { Body, Story } from '@drawcall/animate'
+import { point } from '@drawcall/hand'
 import { PANEL, type Panel } from './panel'
 
 /** how far short of the button he comes to rest, and how long the finger stays on it (m, s) */
@@ -9,7 +10,7 @@ const HELD = 0.3
 export function* press(body: Body, panel: Panel): Story {
   const hand = body.hand.right
   body.walk(panel.button.z - SHORT)
-  hand.shape('point')
+  hand.shape(point)
   // the fingertip is on the button, pushed in as far as it goes
   const { x, y, z } = panel.button
   yield* hand.to({ x, y, z: z + PANEL.travel }, { with: 'index', palm: { x: 0, y: -1, z: 0 } })

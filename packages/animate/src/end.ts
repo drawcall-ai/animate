@@ -1,8 +1,8 @@
-import { Object3D, Vector3 } from 'three'
+import { Object3D, Quaternion, Vector3 } from 'three'
 import type { Body } from './body'
 import { type State, quickest } from './curve'
 import { type Goal, MOST, REST, timed } from './goal'
-import { FINGERS, type Shape, type Touch } from './hand'
+import { DOWN, FINGERS, type Held, type Pose, type Touch } from './hand'
 import { SLACK } from './limb'
 import { type Aimed, JOINTS, type Plan, Planner, type Target, drawn, moves, sway } from './plan'
 import { EXACT, NUDGE, type Story, type Xyz, due, waits } from './world'
@@ -13,13 +13,13 @@ import { EXACT, NUDGE, type Story, type Xyz, due, waits } from './world'
  */
 type Arriving = { velocity?: Xyz; on?: Object3D | Body }
 /**
- * and a hand: turned for its `palm` to face and for the fingers, or what they are closed around, to be `pointing` a
- * way, counted as its place is; the place being that of what it is there `with`, if not its wrist
+ * and a hand: turned for its `palm` to face and for the fingers, or what it carries, to be `pointing` a way, counted
+ * as its place is; the place being that of what it is there `with`, if not its wrist
  */
 type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch }
 
-/** What a story has of a hand: where its wrist is and how it moves, and to send it somewhere, have it somewhere by a moment, give its fingers a shape, or give it back to the body. */
-export type Hand = Readonly<Pick<End, 'value' | 'velocity' | 'to' | 'by' | 'shape' | 'grip' | 'free'>>
+/** What a story has of a hand: where its wrist is and how it moves, and to send it somewhere, have it somewhere by a moment, pose its fingers, or give it back to the body. */
+export type Hand = Readonly<Pick<End, 'value' | 'velocity' | 'to' | 'by' | 'shape' | 'free'>>
 /** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, if it does, and to send it somewhere, have it somewhere by a moment, or give it back to the body. */
 export type Foot = Readonly<Pick<End, 'value' | 'velocity' | 'anchor' | 'free'>> & {
   to(place: Xyz, arriving?: Arriving & { seconds?: number }): Story<boolean>
@@ -48,9 +48,10 @@ export class End extends Planner {
    * with it. The velocity it arrives with is how it moves in the scene then, wherever the place is counted
    * from. Given `seconds`, it sets off at once and takes that long; otherwise it is there the first moment it can
    * be, having taken its time. The story it returns is over at that moment, or once a foot stands where it was sent
-   * to step, and gives false if it was sent elsewhere before.
+   * to step, and gives false if it was sent elsewhere before. A hand can instead be sent to hold what it is on, or the
+   * scene or him, so: the place is then that thing as it is to sit in the hand, which says how the hand is turned.
    */
-  to(place: Xyz, { seconds, ...arriving }: Reaching & { seconds?: number } = {}): Story<boolean> {
+  to(place: Xyz | Held, { seconds, ...arriving }: Reaching & { seconds?: number } = {}): Story<boolean> {
     timed(this.name, seconds)
     const target = this.target(place, arriving)
     const { ground, root } = this
@@ -71,7 +72,7 @@ export class End extends Planner {
    * Has the end be at a place at a moment, on the clock of `update`: until it has to set off it goes on as it is.
    * The story it returns is over at that moment, and gives false if it was sent elsewhere before.
    */
-  by(when: number, place: Xyz, arriving: Reaching = {}): Story<boolean> {
+  by(when: number, place: Xyz | Held, arriving: Reaching = {}): Story<boolean> {
     const soonest = this.clock + this.after
     if (!(when >= soonest)) {
       throw new Error(
@@ -82,17 +83,12 @@ export class End extends Planner {
   }
 
   /**
-   * Has the fingers of a hand take a shape, or with none relax, and hold it until they are given another, whatever
+   * Has the fingers of a hand take a pose, or with none relax, and hold it until they are given another, whatever
    * else the hand does: in the time fingers take, or `by` a moment, setting off as late as they can for that. The story
    * it returns is over when they have it, and gives false if they were given another before.
    */
-  shape(shape?: Shape, { by }: { by?: number } = {}): Story<boolean> {
-    return this.fingers('are to take a shape').shape(shape, by === undefined ? undefined : by - this.clock)
-  }
-
-  /** where what the hand holds lies, on the rig's hand bone: what is added to it the hand holds there */
-  get grip() {
-    return this.fingers('are to hold something').grip
+  shape(pose?: Pose, { by }: { by?: number } = {}): Story<boolean> {
+    return this.fingers('are to take a pose').shape(pose, by === undefined ? undefined : by - this.clock)
   }
 
   private fingers(asked: string) {
@@ -101,17 +97,25 @@ export class End extends Planner {
     throw new Error(`the fingers of the ${this.name} ${asked}, and its rig has no finger bones`)
   }
 
-  private target(at: Xyz, { velocity: moving = REST, on: told, palm, pointing, with: touch }: Reaching): Target {
+  private target(at: Xyz | Held, { velocity: moving = REST, on: told, palm, pointing, with: touch }: Reaching): Target {
     const on = told === this.rig.body ? 'him' : told
     if (on !== undefined && on !== 'him' && !(on instanceof Object3D)) {
       throw new Error(`the ${this.name} is sent to a place on something that is neither him nor a thing`)
     }
-    if (on instanceof Object3D) this.holds(on)
-    const [place, velocity] = [new Vector3().copy(at), new Vector3().copy(moving)]
-    const ways = [palm, pointing].map((way) => way && new Vector3().copy(way))
+    if (on instanceof Object3D) this.see(on)
+    if ('quaternion' in at && (palm || pointing || touch)) {
+      throw new Error(
+        `the ${this.name} is sent to hold something, which says where it is and how it is turned: leave out \`palm\`, \`pointing\` and \`with\``,
+      )
+    }
+    const holding = 'quaternion' in at ? this.holding(at, on) : { place: new Vector3().copy(at), palm, pointing }
+    const [place, velocity] = [holding.place, new Vector3().copy(moving)]
+    const ways = [holding.palm, holding.pointing].map((way) => way && new Vector3().copy(way))
     const [faces, points] = ways.map((way) => way?.normalize())
     const across = faces && points ? faces.clone().cross(points).lengthSq() : 1
-    if (![place, velocity, ...ways].every((told) => !told || told.toArray().every(Number.isFinite))) {
+    const carried = typeof touch === 'object' ? this.framed(touch) : undefined
+    const numbers = [place, velocity, ...ways, carried?.at, carried?.along]
+    if (!numbers.every((one) => !one || one.toArray().every(Number.isFinite))) {
       throw new Error(`the ${this.name} is sent to a place, to move there, or turned a way, as no numbers say`)
     }
     if (ways.some((way) => way?.lengthSq() === 0) || across < EXACT) {
@@ -129,13 +133,49 @@ export class End extends Planner {
         `the ${this.name} is to be ${place.length().toFixed(2)} m from where its limb starts, and the limb is ${this.limb.length.toFixed(2)} m long`,
       )
     }
-    if (touch !== undefined && ![...FINGERS, 'palm', 'grip'].includes(touch)) {
+    if (typeof touch === 'string' && ![...FINGERS, 'palm'].includes(touch)) {
       throw new Error(
-        `the ${this.name} is sent to be somewhere with its ${touch}, and that is the tip of the ${FINGERS.join(', ')}, the palm or the grip`,
+        `the ${this.name} is sent to be somewhere with its ${touch}, and that is the tip of the ${FINGERS.join(', ')}, the palm, or a thing as it sits in the hand`,
       )
     }
-    if (touch) this.fingers(`are to have the hand somewhere with its ${touch}`)
-    return { place, velocity, on, palm: faces, pointing: points, with: touch }
+    if (typeof touch === 'string') this.fingers(`are to have the hand somewhere with its ${touch}`)
+    const along = carried?.along
+    return {
+      place,
+      velocity,
+      on,
+      palm: faces,
+      pointing: points,
+      along,
+      with: typeof touch === 'object' ? carried?.at : touch,
+    }
+  }
+
+  /** a thing as it sits in the hand: where it is from the wrist and the way its z goes, in the frame of the hand as it hangs */
+  private framed({ position, quaternion }: Held) {
+    const { hangs, large } = this.rig
+    const turned = new Quaternion().copy(quaternion).premultiply(hangs)
+    const at = new Vector3().copy(position).multiplyScalar(large).applyQuaternion(hangs)
+    return { at, turned, along: new Vector3(0, 0, 1).applyQuaternion(turned) }
+  }
+
+  /**
+   * where the wrist is and how the hand is turned, for what a place is counted on, a thing or the frame of the scene
+   * or of him, to sit in the hand so: in that frame, and in its lengths
+   */
+  private holding(held: Held, on?: 'him' | Object3D) {
+    const { at, turned } = this.framed(held)
+    const hand = this.limb.hand
+    if (!hand) throw new Error(`the ${this.name} is sent to hold something, and is no hand`)
+    // (a thing's lengths against the body's)
+    if (on instanceof Object3D) on.updateWorldMatrix(true, false)
+    const large = on instanceof Object3D ? on.getWorldScale(new Vector3()).x * this.rig.frame.getMaxScaleOnAxis() : 1
+    const back = turned.clone().invert()
+    return {
+      place: at.negate().applyQuaternion(back).divideScalar(large),
+      palm: hand.palm.clone().applyQuaternion(back),
+      pointing: DOWN.clone().applyQuaternion(back),
+    }
   }
 
   /** Lets the end go: it is no longer on its way anywhere or kept at a place, and its limb is the body's again. */

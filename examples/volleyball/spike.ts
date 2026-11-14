@@ -1,4 +1,5 @@
 import type { Body, Story } from '@drawcall/animate'
+import { flat } from '@drawcall/hand'
 import { Vector3 } from 'three'
 import { type Ball, RADIUS } from './ball'
 
@@ -11,7 +12,7 @@ const HIT = new Vector3(0, -2, 12)
 
 /** a short run-up, a jump, and the right hand through the ball at the top of it */
 export function* spike(body: Body, ball: Ball): Story {
-  body.hand.right.shape('flat')
+  body.hand.right.shape(flat)
   body.run({ speed: 3.5, at: TAKEOFF })
   body.jump({ x: 0, y: ball.position.y - UNDER.below, z: ball.position.z - UNDER.behind })
   // the palm meets the ball on the side it is hit from, facing the way it goes
