@@ -2,41 +2,40 @@ import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Bones } from './bones'
 import type { End } from './end'
 import type { Grip } from './fingers'
-import type { Limb } from './limb'
-import type { Side } from './size'
 import { NUDGE } from './world'
 
 /**
- * how a thing goes with a hand: by a grip, `turning` with the hand as the grip seats it in it, or only by the `point`
- * of it, in its frame, that the grip has at the middle of the palm, `palm` in the frame of the hand as it hangs
+ * a hand on a thing by a grip, `turning` it with the hand or not, and where the grip seats the thing in the hand: its
+ * origin from the wrist and how it is turned, in the frame of the hand as it hangs
  */
-type Bond = { hand: End; grip: Grip; turning: boolean; seat: Seat; point: Vector3; palm: Vector3 }
-/** where a thing sits in a hand by a grip, from the wrist, and how it is turned, in the frame of the hand as it hangs */
-type Seat = { at: Vector3; turn: Quaternion }
+type Bond = { hand: End; grip: Grip; turning: boolean; seat: { at: Vector3; turn: Quaternion } }
 /**
- * a thing bound to a hand, or by points to two: the hands it goes with, the first leading; how large it is in the frame
- * of the body; how it is turned against the leading hand, with two, or in the scene, with one by a point; how far it
- * was from where they have it as the last of them took it or let go, and when, for it to ease into it; and how it moves
+ * a thing bound to his hands: whether it is moved from `outside`, the hands on it, the first leading; how large it is
+ * in the frame of the body; how it is turned there when its leading hand does not turn it, and how it turns on its way
+ * to a way it is sent to point; how far it was from where its hand has it as it was taken, and when, for it to ease
+ * into it; and how it moves, and where it was a nudge on, or last frame
  */
 type Bound = {
   thing: Object3D
+  outside: boolean
   bonds: Bond[]
   scale: Vector3
   turn: Quaternion
+  turns?: { from: Quaternion; to: Quaternion; leaves: number; when: number }
   off: { at: Vector3; turn: Quaternion; since: number }
   velocity: Vector3
   ahead?: Vector3
+  seen?: { at: Vector3; time: number }
 }
 
-/** how long a thing taken from where it is eases into where its hands have it (in his beats) */
+/** how long a thing taken from where it is eases into where its hand has it (in his beats) */
 const EASE = 1
 const at = new Vector3()
-const other = new Vector3()
+const scaled = new Vector3()
 const turned = new Quaternion()
 const matrix = new Matrix4()
 const into = new Matrix4()
 const easing = new Matrix4()
-const scaled = new Vector3()
 const ONE = new Vector3(1, 1, 1)
 
 /** whether a thing is another, or a part of it, that goes with it */
@@ -45,100 +44,160 @@ function within(part: Object3D, thing: Object3D) {
   return false
 }
 
+const eased = (share: number) => {
+  const s = Math.min(1, Math.max(0, share))
+  return s * s * (3 - 2 * s)
+}
+
 /**
- * The things bound to his hands, which go with them, written where the hands have them each time the body is posed:
- * by a grip, turning with the hand, a ball, a racket, a box that the other hand follows; or by a point of it to each of
- * two hands, a bar, a spear, set between them and turned along the line through them, its roll the leading hand's.
- * A hand follows a thing by being sent onto it (`End`); a thing is never moved by what it moves, and goes with one hand
- * turning, or with two by a point each. A thing taken eases from where it is into where its hands have it, and one let
- * go is the scene's again, where it is, moving as it was.
+ * The things bound to his hands. A thing is moved by one owner at a time: the body, or from `outside`, by the game or
+ * physics setting where it is. Moved by the body, it is the end of the arm of the hand that leads it, the first bound,
+ * offset by the grip: wherever that hand goes it goes, turning with it if bound `turning`; bound by a point, its origin
+ * goes where the grip seats it in the hand, a ball's middle, and it keeps its own turn, or turns as it is sent to point. Every other hand on it follows it, sent onto its grip, as near as the arm reaches, and never
+ * moves it. Moved from outside, every hand on it follows it. Taken from where it is, it eases into where its hand has
+ * it; freed, it is the scene's again, where it is, moving as it was.
  */
 export class Bindings {
   private readonly all = new Map<Object3D, Bound>()
 
-  /** `bones` are those of the body whose hands, at the ends of its `arms`, have the things */
-  constructor(
-    private readonly bones: Bones,
-    private readonly arms: Record<Side, Limb>,
-  ) {}
+  /** `bones` are those of the body whose hands have the things */
+  constructor(private readonly bones: Bones) {}
 
-  /** what is bound to which hands, and whether it turns with the hand */
+  /** what is bound: each thing, the sides of the hands on it, the leading one first, whether it turns with that, and whether it is moved from outside */
   get bound() {
-    return [...this.all.values()].map(({ thing, bonds }) => ({
-      thing,
-      hands: bonds.map(({ hand }) => hand.side),
-      turning: bonds[0].turning,
-    }))
+    return [...this.all.values()]
+      .filter(({ bonds }) => bonds.length > 0)
+      .map(({ thing, bonds, outside }) => ({
+        thing,
+        hands: bonds.map(({ hand }) => hand.side),
+        turning: !outside && bonds[0].turning,
+        outside,
+      }))
+  }
+
+  /** a thing is bound to him from now on, moved by the body or from `outside`, as of the moment `now` */
+  bind(thing: Object3D, outside: boolean, now: number) {
+    const bound = this.all.get(thing)
+    if (bound?.outside === outside) return
+    if (!bound) {
+      const off = { at: new Vector3(), turn: new Quaternion(), since: now }
+      this.all.set(thing, { thing, outside, bonds: [], scale: new Vector3(1, 1, 1), turn: new Quaternion(), off, velocity: new Vector3() })
+      return
+    }
+    // (handed over: moved by the body, it leads with its first hand from where it is, the others following)
+    bound.outside = outside
+    for (const bond of bound.bonds) if (bond.hand.follows.some((on) => within(on, thing))) bond.hand.free()
+    for (const bond of outside ? bound.bonds : bound.bonds.slice(1)) void bond.hand.to(bond.grip)
+    if (!outside && bound.bonds.length) this.seated(bound, now)
+  }
+
+  /** the hand leading a thing the body moves, and by which grip, if one does */
+  lead(thing: Object3D) {
+    const bound = this.all.get(thing)
+    return bound && !bound.outside ? bound.bonds[0] : undefined
   }
 
   /**
-   * The thing a grip holds goes with a hand from now on, from where it is, at the moment `now`: turning with it, or by
-   * a point alone. A hand that follows it lets it be and is the body's, as the thing now goes with it.
+   * A hand goes on a thing by a grip, at the moment `now`, in place of how it was on it: the first on a thing the
+   * body moves leads it, which eases into it from where it is; any other follows it.
    */
-  take(hand: End, grip: Grip, turning: boolean, now: number) {
-    const thing = grip.target
-    const bound = this.all.get(thing)
-    const others = bound?.bonds.filter((bond) => bond.hand !== hand) ?? []
-    if (others.length > 0 && (turning || others[0].turning)) {
-      throw new Error(
-        `the ${hand.name} takes what the ${others[0].hand.name} has: one hand has a thing turning with it, or two by a point each (\`turning: false\`)`,
-      )
-    }
-    if (hand.follows.some((on) => within(on, thing))) hand.free()
+  on(thing: Object3D, hand: End, grip: Grip, turning: boolean, now: number) {
+    const bound = this.found(thing)
+    const elsewhere = [...this.all.values()].find((other) => other !== bound && other.bonds.some((bond) => bond.hand === hand))
+    if (elsewhere) this.off(elsewhere.thing, hand, now)
     const { hangs, large } = this.bones.lies('hand', hand.side)
     const seat = {
       at: new Vector3().copy(grip.position).multiplyScalar(large).applyQuaternion(hangs),
       turn: new Quaternion().copy(grip.quaternion).premultiply(hangs),
     }
-    const scale = new Vector3()
-    this.placed(thing, matrix).decompose(at, turned, scale)
-    const palm = this.arms[hand.side].hand?.fingers?.tip('palm', 0) ?? new Vector3()
-    const point = palm.clone().sub(seat.at).applyQuaternion(seat.turn.clone().invert()).divide(scale)
-    const bond = { hand, grip, turning, point, palm, seat }
-    const was = bound?.bonds ?? []
-    const off = { at: new Vector3(), turn: new Quaternion(), since: now }
-    const taken: Bound = bound ?? { thing, bonds: [], scale, turn: new Quaternion(), off, velocity: new Vector3() }
-    taken.bonds = [...others, bond]
-    this.all.set(thing, taken)
-    if (this.loops(hand, hand.follows)) {
-      taken.bonds = was
-      if (!was.length) this.all.delete(thing)
-      throw new Error(`the ${hand.name} takes a thing that moves it, through what it follows`)
+    const bond = { hand, grip, turning, seat }
+    const k = bound.bonds.findIndex((one) => one.hand === hand)
+    if (k >= 0) bound.bonds[k] = bond
+    else bound.bonds.push(bond)
+    const leads = !bound.outside && bound.bonds[0] === bond
+    if (!leads) return void hand.to(grip)
+    if (this.loops(hand, hand.follows.filter((on) => !within(on, thing)))) {
+      bound.bonds.splice(bound.bonds.indexOf(bond), 1)
+      throw new Error(`the ${hand.name} is to lead a thing that moves it, through what it follows`)
     }
-    this.seated(taken, now)
+    if (hand.follows.some((on) => within(on, thing))) hand.free()
+    this.seated(bound, now)
   }
 
   /**
-   * The hand lets go of what is bound to it, where it is, at the moment `now`, and tells how fast it was moving then,
-   * in the scene: held by no hand it is the scene's; by another by a point, it goes with that one alone.
+   * A hand comes off a thing at the moment `now`: one that followed it is the body's again; the next on it leads it
+   * from where it is, if it was led
    */
-  letGo(hand: End, now: number) {
-    const bound = [...this.all.values()].find(({ bonds }) => bonds.some((bond) => bond.hand === hand))
-    if (!bound) throw new Error(`the ${hand.name} lets go, and nothing is bound to it`)
-    bound.bonds = bound.bonds.filter((bond) => bond.hand !== hand)
-    if (bound.bonds.length) this.seated(bound, now)
-    else this.all.delete(bound.thing)
-    // (the frame of the body is the scene's turned and moved, not scaled)
-    return bound.velocity.clone().applyQuaternion(turned.setFromRotationMatrix(this.bones.frame).invert())
+  off(thing: Object3D, hand: End, now: number) {
+    const bound = this.all.get(thing)
+    const k = bound?.bonds.findIndex((bond) => bond.hand === hand) ?? -1
+    if (!bound || k < 0) return
+    bound.bonds.splice(k, 1)
+    if (hand.follows.some((on) => within(on, thing))) hand.free()
+    const [next] = bound.bonds
+    if (k > 0 || bound.outside || !next) return
+    if (next.hand.follows.some((on) => within(on, thing))) next.hand.free()
+    this.seated(bound, now)
   }
 
-  /** throws if a hand sent onto a thing would follow what moves it: what is bound to it, or what follows that */
+  /** the thing is bound no more: every hand comes off it, and it is the scene's. Tells how fast it was moving, in the scene */
+  free(thing: Object3D) {
+    const bound = this.all.get(thing)
+    if (!bound) return new Vector3()
+    for (const { hand } of bound.bonds) if (hand.follows.some((on) => within(on, thing))) hand.free()
+    this.all.delete(thing)
+    return this.velocity(bound)
+  }
+
+  /** how fast a thing moves, in the scene */
+  velocity(bound: Bound | Object3D) {
+    const of = 'bonds' in bound ? bound : this.all.get(bound)
+    // (the frame of the body is the scene's turned and moved, not scaled)
+    return (of?.velocity.clone() ?? new Vector3()).applyQuaternion(turned.setFromRotationMatrix(this.bones.frame).invert())
+  }
+
+  /** whether every hand on a thing is where it is to be: the leading one, if it is sent anywhere */
+  there(thing: Object3D) {
+    const bonds = this.all.get(thing)?.bonds ?? []
+    return bonds.length > 0 && bonds.every(({ hand }) => hand.there || hand.last === undefined)
+  }
+
+  /** a thing a hand leads by a point turns, in the frame of the body, from as it is to `to`, between the moments it `leaves` and is there `when` */
+  turn(thing: Object3D, to: Quaternion, leaves: number, when: number) {
+    const bound = this.all.get(thing)
+    if (!bound) return
+    bound.turns = { from: this.turning(bound, leaves).clone(), to: to.clone(), leaves, when }
+  }
+
+  /** how a thing is turned, in the frame of the body, as it is now */
+  turned(thing: Object3D) {
+    this.placed(thing, matrix).decompose(at, turned, scaled)
+    return turned.clone()
+  }
+
+  /** throws if a hand sent onto a thing would follow what moves it: what it leads, or what follows that */
   follow(hand: End, thing: Object3D) {
     if (this.loops(hand, [thing])) {
-      throw new Error(`the ${hand.name} is sent onto a thing it moves: what is bound to it goes with it, and cannot also lead it`)
+      throw new Error(`the ${hand.name} is sent onto a thing it leads: the thing goes with it, and cannot also lead it`)
     }
   }
 
   /** notes where each thing is a nudge on, at the moment `now`, as the bones are posed now: for how it moves */
   measure(now: number) {
-    for (const bound of this.all.values()) bound.ahead = new Vector3().setFromMatrixPosition(this.where(bound, now, matrix))
+    for (const bound of this.all.values()) {
+      if (this.leads(bound)) bound.ahead = new Vector3().setFromMatrixPosition(this.where(bound, now, matrix))
+    }
   }
 
-  /** each thing is where its hands have it as the bones are posed, at the moment `now`, written in its parent's frame */
+  /**
+   * each thing the body moves is where its leading hand has it as the bones are posed, at the moment `now`, written in
+   * its parent's frame
+   */
   write(now: number) {
     const { frame } = this.bones
     for (const bound of this.all.values()) {
       const { thing } = bound
+      if (!this.leads(bound)) continue
       const to = this.where(bound, now, matrix)
       if (bound.ahead) {
         bound.velocity.setFromMatrixPosition(to).sub(bound.ahead).divideScalar(-NUDGE)
@@ -151,21 +210,46 @@ export class Bindings {
     }
   }
 
-  /** whether following these things leads a hand round to what is bound to it */
+  private found(thing: Object3D) {
+    const bound = this.all.get(thing)
+    if (!bound) throw new Error('a hand goes on a thing that is not bound to him')
+    return bound
+  }
+
+  /** whether a hand leads it */
+  private leads(bound: Bound) {
+    return !bound.outside && bound.bonds.length > 0
+  }
+
+  /**
+   * as an update for the moment `now` begins: each thing moved from outside, or by no hand, was set where it is to be
+   * by then, and how fast it moves is told from where it was set for the update before
+   */
+  watch(now: number) {
+    for (const bound of this.all.values()) {
+      if (this.leads(bound)) continue
+      this.placed(bound.thing, matrix).decompose(at, turned, scaled)
+      const { seen } = bound
+      if (seen && now > seen.time) bound.velocity.copy(at).sub(seen.at).divideScalar(now - seen.time)
+      bound.seen = { at: at.clone(), time: now }
+    }
+  }
+
+  /** whether leading a thing, or following these things, leads a hand round to what it leads */
   private loops(hand: End, things: Object3D[], seen = new Set<End>()): boolean {
     return things.some((thing) =>
-      this.holders(thing).some((holder) => {
-        if (holder === hand) return true
-        if (seen.has(holder)) return false
-        seen.add(holder)
-        return this.loops(hand, holder.follows, seen)
+      this.leaders(thing).some((leader) => {
+        if (leader === hand) return true
+        if (seen.has(leader)) return false
+        seen.add(leader)
+        return this.loops(hand, leader.follows, seen)
       }),
     )
   }
 
-  /** the hands that move a thing: those bound to it or to what it is part of */
-  private holders(thing: Object3D) {
-    return [...this.all.values()].flatMap(({ thing: bound, bonds }) => (within(thing, bound) ? bonds.map(({ hand }) => hand) : []))
+  /** the hands that move a thing: the one leading it or what it is part of */
+  private leaders(thing: Object3D) {
+    return [...this.all.values()].flatMap((bound) => (within(thing, bound.thing) && this.leads(bound) ? [bound.bonds[0].hand] : []))
   }
 
   /** where a thing is, in the frame of the body */
@@ -174,12 +258,21 @@ export class Bindings {
     return to.multiplyMatrices(this.bones.frame, thing.matrixWorld)
   }
 
-  /** its hands have changed: it is turned against them as it is now, and eases from here into where they have it */
+  /** how it is turned at the moment `now`, led by a point: as it was, or on its way to how it is sent to point */
+  private turning(bound: Bound, now: number) {
+    const { turns } = bound
+    if (!turns) return bound.turn
+    const share = turns.when > turns.leaves ? (now - turns.leaves) / (turns.when - turns.leaves) : 1
+    bound.turn.slerpQuaternions(turns.from, turns.to, eased(share))
+    if (share >= 1) bound.turns = undefined
+    return bound.turn
+  }
+
+  /** its leading hand has changed: it is turned as it is now, and eases from here into where that hand has it */
   private seated(bound: Bound, now: number) {
-    const [lead] = bound.bonds
     const is = this.placed(bound.thing, new Matrix4())
-    is.decompose(at, bound.turn, scaled)
-    if (bound.bonds.length > 1) bound.turn.premultiply(turned.copy(this.bones.hand[lead.hand.side]).invert())
+    is.decompose(at, bound.turn, bound.scale)
+    bound.turns = undefined
     const { off } = bound
     off.since = now
     off.at.set(0, 0, 0)
@@ -188,35 +281,17 @@ export class Bindings {
   }
 
   /**
-   * where a thing is to be at the moment `now`, as the bones are posed, in the frame of the body: where its hands have
-   * it, still on its way there from where it was taken
+   * where a thing is to be at the moment `now`, as the bones are posed, in the frame of the body: where its leading
+   * hand has it, still on its way there from where it was taken
    */
   private where(bound: Bound, now: number, to: Matrix4) {
     const { bonds, scale, off } = bound
-    const [lead, second] = bonds
+    const { hand: { side }, seat, turning } = bonds[0]
     const { wrist, hand } = this.bones
-    const pos = new Vector3()
-    const turn = new Quaternion()
-    const palm = (bond: Bond, to: Vector3) => to.copy(bond.palm).applyQuaternion(hand[bond.hand.side]).add(wrist[bond.hand.side])
-    if (lead.turning) {
-      const { seat } = lead
-      turn.copy(hand[lead.hand.side]).multiply(seat.turn)
-      pos.copy(seat.at).applyQuaternion(hand[lead.hand.side]).add(wrist[lead.hand.side])
-    } else if (!second) {
-      turn.copy(bound.turn)
-      pos.copy(palm(lead, at)).sub(scaled.copy(lead.point).multiply(scale).applyQuaternion(turn))
-    } else {
-      // (turned with the leading hand, then the short way for the line through its points to lie along that through the palms)
-      turn.copy(hand[lead.hand.side]).multiply(bound.turn)
-      const along = scaled.copy(second.point).sub(lead.point).multiply(scale).applyQuaternion(turn).normalize()
-      const across = other.copy(palm(second, other)).sub(palm(lead, at)).normalize()
-      turn.premultiply(new Quaternion().setFromUnitVectors(along, across))
-      const middle = scaled.copy(lead.point).add(second.point).multiplyScalar(0.5).multiply(scale).applyQuaternion(turn)
-      pos.copy(palm(lead, at)).add(palm(second, other)).multiplyScalar(0.5).sub(middle)
-    }
+    const pos = new Vector3().copy(seat.at).applyQuaternion(hand[side]).add(wrist[side])
+    const turn = turning ? new Quaternion().copy(hand[side]).multiply(seat.turn) : this.turning(bound, now).clone()
     // (easing in: what was off at the start is left off less and less, until none is)
-    const share = Math.min(1, (now - off.since) / (EASE * this.bones.size.beat))
-    const left = 1 - share * share * (3 - 2 * share)
+    const left = 1 - eased((now - off.since) / (EASE * this.bones.size.beat))
     easing.compose(off.at.clone().multiplyScalar(left), new Quaternion().slerp(off.turn, left), ONE)
     return to.compose(pos, turn, scale).multiply(easing)
   }

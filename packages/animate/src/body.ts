@@ -1,9 +1,9 @@
-import { type Object3D, Vector3 } from 'three'
+import { Object3D, Quaternion, Vector3 } from 'three'
 import { Ahead, carrier, flat, Going, type Ground, Mover, Reactions, type Run, Stance, Stoops, type Walk } from '@drawcall/locomotion'
 import { type Band, Bindings, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
 import { Clock, type Workings } from './clock'
 import { type Intent, intent } from './intent'
-import { type Foot, type Hand, hand as handOf, type On } from './ends'
+import { type Binder, type Foot, type Hand, hand as handOf, type On, type Thing, thing } from './ends'
 
 /**
  * where the pocket of a shoulder is that a stock rests in, from its joint: so far above it (of his trunk) and in
@@ -60,6 +60,7 @@ export class Body {
   private readonly hands: Record<Side, End>
   private readonly gives: Gives
   private readonly bindings: Bindings
+  private readonly binder: Binder
   /** what he is made of, for telling what he means to do */
   private readonly workings: Workings
 
@@ -92,14 +93,25 @@ export class Body {
     const hand = both(
       (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], carried, size, rigged('hand', side)),
     )
-    const ends = { foot, hand }
-    const bindings = (this.bindings = new Bindings(bones, turning.arms))
+    const bindings = (this.bindings = new Bindings(bones))
     this.foot = foot
     this.hands = hand
-    this.hand = both((side) => handOf(hand[side], bindings, this))
+    const ends = new Map<Hand, End>()
+    this.binder = {
+      bindings,
+      clock: this,
+      end: (of) => {
+        const found = ends.get(of)
+        if (!found) throw new Error('a thing is bound to a hand that is not his')
+        return found
+      },
+      ways: (on) => this.ways(on),
+    }
+    this.hand = both((side) => handOf(hand[side], this.binder))
+    for (const side of SIDES) ends.set(this.hand[side], hand[side])
     const stance = both((side) => new Stance(size, side, turning.legs[side], foot[side], mover.foot[side]))
     const at = { value: new Vector3(), velocity: new Vector3() }
-    const going = (this.going = new Going(this, size, mover, ahead, turning, ends, reactions, at))
+    const going = (this.going = new Going(this, size, mover, ahead, turning, { foot, hand }, reactions, at))
     this.hips = { ...at, to: (target, way) => going.to(target, way), at: (place) => going.at(place) }
     this.trunk = turning.trunk
     this.head = turning.head
@@ -108,7 +120,7 @@ export class Body {
     for (const part of parts(turning)) part.free()
     const stood = both(() => new Vector3())
     for (const side of SIDES) foot[side].anchor = stood[side].copy(mover.foot[side].at)
-    const all = { size, bones, mover, joints: turning, ahead, reactions, gives, bindings, going, ends, stance, stood, hips: at }
+    const all = { size, bones, mover, joints: turning, ahead, reactions, gives, bindings, going, ends: { foot, hand }, stance, stood, hips: at }
     this.clock = new Clock((this.workings = all))
     rigs.set(rig, this)
     this.clock.pose(0)
@@ -138,9 +150,29 @@ export class Body {
     }
   }
 
-  /** what is bound to his hands: each thing, the sides of the hands it goes with, and whether it turns with the hand */
+  /**
+   * A thing is bound to him from now on, and moved by one owner: the body, or from `outside`. Hands go `on` it by
+   * grips. Moved by the body, the first hand on it leads it, and the story sends the thing, never that hand: it is the
+   * end of that arm, offset by the grip, so the body plans it as it plans a hand, and every other hand on it follows
+   * it. Moved from outside, the game or physics sets where it is every frame, and every hand on it follows it as near
+   * as the arm reaches. `free` gives it up, telling how fast it was moving.
+   */
+  bind(object: Object3D, { outside = false }: { outside?: boolean } = {}): Thing {
+    return thing(object, outside, this.binder)
+  }
+
+  /** what is bound to him: each thing, the sides of the hands on it, the leading one first, whether it turns with that hand, and whether it is moved from outside */
   get bound() {
     return this.bindings.bound
+  }
+
+  /** what turns a way counted as a place `on` him, on a thing or in the scene into the frame of the body */
+  private ways(on?: Object3D | Body) {
+    const turn = new Quaternion().setFromRotationMatrix(this.bones.frame)
+    if (on === this) return new Quaternion().setFromAxisAngle(UP, this.mover.facing)
+    if (!(on instanceof Object3D)) return turn
+    on.updateWorldMatrix(true, false)
+    return turn.multiply(on.getWorldQuaternion(new Quaternion()))
   }
 
   /** the place on the ground where a foot stands under its hip, he over a place, facing as he does: where a story puts one down */
@@ -170,6 +202,17 @@ export class Body {
   /** where his eye on a side is, in the scene */
   eye(side: Side) {
     return this.bones.eye(side).applyMatrix4(this.bones.frame.clone().invert())
+  }
+
+  /**
+   * where the pocket of a shoulder is, as he was posed last, in the scene: where the butt of a stock rests, so far above
+   * the joint and in toward his middle, on his front, going with his chest
+   */
+  pocket(side: Side) {
+    const { trunk, shoulder: wide } = this.size
+    const [up, inward] = [POCKET.up * trunk, POCKET.inward * wide]
+    const at = new Vector3(-SIGN[side] * inward, up, this.front(side, up, inward))
+    return this.bones.shouldered(side, at).applyMatrix4(this.bones.frame.clone().invert())
   }
 
   /** which way he faces along the ground, in the scene: what `face` turns him to */

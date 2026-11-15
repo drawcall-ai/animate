@@ -1,5 +1,5 @@
-import type { Body, Story } from '@drawcall/animate'
-import { flat, type Grip, type Statement } from '@drawcall/hand'
+import type { Body, Story, Thing } from '@drawcall/animate'
+import { flat, type Statement } from '@drawcall/hand'
 import { Vector3 } from 'three'
 import { RADIUS } from './ball'
 import { HOOP, arc } from './court'
@@ -23,25 +23,24 @@ const JUMP = 0.4
 const SIDE = place(-1, 0, 0)
 
 /**
- * Before his chest, as he carries the ball standing or into a shot: the ball on the right palm and the open left hand
- * at its side, the wrists counted from each shoulder (of his arm).
+ * Before his chest, as he carries the ball standing or into a shot: the ball on the right palm, which faces up, and the
+ * open left hand at its side, counted from each shoulder (of his arm): the ball's middle, and the left wrist.
  */
-export function carry(body: Body, seat: Grip) {
+export function carry(body: Body, ball: Thing) {
   const { arm } = body.size
-  body.hand.right.to(place(0.18 * arm, -0.36 * arm, 0.55 * arm), { on: body, palm: place(0, 1, 0) })
+  void ball.to(place(0.12 * arm, -0.1 * arm, 0.62 * arm), { on: body, palm: place(0, 1, 0) })
   body.hand.left.to(place(-0.18 * arm, -0.22 * arm, 0.55 * arm), { on: body, palm: SIDE })
-  body.hand.right.shape(seat.pose)
   body.hand.left.shape(flat)
 }
 
 /**
  * A jump shot from where he stands: carrying the ball he squares up to the hoop, steps in toward it and springs up, the left hand going
- * up beside the ball; at the top the right sends it off from above his shoulder on its way to the ring and lets go of
- * it, and `letGo` gives how fast it leaves to whatever owns it next. The arm swings on after it as he lands.
+ * up beside the ball; at the top it is sent off from above his right shoulder on its way to the ring and freed, and
+ * `letGo` gives how fast it leaves to whatever owns it next. The arm swings on after it as he lands.
  */
-export function* jumpShot(body: Body, seat: Grip, letGo: (velocity: Vector3) => void): Story {
+export function* jumpShot(body: Body, ball: Thing, letGo: (velocity: Vector3) => void): Story {
   const { arm, leg, stand, trunk, shoulder } = body.size
-  carry(body, seat)
+  carry(body, ball)
   const from = body.hips.value
   const toward = new Vector3(HOOP.x - from.x, 0, HOOP.z - from.z).normalize()
   // (squared up to it first, for the steps in to go straight at it)
@@ -62,8 +61,8 @@ export function* jumpShot(body: Body, seat: Grip, letGo: (velocity: Vector3) => 
     .setY(top.y + trunk + arm)
   const flying = arc(release, UP)
   body.hand.right.shape(flat, { by: highest })
-  yield* body.hand.right.by(highest, release, { velocity: flying, with: seat })
-  letGo(body.hand.right.letGo())
+  yield* ball.by(highest, release, { velocity: flying })
+  letGo(ball.free())
   body.hand.left.free()
   yield* body.stand()
 }

@@ -154,19 +154,22 @@ function seat(hand: Hand, held: Grip, thing = held.target) {
 }
 
 /**
- * which way a hand's palm faces and its fingers point on a thing it holds by a grip, in the thing's frame: what turns
- * the hand for the thing to be turned so, once it is bound to the hand
+ * which way a hand's palm faces on a thing it holds by a grip, in the thing's frame, and which way the thing points its
+ * z there: what turns a hand sent `with` the grip for the thing to be turned so, once it is bound to the hand
  */
 export function lying(hand: Hand, held: Grip) {
-  const back = held.quaternion.clone().invert()
-  const fingers = new Vector3().crossVectors(hand.thumbward, hand.normal).multiplyScalar(hand.side === 'right' ? -1 : 1)
-  return { palm: hand.normal.clone().applyQuaternion(back), pointing: fingers.applyQuaternion(back) }
+  return { palm: hand.normal.clone().applyQuaternion(held.quaternion.clone().invert()), pointing: new Vector3(0, 0, 1) }
 }
 
-/** a hand has a thing from the start: it is put where the grip seats it in the hand as the hand is now, and the hand takes it */
-export function inHand(body: Body, hand: Hand, held: Grip) {
+/**
+ * a hand has a thing from the start: it is put where the grip seats it in the hand as the hand is now, and bound to him
+ * there, the hand leading it, turning it or by a point. Tells the thing as bound
+ */
+export function inHand(body: Body, hand: Hand, held: Grip, how: { turning?: boolean } = {}) {
   seat(hand, held)
-  body.hand[hand.side].take(held)
+  const thing = body.bind(held.target)
+  thing.on(body.hand[hand.side], held, how)
+  return thing
 }
 
 /**

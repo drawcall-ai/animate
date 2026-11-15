@@ -11,7 +11,8 @@ export type Meant = Aim & { at: Vector3; held: boolean }
 /**
  * What he means to do and how far he has come, for whoever looks, in the scene and on the clock of `time`: each hand
  * and foot, the hips and the feet as foreseen, and where each thing he holds is meant to be and when: one he holds
- * now, one bound to his hands where the next place the leading hand is sent to has it, moved there, turned as it is.
+ * now, one the body moves where the next place its leading hand is sent to has it, moved there, turned as it is, and
+ * one moved from outside where it is.
  */
 export type Intent = {
   time: number
@@ -48,11 +49,15 @@ export function intent({ bones, ends, mover, hips, size, bindings }: Workings, t
     if (give && !things.has(give.thing)) things.set(give.thing, { at: give.at(give.thing, 0, new Matrix4()).premultiply(scene), time })
   }
   const hand = both((side) => meant('hand', side))
-  for (const { thing, hands } of bindings.bound) {
+  for (const { thing, hands, outside } of bindings.bound) {
     const leads = hand[hands[0]]
     const [next] = leads.sent
-    if (!next) continue
     thing.updateWorldMatrix(true, false)
+    // (one moved from outside, or led nowhere, is meant to be where it is)
+    if (outside || !next) {
+      things.set(thing, { at: thing.matrixWorld.clone(), time })
+      continue
+    }
     const by = next.at.clone().sub(leads.at).sub(leads.tip)
     things.set(thing, { at: thing.matrixWorld.clone().premultiply(new Matrix4().makeTranslation(by)), time: next.time })
   }

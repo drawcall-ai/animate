@@ -32,6 +32,12 @@ export class End extends Planner {
     return this.plan?.there === true
   }
 
+  /** when it sets off for where it was last sent, and the moment it is to be there, if it is sent anywhere */
+  get last() {
+    const plan = this.sent.at(-1)
+    return plan && { leaves: plan.leaves, when: plan.when }
+  }
+
   /** the things it follows: those it is on, or is sent to be on */
   get follows() {
     return this.sent.flatMap(({ on }) => (on instanceof Object3D ? [on] : []))

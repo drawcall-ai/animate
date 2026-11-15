@@ -243,6 +243,14 @@ export class Bones {
     return new Vector3(SIGN[side] * EYE.aside, EYE.up, EYE.ahead).multiplyScalar(this.size.trunk)
   }
 
+  /**
+   * where a place counted from the joint of a shoulder, he upright, is as he was posed last, in the frame of the body:
+   * it goes with the top of his trunk
+   */
+  shouldered(side: Side, place: Vector3) {
+    return place.clone().applyQuaternion(this.trunk[this.trunk.length - 1].turned).add(this.arms[side][0].place)
+  }
+
   /** where an eye is, as he was posed last, in the frame of the body */
   eye(side: Side) {
     return this.eyed(side).applyQuaternion(this.head.turned).add(this.head.place)

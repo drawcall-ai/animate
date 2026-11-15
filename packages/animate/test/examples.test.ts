@@ -72,9 +72,9 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
     const hand = new Hand(rig, 'right')
     const seat = grip(hand, ball, SEAT)
     const body = new Body(rig)
-    inHand(body, hand, seat)
+    const held = inHand(body, hand, seat, { turning: false })
     let thrown = court.ball()
-    body.play(jumpShot(body, seat, (velocity) => (thrown = { position: ball.getWorldPosition(new Vector3()), velocity })))
+    body.play(jumpShot(body, held, (velocity) => (thrown = { position: ball.getWorldPosition(new Vector3()), velocity })))
     return { body, world: (dt) => thrown.velocity && court.fly(thrown, dt) }
   },
   volleyball(rig) {

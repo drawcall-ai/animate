@@ -31,7 +31,7 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
 - `Carrier` and `Stoop`: **the one interface the planner sees of the rest of the body** (where a limb will start
   from, where a foot the body steps with will be and whether it is spared, getting down, winding up, taking and putting
   a foot). limbs declares it; locomotion implements it. The planner never sees `Mover` or `Ahead`.
-- `Bindings`: the things bound to the hands, which go with them (see below).
+- `Bindings`: the things bound to him and the hands on them (see below).
 - `Gives`: the old held-thing solver, going away (see blurred boundaries).
 - the types `animate` re-exports to authors: `Finger`, `Grip`, `Part`, `Pose`, `Side`, `Size`, `Story`, `Touch`, `Xyz`.
 
@@ -40,7 +40,8 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
   `Going` (the movement intention: walk, run, go, face, look, knock, jump, stand) with `Ground`, `Run`, `Walk`, `flat`,
   `Reactions`, `Stance`, `Stoops`, `held`.
 
-**animate → authors**: `Body` (with `bound`), `Held` (going away), `Foot`, `Hand` (with `take` and `letGo`), and the types above. `Foot` and
+**animate → authors**: `Body` (with `bind` and `bound`), `Thing` (a thing bound to him: `on`, `off`, `to`, `by`,
+`free`), `Held` (going away), `Foot`, `Hand` (its `take` and `letGo` going away), and the types above. `Foot` and
 `Hand` are declared in `animate/src/ends.ts`, where a place `on` him can be typed as the `Body`.
 `Body.intent()` tells what he means to do as plain data (`Intent`: each end's `Aim` from `Planner.aim()` in limbs,
 the hips and footfalls `foresee`n by locomotion on a copy of `Mover`, and where each held thing is meant to be),
@@ -51,10 +52,12 @@ draws only that.
 
 `world`, `size`, `curve`, `goal` → `bone`, `bones`, `shape`, `fingers`, `limb`, `joints` → `track` (where a target
 is) → `reach` (how the limb turns to it) → `planner` (when it sets off, how it swings) → `end` (carrying the plan out).
-`binding` sits above them: it reads where the posed bones put the hands, writes the bound things there after every
-pose, and knows an `End` only by its `side`, `name`, `follows` (the things it is sent onto) and `free`. The planner
-knows nothing of it: a hand sent `with: grip` is counted from the grip, and one sent onto a thing follows it, as
-before. `give` (going away) sits beside the planner and is used by `track` and `end`.
+`binding` sits above them. A thing moved by the body is the end of its leading hand's chain, offset by the grip (a
+tool frame): `thing.to/by` is that hand's send `with: grip`, so the planner plans a thing exactly as it plans a hand,
+and `binding` writes the thing where the posed hand has it after every pose (turning with it, or by a point keeping
+its own turn or turning as sent). Every other hand on it is sent onto its grip and follows it, one way. A thing moved
+from outside is never written; every hand on it follows it. `binding` knows an `End` only by its `side`, `name`,
+`follows`, `there`, `last`, `to` and `free`; the planner knows nothing of it. `give` (going away) sits beside the planner and is used by `track` and `end`.
 
 ## Blurred boundaries still to fix
 

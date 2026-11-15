@@ -62,7 +62,8 @@ const FORWARD = new Vector3(0, 0, 1)
 export type Arriving = { velocity?: Xyz; on?: object }
 /**
  * and a hand: turned for its `palm` to face and for the fingers to be `pointing` a way, counted as its place is; the
- * place being that of what it is there `with`, if not its wrist: a part of it, or what sits in it by a grip
+ * place being that of what it is there `with`, if not its wrist: a part of it, or what sits in it by a grip, which is
+ * then what is `pointing`, its z
  */
 export type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch | Grip }
 /**
@@ -224,7 +225,9 @@ export class Track {
       throw new Error(`the ${this.name} is to take hold of something moving past it: send what he holds instead`)
     }
     const gives = grip && this.rig.held(grip.target)
-    return { place, velocity, on, palm: faces, pointing: points, with: part, grip, gives }
+    // (with a grip, `pointing` is the way what sits in the hand points its z, and the palm is turned about that)
+    const turned = typeof touch === 'object' && points ? this.pointed(touch, points, faces) : { palm: faces, pointing: points }
+    return { place, velocity, on, ...turned, with: part, grip, gives }
   }
 
   /**
@@ -259,6 +262,22 @@ export class Track {
     const palmed = hand.palm.clone().applyQuaternion(held)
     const ends = faces && !z && !y ? { palm: palmed } : { palm: palmed, pointing: DOWN.clone().applyQuaternion(held) }
     return { ...target, ...ends, with: at, carries: give, pose: { at: target.place.clone(), turn } }
+  }
+
+  /**
+   * which way the palm faces and the fingers point for what sits in the hand by a grip to point its z a way: turned the
+   * short way there from how it hangs, and rolled about that way for the palm to face as near `palm` as it can
+   */
+  private pointed(held: Grip, pointing: Vector3, palm?: Vector3) {
+    const hand = this.limb.hand
+    if (!hand) throw new Error(`the ${this.name} is sent with what sits in it by a grip, and is no hand`)
+    const turn = new Quaternion().setFromUnitVectors(this.framed(held).along, pointing)
+    const faces = hand.palm.clone().applyQuaternion(turn)
+    if (palm) {
+      const roll = Math.atan2(pointing.dot(new Vector3().crossVectors(faces, palm)), faces.dot(palm) - faces.dot(pointing) * palm.dot(pointing))
+      turn.premultiply(new Quaternion().setFromAxisAngle(pointing, roll))
+    }
+    return { palm: hand.palm.clone().applyQuaternion(turn), pointing: DOWN.clone().applyQuaternion(turn) }
   }
 
   /** a thing as it sits in the hand: where it is from the wrist and the way its z goes, in the frame of the hand as it hangs */

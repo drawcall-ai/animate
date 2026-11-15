@@ -1,4 +1,4 @@
-import type { Story } from '@drawcall/animate'
+import type { Story, Thing } from '@drawcall/animate'
 import { type Grip, grip, Hand } from '@drawcall/hand'
 import { type Object3D, Quaternion, Vector3 } from 'three'
 import { Character } from '../character'
@@ -31,8 +31,8 @@ const MEET = 1
  * A basketball player led by the keys: he walks and runs, picks the ball up off the floor, dribbles it as he goes,
  * holds it before his chest standing, and shoots it at the hoop. Picking it up and the jump shot are actions, which
  * own his going; dribbling and holding are his hands only, the player leading him. The ball is bound to his right
- * hand where the grip seats it while the hand has it; the floor bounces it between pushes of the dribble, and the
- * world has it once it is shot or dropped.
+ * hand by a point while the hand has it, keeping its own turn, and the story sends the ball; the floor bounces it
+ * between pushes of the dribble, and the world has it once it is shot or dropped.
  */
 export class Hooper implements Game {
   readonly character: Character
@@ -40,6 +40,8 @@ export class Hooper implements Game {
   /** the right hand's bone, and where the ball sits in it */
   private readonly bone: Object3D
   private readonly seat: Grip
+  /** the ball as bound to him */
+  private readonly held: Thing
   /** what he does with the ball, if anything, and whether he is asked to go somewhere and to shoot */
   doing?: 'picking up' | 'holding' | 'dribbling' | 'shooting'
   private moving = false
@@ -57,6 +59,7 @@ export class Hooper implements Game {
     this.bone = hand.bone
     this.seat = grip(hand, this.ball.mesh, SEAT)
     this.character = new Character(rig)
+    this.held = this.character.body.bind(this.ball.mesh)
     // the ball lies on the floor ahead of him
     this.ball.mesh.position.set(0.5, RADIUS, 1.5)
     this.ball.release(new Vector3())
@@ -107,6 +110,7 @@ export class Hooper implements Game {
   /** the ball is the world's, falling from where it is, and he has nothing to do with it */
   private drop() {
     const { hand } = this.character.body
+    this.held.free()
     hand.right.free()
     hand.left.free()
     hand.right.shape()
@@ -144,8 +148,8 @@ export class Hooper implements Game {
     left.by(moment, side, { with: 'palm', palm: leftward.clone().negate() })
     yield* taken
     if (!this.near()) return this.drop()
-    right.take(this.seat)
-    carry(body, this.seat)
+    this.held.on(right, this.seat, { turning: false })
+    carry(body, this.held)
     body.face()
     body.play(this.handle())
   }
@@ -158,12 +162,12 @@ export class Hooper implements Game {
   private *handle(): Story {
     const { body, feet } = this.character
     const { right, left } = body.hand
-    const { ball, seat } = this
+    const { ball, seat, held } = this
     for (;;) {
       if (this.shooting) return this.character.act(this.shot())
       if (!this.moving) {
         this.doing = 'holding'
-        carry(body, seat)
+        carry(body, held)
         while (!this.moving && !this.shooting) yield
         continue
       }
@@ -176,14 +180,14 @@ export class Hooper implements Game {
       // (along the way he is asked to go, which he will be going by the time it comes back up)
       const { x, z } = feet.asked
       const push = new Vector3(x, -pushing(high, high + RADIUS), z)
-      yield* right.to(from, { on: body, velocity: push, palm: DOWN, with: seat, seconds: RIDE })
+      yield* held.to(from, { on: body, velocity: push, palm: DOWN, seconds: RIDE })
       // (the hand may have come short of the push: the ball goes down as hard all the same, from where it is let go)
-      right.letGo()
+      held.free()
       ball.dribble(this.bone, seat, pushing(ball.place.y, high + RADIUS), body.time)
       // the hand goes back up to where it pushed from, and has the ball as it comes up there under it
       yield* right.by(ball.rising(high), from, { on: body, velocity: { x, y: MEET, z }, palm: DOWN, with: seat })
       ball.rest()
-      right.take(seat)
+      held.on(right, seat, { turning: false })
     }
   }
 
@@ -191,7 +195,7 @@ export class Hooper implements Game {
   private *shot(): Story {
     this.doing = 'shooting'
     this.shooting = false
-    yield* jumpShot(this.character.body, this.seat, (velocity) => {
+    yield* jumpShot(this.character.body, this.held, (velocity) => {
       this.ball.release(velocity)
       this.doing = undefined
     })

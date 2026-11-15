@@ -1,4 +1,4 @@
-import type { Side, Story } from '@drawcall/animate'
+import type { Side, Story, Thing } from '@drawcall/animate'
 import { flat, type Grip, grip, Hand } from '@drawcall/hand'
 import type { PhysicsWorld } from '@drawcall/physics'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
@@ -69,7 +69,7 @@ export class Worker implements Game {
    * the box in his hands, the grip of each hand on it, which way its side under his left hand faces in its own frame,
    * and how the right hand lies on it there
    */
-  private held?: { box: Box; grips: Record<Side, Grip>; left: Vector3; right: ReturnType<typeof lying> }
+  private held?: { box: Box; thing: Thing; grips: Record<Side, Grip>; left: Vector3; right: ReturnType<typeof lying> }
   /** where he is to step to before his hands go, and the way he faces while they do */
   private spot?: Vector3
   private way?: { x: number; z: number }
@@ -174,12 +174,12 @@ export class Worker implements Game {
   /** his hands move the held box through places in the scene in turn, at a pace of its own: whether it got to the last */
   private *move(path: Vector3[]): Story<boolean> {
     if (!this.held) return false
-    const { grips, box } = this.held
+    const { thing, box } = this.held
     let [from, there] = [box.place, false]
     for (const place of path) {
       const seconds = Math.max(LIFT.least, place.distanceTo(from) / LIFT.speed)
       from = place
-      there = yield* this.body.hand.right.to(place, { with: grips.right, ...this.square(), seconds })
+      there = yield* thing.to(place, { ...this.square(), seconds })
     }
     return there
   }
@@ -187,8 +187,7 @@ export class Worker implements Game {
   /** the held box rides before him as he goes, so high or low before his belly */
   private ride(high?: number) {
     if (!this.held) return
-    const { grips } = this.held
-    this.body.hand.right.to(this.before(high), { on: this.body, with: grips.right, ...this.square(SHELFWARD) })
+    void this.held.thing.to(this.before(high), { on: this.body, ...this.square(SHELFWARD) })
   }
 
   /** he steps with the held box before him, so high */
@@ -220,7 +219,7 @@ export class Worker implements Game {
       return pointed(grip(this.hands[side], box.mesh, statement), this.hands[side], ahead)
     }
     const grips = { left: on('left', left), right: on('right', left.clone().negate()) }
-    this.held = { box, grips, left, right: lying(this.hands.right, grips.right) }
+    this.held = { box, thing: this.body.bind(box.mesh), grips, left, right: lying(this.hands.right, grips.right) }
     const reached = this.body.hand.left.to(grips.left)
     yield* this.body.hand.right.to(grips.right)
     yield* reached
@@ -228,8 +227,9 @@ export class Worker implements Game {
     // he leaves it where it lies)
     if (!this.near('left', grips.left) || !this.near('right', grips.right)) return this.letGo()
     const { hand } = this.body
-    // the right hand has it, and the left follows it
-    hand.right.take(grips.right)
+    // the right hand leads it, and the left follows it
+    this.held.thing.on(hand.right, grips.right)
+    this.held.thing.on(hand.left, grips.left)
     this.doing = 'lifting'
     // (off a board it is drawn out toward him, off the floor raised a little)
     const carried = this.carried()
@@ -270,8 +270,8 @@ export class Worker implements Game {
 
   /** the box is let go where it is, moving as it was, and his hands are his own again */
   private letGo() {
-    const { hand, bound } = this.body
-    const velocity = bound.length ? hand.right.letGo() : new Vector3()
+    const { hand } = this.body
+    const velocity = this.held?.thing.free() ?? new Vector3()
     for (const side of ['left', 'right'] as const) {
       hand[side].free()
       hand[side].shape()

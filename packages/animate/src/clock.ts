@@ -1,6 +1,21 @@
-import type { Vector3 } from 'three'
+import type { Object3D, Vector3 } from 'three'
 import { type Ahead, type Going, held, type Mover, type Reactions, type Stance } from '@drawcall/locomotion'
 import { type Bindings, type Bones, both, type End, type Gives, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick, UP } from '@drawcall/limbs'
+
+/**
+ * how the head is to be turned against the trunk to look at a place, in the scene, over a point `at` on a thing, in its
+ * frame: with the eye nearer the line from that point to the place on it
+ */
+function sighting(bones: Bones, place: Vector3, { on, at }: { on: Object3D; at: Vector3 }) {
+  on.updateWorldMatrix(true, false)
+  const through = at.clone().applyMatrix4(on.matrixWorld).applyMatrix4(bones.frame)
+  const way = place.clone().applyMatrix4(bones.frame).sub(through).normalize()
+  const off = (side: Side) => {
+    const from = bones.eye(side).sub(through)
+    return from.addScaledVector(way, -from.dot(way)).length()
+  }
+  return bones.sighting(off('right') <= off('left') ? 'right' : 'left', through, way)
+}
 
 /** what a step moves: the workings of a body, as it is made of them */
 export type Workings = {
@@ -47,6 +62,7 @@ export class Clock {
     if (this.owed > 0) this.draw(0)
     this.span = { from: this.time + this.owed, to: this.time + this.owed + delta }
     this.body.going.places(this.span.to)
+    this.body.bindings.watch(this.span.to)
     for (this.owed += delta; this.owed >= dt; this.updated = false) {
       this.owed -= dt
       this.advance(dt, this.updated)
@@ -116,7 +132,7 @@ export class Clock {
     const swing = ahead.wind.start()
     if (swing) this.stories.push(swing)
     // (looking over a thing, his head comes down to the line it has his eye on)
-    reactions.sights = gives.correct(hands, delta, { place: looked, over: going.over })
+    reactions.sights = gives.correct(hands, delta, { place: looked, over: going.over }) ?? (looked && going.over && sighting(this.body.bones, looked, going.over))
     for (const end of all) kept(end, () => end.advance(this.time, delta))
     for (const part of parts(joints)) part.advance(delta)
     reactions.react(delta)
