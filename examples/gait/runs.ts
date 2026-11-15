@@ -3,7 +3,7 @@ import type { Story } from '@drawcall/animate'
 type Flat = { x: number; z: number }
 /** what a scripted run asks of a body: the same words today's body and the frame gait answer */
 export type Runner = {
-  readonly size: { stand: number; leg: number; hip: number }
+  readonly size: { stand: number; leg: number; hip: number; ankle: number }
   readonly time: number
   run(run: { speed: number; at: Flat; plant?: 'left' | 'right'; push?: number; arrive?: number }): unknown
   walk(to: Flat, way?: { speed?: number; plant?: 'left' | 'right' }): unknown
@@ -12,6 +12,8 @@ export type Runner = {
   highest(): number
   stand(): unknown
   until(when: number): Story
+  ground(side: 'left' | 'right', z: number): { x: number; y: number; z: number }
+  readonly foot: Record<'left' | 'right', { to(place: { x: number; y: number; z: number }, way?: { seconds?: number }): Story<unknown> }>
 }
 
 /**
@@ -55,6 +57,17 @@ export const RUNS: Record<string, (body: Runner) => Story> = {
     yield* body.until(body.when({ x: 0, z: 16 }))
     body.stand()
     yield* body.until(body.time + 2)
+  },
+  *box(body) {
+    // up onto a box 0.3 m high ahead of him, one foot and then the other, and down again
+    yield* body.until(0.5)
+    const up = (side: 'left' | 'right', z: number, y: number) => ({ ...body.ground(side, z), y: body.size.ankle + y })
+    yield* body.foot.left.to(up('left', 0.45, 0.3))
+    yield* body.foot.right.to(up('right', 0.45, 0.3))
+    yield* body.until(body.time + 1)
+    yield* body.foot.left.to(up('left', 0.9, 0))
+    yield* body.foot.right.to(up('right', 0.9, 0))
+    yield* body.until(body.time + 1.5)
   },
   *spike(body) {
     yield* body.until(0.3)

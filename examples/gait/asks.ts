@@ -85,6 +85,11 @@ run({
     const scene = new Group().add(man)
     body = frames ? new Walker(man) : new Body(man)
     scene.add(pen)
+    if (asked === 'box') {
+      const box = new Mesh(new BoxGeometry(0.6, 0.3, 0.4), new MeshStandardMaterial({ color: 0x806040 }))
+      box.position.set(0, 0.15, 0.45)
+      scene.add(box)
+    }
     body.play((ask as (body: Runner, scene: Group) => Story)(body, scene))
     return scene
   },
