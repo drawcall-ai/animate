@@ -7,25 +7,22 @@ export const RADIUS = 0.12
 const MASS = 0.62
 /** how much of its speed it keeps off the floor */
 const BOUNCE = 0.85
+/** how fast a ball taken in a hand settles into where the grip seats it (1/s) */
+const SETTLE = 25
 const GRAVITY = 9.81
 
-/** where a ball bounced off the floor is, and how it moves, `seconds` after it left a place moving so */
-function flown(from: Vector3, velocity: Vector3, seconds: number) {
-  const fall = landing(from, velocity)
-  if (seconds <= fall) {
-    const place = from.clone().addScaledVector(velocity, seconds).setY(from.y + velocity.y * seconds - (GRAVITY / 2) * seconds ** 2)
-    return { place, velocity: velocity.clone().setY(velocity.y - GRAVITY * seconds) }
-  }
-  const up = BOUNCE * (GRAVITY * fall - velocity.y)
-  const since = seconds - fall
-  const place = from.clone().addScaledVector(velocity, seconds).setY(RADIUS + up * since - (GRAVITY / 2) * since ** 2)
-  return { place, velocity: velocity.clone().setY(up - GRAVITY * since) }
+/** how long a ball let go so high, going down so fast, takes to come down onto the floor (s) */
+function landing(high: number, down: number) {
+  return (-down + Math.sqrt(down * down + 2 * GRAVITY * (high - RADIUS))) / GRAVITY
 }
 
-/** how long a ball that left a place moving so takes to come down onto the floor (s) */
-function landing(from: Vector3, velocity: Vector3) {
-  const { y } = velocity
-  return (y + Math.sqrt(y * y + 2 * GRAVITY * (from.y - RADIUS))) / GRAVITY
+/** how high a ball let go so high, going down so fast, is `seconds` later, bounced off the floor once (m) */
+function bounced(high: number, down: number, seconds: number) {
+  const fall = landing(high, down)
+  if (seconds <= fall) return high - down * seconds - (GRAVITY / 2) * seconds ** 2
+  const up = BOUNCE * (down + GRAVITY * fall)
+  const since = seconds - fall
+  return RADIUS + up * since - (GRAVITY / 2) * since ** 2
 }
 
 /** how fast a ball let go so high is pushed down for it to come back up so high, its middle (m, m/s) */
@@ -34,22 +31,34 @@ export function pushing(from: number, to: number) {
   return Math.sqrt(Math.max(0, floor * floor - 2 * GRAVITY * (from - RADIUS)))
 }
 
+/** hangs a thing on a hand's bone where a grip seats it, at once, as large as it is */
+export function hang(thing: Object3D, bone: Object3D, seat: Grip) {
+  bone.attach(thing)
+  thing.position.copy(seat.position)
+  thing.quaternion.copy(seat.quaternion)
+}
+
 /**
- * The ball: free, a body of its own the world moves; bouncing, his between his hand and the floor; or held in the
- * scene's frame, which his hands move.
+ * The ball, which has one owner at a time: the physics world, a body of its own there; the floor, bouncing off it
+ * between pushes of a dribble, under where the hand that dribbles it seats it; or a hand, hung on its bone where the
+ * grip seats it, which it settles into from where the hand took it.
  */
 export class Ball {
   readonly mesh = new Mesh(new SphereGeometry(RADIUS, 24, 16), new MeshStandardMaterial({ color: 0xe07020 }))
   private solid?: RigidBody
-  /** where it left his hand, how it moved, and when, on his clock (m, m/s, s) */
-  private bounce?: { from: Vector3; velocity: Vector3; since: number }
-  /** the grip the hand that has it holds it by */
-  held?: Grip
+  /** the hand it bounces under: its bone and where it seats the ball; how high it left the hand, going down how fast, and when, on his clock (m, m/s, s) */
+  private bounce?: { bone: Object3D; seat: Grip; high: number; down: number; since: number }
+  /** where in the hand that has it it settles */
+  private seat?: Grip
 
   constructor(private readonly scene: Object3D) {}
 
   get free() {
     return this.solid !== undefined
+  }
+
+  get held() {
+    return this.seat !== undefined
   }
 
   /** where it is in the scene */
@@ -61,55 +70,61 @@ export class Ball {
   release(velocity: Vector3) {
     const solid = new RigidBody({ mass: MASS, velocity: { linear: velocity.toArray() }, material: { restitution: BOUNCE } })
     solid.position.copy(this.place)
+    this.rest()
     solid.add(this.mesh)
     this.mesh.position.set(0, 0, 0)
-    this.mesh.quaternion.identity()
-    this.mesh.scale.setScalar(1)
     this.scene.add(solid)
     this.solid = solid
-    this.bounce = this.held = undefined
   }
 
-  /** it leaves his hand where it is, moving so, at the moment `now` on his clock, to bounce off the floor and come back up */
-  dribble(velocity: Vector3, now: number) {
-    this.bounce = { from: this.place, velocity: velocity.clone(), since: now }
+  /**
+   * it leaves the hand it is in going down so fast, at the moment `now` on his clock, and bounces off the floor back
+   * up, under where that hand seats it as the hand goes along
+   */
+  dribble(down: number, now: number) {
+    const { seat } = this
+    const bone = this.mesh.parent
+    if (!seat || !bone) throw new Error('the ball is dribbled, and no hand has it')
+    const { y } = this.place
+    this.rest()
+    this.bounce = { bone, seat, high: y, down, since: now }
+  }
+
+  /** a hand's bone takes it where it is, and it settles to where the grip seats it */
+  take(bone: Object3D, seat: Grip) {
+    this.rest()
+    bone.attach(this.mesh)
+    this.seat = seat
+  }
+
+  /** it is no one's, lying still where it is: out of the world, not bouncing, in no hand */
+  rest() {
     this.scene.attach(this.mesh)
-    this.held = undefined
+    this.mesh.quaternion.identity()
+    this.mesh.scale.setScalar(1)
+    this.solid?.removeFromParent()
+    this.solid = this.bounce = this.seat = undefined
   }
 
-  /** where it will be and how it will move as it comes back up through so far `below` the height it left his hand at, and when (on his clock) */
-  rising(below: number) {
+  /** the moment on his clock it comes back up through a height after it bounced */
+  rising(high: number) {
     if (!this.bounce) throw new Error('the ball is not bouncing')
-    const { from, velocity, since } = this.bounce
-    const fall = landing(from, velocity)
-    const up = BOUNCE * (GRAVITY * fall - velocity.y)
-    const rise = from.y - below - RADIUS
+    const { high: from, down, since } = this.bounce
+    const fall = landing(from, down)
+    const up = BOUNCE * (down + GRAVITY * fall)
+    const rise = high - RADIUS
     // (it does not come back so high: at the top it reaches)
     const climb = up * up >= 2 * GRAVITY * rise ? (up - Math.sqrt(up * up - 2 * GRAVITY * rise)) / GRAVITY : up / GRAVITY
-    const seconds = fall + climb
-    return { time: since + seconds, ...flown(from, velocity, seconds) }
+    return since + fall + climb
   }
 
-  /** it is taken where it is, by a grip: no body of its own, nor bouncing */
-  take(held: Grip) {
-    this.scene.attach(this.mesh)
-    this.solid?.removeFromParent()
-    this.solid = this.bounce = undefined
-    this.held = held
-  }
-
-  /** where it has bounced to by the moment `now` on his clock, if it bounces */
-  update(now: number) {
-    if (!this.bounce) return
-    const { from, velocity, since } = this.bounce
-    this.mesh.position.copy(flown(from, velocity, now - since).place)
-  }
-
-  /** how it moves by the moment `now` on his clock, if it is not held (m/s) */
-  velocity(now: number) {
-    if (this.solid) return this.solid.getVelocity().linear.clone()
-    if (!this.bounce) return new Vector3()
-    const { from, velocity, since } = this.bounce
-    return flown(from, velocity, now - since).velocity
+  /** a frame of `delta` seconds that ends at the moment `now` on his clock: it bounces, or settles in the hand */
+  update(now: number, delta: number) {
+    if (this.bounce) {
+      const { bone, seat, high, down, since } = this.bounce
+      const under = bone.localToWorld(new Vector3().copy(seat.position))
+      this.mesh.position.set(under.x, bounced(high, down, now - since), under.z)
+    }
+    if (this.seat) this.mesh.position.lerp(new Vector3().copy(this.seat.position), 1 - Math.exp(-SETTLE * delta))
   }
 }

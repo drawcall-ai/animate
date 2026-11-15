@@ -64,9 +64,9 @@ const FORWARD = new Vector3(0, 0, 1)
 export type Arriving = { velocity?: Xyz; on?: Object3D | Body }
 /**
  * and a hand: turned for its `palm` to face and for the fingers to be `pointing` a way, counted as its place is; the
- * place being that of what it is there `with`, if not its wrist
+ * place being that of what it is there `with`, if not its wrist: a part of it, or what sits in it by a grip
  */
-export type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch }
+export type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch | Grip }
 /**
  * how a thing he holds is to arrive: as a hand does, its z `pointing` a way and its y `up`, or the `palm` of the hand
  * that carries it facing a way, counted as its place is
@@ -215,17 +215,19 @@ export class Track {
     }
     // (a foot goes no lower than it stands on the ground)
     if (this.kind === 'foot' && !on) place.y = Math.max(place.y, this.size.ankle)
-    if (touch && ![...FINGERS, 'palm', 'knuckles'].includes(touch)) {
+    // (with a grip, the place is that of what sits in the hand by it: where it is from the wrist)
+    const part = typeof touch === 'object' ? this.framed(touch).at : touch
+    if (typeof part === 'string' && ![...FINGERS, 'palm', 'knuckles'].includes(part)) {
       throw new Error(
-        `the ${this.name} is sent to be somewhere with its ${touch}, and that is the tip of the ${FINGERS.join(', ')}, the palm or the knuckles`,
+        `the ${this.name} is sent to be somewhere with its ${part}, and that is the tip of the ${FINGERS.join(', ')}, the palm or the knuckles, or what sits in it by a grip`,
       )
     }
-    if (touch) this.fingers(`are to have the hand somewhere with its ${touch}`)
+    if (typeof part === 'string') this.fingers(`are to have the hand somewhere with its ${part}`)
     if (grip && velocity.lengthSq() > 0) {
       throw new Error(`the ${this.name} is to take hold of something moving past it: send what he holds instead`)
     }
     const gives = grip && this.rig.held(grip.target)
-    return { place, velocity, on, palm: faces, pointing: points, with: touch, grip, gives }
+    return { place, velocity, on, palm: faces, pointing: points, with: part, grip, gives }
   }
 
   /**

@@ -262,6 +262,11 @@ export class Pelvis {
     return new Vector3().addVectors(left, right).multiplyScalar(0.5)
   }
 
+  /** how low the hips get: lower than a lunge only standing with his feet side by side, a knee staying off the ground */
+  protected get deepest() {
+    return (this.together ? lowest : lunge)(this.size)
+  }
+
   /** whether getting down is a lunge for him: his feet are apart, and he is going along or stands between feet the story has put down */
   get lunging() {
     return !this.together && (!this.halted || this.placed)
@@ -428,12 +433,7 @@ export class Pelvis {
     // (his weight drifted over a foot, they are as much lower as has that leg reach from out over it, its hip up)
     const drift = this.drifts
     const sag = hip * Math.abs(Math.sin(DRIFT.list * drift)) + (DRIFT.over * hip * drift) ** 2 / (2 * leg)
-    const high = clamp(
-      Math.min(this.rides - this.low - ride, this.ceiling()) - sag,
-      // (lower than a lunge he gets only standing with his feet side by side: a knee stays off the ground)
-      (this.together ? lowest : lunge)(size),
-      size.stand,
-    )
+    const high = clamp(Math.min(this.rides - this.low - ride, this.ceiling()) - sag, this.deepest, size.stand)
     const rise = high - value.y
     // (they come up in half the time they take to settle along)
     const fast = Math.min(Math.sqrt(GRAVITY * Math.abs(rise)), Math.abs(rise) / (settle / 2))

@@ -147,3 +147,29 @@ test('the drills of examples/gait, as a viewer would measure them: the feet stay
     expect(r.steps, r.drill).toBeLessThan(3.5)
   }
 }, 120000)
+
+test('led to a stand and then sent to take something off the floor, a hand gets there: the hips come down as the stoop has them', () => {
+  const rig = person()
+  const body = new Body(rig)
+  // led a few steps ahead, then to a stand, as a game leads him
+  let z = 0
+  for (let time = 0; time < 2.5; time += FRAME) {
+    const speed = time < 1 ? 1.2 : 0
+    body.go({ x: 0, z: speed })
+    body.face()
+    body.hips.at({ x: 0, y: 0, z })
+    body.update(FRAME)
+    z += speed * FRAME
+  }
+  // then an action has him, which leads him no more: a hand to just over the floor before his right foot
+  const { value } = body.hips
+  const place = new Vector3(value.x - 0.12, 0.08, value.z + 0.35)
+  let reached: boolean | undefined
+  body.play(
+    (function* () {
+      reached = yield* body.hand.right.by(body.time + 0.8, place)
+    })(),
+  )
+  for (let time = 0; time < 1.2; time += FRAME) body.update(FRAME)
+  expect(reached).toBe(true)
+})

@@ -1,4 +1,3 @@
-import type { Statement } from '@drawcall/hand'
 import { RigidBody, SphereCollider } from '@drawcall/physics'
 import {
   BoxGeometry,
@@ -6,7 +5,6 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  type Object3D,
   TorusGeometry,
   Vector3,
 } from 'three'
@@ -86,26 +84,12 @@ export function arc(from: Vector3, up: number) {
 }
 
 /*
- * The scripted jump shot's ball (shot.ts), which the library's tests play without a physics world: it flies and
- * bounces on its own here, and the game's ball is ./ball.
+ * The ball of the jump shot played on its own (story.ts) and by the library's tests, without a physics world: it flies
+ * and bounces on its own here, and the game's ball is ./ball.
  */
-export { RADIUS } from './ball'
 /** the scripted ball: `velocity` is none while it is in the hand */
 export type Flight = { position: Vector3; velocity: Vector3 | null }
-/** the shooting hand's palm under the ball, the fingers spread round it: the thumb does not reach round a ball so big */
-export const GRIP: Statement = {
-  at: new Vector3(0, -RADIUS, 0),
-  from: new Vector3(0, -1, 0),
-  using: ['palm', 'index', 'middle', 'ring', 'little'],
-}
 export const ball = (): Flight => ({ position: new Vector3(), velocity: null })
-
-/** it leaves the hand that holds it, moving so */
-export function letGo(flight: Flight, held: Object3D, velocity: Vector3) {
-  held.updateWorldMatrix(true, false)
-  held.getWorldPosition(flight.position)
-  flight.velocity = velocity.clone()
-}
 
 /** let go, it flies, and bounces on the floor until it lies still */
 export function fly(flight: Flight, dt: number) {

@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [vitecache()],
   server: { headers },
   preview: { headers },
+  // the game and the scripted story are both pages of it
+  build: { rolldownOptions: { input: ['index.html', 'story.html'] } },
   // (its workers are found beside its own modules, which prebundling would move)
   // and what it brings that is not an ES module still has to be bundled for the browser
   optimizeDeps: { exclude: ['@drawcall/rig'], include: ['vitecache > safe-stable-stringify'] },
