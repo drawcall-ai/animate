@@ -10,13 +10,25 @@ export interface Mover {
 
 /**
  * A frame: the state something is to have at a moment. Its `place` (m) and `turn` are counted in what it is `on`, if
- * anything; its `velocity` (m/s) is how it moves in the scene. Left out, the moment is as soon as it can be at its
- * ease, the place where its velocity carries it, the velocity rest, the turn the one it has. `by` names who wrote it.
+ * anything; its `velocity` (m/s) and `spin` (rad/s about the scene's axes) are how it moves in the scene. Left out, the
+ * moment is as soon as it can be at its ease, the place where its velocity carries it, the velocity and spin rest, the
+ * turn the one it has. Its way there swings round what it is `about`, if anything, as an arm swings about its
+ * shoulder; it `leaves` for it no sooner than a moment, if said; `by` names who wrote it.
  */
-export type Frame = { at?: number; place?: Xyz; velocity?: Xyz; turn?: Quaternion; on?: Mover; by?: string }
+export type Frame = {
+  at?: number
+  place?: Xyz
+  velocity?: Xyz
+  turn?: Quaternion
+  spin?: Xyz
+  on?: Mover
+  about?: Mover
+  leaves?: number
+  by?: string
+}
 
 /** a frame as it is met: the moment, the velocity it can arrive with, when it sets off, and what it came short of */
-type Planned = Frame & { met?: { at: number; velocity: Vector3; leaves: number; slow: number; late: number } }
+type Planned = Frame & { met?: { at: number; velocity: Vector3; leaves: number; slow: number; late: number; turn: Quaternion } }
 /** what a share of its strength it eases with, coming round on its own */
 const EASE = 0.5
 /** how far a fast arrival draws back is `velocity × swing × 4/27`: so a swing of `DRAW × draw / speed` draws back `draw` */
@@ -82,6 +94,13 @@ export class Channel implements Mover {
     this.frames.splice(0, this.frames.length, ...kept)
     this.replan(this.frames[0] === head ? undefined : this.frames[0])
     if (this.last && (by === undefined || this.last.by === by)) this.last = undefined
+    // (cancelled outright while moving, it swings on the way it was going)
+    if (by === undefined && !this.frames.length && !this.parent && !this.outside) this.swingOn(this.now, this.value, this.velocity)
+  }
+
+  /** when it sets off, or set off, for the frame it is going to: until then it holds as it was */
+  get setsOff() {
+    return this.frames[0]?.met?.leaves
   }
 
   /** what was fitted to the frames to come is fitted anew, from the state it will be in */
@@ -117,11 +136,11 @@ export class Channel implements Mover {
   }
 
   /** arrived moving with nothing after, it swings on the way it was going and comes to rest as hard as it can push */
-  private swingOn(when: number, place: Vector3, velocity: Vector3) {
+  private swingOn(when: number, place: Vector3, velocity: Vector3, about?: Mover) {
     const speed = velocity.length()
     if (speed < 1e-6) return
     const T = (2 * speed) / this.strength
-    this.frames.push({ at: when + T, place: place.clone().addScaledVector(velocity, T / 2), by: 'on' })
+    this.frames.push({ at: when + T, place: place.clone().addScaledVector(velocity, T / 2), about, by: 'on' })
   }
 
   /** a frame for this channel told as the frame its parent is to have */
@@ -158,6 +177,8 @@ export class Channel implements Mover {
     let held = this.last
     for (const frame of this.frames) {
       const met = frame.met ?? this.fit(frame, start)
+      // (until it sets off it holds as it was: on what it was held on, if anything)
+      if (t < met.leaves && held?.on && !held.velocity) return this.after(t, start, held, place, velocity, turn)
       if (t <= met.at) return this.between(t, Math.max(start, met.leaves), met.at, frame, met.velocity, place, velocity, turn)
       this.resolve(frame, met.at, met.velocity)
       this.from.value.copy(this.to.value)
@@ -180,6 +201,7 @@ export class Channel implements Mover {
     this.resolve(frame, asked, this.to.velocity.set(0, 0, 0))
     const far = this.to.value.distanceTo(this.from.value)
     let leaves = speed > 0 && still && this.draw > 0 ? Math.max(start, asked - Math.max(DRAW * this.draw, 3 * far) / speed) : start
+    leaves = Math.min(asked, Math.max(leaves, frame.leaves ?? start))
     const hard = (when: number, share: number, from = leaves) => {
       this.resolve(frame, when, this.moving.copy(frame.velocity ?? this.to.velocity.set(0, 0, 0)).multiplyScalar(share))
       return hardest(this.from, this.to, when - from) > this.strength
@@ -193,7 +215,8 @@ export class Channel implements Mover {
       if (share === 0) when = between(when + 5, when, (w) => !hard(w, 0))
     }
     const velocity = new Vector3().copy(frame.velocity ?? this.to.velocity.set(0, 0, 0)).multiplyScalar(1 - slow)
-    return { at: when, velocity, leaves, slow, late: when - asked }
+    // (told no turn, it keeps the one it had when it was fitted)
+    return { at: when, velocity, leaves, slow, late: when - asked, turn: this.from.turn.clone() }
   }
 
   /** how long it takes at its ease to go to a frame given no moment */
@@ -210,11 +233,12 @@ export class Channel implements Mover {
       if (!frame.velocity) this.to.velocity.copy(this.at)
       this.to.value.add(this.rotated.copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(this.spun))
       if (frame.turn) this.spun.multiply(frame.turn)
+      else this.spun.copy((frame as Planned).met?.turn ?? this.from.turn)
       return
     }
     if (frame.place) this.to.value.copy(frame.place)
     else this.to.value.copy(this.from.value).addScaledVector(this.at.addVectors(this.from.velocity, velocity), (when - this.now) / 2)
-    this.spun.copy(frame.turn ?? this.from.turn)
+    this.spun.copy(frame.turn ?? (frame as Planned).met?.turn ?? this.from.turn)
   }
 
   /** on its way to a frame between two moments, holding still before it sets off */
@@ -222,15 +246,51 @@ export class Channel implements Mover {
     this.resolve(frame, when, arrives)
     const T = when - leaves
     const s = Math.max(0, (t - leaves) / T)
-    cubic(s, T, this.from, this.to, place, velocity)
+    if (frame.about) this.swung(frame.about, leaves, T, s, place, velocity)
+    else cubic(s, T, this.from, this.to, place, velocity)
     if (t < leaves) velocity.set(0, 0, 0)
     // the turn goes the same smoothest way, as a rotation vector from where it starts
+    const back = this.scratch.copy(this.from.turn).invert()
     this.rFrom.value.set(0, 0, 0)
-    this.rFrom.velocity.copy(this.from.spin).applyQuaternion(this.scratch.copy(this.from.turn).invert())
-    this.rTo.value.copy(turnFrom(this.from.turn, frame.turn ? this.spun : this.from.turn, this.turned))
-    this.rTo.velocity.set(0, 0, 0)
+    this.rFrom.velocity.copy(this.from.spin).applyQuaternion(back)
+    this.rTo.value.copy(turnFrom(this.from.turn, this.spun, this.turned))
+    this.rTo.velocity.copy(frame.spin ?? { x: 0, y: 0, z: 0 }).applyQuaternion(back)
     cubic(s, T, this.rFrom, this.rTo, this.rotated, this.at)
     turnBy(this.from.turn, this.rotated, turn)
+  }
+
+  /**
+   * the way round a pivot, as an arm swings round its shoulder: the way it points from there turns, and how far it
+   * is from there changes, each on its smoothest way, from how it was going to how it is to arrive
+   */
+  private swung(about: Mover, leaves: number, T: number, s: number, place: Vector3, velocity: Vector3) {
+    const polar = (at: Vector3, moving: Vector3, when: number) => {
+      const [pivot, pivoting] = [new Vector3(), new Vector3()]
+      about.state(when, pivot, pivoting)
+      const r = at.clone().sub(pivot)
+      const v = moving.clone().sub(pivoting)
+      const far = Math.max(r.length(), 1e-6)
+      return { r, far, out: v.dot(r) / far, spin: r.clone().cross(v).divideScalar(far * far) }
+    }
+    const [a, b] = [polar(this.from.value, this.from.velocity, leaves), polar(this.to.value, this.to.velocity, leaves + T)]
+    const axis = a.r.clone().cross(b.r)
+    const angle = Math.atan2(axis.length(), a.r.dot(b.r))
+    const turned = axis.lengthSq() > 1e-12 ? axis.normalize().multiplyScalar(angle) : axis.set(0, 0, 0)
+    const at = (u: number, out: Vector3) => {
+      const [rv, far, unused] = [new Vector3(), new Vector3(), new Vector3()]
+      cubic(u, T, { value: new Vector3(), velocity: a.spin }, { value: turned, velocity: b.spin }, rv, unused)
+      cubic(u, T, { value: new Vector3(a.far, 0, 0), velocity: new Vector3(a.out, 0, 0) }, { value: new Vector3(b.far, 0, 0), velocity: new Vector3(b.out, 0, 0) }, far, unused)
+      const angle = rv.length()
+      const r = a.r.clone().normalize().multiplyScalar(far.x)
+      if (angle > 1e-9) r.applyAxisAngle(rv.divideScalar(angle), angle)
+      const pivot = new Vector3()
+      about.state(leaves + u * T, pivot, unused)
+      return out.copy(pivot).add(r)
+    }
+    const step = 1e-3
+    at(s, place)
+    at(Math.min(1, s + step / T), velocity)
+    velocity.sub(at(Math.max(0, Math.min(1, s + step / T) - step / T), new Vector3())).divideScalar(step)
   }
 
   /** past its last frame: held there, on what it is on if anything */
@@ -265,7 +325,7 @@ export class Channel implements Mover {
       this.short = { slow: head.met.slow, late: head.met.late }
       this.last = this.frames.shift()
       if (!this.frames.length && head.met.velocity.lengthSq() > 0) {
-        this.swingOn(head.met.at, this.value, this.velocity)
+        this.swingOn(head.met.at, this.value, this.velocity, head.about)
         this.last = undefined
       }
       this.fitHead()

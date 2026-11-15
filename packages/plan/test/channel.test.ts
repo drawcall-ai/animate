@@ -125,3 +125,32 @@ test('who writes it owns it: cancelling one owner keeps the others, and settle h
   expect(settled).toBeGreaterThan(0)
   expect(foot.value.z).toBeCloseTo(0.8, 2)
 })
+
+test('about a pivot it swings round it, as an arm round its shoulder, and arrives turning as asked', () => {
+  const shoulder = new Channel('shoulder', 40, 0)
+  const hand = new Channel('hand', 200, 0.3)
+  shoulder.set({ x: 0, y: 1.4, z: 0 })
+  hand.set({ x: 0, y: 0.8, z: 0 })
+  const spin = new Vector3(5, 0, 0)
+  hand.by({ at: 1, place: { x: 0, y: 1.4, z: 0.6 }, velocity: { x: 0, y: 6, z: 0 }, spin, about: shoulder })
+  let [near, far] = [Infinity, 0]
+  run([shoulder, hand], 0, 1, () => {
+    const r = hand.value.distanceTo(shoulder.value)
+    ;[near, far] = [Math.min(near, r), Math.max(far, r)]
+  })
+  expect(near).toBeGreaterThan(0.55)
+  expect(far).toBeLessThan(0.65)
+  expect(hand.value.distanceTo(new Vector3(0, 1.4, 0.6))).toBeLessThan(0.02)
+  expect(hand.velocity.y).toBeCloseTo(6, 0)
+  expect(hand.spin.distanceTo(spin)).toBeLessThan(1)
+})
+
+test('it leaves no sooner than it is told to, holding as it was until then', () => {
+  const foot = new Channel('foot', 300, 0.4)
+  foot.set({ x: 0, y: 0, z: 0 })
+  foot.by({ at: 1, place: { x: 0, y: 0.1, z: 1 }, velocity: { x: 0, y: 0, z: 10 }, leaves: 0.7 })
+  run([foot], 0, 0.69)
+  expect(foot.value.length()).toBeLessThan(1e-6)
+  run([foot], 0.69, 1)
+  expect(foot.value.distanceTo(new Vector3(0, 0.1, 1))).toBeLessThan(0.02)
+})
