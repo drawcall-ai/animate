@@ -4,7 +4,7 @@ import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { inHand } from '../character'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
-import { bowl, carry, upright } from './bowl'
+import { bowl, carry, SIDE } from './bowl'
 import { type Ball, GRIP, LANE, LINE, RADIUS, ball, roll, sphere } from './lane'
 
 const ballMesh = sphere()
@@ -23,16 +23,20 @@ run({
     const man = mannequin()
     const scene = new Group().add(man, boards, line, ballMesh)
     scene.updateMatrixWorld(true)
-    const hand = new Hand(man, 'right')
-    const seat = grip(hand, ballMesh, GRIP)
+    const hands = { left: new Hand(man, 'left'), right: new Hand(man, 'right') }
+    const seat = grip(hands.right, ballMesh, GRIP)
     body = new Body(man)
-    inHand(body, hand, seat)
+    const held = inHand(body, hands.right, seat, { turning: false })
+    // (upright, its holes to his right, as it sits on the palm by a point: it keeps that turn)
+    held.off(body.hand.right)
+    ballMesh.quaternion.identity()
+    held.on(body.hand.right, seat, { turning: false })
     bowled = ball()
     left = undefined
     body.play(
       (function* () {
-        yield* carry(body, seat)
-        yield* bowl(body, seat, (velocity) => {
+        yield* carry(body, held, grip(hands.left, ballMesh, SIDE.left))
+        yield* bowl(body, held, (velocity) => {
           bowled = { position: ballMesh.position.clone(), velocity }
           left = velocity.length()
         })
@@ -42,7 +46,7 @@ run({
   },
   update(delta) {
     body.update(delta)
-    if (!bowled.velocity) return upright(ballMesh, body)
+    if (!bowled.velocity) return
     // let go, it rolls on its own, turning as it rolls
     const from = bowled.position.z
     roll(bowled, delta)

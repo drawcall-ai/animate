@@ -1,26 +1,21 @@
-import type { Story } from '@drawcall/animate'
-import { type Grip, grip, Hand } from '@drawcall/hand'
+import type { Story, Thing as Bound } from '@drawcall/animate'
+import { grip, Hand } from '@drawcall/hand'
 import { type Object3D, Vector3 } from 'three'
 import { Character } from '../character'
 import type { Game, Input } from '../play'
 import type { Thing } from '../thing'
 import { balls, done, home, Pins } from './alley'
-import { bowl, carry, upright } from './bowl'
+import { bowl, carry, hold, SIDE } from './bowl'
 import { GRIP, LINE, RADIUS } from './lane'
 
 /** how fast he walks and runs (m/s) */
 const SPEED = { walk: 1.4, run: 3.5 }
 /** how high above where it rested he lifts a ball off the return, and how long that takes (m, s) */
 const LIFT = { up: 0.15, seconds: 0.5 }
+/** how far a carried ball may point off the way he faces before it is turned to it (the cosine) */
+const TURNED = Math.cos((20 * Math.PI) / 180)
 /** how long the pins have to settle once the ball is done before it comes back on the return (s) */
 const SETTLE = 2
-/** a hand on each side of a ball, turned to face him, as he takes it off the return: the index does not reach round a ball so big */
-const using = ['palm', 'middle', 'ring', 'little'] as const
-const SIDE = {
-  left: { at: new Vector3(RADIUS, 0, 0), from: new Vector3(1, 0, 0), using },
-  right: { at: new Vector3(-RADIUS, 0, 0), from: new Vector3(-1, 0, 0), using },
-}
-
 /**
  * The bowler: he walks about, takes a ball off the return, carries it in both hands, and bowls it down the lane. Taking
  * a ball and bowling it are his actions, the player leading him again once each is over; the ball is his from when his
@@ -31,8 +26,8 @@ export class Bowler implements Game {
   private readonly hands: { left: Hand; right: Hand }
   private readonly balls: Thing[]
   private readonly pins = new Pins()
-  /** which ball is in his hands, and how his right hand has it */
-  private held?: { k: number; seat: Grip }
+  /** which ball is in his hands, bound to him */
+  private held?: { k: number; ball: Bound }
   /** the ball let go, and how long until it comes back on the return */
   private rolled?: { k: number; left?: number }
   /** which ball of the frame is next */
@@ -53,7 +48,7 @@ export class Bowler implements Game {
     if (input.act) this.act()
     const speed = input.run ? SPEED.run : SPEED.walk
     this.character.update(delta, { x: input.move.x * speed, z: input.move.z * speed })
-    if (this.held) upright(this.held.seat.target, this.body)
+    this.turn()
     this.collect(delta)
   }
 
@@ -65,7 +60,7 @@ export class Bowler implements Game {
       // (the approach needs a few strides)
       if (character.feet.position.z > LINE - 2.5) return
       return character.act(
-        bowl(this.body, held.seat, (velocity) => {
+        bowl(this.body, held.ball, (velocity) => {
           this.balls[held.k].release(velocity)
           this.rolled = { k: held.k }
           this.held = undefined
@@ -80,29 +75,48 @@ export class Bowler implements Game {
   }
 
   /**
-   * he turns to the ball where it rests, a hand goes to each side of it and they lift it off the return, then his right
-   * hand goes under it and has it, and he carries it before him
+   * he turns to the ball where it rests, and a hand goes to each side of it; they lift it off the return, then his
+   * right hand goes round under it and leads it, and he carries it before him, the left on its side
    */
   private *take(k: number): Story {
     const { body, hands } = this
+    const { right, left } = body.hand
     const { mesh } = this.balls[k]
     const toward = mesh.position.clone().sub(this.character.feet.position).setY(0)
     body.face(toward)
+    // (turned to face him, for its sides to be his left and right; it keeps that turn in his hands)
     mesh.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(toward.x, toward.z))
-    const { left, right } = body.hand
-    const sides = { left: grip(hands.left, mesh, SIDE.left), right: grip(hands.right, mesh, SIDE.right) }
+    // a hand goes to each side of it where it rests, and they are on it
+    const sides = { right: grip(hands.right, mesh, SIDE.right), left: grip(hands.left, mesh, SIDE.left) }
     const reached = left.to(sides.left)
     yield* right.to(sides.right)
     yield* reached
-    // (the left hand has it while the right goes round under it)
-    left.take(sides.left)
-    this.held = { k, seat: grip(hands.right, mesh, GRIP) }
-    yield* left.to(mesh.position.clone().setY(mesh.position.y + LIFT.up), { with: sides.left, seconds: LIFT.seconds })
-    yield* right.to(this.held.seat)
-    left.letGo()
-    right.take(this.held.seat)
-    yield* carry(body, this.held.seat)
+    const point = { turning: false }
+    const resting = body.bind(mesh, { outside: true })
+    resting.on(right, sides.right, point)
+    resting.on(left, sides.left, point)
+    // the body has it, the right hand leading, and lifts it
+    const ball = body.bind(mesh)
+    this.held = { k, ball }
+    const lifted = mesh.position.clone().setY(mesh.position.y + LIFT.up)
+    yield* ball.to(lifted, { seconds: LIFT.seconds })
+    // the left leads it, held where it is, while the right goes under it; then the right leads
+    const under = grip(hands.right, mesh, GRIP)
+    ball.off(right)
+    void ball.to(lifted)
+    yield* right.to(under)
+    ball.on(right, under, point)
+    ball.off(left)
+    yield* carry(body, ball, sides.left)
     body.face()
+  }
+
+  /** a ball carried by a point keeps its turn as he turns: turned off the way he faces, it is turned to it again, the left hand staying on its side */
+  private turn() {
+    const { held, body } = this
+    if (!held || this.character.acting) return
+    const pointing = new Vector3(0, 0, 1).applyQuaternion(this.balls[held.k].mesh.quaternion)
+    if (pointing.x * body.facing.x + pointing.z * body.facing.z < TURNED) void hold(body, held.ball)
   }
 
   /** a ball rolled into the pit or come to rest goes back onto the return once the pins settle, and they are set up anew after a frame */

@@ -2,7 +2,7 @@ import { buildWorld } from '@drawcall/physics-rapier'
 import { grip, Hand, type Statement } from '@drawcall/hand'
 import { Mesh, type Object3D, Scene, SphereGeometry, Vector3 } from 'three'
 import { expect, test } from 'vitest'
-import { bowl, carry } from '../../../examples/bowling/bowl'
+import { bowl, carry, SIDE } from '../../../examples/bowling/bowl'
 import * as lane from '../../../examples/bowling/lane'
 import * as court from '../../../examples/basketball/court'
 import { RADIUS } from '../../../examples/basketball/ball'
@@ -62,15 +62,14 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   bowling(rig) {
     const ball = lane.sphere()
     new Scene().add(rig, ball)
-    const hand = new Hand(rig, 'right')
-    const seat = grip(hand, ball, lane.GRIP)
+    const hands = { left: new Hand(rig, 'left'), right: new Hand(rig, 'right') }
     const body = new Body(rig)
-    inHand(body, hand, seat)
+    const held = inHand(body, hands.right, grip(hands.right, ball, lane.GRIP), { turning: false })
     let bowled = lane.ball()
     body.play(
       (function* () {
-        yield* carry(body, seat)
-        yield* bowl(body, seat, (velocity) => (bowled = { position: ball.getWorldPosition(new Vector3()), velocity }))
+        yield* carry(body, held, grip(hands.left, ball, SIDE.left))
+        yield* bowl(body, held, (velocity) => (bowled = { position: ball.getWorldPosition(new Vector3()), velocity }))
       })(),
     )
     return { body, world: (dt) => bowled.velocity && lane.roll(bowled, dt) }
