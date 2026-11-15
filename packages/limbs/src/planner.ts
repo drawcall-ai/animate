@@ -1,4 +1,5 @@
 import { Euler, type Matrix4, Quaternion, Vector3 } from 'three'
+import { type Aim, aim } from './aim'
 import { AXES, type State, between, longest } from './curve'
 import { EASY, type Goal, MOST, REST } from './goal'
 import { type Limb, sway } from './limb'
@@ -114,6 +115,22 @@ export class Planner extends Reach {
   /** whether the story has its limb: it has set off for somewhere, and has not arrived moving or been let `free` since */
   get held() {
     return this.plan !== undefined
+  }
+
+  /** what it means to do, for whoever looks: see `Aim` */
+  aim(): Aim {
+    const { plan: going } = this
+    return aim({
+      now: this.clock,
+      sent: this.sent,
+      going,
+      limb: this.limb,
+      where: (plan, seconds) => this.where(plan, seconds),
+      solve: (plan, seconds) => this.solve(plan, seconds),
+      drawn: (aimed, swing) => drawn(aimed, swing, this.limb),
+      root: (seconds, at, turned) => this.root(seconds, at, turned),
+      tip: going ? this.tipped(going, 0, new Vector3()) : new Vector3(),
+    })
   }
 
   protected get sent() {

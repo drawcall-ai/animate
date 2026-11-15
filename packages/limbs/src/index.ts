@@ -1,3 +1,4 @@
+export type { Aim, Mark, Sent } from './aim'
 export { Bones } from './bones'
 export type { Carrier, Stoop } from './carrier'
 export { AXES, cubic, type State } from './curve'

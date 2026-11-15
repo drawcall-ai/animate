@@ -1,7 +1,8 @@
 import { type Object3D, Vector3 } from 'three'
 import { Ahead, carrier, flat, Going, type Ground, Mover, Reactions, type Run, Stance, Stoops, type Walk } from '@drawcall/locomotion'
 import { type Band, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
-import { Clock } from './clock'
+import { Clock, type Workings } from './clock'
+import { type Intent, intent } from './intent'
 import type { Foot, Hand, On } from './ends'
 
 /**
@@ -20,6 +21,9 @@ export type Held = {
   by(when: number, place: Xyz, how?: Carrying & On): Story<boolean>
   free(side?: Side): void
 }
+
+/** the body made for each rig */
+const rigs = new WeakMap<Object3D, Body>()
 
 /**
  * A person as joints that turn, which turn the bones of a rigged humanoid. The hips are given somewhere to go, and the
@@ -55,6 +59,8 @@ export class Body {
   readonly hand: Record<Side, Hand>
   private readonly hands: Record<Side, End>
   private readonly gives: Gives
+  /** what he is made of, for telling what he means to do */
+  private readonly workings: Workings
 
   /** the body of a rigged humanoid, as it is posed now: its rest pose. Places are told from where the `rig` is, along its axes */
   constructor(rig: Object3D) {
@@ -100,7 +106,8 @@ export class Body {
     const stood = both(() => new Vector3())
     for (const side of SIDES) foot[side].anchor = stood[side].copy(mover.foot[side].at)
     const all = { size, bones, mover, joints: turning, ahead, reactions, gives, going, ends, stance, stood, hips: at }
-    this.clock = new Clock(all)
+    this.clock = new Clock((this.workings = all))
+    rigs.set(rig, this)
     this.clock.pose(0)
   }
 
@@ -160,6 +167,16 @@ export class Body {
   /** which way he faces along the ground, in the scene: what `face` turns him to */
   get facing() {
     return new Vector3(0, 0, 1).applyAxisAngle(UP, this.mover.facing)
+  }
+
+  /** the body made for a rig, if one was */
+  static of(rig: Object3D): Body | undefined {
+    return rigs.get(rig)
+  }
+
+  /** what he means to do, and where he is: for whoever looks, as the debug view does. It costs only when asked and changes nothing of him */
+  intent(): Intent {
+    return intent(this.workings, this.time)
   }
 
   /** the seconds it has gone on for */

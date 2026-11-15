@@ -1,5 +1,6 @@
 export { Ahead } from './ahead'
 export { carrier } from './carrier'
+export { type Footfall, type Foreseen, foresee } from './foresee'
 export { flat, Going, type Ground, type Run, type Walk } from './going'
 export { held } from './heights'
 export { Mover } from './mover'
