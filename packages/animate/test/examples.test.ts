@@ -5,13 +5,13 @@ import { expect, test } from 'vitest'
 import { bowl } from '../../../examples/bowling/bowl'
 import * as lane from '../../../examples/bowling/lane'
 import * as court from '../../../examples/basketball/court'
-import { hang, RADIUS } from '../../../examples/basketball/ball'
+import { RADIUS } from '../../../examples/basketball/ball'
 import { SEAT, jumpShot } from '../../../examples/basketball/shot'
 import { bagAt, swing } from '../../../examples/boxing/bag'
 import { combination } from '../../../examples/boxing/combination'
 import { panelAt } from '../../../examples/button/panel'
 import { press } from '../../../examples/button/press'
-import { holds } from '../../../examples/character'
+import { holds, inHand } from '../../../examples/character'
 import { GRIP as FOIL, foil } from '../../../examples/fencing/foil'
 import { lunge } from '../../../examples/fencing/lunge'
 import { FOIL as POINT, fence, targetAt } from '../../../examples/fencing/target'
@@ -71,8 +71,8 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
     new Scene().add(rig, ball)
     const hand = new Hand(rig, 'right')
     const seat = grip(hand, ball, SEAT)
-    hang(ball, hand.bone, seat)
     const body = new Body(rig)
+    inHand(body, hand, seat)
     let thrown = court.ball()
     body.play(jumpShot(body, seat, (velocity) => (thrown = { position: ball.getWorldPosition(new Vector3()), velocity })))
     return { body, world: (dt) => thrown.velocity && court.fly(thrown, dt) }

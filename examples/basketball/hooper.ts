@@ -18,7 +18,7 @@ const REACH = 1.3
 const STOOP = 0.8
 /** where he stands to pick the ball up: so far behind it, and to its left, for it to lie ahead of his right foot (of his arm, of how far out a hip is) */
 const BEFORE = { behind: 0.6, aside: 1 }
-/** how far from where his hand seats the ball it may be for the hand to take it, the ball settling into it (m) */
+/** how far from where his hand seats the ball it may be for the hand to take it, the ball easing into it (m) */
 const NEAR = RADIUS
 /** where his palm comes onto a ball on the floor from, as he faces it: over its top, toward him and to his right */
 const ONTO = new Vector3(-0.3, 1, -0.6).normalize()
@@ -30,8 +30,8 @@ const MEET = 1
 /**
  * A basketball player led by the keys: he walks and runs, picks the ball up off the floor, dribbles it as he goes,
  * holds it before his chest standing, and shoots it at the hoop. Picking it up and the jump shot are actions, which
- * own his going; dribbling and holding are his hands only, the player leading him. The ball is in his right hand,
- * hung where the grip seats it, while the hand has it; the floor bounces it between pushes of the dribble, and the
+ * own his going; dribbling and holding are his hands only, the player leading him. The ball is bound to his right
+ * hand where the grip seats it while the hand has it; the floor bounces it between pushes of the dribble, and the
  * world has it once it is shot or dropped.
  */
 export class Hooper implements Game {
@@ -69,7 +69,7 @@ export class Hooper implements Game {
     const speed = input.run ? SPEED.run : SPEED.walk
     this.moving = move.x !== 0 || move.z !== 0
     this.character.update(delta, { x: move.x * speed, z: move.z * speed })
-    this.ball.update(this.character.body.time, delta)
+    this.ball.update(this.character.body.time)
     this.count()
   }
 
@@ -144,10 +144,8 @@ export class Hooper implements Game {
     left.by(moment, side, { with: 'palm', palm: leftward.clone().negate() })
     yield* taken
     if (!this.near()) return this.drop()
-    // (the hand off the ball where it lay, before the ball hangs from it)
-    right.free()
+    right.take(this.seat)
     carry(body, this.seat)
-    ball.take(this.bone, this.seat)
     body.face()
     body.play(this.handle())
   }
@@ -180,10 +178,12 @@ export class Hooper implements Game {
       const push = new Vector3(x, -pushing(high, high + RADIUS), z)
       yield* right.to(from, { on: body, velocity: push, palm: DOWN, with: seat, seconds: RIDE })
       // (the hand may have come short of the push: the ball goes down as hard all the same, from where it is let go)
-      ball.dribble(pushing(ball.place.y, high + RADIUS), body.time)
+      right.letGo()
+      ball.dribble(this.bone, seat, pushing(ball.place.y, high + RADIUS), body.time)
       // the hand goes back up to where it pushed from, and has the ball as it comes up there under it
       yield* right.by(ball.rising(high), from, { on: body, velocity: { x, y: MEET, z }, palm: DOWN, with: seat })
-      ball.take(this.bone, seat)
+      ball.rest()
+      right.take(seat)
     }
   }
 

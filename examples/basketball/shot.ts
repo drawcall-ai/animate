@@ -36,8 +36,8 @@ export function carry(body: Body, seat: Grip) {
 
 /**
  * A jump shot from where he stands: carrying the ball he squares up to the hoop, steps in toward it and springs up, the left hand going
- * up beside the ball; at the top the right sends it off from above his shoulder on its way to the ring, and the ball
- * is let go moving so, which `letGo` gives to whatever owns it next. The arm swings on after it as he lands.
+ * up beside the ball; at the top the right sends it off from above his shoulder on its way to the ring and lets go of
+ * it, and `letGo` gives how fast it leaves to whatever owns it next. The arm swings on after it as he lands.
  */
 export function* jumpShot(body: Body, seat: Grip, letGo: (velocity: Vector3) => void): Story {
   const { arm, leg, stand, trunk, shoulder } = body.size
@@ -63,7 +63,7 @@ export function* jumpShot(body: Body, seat: Grip, letGo: (velocity: Vector3) => 
   const flying = arc(release, UP)
   body.hand.right.shape(flat, { by: highest })
   yield* body.hand.right.by(highest, release, { velocity: flying, with: seat })
-  letGo(flying)
+  letGo(body.hand.right.letGo())
   body.hand.left.free()
   yield* body.stand()
 }

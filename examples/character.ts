@@ -141,11 +141,8 @@ export class Character {
   }
 }
 
-/**
- * A body holds a thing in a hand from the start: it is put where the grip has its part in the hand as the hand is
- * now, and the hand takes hold of it there. Tells the thing as he holds it.
- */
-export function holds(body: Body, hand: Hand, held: Grip, thing = held.target) {
+/** a thing is put where a grip has it, or the part of it the grip holds, in a hand as the hand is now */
+function seat(hand: Hand, held: Grip, thing = held.target) {
   hand.bone.updateWorldMatrix(true, false)
   thing.updateWorldMatrix(true, true)
   const part = thing.matrixWorld.clone().invert().multiply(held.target.matrixWorld)
@@ -154,6 +151,20 @@ export function holds(body: Body, hand: Hand, held: Grip, thing = held.target) {
   const world = hand.bone.matrixWorld.clone().multiply(placed).multiply(part.invert())
   if (thing.parent) world.premultiply(thing.parent.matrixWorld.clone().invert())
   world.decompose(thing.position, thing.quaternion, thing.scale)
+}
+
+/** a hand has a thing from the start: it is put where the grip seats it in the hand as the hand is now, and the hand takes it */
+export function inHand(body: Body, hand: Hand, held: Grip) {
+  seat(hand, held)
+  body.hand[hand.side].take(held)
+}
+
+/**
+ * A body holds a thing in a hand from the start through `body.hold` (going away, for `inHand`): it is put where the
+ * grip has its part in the hand as the hand is now, and the hand takes hold of it there. Tells the thing as he holds it.
+ */
+export function holds(body: Body, hand: Hand, held: Grip, thing = held.target) {
+  seat(hand, held, thing)
   const holding = body.hold(thing)
   body.hand[hand.side].to(held)
   return holding

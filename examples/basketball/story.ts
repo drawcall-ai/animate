@@ -1,9 +1,10 @@
 import { Body } from '@drawcall/animate'
 import { grip, Hand } from '@drawcall/hand'
 import { Group } from 'three'
+import { inHand } from '../character'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
-import { Ball, hang } from './ball'
+import { Ball } from './ball'
 import { type Flight, ball, fly } from './court'
 import { SEAT, jumpShot } from './shot'
 
@@ -20,13 +21,12 @@ run({
     scene.updateMatrixWorld(true)
     const hand = new Hand(man, 'right')
     const seat = grip(hand, thrown.mesh, SEAT)
-    hang(thrown.mesh, hand.bone, seat)
     body = new Body(man)
+    inHand(body, hand, seat)
     flight = ball()
     body.play(
       jumpShot(body, seat, (velocity) => {
         flight = { position: thrown.place, velocity }
-        scene.attach(thrown.mesh)
       }),
     )
     return scene
