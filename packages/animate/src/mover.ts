@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import type { Footing, Step } from './pelvis'
-import { CADENCE, CLEAR, RIDE, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
+import { CADENCE, CLEAR, RIDE, SINK, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
 import { toRest } from './pelvis'
 import { TRAIL } from './joints'
 import { SLACK } from './limb'
@@ -244,9 +244,10 @@ export class Mover extends Way {
     const reach = this.ceiling(value.z, SIDES, (side) => lands(foot[side])) - ride
     const soft = SOFT * size.leg
     const eased = ride + Math.min(0, reach) - soft * Math.log1p(Math.exp(-Math.abs(reach) / soft))
-    const high = clamp(eased, lunge(size), size.stand)
+    const high = clamp(eased, this.deepest, size.stand)
     const rose = velocity.y
-    velocity.y = damped(velocity.y, high - value.y, (2 * Math.PI) / (HOLD * size.beat), dt)
+    // (they come down no faster than he sinks, as a stoop is planned)
+    velocity.y = Math.max(-SINK * size.pace, damped(velocity.y, high - value.y, (2 * Math.PI) / (HOLD * size.beat), dt))
     this.acceleration.y = (velocity.y - rose) / dt
     value.y += velocity.y * dt
   }

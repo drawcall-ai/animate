@@ -1,4 +1,5 @@
-import { Euler, Line3, Object3D, Quaternion, Vector3 } from 'three'
+import { grip, Hand } from '@drawcall/hand'
+import { Euler, Line3, Mesh, Object3D, Quaternion, Scene, SphereGeometry, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { other, person } from '../../../examples/person'
 import { Body, type Pose, type Story } from '../src'
@@ -296,6 +297,22 @@ test('a palm sent flat to a wall is on it with its skin', () => {
   const knuckles = DIGITS.map((finger) => at(rig, `right${finger}Proximal`))
   const centre = knuckles.reduce((sum, knuckle) => sum.add(knuckle), new Vector3()).divideScalar(4)
   expect(Math.abs(centre.lerp(at(rig, 'rightHand'), 0.5).z - (wall - thick(rig)))).toBeLessThan(0.005)
+})
+
+test('a hand sent with a grip has what hangs in it by that grip at the place', () => {
+  const rig = person()
+  const ball = new Mesh(new SphereGeometry(0.12))
+  new Scene().add(rig, ball)
+  const hand = new Hand(rig, 'right')
+  const seat = grip(hand, ball, { at: new Vector3(0, -0.12, 0), from: new Vector3(0, -1, 0) })
+  hand.bone.attach(ball)
+  ball.position.copy(seat.position)
+  ball.quaternion.copy(seat.quaternion)
+  const body = new Body(rig)
+  const place = new Vector3(-0.25, 1.3, 0.35)
+  play(body, body.hand.right.to(place, { with: seat, palm: { x: 0, y: 1, z: 0 } }))
+  rig.updateMatrixWorld(true)
+  expect(ball.getWorldPosition(new Vector3()).distanceTo(place)).toBeLessThan(0.005)
 })
 
 test('a fingertip sent somewhere is there at its moment, moving as stated, however the arm is bent and whenever the fingers were shaped', () => {
