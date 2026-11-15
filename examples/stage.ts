@@ -48,7 +48,8 @@ export function run(stage: { begin(): Object3D; update(delta: number): void; foc
     camera.position.z += along
     controls.target.z += along
     controls.update()
-    renderer.setPixelRatio(window.devicePixelRatio)
+    // (at most 2 pixels drawn to a CSS pixel, which keeps a phone's frame rate)
+    renderer.setPixelRatio(Math.min(2, devicePixelRatio))
     renderer.setSize(canvas.clientWidth, Math.round(canvas.clientWidth * 0.42), false)
     renderer.render(scene, camera)
     readout.textContent = stage.readout()

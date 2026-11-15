@@ -92,7 +92,6 @@ class Prints {
 
 const canvas = element('stage', HTMLCanvasElement)
 const readout = element('readout', HTMLPreElement)
-element('keys', HTMLPreElement).textContent = names.map((name, k) => `${(k + 1) % 10}  ${name}`).join('\n') + '\nR  again'
 const renderer = new WebGLRenderer({ canvas, antialias: true })
 const camera = new PerspectiveCamera(45, 1, 0.05, 200)
 const scene = new Scene()
@@ -143,7 +142,8 @@ function draw() {
   const [wide, high] = [canvas.clientWidth, canvas.clientHeight]
   camera.aspect = wide / high
   camera.updateProjectionMatrix()
-  renderer.setPixelRatio(window.devicePixelRatio)
+  // (at most 2 pixels drawn to a CSS pixel, which keeps a phone's frame rate)
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio))
   renderer.setSize(wide, high, false)
   renderer.render(scene, camera)
   const { x, z } = drive.velocity
@@ -151,6 +151,15 @@ function draw() {
 }
 
 begin(name)
+// a button for each drill and one to start it again, which the keys press too
+function pick(label: string, drill: () => string) {
+  const button = document.createElement('button')
+  button.textContent = label
+  button.addEventListener('click', () => begin(drill()))
+  element('keys', HTMLDivElement).append(button)
+}
+names.forEach((drill, k) => pick(`${(k + 1) % 10} ${drill}`, () => drill))
+pick('R again', () => name)
 addEventListener('keydown', (event) => {
   const digit = /^Digit(\d)$/.exec(event.code)
   if (digit) begin(names[(Number(digit[1]) + 9) % 10] ?? name)
@@ -161,7 +170,7 @@ let seeking = false
 Object.assign(window, {
   seek(time: number) {
     seeking = true
-    element('keys', HTMLPreElement).hidden = true
+    element('keys', HTMLDivElement).hidden = true
     while (drive.time + FRAME / 2 < time) step(FRAME)
     draw()
   },

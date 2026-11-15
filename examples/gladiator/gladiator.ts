@@ -60,6 +60,7 @@ const UP = new Vector3(0, 1, 0)
  */
 export class Gladiator implements Game {
   readonly character: Character
+  readonly buttons = [{ code: GUARD, label: 'shield' }]
   /** the sword in his right hand and the shield, its top its y and its face its z, in his left */
   private readonly sword: Held
   private readonly shield: Held

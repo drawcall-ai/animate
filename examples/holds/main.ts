@@ -16,12 +16,21 @@ const THINGS: Thing[] = [sword, bottle, phone, key, handle, pen, pistol]
 const ENLARGE = 12
 let shown = 0
 
+const show = (at: number) => {
+  shown = at
+  document.getElementById('again')?.click()
+}
 addEventListener('keydown', ({ key: pressed }) => {
   const number = Number(pressed)
-  if (number < 1 || number > THINGS.length) return
-  shown = number - 1
-  document.getElementById('again')?.click()
+  if (number >= 1 && number <= THINGS.length) show(number - 1)
 })
+for (const [at, thing] of THINGS.entries()) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.textContent = `${at + 1} ${thing.name}`
+  button.addEventListener('click', () => show(at))
+  document.querySelector('.bar')?.append(button)
+}
 
 run({
   begin() {

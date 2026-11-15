@@ -1,4 +1,5 @@
 import { CachedRigLoader } from '@drawcall/rig'
+import { rigging } from '../served'
 import type { Landmarks } from '../humanoid'
 
 /**
@@ -41,7 +42,7 @@ export const landmarks: Landmarks = {
  * rigs him ahead, in Node, for a load it reads as it is written.
  */
 export const rig = () =>
-  new CachedRigLoader().loadAsync({
+  new CachedRigLoader(rigging.manager, rigging.cache).loadAsync({
     url: '/models/worker.glb',
     resolution: 512,
     skeleton: [

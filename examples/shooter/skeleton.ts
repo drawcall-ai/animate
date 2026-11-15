@@ -1,4 +1,5 @@
 import { CachedRigLoader } from '@drawcall/rig'
+import { rigging } from '../served'
 
 /**
  * The soldier model (public/models/soldier.glb) rigged to his skeleton, where each joint is (m): standing on y = 0 with
@@ -7,7 +8,7 @@ import { CachedRigLoader } from '@drawcall/rig'
  * load it reads as it is written, which is why the skeleton is written out in it.
  */
 export const rig = () =>
-  new CachedRigLoader().loadAsync({
+  new CachedRigLoader(rigging.manager, rigging.cache).loadAsync({
     url: '/models/soldier.glb',
     resolution: 640,
     skeleton: [
