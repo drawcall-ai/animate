@@ -11,6 +11,11 @@ export const GRIP: Statement = {
   from: new Vector3(0, -1, 0),
   using: ['palm', 'index', 'middle', 'ring', 'little'],
 }
+/** a hand on each side of the ball, its +z ahead of him: how it is taken up, and how the left steadies it as he carries it */
+export const SIDE = {
+  left: { at: new Vector3(RADIUS, 0, 0), from: new Vector3(1, 0, 0) },
+  right: { at: new Vector3(-RADIUS, 0, 0), from: new Vector3(-1, 0, 0) },
+} satisfies Record<string, Statement>
 /** where the foul line is, ahead of where the bowler starts, and how long and wide the lane is beyond it (m) */
 export const LINE = 4.5
 export const LANE = { length: 18.3, width: 1.05 }

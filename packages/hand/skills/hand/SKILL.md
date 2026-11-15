@@ -48,9 +48,12 @@ Never state where a handle seats, how the fingers wrap, in what order they close
 solver does. The hand rolls by itself about `from`: without the palm the line from thumb to fingers lies across the
 target's thin direction, so the pads land on its two broad faces; with it a long thing lies along the palm from the
 heel to the index knuckle, and the
-target's bulk (a racket's head, a mug's body) goes out on the thumb's side. Where there is no bulk to one side, as
-round the middle of a rod, a ball or a plate, either way round holds; the thumb then goes to the target's +y side,
-else +z, else +x. To have it the other way, state `from` and `at` on the target turned over, or give it a bulk.
+target's bulk (a racket's head, a mug's body) goes out on the thumb's side. A target as wide every way across the
+approach, as a ball, has no long way: the hand lies as the arm comes to it, the fingers going on away from the
+shoulder, as the hand and the target stand when the grip is made, so a ball's grip is made with the ball where the
+hand will take it, not at the rig's feet. Where there is no bulk to one side otherwise, as round the middle of a rod or
+a plate, either way round holds; the thumb then goes to the target's +y side, else +z, else +x. To have it the other
+way, state `from` and `at` on the target turned over, or give it a bulk.
 
 Closing is enclosing: each joint turns in until its bone meets the target. The fingers close first, each straight
 from its knuckle and spread only as far as it must to reach the target, and wrap it joint by joint. The thumb closes

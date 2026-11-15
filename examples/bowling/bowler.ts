@@ -1,13 +1,12 @@
 import type { Held, Story } from '@drawcall/animate'
 import { grip, Hand } from '@drawcall/hand'
-import type { Object3D } from 'three'
-import { Vector3 } from 'three'
+import type { Object3D, Vector3 } from 'three'
 import { Character } from '../character'
 import type { Game, Input } from '../play'
 import type { Thing } from '../thing'
 import { balls, done, home, Pins } from './alley'
 import { bowl } from './bowl'
-import { type Ball, ball, GRIP, LINE, RADIUS } from './lane'
+import { type Ball, ball, GRIP, LINE, SIDE } from './lane'
 
 /** how fast he walks and runs (m/s) */
 const SPEED = { walk: 1.4, run: 3.5 }
@@ -17,10 +16,6 @@ const CARRY = { up: 0.3, ahead: 0.4 }
 const LIFT = 0.5
 /** how long the pins have to settle once the ball is done before it comes back on the return (s) */
 const SETTLE = 2
-/** the right hand under the ball, the delivery's grip, and the left on its left side: the index does not reach round a ball so big */
-const USING = ['palm', 'middle', 'ring', 'little'] as const
-const UNDER = { ...GRIP, using: USING }
-const SIDE = { at: new Vector3(RADIUS, 0, 0), from: new Vector3(1, 0, 0), using: USING }
 
 /**
  * The bowler: he walks about, takes a ball off the return, carries it in both hands, and bowls it down the lane. Taking
@@ -80,7 +75,10 @@ export class Bowler implements Game {
     if (k >= 0) character.act(this.take(k))
   }
 
-  /** he turns to the ball where it rests, both hands go to it, and lift it to where he carries it, ahead of his hips */
+  /**
+   * he turns to the ball where it rests, a hand goes to each side of it, they lift it to where he carries it, ahead of
+   * his hips, and the right hand goes under it, as it is to bowl it
+   */
   private *take(k: number): Story {
     const { body, hands } = this
     const { mesh } = this.balls[k]
@@ -89,12 +87,13 @@ export class Bowler implements Game {
     yield* body.face(toward)
     const ball = body.hold(mesh)
     this.held = { k, ball }
-    const right = body.hand.right.to(grip(hands.right, mesh, UNDER))
-    const left = body.hand.left.to(grip(hands.left, mesh, SIDE))
+    const right = body.hand.right.to(grip(hands.right, mesh, SIDE.right))
+    const left = body.hand.left.to(grip(hands.left, mesh, SIDE.left))
     yield* right
     yield* left
-    const { stand, trunk, shoulder } = body.size
+    const { stand, trunk } = body.size
     yield* ball.to({ x: 0, y: CARRY.up * stand - trunk, z: CARRY.ahead * stand }, { on: body, seconds: LIFT })
+    yield* body.hand.right.to(grip(hands.right, mesh, GRIP))
     body.face()
   }
 

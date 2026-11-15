@@ -115,15 +115,19 @@ export function chase(camera: Camera, character: Character, yaw: number) {
 
 /**
  * a close view of a detail, for judging it: `?close=rightHand,leftHand` looks at the middle of those parts of the
- * scene from `&far=0.6` metres, from the side `&yaw=` and height `&pitch=` say (degrees; yaw 0 looks along +z)
+ * scene from `&far=0.6` metres, from the side `&yaw=` and height `&pitch=` say, counted from the way he faces
+ * (degrees; yaw 0 looks the way he faces, 90 from his right, -90 from his left)
  */
-function close(camera: Camera, scene: Object3D, query: URLSearchParams) {
+function close(camera: Camera, scene: Object3D, character: Character, query: URLSearchParams) {
   const parts = (query.get('close')?.split(',') ?? []).flatMap((name) => scene.getObjectByName(name) ?? [])
   if (!parts.length) return false
   const at = new Vector3()
   for (const part of parts) at.add(part.getWorldPosition(new Vector3()))
   at.divideScalar(parts.length)
-  const [yaw, pitch] = [Number(query.get('yaw') ?? 0), Number(query.get('pitch') ?? 20)].map((d) => (d * Math.PI) / 180)
+  const { x, z } = character.body.facing
+  const [turn, pitch] = [Number(query.get('yaw') ?? 0), Number(query.get('pitch') ?? 20)].map((d) => (d * Math.PI) / 180)
+  // (looking along +z his right is -x: looking along +x is looking from his right)
+  const yaw = Math.atan2(x, z) + turn
   const ahead = new Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))
   camera.position.copy(at).addScaledVector(ahead, -Number(query.get('far') ?? 0.6))
   camera.lookAt(at)
@@ -164,7 +168,7 @@ export async function play(start: Start) {
     const delta = last === undefined ? 0 : Math.min(LONGEST, (now - last) / 1000)
     last = now
     frame(game, world, delta, keys.read(delta))
-    if (!close(camera, scene, query)) chase(camera, game.character, keys.yaw)
+    if (!close(camera, scene, game.character, query)) chase(camera, game.character, keys.yaw)
     const [wide, high] = [canvas.clientWidth, canvas.clientHeight]
     camera.aspect = wide / high
     camera.updateProjectionMatrix()
