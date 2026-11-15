@@ -51,6 +51,11 @@ export class Walker {
 
   jump(top: { x: number; y: number; z: number }) {
     this.gait.jump(top)
+    return this.landed()
+  }
+
+  private *landed(): Story {
+    while (this.gait.jumps) yield
   }
 
   when(place: { x: number; z: number }) {

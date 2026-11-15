@@ -3,7 +3,7 @@ import { Quaternion, Vector3 } from 'three'
 import { Course, type Way } from './course'
 import { jump, type Jump } from './jump'
 import { Lead } from './lead'
-import { angleOf, ahead, bob, GRAVITY, PUSH, RUN, WALK, dip, HEEL, left, over, raised, type Side, SIDES, SIGN, type Size, SOLE, STILL, TOGETHER, UP, wide, wrap } from './measure'
+import { angleOf, ahead, bob, GRAVITY, PUSH, RUN, SLOW, WALK, dip, HEEL, left, over, raised, type Side, SIDES, SIGN, type Size, SOLE, STILL, TOGETHER, UP, wide, wrap } from './measure'
 import { Pelvis } from './pelvis'
 import { duty, footfall, type Going, rate } from './stride'
 import { type Step, swing } from './swing'
@@ -149,9 +149,9 @@ export class Gait {
     this.course = new Course(this.size, this.time, lead.place, going, to, { speed: Math.max(going.length(), 0.1), push: PUSH.along, arrive: 0 })
   }
 
-  /** whether he is going anywhere he was sent, or jumping */
-  get busy() {
-    return this.course !== undefined || this.jumping !== undefined
+  /** whether he is making a jump */
+  get jumps() {
+    return this.jumping !== undefined
   }
 
   /**
@@ -173,7 +173,7 @@ export class Gait {
     const from = this.path(leaves - this.time).setY(lead.place.y)
     const going = course ? course.velocity(leaves) : lead.velocity.clone()
     const takes = this.plant?.side ?? (this.steps.left ? 'right' : 'left')
-    const planned = (this.jumping = { ...jump(size, this.hips, new Vector3(top.x, top.y, top.z), leaves, from, going, this.going.facing, !course, takes), course })
+    const planned = (this.jumping = { ...jump(size, this.hips, new Vector3(top.x, top.y, top.z), leaves, from, going, this.going.facing, !course && lead.velocity.length() > SLOW * size.pace, takes), course })
     for (const frame of planned.hips) this.hips.by(frame)
     for (const side of SIDES) for (const frame of planned.feet[side]) this.feet[side].by(frame)
     return planned.top
