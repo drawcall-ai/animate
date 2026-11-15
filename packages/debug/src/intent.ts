@@ -121,7 +121,10 @@ export class Intent extends Group {
       const due = sent.time - time
       pen.diamond(sent.at, MARK.goal, sent.there === false ? warm(GAP.red) : color)
       if (sent.velocity.lengthSq() > 0) pen.line(sent.at, sent.at.clone().addScaledVector(sent.velocity, ARRIVES), color)
-      const short = sent.short?.by === 'reach' && sent.short.far ? ` short ${cm(sent.short.far)}` : sent.short ? ` ${sent.short.by}` : ''
+      const far = sent.short?.by === 'reach' ? sent.short.far : undefined
+      // (out of reach by no number: no plan was found, and it goes after it as near as it comes)
+      const reach = far === undefined ? '' : Number.isFinite(far) ? ` short ${cm(far)}` : ' no plan'
+      const short = reach || (sent.short ? ` ${sent.short.by}` : '')
       if (due > 0 && k < 2) labels.say(sent.at, soon(due) + short, color)
     })
     const [first] = end.sent
