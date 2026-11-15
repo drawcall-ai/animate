@@ -48,21 +48,20 @@ export class End extends Planner {
    * with it. The velocity it arrives with is how it moves in the scene then, wherever the place is counted
    * from. Given `seconds`, it sets off at once and takes that long, or is there as soon after as it can be; otherwise
    * it is there the first moment it can be, having taken its time, with a short wind-up. Asked to arrive faster than it
-   * can, it arrives as fast as it can. The story it returns is over at that moment, or once a foot stands where it was
-   * sent to step, and gives whether it was there then: false if it came short, or was sent elsewhere before. A hand
-   * can instead be sent by a grip to a thing, closing its fingers on it as the grip has them by then, and stays on it.
+   * can, it arrives as fast as it can. A foot sent to rest on the ground, or on a thing, stands there: the body steps
+   * there with it, in `seconds` if they are given, or as soon after as a step can be. The story it returns is over at
+   * that moment, or once a foot stands where it was sent to step, and gives whether it was there then: false if it came
+   * short, or was sent elsewhere before. A hand can instead be sent by a grip to a thing, closing its fingers on it as
+   * the grip has them by then, and stays on it.
    */
   to(place: Xyz | Grip, { seconds, ...arriving }: Reaching & { seconds?: number } = {}): Story<boolean> {
     timed(this.name, seconds)
     const target = this.target(place, arriving)
-    const lands =
-      this.kind === 'foot' && !target.on && target.place.y <= this.carrier.ground + this.size.ankle + EXACT && !moves(target)
-    if (!lands) return this.send(target, seconds, true)
-    if (seconds !== undefined) {
-      throw new Error(`the ${this.name} is sent to step somewhere in ${seconds} s, and a step takes the time it takes`)
-    }
+    const ground = !target.on && target.place.y <= this.carrier.ground + this.size.ankle + EXACT
+    const stands = this.kind === 'foot' && !moves(target) && (ground || target.on instanceof Object3D)
+    if (!stands) return this.send(target, seconds, true)
     this.free()
-    const put = this.put(target.place)
+    const put = this.put(this.where(target, 0).clone(), seconds)
     const foot = this.carrier.foot(this.side)
     return waits(
       () => foot.put === put,
@@ -102,9 +101,9 @@ export class End extends Planner {
     if (this.kind === 'foot') this.put()
   }
 
-  /** has the body step with the foot to a place on the ground and stand over it there: or with none, keep it there no longer. Tells where it is to stand so, if it is */
-  private put(place?: Vector3) {
-    const put = this.carrier.put(this.side, place)
+  /** has the body step with the foot to a place it stands on, in so many `seconds` or as soon as it can, and stand over it there: or with none, keep it there no longer. Tells where it is to stand so, if it is */
+  private put(place?: Vector3, seconds?: number) {
+    const put = this.carrier.put(this.side, place, seconds)
     this.carrier.stale()
     return put
   }

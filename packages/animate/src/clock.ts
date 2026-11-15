@@ -80,8 +80,7 @@ export class Clock {
     const { from, to } = this.span
     const looked = going.looking(to > from ? Math.min(1, (this.time + delta - from) / (to - from)) : 1)
     // the ground moves the hips and the feet, and a fast hand he winds up for has him wind up from now
-    const { fault, wind } = locomotion.step(delta, ends.foot, looked)
-    if (fault) this.faults.push(fault)
+    const { wind } = locomotion.step(delta, ends.foot, looked)
     if (wind) this.stories.push(wind)
     for (const end of all) kept(end, () => end.advance(this.time, delta))
     for (const part of parts(joints)) part.advance(delta)

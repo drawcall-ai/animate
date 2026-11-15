@@ -285,9 +285,7 @@ export class Going {
 
   jump(top: Xyz): Story<boolean> {
     const { mover } = this
-    if (!(top.y - mover.origin.y > this.size.stand && Number.isFinite(top.x + top.y + top.z))) {
-      throw new Error(`a jump goes up: at its top the hips are above the ${this.size.stand.toFixed(2)} m they stand at`)
-    }
+    if (!Number.isFinite(top.x + top.y + top.z)) throw new Error('he is to jump to a place no numbers say')
     mover.spring = { top: mover.local(new Vector3().copy(top)), from: mover.course.z }
     this.ahead.stale()
     return waits(

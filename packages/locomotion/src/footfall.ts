@@ -96,6 +96,6 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
   const off = to.clone().sub(under).setY(0)
   const reach = span(size, going.speed).ahead + REACH * size.leg
   if (off.length() > reach) to.copy(under).add(off.setLength(reach))
-  to.y = size.ankle
+  to.y = going.at.y + size.ankle
   return { to, toes }
 }

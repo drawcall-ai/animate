@@ -120,7 +120,7 @@ test('the top of a jump is a place and a moment: a hand told to be somewhere by 
   expect(body.highest()).toBe(body.time)
 })
 
-test('a walk that leaves him no foot on the ground is an error, not a walk that quietly ends elsewhere', () => {
+test('a walk that leaves him no foot on the ground is no error: he comes down on his feet, the story no longer having them', () => {
   const body = new Body(person())
   body.play(
     (function* (): Story {
@@ -130,7 +130,10 @@ test('a walk that leaves him no foot on the ground is an error, not a walk that 
       yield* there
     })(),
   )
-  expect(() => {
-    while (body.playing) body.update(tick(body.size))
-  }).toThrow(/he has fallen/)
+  for (let n = 0; n < 2000 && body.playing; n++) body.update(tick(body.size))
+  expect(body.playing).toBe(false)
+  for (let n = 0; n < 60; n++) body.update(tick(body.size))
+  // he stands on both feet on the ground, near where the walk was to end
+  for (const side of ['left', 'right'] as const) expect(body.foot[side].value.y).toBeLessThan(body.size.ankle + 0.03)
+  expect(body.hips.value.z).toBeGreaterThan(2.5)
 })

@@ -28,9 +28,10 @@ export function run(stage: { begin(): Object3D; update(delta: number): void; foc
   camera.position.set(-6, 1.3, 0.6)
   const controls = new OrbitControls(camera, canvas)
   controls.target.set(0, 1, 0.6)
-  // (`?zoom=3` starts three times as near, for a film to see a detail)
-  const zoom = Number(new URLSearchParams(location.search).get('zoom') ?? 1)
-  camera.position.sub(controls.target).divideScalar(zoom).add(controls.target)
+  // (`?zoom=3` starts three times as near, for a film to see a detail, and `?yaw=90` from the front, turned so many degrees round)
+  const asked = new URLSearchParams(location.search)
+  const [zoom, yaw] = [Number(asked.get('zoom') ?? 1), Number(asked.get('yaw') ?? 0)]
+  camera.position.sub(controls.target).divideScalar(zoom).applyAxisAngle(camera.up, (yaw * Math.PI) / 180).add(controls.target)
   const scene = new Scene()
   scene.background = new Color(0x202020)
   const sun = new DirectionalLight(0xffffff, 2.5)

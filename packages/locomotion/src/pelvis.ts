@@ -57,7 +57,8 @@ export type Step = { from: Vector3; to: Vector3; through: number; remains: numbe
 /**
  * a foot as the ground has it: where its ankle is, which way it points, from the way he is going (rad), whether the
  * ground holds it and when it last did, the step it is making, from when until when the story has it, as it has sent
- * it, where the story has put it to stay on the ground, and in the air, how far ahead of the hips it left the ground
+ * it, where the story has put it to stand, on the ground or on a thing, and by when if it said, and in the air, how
+ * far ahead of the hips it left the ground
  */
 export type Footing = {
   at: Vector3
@@ -67,6 +68,7 @@ export type Footing = {
   step?: Step
   taken?: { from: number; until: number }
   put?: Vector3
+  due?: number
   fore?: number
 }
 /** how high the hips are to go, how fast, pushed how hard, and how fast they are to arrive: at none, to rest */
@@ -119,12 +121,14 @@ export class Pelvis {
   height: number
   /** in the air, with nothing to push him */
   falls = false
-  /** what went wrong in the last step, to be told: the story's feet left him none to come down on */
-  fault?: string
+  /** whether he fell in the last step, the story's feet leaving him none to come down on: they are let go */
+  fell = false
   /** a jump he is to make: where the hips are at the top of it, and until he lets himself drop for it, the footfall along z he is going to, to take off from */
   spring?: { top: Vector3; from?: number }
   /** the legs pushing him off the ground: what he is to leave it with, and when */
   launch?: { velocity: Vector3; until: number }
+  /** how high the hips come to rest where he lands out of a jump whose top was lower than he stands (m) */
+  alights?: number
   /** how far the pelvis is turned about the vertical, the right hip ahead, and lists, the left hip up (rad), and how fast each changes (rad/s) */
   turn = 0
   turning = 0
@@ -332,14 +336,6 @@ export class Pelvis {
     return taken !== undefined && due(from, taken.from) && !due(from, taken.until)
   }
 
-  /** what an error says of his falling `how` he did, if the story made him: the feet it has, which he did not land on */
-  fallen(how: string) {
-    const held = SIDES.filter((side) => this.has(this.foot[side], 0))
-    const them = held.length > 1 ? 'them' : 'it'
-    if (!held.length) return undefined
-    return `${how}, the ${held.join(' and ')} foot the story's: free ${them} before he comes down, or send ${them} to the ground`
-  }
-
   /** how far ahead of the hips a leg points, from straight down (rad) */
   points(side: Side) {
     const { at } = this.foot[side]
@@ -456,8 +452,8 @@ export class Pelvis {
     const back = still ? Math.max(0, Math.min(this.course.z ?? 0, front) - front - overhang(size, value.y)) : 0
     this.back += clamp(back - this.back, -SINK * pace * dt, SINK * pace * dt)
     if (this.unheld > FLIGHT * beat) {
-      this.falls = true
-      this.fault = this.fallen('he has fallen, no foot under him as he went')
+      // (he lands going on where he was going)
+      this.falls = this.fell = this.sent = true
     }
   }
 
@@ -472,7 +468,7 @@ export class Pelvis {
       const at = stands(side)
       const heel = raised(this.size, z > at.z ? HEEL : 0)
       const flat = Math.hypot(Math.max(0, Math.abs(z - at.z) - heel.z), at.x - SIGN[side] * hip)
-      return ankle + heel.y + Math.sqrt(Math.max(0, leg * leg - flat * flat))
+      return at.y + heel.y + Math.sqrt(Math.max(0, leg * leg - flat * flat))
     })
     return reaches.length ? (this.placed ? Math.min : Math.max)(...reaches) : Infinity
   }

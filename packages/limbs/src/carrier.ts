@@ -40,8 +40,8 @@ export type Carrier = {
   take(side: Side, span: { from: number; until: number } | undefined): void
   /** how high the ground is that he stands on */
   readonly ground: number
-  /** the body steps with a foot to a place on the ground and stands over it there, or with none keeps it there no longer: where it is to stand so, if it is */
-  put(side: Side, place?: Vector3): Vector3 | undefined
+  /** the body steps with a foot to a place it stands on, in so many `seconds` or as soon as it can, and stands over it there, or with none keeps it there no longer: where it is to stand so, if it is */
+  put(side: Side, place?: Vector3, seconds?: number): Vector3 | undefined
   /** a foot the body steps with, as it is now: where it is to stand, whether it is down, and where it is */
   foot(side: Side): { readonly put?: Vector3; readonly down: boolean; readonly at: Vector3 }
   /** whether he is in the air and coming down */

@@ -38,7 +38,7 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
 - `Locomotion`, made from the rig's `Bones` and `Joints`: it owns the hips and feet (`Mover`), the look-ahead
   (`Ahead`), the free parts' reactions, the legs' stances and the movement intention. animate says where he goes
   through its `going` (`Going`: walk, run, go, face, look, knock, jump) and `stand(free)`, hands the planner its
-  `carrier`, steps it with `step(dt, feet, looked)` (telling a fault and a wind-up to play), `react(dt, sights)`,
+  `carrier`, steps it with `step(dt, feet, looked)` (telling a wind-up to play), `react(dt, sights)`,
   `pose(delta, feet)` and `tread(side, foot, delta)`, and reads `hips`, `facing`, `ground`, `stands(side)`, `posed()`
   and, for the intent, `foresee(seconds)`. With it `Ground`, `Run`, `Walk`, `flat`, and the types `Footfall`,
   `Foreseen`.

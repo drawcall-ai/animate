@@ -50,6 +50,8 @@ export class Way extends Pelvis {
   /** the way a story has him face in the scene, if it does (rad about y, from +z toward +x), and how fast that turns (rad/s) */
   face?: number
   swings = 0
+  /** how far above the ground the world has under him he stands, up on something (m) */
+  raised = 0
   /** where the world has the hips on the ground at a moment, until they have been carried there */
   world?: { place: Vector3; time: number }
   /** where he looks, if he does, from his shoulders in the scene: about y from +z toward +x, and up (rad) */
@@ -156,6 +158,32 @@ export class Way extends Pelvis {
     return by.set(place.x - by.x, 0, place.z - by.z)
   }
 
+  /** the hips have gone so far across the way he is going (m): it goes with them, what stands in the scene staying where it is */
+  protected across(by: number) {
+    this.value.x -= by
+    this.carry(new Vector3(by, 0, 0).applyAxisAngle(UP, this.heading))
+  }
+
+  /**
+   * The ground he stands on is where his lowest foot on the ground stands: up on what a story put him on, and down again
+   * as he steps off it. The hips stay where they are in the scene, and are held as high above it as they were.
+   */
+  protected level() {
+    const down = SIDES.filter((side) => this.foot[side].down).map((side) => this.foot[side].at.y)
+    const by = Math.min(...down) - this.size.ankle
+    if (!down.length || Math.abs(by) < THERE * this.size.leg) return
+    this.origin.y += by
+    this.raised += by
+    this.value.y -= by
+    // (a step goes to where the foot was put: each place once)
+    const places = new Set(SIDES.flatMap((side) => {
+      const { at, put, step } = this.foot[side]
+      return [at, put, step?.from, step?.to]
+    }))
+    for (const place of places) if (place) place.y -= by
+    if (this.spring) this.spring.top.y -= by
+  }
+
   /** he is carried along the ground with the way he is going: what `stays` stands where it is, and where he is to rest and where his feet were put go with him */
   private carry(by: Vector3, stays = ({ at, step }: Footing) => [at, step?.points === undefined ? undefined : step.from]) {
     const { course } = this
@@ -166,10 +194,11 @@ export class Way extends Pelvis {
 
   /**
    * The ground under him is so high in the scene: a foot on it goes with it, and the hips and a foot in the air stay
-   * where they are. Ground that drops away from under his feet leaves him in the air, to come down onto it.
+   * where they are. Ground that drops away from under his feet leaves him in the air, to come down onto it. Standing up
+   * on something, he stands as high above it as he did.
    */
   floor(y: number) {
-    const by = y - this.origin.y
+    const by = y + this.raised - this.origin.y
     if (by === 0) return
     this.origin.y = y
     this.value.y -= by

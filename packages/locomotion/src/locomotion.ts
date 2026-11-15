@@ -66,8 +66,8 @@ export class Locomotion {
 
   /**
    * A step of time for the hips and the feet: where a foot the story has is, is told to the ground, he looks where he
-   * is to, and he goes as he is to go; a foot of his own the ground holds is anchored there. Tells what went wrong,
-   * and a wind-up for a fast hand that is to begin now, as a story for the body to play.
+   * is to, and he goes as he is to go; a foot of his own the ground holds is anchored there. Fallen, he lands on feet
+   * the story has no longer. Tells a wind-up for a fast hand that is to begin now, as a story for the body to play.
    */
   step(dt: number, feet: Record<Side, End>, looked?: Vector3) {
     const { mover, ahead } = this
@@ -80,12 +80,10 @@ export class Locomotion {
     const { course } = mover
     if (course.heading !== undefined) mover.height = course.y = held(mover, mover.height, { speed: Math.abs(course.speed) })
     mover.advance(dt)
-    const said = mover.fault
-    mover.fault = undefined
-    // (fallen, he lands on feet the story has no longer)
-    if (said && mover.falls) for (const side of SIDES) feet[side].free()
+    if (mover.fell) for (const side of SIDES) feet[side].free()
+    mover.fell = false
     for (const side of SIDES) if (!feet[side].held) feet[side].anchor = this.stands(side)
-    return { fault: said === undefined ? undefined : new Error(said), wind: ahead.wind.start() }
+    return { wind: ahead.wind.start() }
   }
 
   /** the free parts come round to what the rest of him has them do */

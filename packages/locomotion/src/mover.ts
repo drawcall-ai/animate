@@ -55,7 +55,7 @@ export class Mover extends Way {
     // how far ahead of its hip the foot is the way it points, and to the side of that: a heel comes up the way its foot points
     const [on, out] = [at.z - hips.z, at.x - SIGN[side] * hip]
     const [far, aside] = [on * Math.cos(toes) + out * Math.sin(toes), out * Math.cos(toes) - on * Math.sin(toes)]
-    const [high, ball] = [hips.y - ankle, SOLE.ball * leg]
+    const [high, ball] = [hips.y - at.y, SOLE.ball * leg]
     const heel = raised(this.size, clamp(Math.atan2(high + ankle, far + ball) - Math.atan2(ankle, ball), 0, HEEL))
     return Math.hypot(Math.hypot(high - heel.y, far + heel.z), aside) <= leg
   }
@@ -94,13 +94,13 @@ export class Mover extends Way {
   }
 
   /**
-   * The story puts a foot down at a place on the ground, or with none, has it there no longer. He steps there with it,
-   * one foot at a time, and stands over his feet: the hips come to rest between them, as high as his legs reach both
-   * from there.
+   * The story puts a foot down at a place on the ground or on a thing, or with none, has it there no longer. He steps
+   * there with it, one foot at a time, in so many `seconds` or as soon as he can, and stands over his feet: the hips
+   * come to rest between them, as high as his legs reach both from there.
    */
-  put(side: Side, at?: Vector3) {
+  put(side: Side, at?: Vector3, seconds?: number) {
     const [foot, partner] = [this.foot[side], this.foot[other(side)]]
-    foot.put = undefined
+    foot.put = foot.due = undefined
     this.planted = undefined
     const place = at && this.local(at.clone(), side)
     if (!place) {
@@ -115,6 +115,7 @@ export class Mover extends Way {
     // (the other stands where it is, or is to: the two are his stance)
     partner.put ??= stands.clone()
     foot.put = place
+    if (seconds !== undefined) foot.due = this.time + seconds
     this.settle(this.led)
   }
 
@@ -125,8 +126,8 @@ export class Mover extends Way {
   settle(led: boolean) {
     const [left, right] = SIDES.map((side) => this.foot[side].put ?? this.foot[side].step?.to ?? this.foot[side].at)
     const half = Math.abs(left.z - right.z) / 2
-    const { ankle, leg, pace } = this.size
-    const y = ankle + Math.sqrt(Math.max(0, leg ** 2 - (half + SLACK.reach * leg) ** 2))
+    const { leg, pace } = this.size
+    const y = Math.min(left.y, right.y) + Math.sqrt(Math.max(0, leg ** 2 - (half + SLACK.reach * leg) ** 2))
     const z = this.between().z
     const puts = SIDES.map((side) => this.foot[side].put)
     this.send(toRest(y, z, (Math.sign(z - this.value.z) || 1) * WALK.speed * pace), led)
@@ -175,8 +176,11 @@ export class Mover extends Way {
     this.steer(dt, down)
     const { x } = this.value
     this.move(dt, down)
-    this.sway(dt, x)
+    // (in the air he flies across the way he is going as he left the ground: the way goes with him)
+    if (this.aloft) this.across(this.value.x - x)
+    else this.sway(dt, x)
     for (const side of SIDES) this.tread(side, dt)
+    this.level()
     // at a run the last foot to leave the ground pushes him up as it goes: as fast as has him back as high when the next comes down
     const feet = SIDES.map((side) => this.foot[side])
     const air = Math.min(...feet.map((foot) => foot.step?.remains ?? Infinity))
@@ -334,7 +338,9 @@ export class Mover extends Way {
     step.to.z += clamp(on - step.to.z, -SHIFT * pace * dt, SHIFT * pace * dt)
     // and where its leg reaches it, no later than a foot stays in the air
     const latest = reaches(step.to.z) ? Math.max(soonest, most) : Infinity
-    const remains = (step.remains = clamp(hips, soonest, latest))
+    // (put down by a moment, it is there then, or as soon after as a foot gets through the air)
+    const due = foot.put && foot.due !== undefined ? Math.max(foot.due - this.time, AIR.least * beat * (1 - step.through)) : undefined
+    const remains = (step.remains = due ?? clamp(hips, soonest, latest))
     if (remains <= dt) {
       foot.at.copy(step.to)
       foot.down = true
@@ -345,7 +351,8 @@ export class Mover extends Way {
     step.through += ((1 - step.through) * dt) / remains
     const high = (CLEAR.least + (CLEAR.faster * Math.abs(this.velocity.z)) / pace) * leg
     foot.at.lerpVectors(step.from, step.to, ease(step.through))
-    foot.at.y += high * Math.sin(Math.PI * step.through)
+    // (and over what it steps up onto or down from)
+    foot.at.y += (high + Math.abs(step.to.y - step.from.y) / 2) * Math.sin(Math.PI * step.through)
     this.trail(foot)
     const far = Math.hypot(this.value.y - foot.at.y, foot.at.z - this.value.z)
     if (far > leg) foot.at.lerp(new Vector3(foot.at.x, this.value.y, this.value.z), 1 - leg / far)

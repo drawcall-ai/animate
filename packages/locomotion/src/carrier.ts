@@ -27,8 +27,8 @@ export const carrier = (mover: Mover, ahead: Ahead): Carrier => ({
   get ground() {
     return mover.origin.y
   },
-  put(side, place) {
-    mover.put(side, place)
+  put(side, place, seconds) {
+    mover.put(side, place, seconds)
     return mover.foot[side].put
   },
   foot: (side) => mover.foot[side],
