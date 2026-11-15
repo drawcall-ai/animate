@@ -1,12 +1,13 @@
 import { Vector3 } from 'three'
 import type { Footing, Step } from './pelvis'
-import { CADENCE, RIDE, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
+import { CADENCE, CLEAR, RIDE, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
 import { toRest } from './pelvis'
 import { TRAIL } from './joints'
 import { SLACK } from './limb'
 import { HEEL, SIDES, SIGN, SOLE, type Side, both, ground, other, raised } from './size'
+import { type Placed, Steps, type Stride } from './steps'
 import { Way } from './way'
-import { EXACT, GRAVITY, clamp, ease } from './world'
+import { EXACT, GRAVITY, clamp, damped, ease } from './world'
 
 /** how long a foot is in the air for a step at the least and at the most (in his beats) */
 const AIR = { least: 0.5, most: 1.67 }
@@ -19,8 +20,6 @@ const EARLY = 0.7
 const FORE = { carries: 0.668, within: 0.9 }
 /** how fast a foot in the air is brought back to where hips come to rest that were to go on further (in his paces) */
 const SHIFT = 0.68
-/** how high a foot is lifted in a step, and how much higher for every pace he goes (in lengths of his leg): the heel kicks up behind him, as far as a knee folds */
-const CLEAR = { least: 0.045, faster: 0.134 }
 /** how much of its length a leg is at when he comes down on it out of the air, on the ball of its foot: the knee bent to give */
 const LANDING = 0.92
 /** how long before he comes down out of the air his feet reach for the ground (in his beats) */
@@ -31,6 +30,12 @@ const TUCK = 0.25
 const APART = 0.341
 /** how many times a beat a foot off the ground comes round to point the way he faces */
 const POINTS = 9
+/** led, over how long his speeding up is told (in his beats) */
+const URGES = 0.3
+/** led, how near how high the legs reach the hips ride before they give to it (in lengths of his leg) */
+const SOFT = 0.03
+/** led, how long the hips take to come to how high his steps have them (in his beats) */
+const HOLD = 0.5
 /** how far round a foot swings at the most that steps as he turns where he stands (rad) */
 const REACH = 1.4
 
@@ -45,6 +50,10 @@ const REACH = 1.4
 export class Mover extends Way {
   /** when a foot last came down */
   private trod = -Infinity
+  /** how the feet step led, going his own way */
+  private steps = new Steps(this.size)
+  /** led, how fast he has been speeding up along the way he goes, lately (m/s²) */
+  private urges = 0
 
   /** whether a leg reaches its foot where it stands from where the hips are: flat on the ground, or its heel up as far as brings the ankle, which turns about the ball of the foot, nearest the hip */
   reaches(side: Side, hips: Vector3) {
@@ -72,6 +81,7 @@ export class Mover extends Way {
       stance: same(this.stance),
       planted: same(this.planted),
       plant: this.plant && { ...this.plant },
+      steps: this.steps.clone(),
       spring: this.spring && { ...this.spring, top: this.spring.top.clone() },
       foot: both((side) => {
         const { at, step, put } = this.foot[side]
@@ -160,6 +170,12 @@ export class Mover extends Way {
     this.carried(dt)
     this.time += dt
     this.idles(dt)
+    // (led, with his feet his own, he steps by the clock of his strides: else as he goes where he is sent)
+    if (this.led && !this.placed && !this.jumps) {
+      this.stride(dt)
+      return
+    }
+    this.steps.resting = true
     const down = SIDES.some((side) => this.foot[side].down)
     this.steer(dt, down)
     const { x } = this.value
@@ -177,6 +193,64 @@ export class Mover extends Way {
     this.lower(dt)
     this.swivel(dt)
   }
+
+  /**
+   * Led, a step of time: the way he goes and faces follows the world, the feet step after the hips by the clock of
+   * his strides, and the hips go as fast as he is led, as high as his feet let them, rising and falling with each step.
+   */
+  private stride(dt: number) {
+    const { value, velocity, foot, size } = this
+    const was = velocity.z
+    this.follow(dt)
+    this.urges += ((velocity.z - was) / dt - this.urges) * Math.min(1, dt / (URGES * size.beat))
+    // the steps are told in the scene, where the feet stand still however the way he is going turns
+    const feet = both((side): Placed => {
+      const { at, toes, down } = foot[side]
+      const [held, reached] = [this.has(foot[side], dt), this.reaches(side, value)]
+      return { at: this.scene(at.clone(), side), toes: this.heading + toes, down, held, reached }
+    })
+    const { heading, curves, facing, spins, aims } = this
+    const at = this.scene(new Vector3(0, 0, value.z))
+    const stride = this.steps.advance({ at, speed: velocity.z, faster: this.urges, heading, curves, facing, spins, aims }, feet, dt)
+    for (const side of SIDES) {
+      const [footing, placed] = [foot[side], feet[side]]
+      this.local(placed.at, side, footing.at)
+      footing.toes = placed.toes - this.heading
+      footing.down = placed.down
+      if (placed.down) footing.stood = this.time
+      const { to, remains } = placed
+      footing.step = to && remains !== undefined ? { from: footing.at.clone(), to: this.local(to.clone(), side), through: 0, remains } : undefined
+    }
+    this.acceleration.set(0, 0, 0)
+    value.z += velocity.z * dt
+    this.ride(dt, stride)
+    this.bounds = false
+    // (no further than over the foot as it stands under its hip: one put out for him to lean into a turn he leans over)
+    this.sway(dt, value.x, size.hip)
+    this.lower(dt)
+    this.swivel(dt)
+  }
+
+  /**
+   * Led, the hips ride as high as they are held, lower going along, and rise and fall with each step; no higher than
+   * his legs reach his feet, the one easing into the other, a foot in the air as where it comes down from where the
+   * hips are by then, so he flies no higher than he lands.
+   */
+  private ride(dt: number, { phase, dip, bob }: Stride) {
+    const { value, velocity, foot, size, course } = this
+    // (held lower than he stands, he rides no lower for his stride than that)
+    const ride = course.y - this.low - Math.max(0, dip - (size.stand - course.y)) + bob * Math.cos(4 * Math.PI * phase)
+    const lands = ({ at, step }: Footing) => (step ? step.to.clone().setZ(step.to.z - velocity.z * step.remains) : at)
+    const reach = this.ceiling(value.z, SIDES, (side) => lands(foot[side])) - ride
+    const soft = SOFT * size.leg
+    const eased = ride + Math.min(0, reach) - soft * Math.log1p(Math.exp(-Math.abs(reach) / soft))
+    const high = clamp(eased, lunge(size), size.stand)
+    const rose = velocity.y
+    velocity.y = damped(velocity.y, high - value.y, (2 * Math.PI) / (HOLD * size.beat), dt)
+    this.acceleration.y = (velocity.y - rose) / dt
+    value.y += velocity.y * dt
+  }
+
 
   /**
    * how far ahead of the hips a foot comes down: by what carries them over it, and by where the push has to come from.

@@ -1,6 +1,6 @@
 import type { Side, Story } from '@drawcall/animate'
 import { fist } from '@drawcall/hand'
-import type { PhysicsWorld, RigidBody } from '@drawcall/physics'
+import type { RigidBody } from '@drawcall/physics'
 import { Line3, type Object3D, Vector3 } from 'three'
 import { Character } from '../character'
 import type { Game, Input } from '../play'
@@ -64,10 +64,10 @@ export class Boxer implements Game {
   private planted = false
   private readonly bag: RigidBody
 
-  /** `rig` is his rigged body at rest, in the `scene` the `world` simulates, which the gym is put in */
-  constructor(rig: Object3D, world: PhysicsWorld, scene: Object3D) {
+  /** `rig` is his rigged body at rest, in the `scene` the physics world simulates, which the gym is put in */
+  constructor(rig: Object3D, scene: Object3D) {
     // (read while the rig is at rest, before the body poses it)
-    this.character = new Character(rig, world)
+    this.character = new Character(rig)
     const { stand } = this.character.body.size
     const room = gym(new Vector3(0, ROOM.high * stand, ROOM.ahead * stand))
     scene.add(rig, room.scene)
@@ -91,7 +91,7 @@ export class Boxer implements Game {
 
   /** which way the bag is from him, along the ground */
   private toward() {
-    const { position } = this.character.capsule
+    const { position } = this.character.feet
     return this.bag.position.clone().sub(position).setY(0).normalize()
   }
 
@@ -118,8 +118,8 @@ export class Boxer implements Game {
 
   /** at rest he stands in his stance: the lead foot steps ahead toward the bag */
   private *stance(): Story {
-    const { body, capsule } = this.character
-    const { x, z } = capsule.position.clone().addScaledVector(this.toward(), STANCE * body.size.leg)
+    const { body, feet } = this.character
+    const { x, z } = feet.position.clone().addScaledVector(this.toward(), STANCE * body.size.leg)
     yield* body.foot.left.to(body.ground('left', { x, z }))
   }
 
@@ -138,7 +138,7 @@ export class Boxer implements Game {
   /** a punch at the bag: the fist meets it where it hangs at the height of his shoulders, or falls short in the air, and goes back to his guard */
   private *punch(punch: Punch): Story {
     try {
-      const { body, capsule } = this.character
+      const { body, feet } = this.character
       const { side, speed, reach } = PUNCH[punch]
       const { arm, stand, trunk } = body.size
       const { bag } = this
@@ -155,7 +155,7 @@ export class Boxer implements Game {
         .setY(stand + trunk)
         .addScaledVector(face, BAG.radius)
       // (beyond his reach, it falls short of the bag in the air)
-      const hips = capsule.position.clone().setY(hit.y)
+      const hips = feet.position.clone().setY(hit.y)
       const place = hips.clone().add(hit.sub(hips).clampLength(0, reach * arm))
       const hand = body.hand[side]
       const met = yield* hand.to(place, {
@@ -187,7 +187,7 @@ export class Boxer implements Game {
   }
 
   readout() {
-    const away = this.bag.position.clone().sub(this.character.capsule.position).setY(0).length()
+    const away = this.bag.position.clone().sub(this.character.feet.position).setY(0).length()
     return [
       `boxer     ${this.throwing ?? 'guard'}${this.waiting ? ` (+${this.waiting})` : ''}`,
       `landed    ${this.landed}, the last ${this.blow.toFixed(1)} N·s`,

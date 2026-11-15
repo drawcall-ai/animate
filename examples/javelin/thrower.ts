@@ -1,6 +1,5 @@
 import type { Held, Story } from '@drawcall/animate'
-import { grip, Hand } from '@drawcall/hand'
-import type { PhysicsWorld } from '@drawcall/physics'
+import { flat, grip, Hand } from '@drawcall/hand'
 import { type Object3D, Vector3 } from 'three'
 import { Character } from '../character'
 import type { Game, Input } from '../play'
@@ -11,16 +10,13 @@ import { Javelin } from './javelin'
 const SPEED = { walk: 1.4, run: 6 }
 /** how far from his hips, along the ground, a javelin is for Space to fetch it (of his arm) */
 const NEAR = 4
-/** how near the place he takes it from counts as there (m), and how he slows into it (m/s a metre) */
-const THERE = 0.1
-const EASE = 3
 /** how long his hand takes to the javelin to take it (s) */
 const REACH = 0.8
-/** how slow he is to go to count as having stopped (m/s) */
-const STILL = 0.05
-/** how fast the arm throws, on top of how fast he goes, and how steeply up from level (m/s, rad) */
-const THROW = 16
-const UP = (32 * Math.PI) / 180
+/** the throw: how slow he runs into it at the least, how long his last strides take, how fast he arrives on the front foot (m/s, s, m/s) */
+const RUNUP = { least: 3, strides: 0.5, arrive: 3 }
+/** how fast it leaves the hand, and how steeply up from level (m/s, rad) */
+const THROW = 20
+const UP = (30 * Math.PI) / 180
 
 /** places of his right hand, counted from his right shoulder as he faces: +x his left, +y up, +z ahead (of his arm) */
 const OVER = { x: -0.15, y: 0.45, z: -0.15 }
@@ -34,27 +30,26 @@ const scaled = (place: { x: number; y: number; z: number }, by: number) => new V
 const along = (from: Vector3, to: Vector3) => new Vector3(to.x - from.x, 0, to.z - from.z)
 
 /**
- * A javelin thrower led by the keys: he walks and runs, fetches a javelin with Space and carries it, over his
- * shoulder at a run and low at his side otherwise, and throws it with Space the way he faces, his run in the throw.
+ * A javelin thrower led by the keys: he walks and runs, and carries a javelin over his shoulder at a run and low at
+ * his side otherwise. Fetching one from the rack and throwing it are his actions: Space walks him up to the nearest and
+ * takes it, or throws the one he carries the way he faces, braking onto the front foot out of how he runs. The javelin
+ * is his from when his hand takes it until it leaves the hand, the world's after.
  */
 export class Thrower implements Game {
   readonly character: Character
   readonly javelins: Javelin[]
   /** his right hand, read from the rig at rest */
   private readonly hand: Hand
-  state: 'empty' | 'fetching' | 'picking' | 'carrying' | 'throwing' = 'empty'
-  /** the javelin he fetches, carries or last threw, and it as he holds it */
+  /** the javelin he carries or last threw, and it as he holds it while he does */
   private javelin?: Javelin
   private held?: Held
   /** how he carries it as last told, over his shoulder or not, and whether he is running */
   private over?: boolean
   private running = false
-  /** which way he keeps facing, if not the way he goes */
-  private way?: { x: number; z: number }
 
-  constructor(rig: Object3D, world: PhysicsWorld, scene: Object3D) {
+  constructor(rig: Object3D, scene: Object3D) {
     this.hand = new Hand(rig, 'right')
-    this.character = new Character(rig, world)
+    this.character = new Character(rig)
     // the rack holds them where his hand carries one low, as he stands beside it
     const { stand, trunk, arm } = this.character.body.size
     const { drawn, rack } = field(stand + trunk + LOW.y * arm)
@@ -63,81 +58,59 @@ export class Thrower implements Game {
   }
 
   update(delta: number, input: Input) {
+    const { character } = this
     this.running = input.run && Math.hypot(input.move.x, input.move.z) > 0
+    if (input.act && !character.acting) this.act()
+    if (this.held && !character.acting && this.over !== this.running) this.carry()
     const speed = input.run ? SPEED.run : SPEED.walk
-    let asked = { x: input.move.x * speed, z: input.move.z * speed }
-    if (input.act) this.act()
-    if (this.state === 'fetching' || this.state === 'picking') asked = this.fetch()
-    if (this.state === 'carrying' && this.over !== this.running) this.carry()
-    this.character.update(delta, asked, this.way)
+    character.update(delta, { x: input.move.x * speed, z: input.move.z * speed })
     for (const javelin of this.javelins) javelin.update()
   }
 
   readout() {
-    const thrown = this.javelin
-    const flight = thrown && this.state === 'empty' ? `   javelin ${thrown.state}` : ''
+    const thrown = this.held ? undefined : this.javelin
+    const doing = this.character.acting ? 'acting' : this.held ? 'carrying' : 'empty'
+    const flight = thrown ? `   javelin ${thrown.state}` : ''
     const far = thrown?.distance === undefined ? '' : `   ${thrown.distance.toFixed(1)} m`
-    return `${this.state}${flight}${far}   ${this.character.speed.toFixed(1)} m/s`
+    return `${doing}${flight}${far}   ${this.character.speed.toFixed(1)} m/s`
   }
 
   /** the javelin he threw last, while he has not gone for another */
   focus() {
-    return this.state === 'empty' ? this.javelin?.grip : undefined
+    return this.held ? undefined : this.javelin?.grip
   }
 
-  /** Space: fetch the nearest javelin he can take, or throw the one he carries */
+  /** Space: throw the javelin he carries, or fetch the nearest he can take */
   private act() {
-    if (this.state === 'carrying') {
-      this.state = 'throwing'
-      this.character.body.play(this.throw())
-      return
-    }
-    if (this.state !== 'empty') return
-    const hips = this.character.capsule.position
+    const { character } = this
+    if (this.held) return character.act(this.throw(this.held))
+    const hips = character.feet.position
     const far = (javelin: Javelin) => along(hips, javelin.grip).length()
-    const near = this.javelins.filter((javelin) => javelin.free && far(javelin) < NEAR * this.character.body.size.arm)
+    const near = this.javelins.filter((javelin) => javelin.free && far(javelin) < NEAR * character.body.size.arm)
     near.sort((a, b) => far(a) - far(b))
-    if (!near[0]) return
-    this.javelin = near[0]
-    this.state = 'fetching'
+    if (near[0]) character.act(this.fetch(near[0]))
   }
 
-  /** he walks up to where the javelin he fetches is by his hand as he carries it low, facing the way it points, and once there stops and takes it: how he is to go */
-  private fetch() {
-    const { javelin, character } = this
-    if (!javelin) throw new Error('he fetches no javelin')
-    const ahead = javelin.pointing.setY(0).normalize()
-    this.way = { x: ahead.x, z: ahead.z }
-    if (this.state === 'picking') return { x: 0, z: 0 }
-    // it is to be by his right hand, as he carries it low
-    const left = new Vector3(ahead.z, 0, -ahead.x)
-    const { arm, shoulder } = character.body.size
-    const spot = javelin.grip.addScaledVector(left, shoulder - LOW.x * arm).addScaledVector(ahead, -LOW.z * arm)
-    const way = along(character.capsule.position, spot)
-    if (way.length() > THERE) return way.setLength(Math.min(SPEED.walk, EASE * way.length()))
-    // (a hand is planned on how he goes as it is sent: he stops first)
-    if (character.speed > STILL) return { x: 0, z: 0 }
-    this.state = 'picking'
-    character.body.play(this.pick(javelin))
-    return { x: 0, z: 0 }
-  }
-
-  /** his hand goes down to the javelin's grip and takes it, as he is to carry it */
-  private *pick(javelin: Javelin): Story {
+  /** he walks up to where the javelin is by his right hand as he carries it low, facing the way it points, and takes it */
+  private *fetch(javelin: Javelin): Story {
     const { body } = this.character
+    const ahead = javelin.pointing.setY(0).normalize()
+    const left = new Vector3(ahead.z, 0, -ahead.x)
+    const { arm, shoulder } = body.size
+    const spot = javelin.grip.addScaledVector(left, shoulder - LOW.x * arm).addScaledVector(ahead, -LOW.z * arm)
+    body.face(ahead)
+    yield* body.walk(spot)
+    this.javelin = javelin
     javelin.take()
-    this.held = body.hold(javelin.mesh)
-    try {
-      if (!(yield* body.hand.right.to(grip(this.hand, javelin.mesh, GRIP), { seconds: REACH }))) return
-      this.state = 'carrying'
-      this.carry()
-    } finally {
-      this.way = undefined
-      if (this.state === 'picking') {
-        this.state = 'empty'
-        javelin.state = 'down'
-      }
+    const held = body.hold(javelin.mesh)
+    body.face()
+    // (a hand that never got there drops it)
+    if (!(yield* body.hand.right.to(grip(this.hand, javelin.mesh, GRIP), { seconds: REACH }))) {
+      held.free()
+      return javelin.release(new Vector3())
     }
+    this.held = held
+    this.carry()
   }
 
   /** his hand carries the javelin over his shoulder at a run, low at his side otherwise */
@@ -149,26 +122,25 @@ export class Thrower implements Game {
     this.held?.to(place, { on: body, ...(over ? SHOULDERED : LOWERED) })
   }
 
-  /** the javelin leaves his hand above and behind his shoulder the way he faces, his run in it, and flies */
-  private *throw(): Story {
-    const { body, capsule } = this.character
-    const hand = body.hand.right
-    const facing = body.facing
-    this.way = { x: facing.x, z: facing.z }
-    const velocity = facing
-      .clone()
-      .multiplyScalar(THROW * Math.cos(UP))
-      .setY(THROW * Math.sin(UP))
-      .add(capsule.velocity.clone().setY(0))
-    try {
-      const pointing = { x: 0, y: Math.sin(UP), z: Math.cos(UP) }
-      if (this.held) yield* this.held.to(scaled(RELEASE, body.size.arm), { velocity, on: body, pointing })
-    } finally {
-      this.held?.free()
-      this.javelin?.release(hand.velocity.clone())
-      this.state = 'empty'
-      this.way = this.over = undefined
-      this.held = undefined
-    }
+  /**
+   * out of how he runs, he brakes onto his left foot a couple of strides ahead the way he faces, and as he comes over
+   * it the javelin leaves his hand above and behind the shoulder: the run, the trunk and the arm make up its speed
+   */
+  private *throw(held: Held): Story {
+    const { body, feet } = this.character
+    const way = body.facing
+    const speed = Math.max(this.character.speed, RUNUP.least)
+    const at = feet.position.clone().addScaledVector(way, speed * RUNUP.strides)
+    body.run({ speed, plant: 'left', at, arrive: RUNUP.arrive })
+    const flying = way.clone().multiplyScalar(THROW * Math.cos(UP)).setY(THROW * Math.sin(UP))
+    const release = body.when(at)
+    body.hand.right.shape(flat, { by: release })
+    const pointing = { x: 0, y: Math.sin(UP), z: Math.cos(UP) }
+    yield* held.by(release, scaled(RELEASE, body.size.arm), { velocity: flying, on: body, pointing })
+    held.free()
+    this.javelin?.release(flying)
+    this.held = this.over = undefined
+    body.hand.right.shape()
+    yield* body.stand()
   }
 }

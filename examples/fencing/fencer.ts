@@ -1,6 +1,5 @@
 import type { Body, Held, Side, Story } from '@drawcall/animate'
 import { grip, Hand } from '@drawcall/hand'
-import type { PhysicsWorld } from '@drawcall/physics'
 import { type Object3D, type Scene, Vector3 } from 'three'
 import { Character, holds } from '../character'
 import type { Game, Input } from '../play'
@@ -27,7 +26,10 @@ const REACH = 0.5
 
 type Phase = 'coming en garde' | 'en garde' | 'advance' | 'retreat' | 'lunge' | 'recovery'
 
-/** A fencer on the piste, en garde facing the dummy: W advances, S retreats, Space lunges at the target and recovers. */
+/**
+ * A fencer on the piste, en garde facing the dummy: W advances, S retreats, the player leading his stance along, and
+ * Space lunges at the target and recovers, his action, the front foot placed out and back.
+ */
 export class Fencer implements Game {
   readonly character: Character
   readonly dummy: Dummy
@@ -38,22 +40,22 @@ export class Fencer implements Game {
   /** whether the lunge he is in has touched */
   private touched = false
 
-  constructor(rig: Object3D, world: PhysicsWorld, scene: Scene) {
-    this.character = new Character(rig, world)
+  constructor(rig: Object3D, scene: Scene) {
+    this.character = new Character(rig)
     const { body } = this.character
     const hand = new Hand(rig, 'right')
     this.held = holds(body, hand, grip(hand, this.sword, GRIP))
     this.dummy = new Dummy(body.size)
     scene.add(rig, this.sword, this.dummy.scene)
     body.face({ x: 0, z: 1 })
-    body.play(this.guard(body))
+    this.character.act(this.guard(body))
   }
 
   update(delta: number, input: Input) {
     const { character, dummy } = this
     const { body } = character
     const guard = this.phase === 'en garde' || this.phase === 'advance' || this.phase === 'retreat'
-    if (guard && input.act) body.play(this.lunge(body))
+    if (guard && input.act) character.act(this.lunge(body))
     // en garde he advances and retreats along the piste: his stance steps along, the front foot first
     const ahead = guard && !input.act && Math.abs(input.move.z) > 0.5 ? Math.sign(input.move.z) : 0
     if (guard) this.phase = ahead > 0 ? 'advance' : ahead < 0 ? 'retreat' : 'en garde'

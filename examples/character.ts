@@ -1,4 +1,4 @@
-import { Body } from '@drawcall/animate'
+import { Body, type Story } from '@drawcall/animate'
 import type { Grip, Hand } from '@drawcall/hand'
 import type { PhysicsWorld } from '@drawcall/physics'
 import { Matrix4, Object3D, Vector3 } from 'three'
@@ -6,30 +6,65 @@ import { Capsule } from './capsule'
 
 /** how high and how wide the capsule the world moves him as is (of how high his hips stand) */
 const CAPSULE = { high: 1.9, radius: 0.32 }
+/** how fast his going changes toward what the player asks on open ground (m/s²) */
+const PUSH = 8
+const GRAVITY = 9.81
+
+/** where he stands on open, flat ground and how he goes there, as the player moves him: nothing to bump into */
+export class Ground {
+  /** how he is asked to go along the ground (m/s), and how he goes */
+  readonly asked = new Vector3()
+  readonly velocity = new Vector3()
+  readonly position = new Vector3()
+  readonly grounded = true
+
+  /** how high the ground under him is */
+  get floor() {
+    return this.position.y
+  }
+
+  update(delta: number) {
+    this.velocity.add(this.asked.clone().sub(this.velocity).clampLength(0, PUSH * delta))
+    this.position.addScaledVector(this.velocity, delta)
+  }
+}
 
 /**
- * A game's character: a rigged body led by a capsule the physics world moves. Each frame the capsule goes as the game
- * asks, and the body is told how it goes and where it is by then; what the body could not do it says, once, here.
+ * A game's character: a rigged body and what moves him along the ground. His going has one owner at a time. The
+ * player owns it: each frame the feet go as the game asks and the body is led after them. Or an action owns it, a
+ * story played by `act` that needs his legs: the player has no say, the feet follow the body, and when it is over the
+ * player leads him on from where he stands. What the body could not do it says, once, here.
  */
 export class Character {
   readonly body: Body
-  readonly capsule: Capsule
+  /** what moves him for the player: open ground, or with a physics world a capsule that it moves */
+  readonly feet: Ground | Capsule
   /** what the body could not do, as it said so, the latest last */
   readonly errors: string[] = []
+  /** whether an action owns his going */
+  acting = false
+  private readonly gravity: number
 
-  /** `rig` is his rigged body at rest, standing where the `world` is to move him from */
+  /** `rig` is his rigged body at rest, standing where he is to start; with a `world`, a capsule moves him through it */
   constructor(
     readonly rig: Object3D,
-    private readonly world: PhysicsWorld,
+    world?: PhysicsWorld,
   ) {
     this.body = new Body(rig)
     const { stand } = this.body.size
-    this.capsule = new Capsule(world, new Object3D(), CAPSULE.radius * stand, CAPSULE.high * stand)
+    this.feet = world ? new Capsule(world, new Object3D(), CAPSULE.radius * stand, CAPSULE.high * stand) : new Ground()
+    this.gravity = world ? -world.gravity[1] : GRAVITY
+  }
+
+  /** the capsule that moves him, for a game on a physics world */
+  get capsule() {
+    if (!(this.feet instanceof Capsule)) throw new Error('he goes on open ground, with no capsule')
+    return this.feet
   }
 
   /** how fast he goes along the ground (m/s) */
   get speed() {
-    const { x, z } = this.capsule.velocity
+    const { x, z } = this.feet.velocity
     return Math.hypot(x, z)
   }
 
@@ -50,32 +85,55 @@ export class Character {
   }
 
   /**
-   * he jumps, leaving the ground so fast (m/s), if he stands on it: the body drops and pushes off, and the capsule leaves
+   * An action that needs his legs, written as a story: a walk or a run, a foot placed, a hand by a moment. It owns his
+   * going until it is over.
+   */
+  act(story: Story<unknown>) {
+    this.acting = true
+    this.body.play(this.owned(story))
+  }
+
+  private *owned(story: Story<unknown>): Story {
+    try {
+      yield* story
+    } finally {
+      this.acting = false
+    }
+  }
+
+  /**
+   * he jumps, leaving the ground so fast (m/s), if he stands on it: the body drops and pushes off, and a capsule leaves
    * the ground as the body does. Tells the moment he is highest, or NaN if he cannot jump now
    */
   jump(up: number) {
-    const { body, capsule } = this
-    if (!capsule.grounded || body.highest() > body.time) return Number.NaN
-    const gravity = -this.world.gravity[1]
-    const top = capsule.position.clone().setY(capsule.floor + body.size.stand + (up * up) / (2 * gravity))
+    const { body, feet } = this
+    if (!feet.grounded || body.highest() > body.time) return Number.NaN
+    const top = feet.position.clone().setY(feet.floor + body.size.stand + (up * up) / (2 * this.gravity))
     this.tried(() => body.jump(top))
     const highest = body.highest()
-    capsule.jump(up, highest - up / gravity - body.time)
+    if (feet instanceof Capsule) feet.jump(up, highest - up / this.gravity - body.time)
     return highest
   }
 
   /**
-   * a frame: the capsule goes for `delta` seconds toward going as `asked` along the ground (m/s), and the body is led
-   * so, facing `way` if that is said, else the way he goes; what else the body is to do this frame is stated before
+   * a frame of `delta` seconds. The player owning his going, the feet go toward going as `asked` along the ground
+   * (m/s), and the body is led so, facing `way` if that is said, else the way he goes; an action owning it, the feet
+   * follow where the body takes him. What else the body is to do this frame is stated before
    */
   update(delta: number, asked: { x: number; z: number }, way?: { x: number; z: number }) {
-    const { body, capsule } = this
-    capsule.asked.set(asked.x, 0, asked.z)
-    capsule.update(delta)
-    const { x, z } = capsule.velocity
-    const { position, floor } = capsule
+    const { body, feet } = this
+    if (this.acting) {
+      this.tried(() => body.update(delta))
+      const { value, velocity } = body.hips
+      feet.position.set(value.x, feet.position.y, value.z)
+      feet.velocity.set(velocity.x, feet.velocity.y, velocity.z)
+      return
+    }
+    feet.asked.set(asked.x, 0, asked.z)
+    feet.update(delta)
+    const { velocity, position, floor } = feet
     this.tried(() => {
-      body.go({ x, z })
+      body.go({ x: velocity.x, z: velocity.z })
       body.face(way)
       body.hips.at({ x: position.x, y: floor, z: position.z })
     })

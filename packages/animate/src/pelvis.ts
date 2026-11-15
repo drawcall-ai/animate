@@ -359,13 +359,13 @@ export class Pelvis {
     this.list += this.listing * dt
   }
 
-  /** the hips sway over the foot he stands on, or as far as his weight has drifted, from where they were along x, like a pendulum as high as they are */
-  protected sway(dt: number, from: number) {
+  /** the hips sway over the foot he stands on, no further than so far, or as far as his weight has drifted, from where they were along x, like a pendulum as high as they are */
+  protected sway(dt: number, from: number, most = Infinity) {
     const { value, velocity, foot } = this
     // (facing off the way he goes, the foot is less far to the side of it)
     const drifted = DRIFT.over * this.size.hip * this.drifts
-    const over =
-      foot.left.down === foot.right.down ? drifted : foot[foot.left.down ? 'left' : 'right'].at.x * Math.cos(this.faces)
+    const under = foot[foot.left.down ? 'left' : 'right'].at.x * Math.cos(this.faces)
+    const over = foot.left.down === foot.right.down ? drifted : clamp(under, -most, most)
     const pull = Math.sqrt(GRAVITY / value.y)
     velocity.x = damped(velocity.x, over - from, pull, dt)
     value.x = from + velocity.x * dt
@@ -456,11 +456,15 @@ export class Pelvis {
     }
   }
 
-  /** how high the hips can be at a place along z for a leg on the ground to hold them: or where the story has put a foot, for both to reach where they stand */
-  ceiling(z = this.value.z) {
+  /** how high the hips can be at a place along z for a leg on the ground to hold them, or for the legs of feet that stand at places: or where the story has put a foot, for both to reach where they stand */
+  ceiling(
+    z = this.value.z,
+    sides = SIDES.filter((side) => this.foot[side].down),
+    stands = (side: Side) => this.foot[side].at,
+  ) {
     const { ankle, hip, leg } = this.size
-    const reaches = SIDES.filter((side) => this.foot[side].down).map((side) => {
-      const { at } = this.foot[side]
+    const reaches = sides.map((side) => {
+      const at = stands(side)
       const heel = raised(this.size, z > at.z ? HEEL : 0)
       const flat = Math.hypot(Math.max(0, Math.abs(z - at.z) - heel.z), at.x - SIGN[side] * hip)
       return ankle + heel.y + Math.sqrt(Math.max(0, leg * leg - flat * flat))

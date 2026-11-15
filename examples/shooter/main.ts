@@ -126,8 +126,13 @@ renderer.setAnimationLoop((now) => {
     camera.position.copy(chest).addScaledVector(along(orbit), -ORBIT)
     camera.lookAt(chest)
   } else if (view === 'eye') {
-    // at his eye, looking along the aim
-    camera.position.copy(soldier.body.eye('right'))
+    // at his eye, looking along the aim: down the sights, on the line along it through the rear sight, as far behind
+    // that as his eye is, so that the sights stay where they are in the picture whatever his head does
+    const eye = soldier.body.eye('right')
+    if (soldier.aimed.sights) {
+      const sight = soldier.sight()
+      camera.position.copy(sight).addScaledVector(ahead, -sight.distanceTo(eye))
+    } else camera.position.copy(eye)
     camera.lookAt(camera.position.clone().add(ahead))
   } else {
     // behind his right shoulder, looking the way he aims: from where the world has him

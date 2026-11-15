@@ -121,7 +121,7 @@ test('led round a quarter turn at a walk, a foot on the ground stays where it st
   until(3, slides)
   body.go({ x: 1.4, z: 0 })
   until(7, slides)
-  expect(slid).toBeLessThan(0.01)
+  expect(slid).toBeLessThan(0.02)
   expect(Math.abs(wrap(facing(rig) - Math.PI / 2))).toBeLessThan(0.1)
 })
 

@@ -10,17 +10,13 @@ const EVERY = 6
 const FIRST = 3
 /** where the setter's hands toss the ball from: so far to his left of where it peaks, and so high (m) */
 const FROM = { aside: 1.2, high: 1.9 }
-/** where the tosses peak, in turn: high near the net, to spike, and lower and further back, to pass (m) */
-const PEAKS = [
-  new Vector3(0, 4.2, NET.z - 0.6),
-  new Vector3(-1.2, 3.4, NET.z - 3.5),
-  new Vector3(-1.5, 4.2, NET.z - 0.8),
-  new Vector3(0.8, 3.2, NET.z - 4.5),
-]
+/** where the tosses he is to pass peak, in turn, back from the net (m) */
+const PEAKS = [new Vector3(-1.2, 3.4, NET.z - 3.5), new Vector3(0.8, 3.2, NET.z - 4.5)]
 
 /**
  * A setter, unseen, and the ball: a body of its own the world moves, tossed up to peak at a spot on his side every
- * few seconds, and struck by a hand or forearms, off which it leaves as they hit it.
+ * few seconds for him to pass, or set when he runs in to spike, to be where his hand meets it as he does; struck by a
+ * hand or forearms, it leaves as they hit it.
  */
 export class Setter {
   readonly ball = new RigidBody({ mass: MASS, canSleep: false })
@@ -37,7 +33,7 @@ export class Setter {
       new SphereCollider({ radius: RADIUS }),
       new Mesh(new SphereGeometry(RADIUS, 24, 16), new MeshStandardMaterial({ color: 0xf0e060 })),
     )
-    this.ball.position.set(PEAKS[0].x + FROM.aside, RADIUS, PEAKS[0].z)
+    this.ball.position.set(PEAKS[0].x + FROM.aside, RADIUS, NET.z - 0.6)
     scene.add(this.ball)
   }
 
@@ -50,15 +46,21 @@ export class Setter {
     if (this.live && this.place.y < 2 * RADIUS) this.live = false
     this.clock += delta
     if (this.clock < EVERY || !ready) return
-    this.clock = 0
     const peak = PEAKS[this.tossed++ % PEAKS.length]
     const from = new Vector3(peak.x + FROM.aside, FROM.high, peak.z)
     const up = Math.sqrt(2 * this.gravity * (peak.y - from.y))
-    const linear = peak
-      .clone()
-      .sub(from)
-      .multiplyScalar(this.gravity / up)
-      .setY(up)
+    this.toss(from, peak.clone().sub(from).multiplyScalar(this.gravity / up).setY(up))
+  }
+
+  /** the ball is set to be at a place so many seconds from now, from beside it */
+  set(place: Vector3, seconds: number) {
+    const from = new Vector3(place.x + FROM.aside, FROM.high, place.z)
+    const linear = place.clone().sub(from).divideScalar(seconds)
+    this.toss(from, linear.setY(linear.y + (this.gravity * seconds) / 2))
+  }
+
+  private toss(from: Vector3, linear: Vector3) {
+    this.clock = 0
     this.ball.teleport(new Matrix4().setPosition(from))
     this.ball.setVelocity({ linear, angular: new Vector3() })
     this.live = true

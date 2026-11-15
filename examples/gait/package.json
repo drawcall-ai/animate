@@ -1,0 +1,17 @@
+{
+  "name": "gait",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@drawcall/animate": "workspace:*",
+    "@drawcall/rig": "^0.7.0",
+    "three": "^0.187.0",
+    "vitecache": "^0.5.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}

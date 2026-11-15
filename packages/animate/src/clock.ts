@@ -75,7 +75,7 @@ export class Clock {
     const { mover, joints, ends, ahead, gives, going, reactions, stood } = this.body
     const all = SIDES.flatMap((side) => [ends.foot[side], ends.hand[side]])
     const hands = SIDES.map((side) => ends.hand[side])
-    if (frame) gives.begin()
+    if (frame) gives.begin(this.span)
     // what was to arrive by now has, before the stories go on from it
     // (one sent to a thing that has left his scene is let free, and that is told once the step is done)
     const kept = (end: End, act: () => void) => {

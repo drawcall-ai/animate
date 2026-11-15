@@ -86,6 +86,13 @@ function toward(from: Matrix4, to: Matrix4, beats: number, arm: number) {
   return partway(from, to, Math.min(1, beats / far))
 }
 
+/** how a thing was to be as an update began, how it is set to be by its end, and from when until when on his clock that is */
+type Told = { was: Matrix4; set: Matrix4; from: number; to: number }
+
+/** how a thing set anew is to be at a moment on his clock: so far on its way from how it was to be to how it is set to be */
+const course = ({ was, set, from, to }: Told, time: number) =>
+  partway(was, set, to > from ? clamp((time - from) / (to - from), 0, 1) : 1)
+
 /**
  * the points of a hand on a thing, where they are to go: its wrist, and a grip's length off it along two ways in the
  * hand, carried as the hand is turned from how it is to be to how it can be or is
@@ -149,7 +156,8 @@ function fit(pairs: Pair[]) {
 
 /**
  * A thing he holds. How it is to be is decided here, and the hands follow: it is what was set last, by setting its
- * transform before an update, or the way a hand carries it to a place, from how it was against him to where it is sent,
+ * transform before an update for the end of it, on its way there from how it was to be as the update goes on, or the
+ * way a hand carries it to a place, from how it was against him to where it is sent,
  * eased in and out; with nothing new said it keeps how it was against him, going and turning with him. What holds of
  * it, first to last: the hands that keep to it are on it, it is out of him, a point of it that rests in a shoulder is in
  * its pocket, and it is as it is to be. So in each step it is moved from how it is to be, as little as that takes, to
@@ -170,6 +178,13 @@ export class Give {
   private readonly framed = new Matrix4()
   private is = new Matrix4()
   private readonly from = new Matrix4()
+  /** the moment `from` and `is` are as of, on his clock */
+  private when = 0
+  /**
+   * how it was to be and how it is set to be, if it was set anew for the update being made: it goes from the one to the
+   * other as the update goes on, wherever he goes
+   */
+  private told?: Told
   /** whether a hand holds it, and whether more than one does */
   held = false
   shared = false
@@ -190,6 +205,7 @@ export class Give {
     readonly thing: Object3D,
     private readonly bones: Bones,
     private readonly carries: (seconds: number, to: Matrix4) => Matrix4,
+    private readonly now: () => number,
   ) {
     thing.updateWorldMatrix(true, false)
     const apart = bones.shape.thigh / (thing.getWorldScale(point).x * bones.frame.getMaxScaleOnAxis())
@@ -208,21 +224,25 @@ export class Give {
       }
     }
     carries(0, this.from)
-    this.begin()
+    this.begin({ from: now(), to: now() })
     this.is.copy(this.framed)
   }
 
   /**
-   * at the first step of an update: it goes on with him as he has gone and turned since it was looked at, and is to be
-   * as it was set if it has been set anew, or held by none
+   * at the first step of an update that goes on over a `span` of his clock: it goes on with him as he has gone and
+   * turned since it was looked at, and is to be as it was set by the end of the span if it has been set anew, or held
+   * by none
    */
-  begin() {
+  begin({ from, to }: { from: number; to: number }) {
     const { thing } = this
     this.carry(0)
     thing.updateMatrix()
+    const was = this.told?.set ?? this.framed.clone()
+    this.told = undefined
     if (this.held && this.wrote && thing.matrix.equals(this.wrote)) return
     thing.parent?.updateWorldMatrix(true, false)
     this.framed.multiplyMatrices(this.bones.frame, thing.parent?.matrixWorld ?? new Matrix4()).multiply(thing.matrix)
+    this.told = { was, set: this.framed.clone(), from, to }
   }
 
   /** how he has gone and turned since it was looked at, to `seconds` from now, in the frame of the body */
@@ -230,16 +250,25 @@ export class Give {
     return this.carries(seconds, new Matrix4()).multiply(this.from.clone().invert())
   }
 
-  /** held, it goes on with him to `seconds` from now, and is looked at from there */
+  /** held, it goes on with him to `seconds` from now, and is looked at from there: and how it is to be too, unless it was set anew */
   private carry(seconds: number) {
     const gone = this.gone(seconds)
-    if (this.held) [this.is, this.framed].forEach((pose) => pose.premultiply(gone))
+    if (this.held) this.is.premultiply(gone)
+    if (this.held && !this.told) this.framed.premultiply(gone)
     this.carries(seconds, this.from)
+    this.when = this.now() + seconds
   }
 
-  /** how it is `seconds` from now, in the frame of the body: carried on with him as he goes and turns */
+  /** how it goes on from the moment it is looked at from to `seconds` from now: with him, or on its way to how it is set to be */
+  private moved(seconds: number) {
+    const { told } = this
+    if (!told) return this.gone(seconds)
+    return course(told, this.now() + seconds).multiply(course(told, this.when).invert())
+  }
+
+  /** how it is `seconds` from now, in the frame of the body */
   private pose(seconds: number) {
-    return this.gone(seconds).multiply(this.is)
+    return this.moved(seconds).multiply(this.is)
   }
 
   /** how it is to be turned now, in the frame of the body */
@@ -338,6 +367,7 @@ export class Give {
     this.aimed = undefined
     if (!held) return void this.is.copy(this.framed)
     if (lead) return void this.framed.copy(this.is)
+    if (this.told) this.framed.copy(course(this.told, this.when))
     const wants = holding.map((hand) => hand.wants(seconds)).find((wants) => wants)
     if (wants) this.framed.copy(this.along(wants, seconds))
     const { size } = this.bones
@@ -445,8 +475,12 @@ export class Gives {
     const { ahead } = this
     const found =
       this.all.get(thing) ??
-      new Give(thing, this.bones, (seconds, to) =>
-        to.makeRotationY(ahead.facing(seconds)).setPosition(ahead.hips(seconds, new Vector3(), new Vector3())),
+      new Give(
+        thing,
+        this.bones,
+        (seconds, to) =>
+          to.makeRotationY(ahead.facing(seconds)).setPosition(ahead.hips(seconds, new Vector3(), new Vector3())),
+        () => ahead.now,
       )
     found.rests = rests
     this.all.set(thing, found)
@@ -467,9 +501,9 @@ export class Gives {
     return undefined
   }
 
-  /** at the first step of an update: what he holds is looked at as it was last set, not as it was last written */
-  begin() {
-    for (const give of this.all.values()) give.begin()
+  /** at the first step of an update over a `span` of his clock: what he holds is looked at as it was last set, not as it was last written */
+  begin(span: { from: number; to: number }) {
+    for (const give of this.all.values()) give.begin(span)
   }
 
   /**

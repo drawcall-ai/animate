@@ -1,6 +1,5 @@
 import type { Held } from '@drawcall/animate'
 import { grip, Hand } from '@drawcall/hand'
-import type { PhysicsWorld } from '@drawcall/physics'
 import { type Object3D, Vector3 } from 'three'
 import { Character, holds } from '../character'
 import type { Game, Input } from '../play'
@@ -62,8 +61,8 @@ export class Player implements Game {
   private over = 0
   private said = ''
 
-  constructor(rig: Object3D, world: PhysicsWorld, scene: Object3D) {
-    this.character = new Character(rig, world)
+  constructor(rig: Object3D, scene: Object3D) {
+    this.character = new Character(rig)
     const hand = new Hand(rig, 'right')
     this.held = holds(this.character.body, hand, grip(hand, this.racket, FOREHAND))
     this.machine = new Machine(scene)
@@ -96,7 +95,7 @@ export class Player implements Game {
 
   /** the machine feeds a ball to pass him on his right, then on his left, and so on */
   private feed() {
-    const { position } = this.character.capsule
+    const { position } = this.character.feet
     const { size } = this.character.body
     const stroke = this.fed % 2 ? 'backhand' : 'forehand'
     const aside = (stroke === 'forehand' ? -1 : 1) * (size.shoulder + ASIDE[stroke] * size.arm + RACKET.strings)
@@ -109,14 +108,14 @@ export class Player implements Game {
 
   /** where and when he meets the ball, facing it, if it comes within his reach soon enough but not too soon */
   private meet(ball: Ball) {
-    const { body, capsule } = this.character
+    const { body, feet } = this.character
     const { size } = body
     const coming = ball.velocity.clone().setY(0)
     const speed = coming.length()
     if (speed < 1) return undefined
     const way = coming.clone().divideScalar(-speed)
     const him = (seconds: number) =>
-      capsule.position.clone().setY(0).addScaledVector(capsule.velocity.clone().setY(0), seconds)
+      feet.position.clone().setY(0).addScaledVector(feet.velocity.clone().setY(0), seconds)
     const stroke = (): Stroke => (ball.place.clone().sub(him(0)).dot(right(way)) > 0 ? 'forehand' : 'backhand')
     const ahead = SWING.ahead[stroke()] * size.arm
     let seconds = 0
@@ -139,7 +138,7 @@ export class Player implements Game {
     const meeting = ball && !ball.struck ? this.meet(ball) : undefined
     if (!meeting) {
       const stroke =
-        ball && ball.place.clone().sub(this.character.capsule.position).dot(right(body.facing)) < 0
+        ball && ball.place.clone().sub(this.character.feet.position).dot(right(body.facing)) < 0
           ? 'backhand'
           : 'forehand'
       const out = stroke === 'forehand' ? -1 : 1

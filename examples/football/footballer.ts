@@ -1,5 +1,4 @@
 import type { Side, Story } from '@drawcall/animate'
-import type { PhysicsWorld } from '@drawcall/physics'
 import { type Object3D, type Scene, Vector3 } from 'three'
 import { Character } from '../character'
 import type { Game, Input } from '../play'
@@ -20,12 +19,12 @@ const TOUCH = { ahead: 0.55, aside: 1, soonest: 0.45, latest: 0.8, faster: 1.5 }
 const MET = 2.5
 /** how far from his hips the ball is at his feet, to shoot (of his leg) */
 const FEET = 2.4
-/** how far behind the ball his hips stand as he shoots, and how near they come to there before his foot sets off (of his leg) */
-const BEHIND = { far: 0.35, near: 0.15 }
-/** how fast the shooting foot meets the ball, how far it sends it up from level at least, and how long ahead it is sent (m/s, rad, s) */
-const SHOT = { speed: 20, up: (10 * Math.PI) / 180, ahead: 0.6 }
-/** how long he takes to come to where he shoots from (s) */
-const CLOSE = 0.35
+/** where the left foot comes down as he shoots: so far behind the ball, and his middle so far to its left (of his leg) */
+const PLANT = { behind: 0.4, aside: 0.1 }
+/** how fast he runs onto the ball to shoot at the least, how fast he arrives on the left foot, and how near it he steps rather than run (m/s, m/s, of his leg) */
+const RUNUP = { least: 3.6, arrive: 2.5, step: 2 }
+/** how fast the shooting foot meets the ball, and how far it sends it up from level at least (m/s, rad) */
+const SHOT = { speed: 20, up: (10 * Math.PI) / 180 }
 /** how high in the goal he aims (of its height) */
 const AIM = 0.4
 
@@ -35,21 +34,20 @@ const leftOf = (way: Vector3) => new Vector3(way.z, 0, -way.x)
 
 /**
  * A footballer on a pitch with a ball: he walks and runs as the keys ask, touches the ball on ahead of him with the
- * foot on its side as he runs onto it, and with it at his feet, Space has him stand beside it and shoot at the goal
- * with his right foot.
+ * foot on its side as he runs onto it, and with it at his feet, Space has him shoot at the goal with his right foot. A
+ * touch is his foot only, the player leading him on; a shot needs his legs, a run onto the left foot beside the ball,
+ * so it is his action. The ball is always the world's: his feet strike it.
  */
 export class Footballer implements Game {
-  /** what a foot is doing with the ball, while it does */
-  private doing?: 'touching' | 'shooting'
+  /** whether a foot is touching the ball on */
+  private touching = false
   /** whether Space was pressed while a foot was busy with the ball */
   private wants = false
-  /** where his hips are to stand as he shoots, and which way he faces */
-  private shot?: { spot: Vector3; aim: Vector3 }
 
   /** he stands where his `rig` is, the ball lying a step ahead of him */
-  static start(rig: Object3D, world: PhysicsWorld, scene: Scene) {
+  static start(rig: Object3D, scene: Scene) {
     scene.add(rig)
-    const character = new Character(rig, world)
+    const character = new Character(rig)
     const ahead = 1.2 * character.body.size.leg
     return new Footballer(character, new Ball(scene, rig.localToWorld(new Vector3(0, 0, ahead))))
   }
@@ -60,25 +58,22 @@ export class Footballer implements Game {
   ) {}
 
   update(delta: number, input: Input) {
-    const { character, shot } = this
-    const asked = shot ? this.closing(shot.spot) : new Vector3(input.move.x, 0, input.move.z)
-    if (!shot) asked.multiplyScalar(input.run ? SPEED.run : SPEED.walk)
+    const { character } = this
+    const asked = new Vector3(input.move.x, 0, input.move.z).multiplyScalar(input.run ? SPEED.run : SPEED.walk)
     // (Space as a foot touches the ball on is for when it has)
     this.wants ||= input.act
-    const shoots = !this.doing && this.wants && this.atFeet()
-    if (!this.doing) this.wants = false
-    if (shoots) this.play('shooting', this.shoot())
-    else if (!this.doing && asked.length() > MOVING) {
-      const way = asked.clone().normalize()
-      const touch = this.onto(way)
-      if (touch) this.play('touching', this.touch(asked, touch.at, touch.by))
+    if (!this.touching && !character.acting) {
+      const touch = asked.length() > MOVING && this.onto(asked.clone().normalize())
+      if (this.wants && this.atFeet()) character.tried(() => character.act(this.shoot()))
+      else if (touch) character.tried(() => character.body.play(this.touch(asked, touch.at, touch.by)))
+      this.wants = false
     }
-    character.update(delta, asked, this.shot?.aim)
+    character.update(delta, asked)
   }
 
   readout() {
     const ball = flat(this.ball.velocity).length()
-    const doing = this.doing ?? (this.atFeet() ? 'Space: shoot' : '')
+    const doing = this.character.acting ? 'shooting' : this.touching ? 'touching' : this.atFeet() ? 'Space: shoot' : ''
     return `${doing}\nhe ${this.character.speed.toFixed(1)} m/s  ball ${ball.toFixed(1)} m/s`
   }
 
@@ -114,35 +109,15 @@ export class Footballer implements Game {
     return { by: body.time + late, at }
   }
 
-  /** how he goes to stand where he shoots from: there in a short while, no faster than he runs */
-  private closing(spot: Vector3) {
-    const { position } = this.character.capsule
-    return flat(spot.clone().sub(position)).divideScalar(CLOSE).clampLength(0, SPEED.run)
-  }
-
-  /** has a foot do something with the ball, played beside his going: what it is doing until the story is over */
-  private play(doing: 'touching' | 'shooting', story: Story) {
-    this.doing = doing
-    this.character.tried(() => this.character.body.play(this.done(story)))
-  }
-
-  private *done(story: Story): Story {
-    try {
-      yield* story
-    } finally {
-      this.doing = this.shot = undefined
-    }
-  }
-
   /**
-   * a foot meets the ball where it is `at` by a moment, moving so, its ankle behind the ball and above its middle as
+   * a foot meets the ball where it is `at`, by a moment or as soon as it can, moving so, its ankle behind the ball and above its middle as
    * the instep meets it, and pushes it the `way` it met it
    */
-  private *strike(side: Side, way: Vector3, velocity: Vector3, at: Vector3, by: number): Story {
+  private *strike(side: Side, way: Vector3, velocity: Vector3, at: Vector3, by?: number): Story {
     const foot = this.character.body.foot[side]
     const place = at.clone().addScaledVector(flat(way).normalize(), -1.5 * RADIUS).setY(2 * RADIUS)
     try {
-      yield* foot.by(by, place, { velocity })
+      yield* (by === undefined ? foot.to(place, { velocity }) : foot.by(by, place, { velocity }))
     } finally {
       // the foot meets the ball where it is, if it is there: what the body calls a miss may still have met it
       if (foot.value.distanceTo(this.ball.place) < MET * RADIUS) this.ball.kick(way, foot.velocity)
@@ -153,23 +128,30 @@ export class Footballer implements Game {
   private *touch(asked: Vector3, at: Vector3, by: number): Story {
     const way = asked.clone().normalize()
     const side: Side = flat(at.clone().sub(this.character.body.hips.value)).dot(leftOf(way)) > 0 ? 'left' : 'right'
-    yield* this.strike(side, way, way.clone().multiplyScalar(asked.length() + TOUCH.faster), at, by)
+    this.touching = true
+    try {
+      yield* this.strike(side, way, way.clone().multiplyScalar(asked.length() + TOUCH.faster), at, by)
+    } finally {
+      this.touching = false
+    }
   }
 
-  /** he comes to stand behind where the ball comes to rest, it in the line of his right foot, and his right foot meets it toward the goal */
+  /** he runs onto where the ball comes to rest, braking onto his left foot beside it, and his right foot meets it toward the goal */
   private *shoot(): Story {
     const { body } = this.character
-    const { leg, hip } = body.size
+    const { leg } = body.size
     // (where it comes to rest, if it rolls)
     const place = this.ball.rolled(Infinity)
     const aim = flat(new Vector3(GOAL.x, 0, GOAL.z).sub(place)).normalize()
-    const spot = flat(place.clone().addScaledVector(aim, -BEHIND.far * leg).addScaledVector(leftOf(aim), hip))
-    this.shot = { spot, aim }
-    while (flat(body.hips.value).distanceTo(spot) > BEHIND.near * leg) yield
-    const at = this.ball.rolled(SHOT.ahead)
-    const target = new Vector3(GOAL.x, AIM * GOAL.high, GOAL.z).sub(at).normalize()
+    const at = flat(place.clone().addScaledVector(aim, -PLANT.behind * leg).addScaledVector(leftOf(aim), PLANT.aside * leg))
+    // (near it, he steps onto the left foot rather than run)
+    const speed = this.character.speed
+    if (speed < RUNUP.least && flat(body.hips.value).distanceTo(at) < RUNUP.step * leg) body.walk(at, { plant: 'left' })
+    else body.run({ speed: Math.max(speed, RUNUP.least), plant: 'left', at, arrive: RUNUP.arrive })
+    const target = new Vector3(GOAL.x, AIM * GOAL.high, GOAL.z).sub(place).normalize()
     const lift = Math.max(SHOT.up, Math.asin(target.y))
     const way = aim.clone().multiplyScalar(Math.cos(lift)).setY(Math.sin(lift))
-    yield* this.strike('right', way, way.clone().multiplyScalar(SHOT.speed), at, body.time + SHOT.ahead)
+    yield* this.strike('right', way, way.clone().multiplyScalar(SHOT.speed), place)
+    yield* body.stand()
   }
 }

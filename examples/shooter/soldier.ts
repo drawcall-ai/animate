@@ -147,6 +147,12 @@ export class Soldier {
     this.body.hand.left.to(this.held.fore)
   }
 
+  /** where the eye looks through the rear sight, in the scene, as the rifle is now */
+  sight() {
+    this.rifle.updateWorldMatrix(true, false)
+    return this.rifle.localToWorld(RIFLE.sight.clone())
+  }
+
   /** the magazine is to slide out of its well, or back in */
   slide(out: boolean) {
     this.slid = { from: this.slid.to, to: out ? 1 : 0, since: this.body.time }

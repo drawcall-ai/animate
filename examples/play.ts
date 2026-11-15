@@ -103,7 +103,7 @@ export function frame(game: Game, world: PhysicsWorld, delta: number, input: Inp
 /** the camera behind him, the way the keys have it look, from where the world has him */
 export function chase(camera: Camera, character: Character, yaw: number) {
   const { stand } = character.body.size
-  const { position } = character.capsule
+  const { position } = character.feet
   const ahead = new Vector3(Math.sin(yaw), 0, Math.cos(yaw))
   const at = position.clone().setY(position.y + BEHIND.at * stand)
   camera.position
@@ -111,6 +111,23 @@ export function chase(camera: Camera, character: Character, yaw: number) {
     .setY(position.y + (2 + BEHIND.up) * stand)
     .addScaledVector(ahead, -BEHIND.back * stand)
   camera.lookAt(at)
+}
+
+/**
+ * a close view of a detail, for judging it: `?close=rightHand,leftHand` looks at the middle of those parts of the
+ * scene from `&far=0.6` metres, from the side `&yaw=` and height `&pitch=` say (degrees; yaw 0 looks along +z)
+ */
+function close(camera: Camera, scene: Object3D, query: URLSearchParams) {
+  const parts = (query.get('close')?.split(',') ?? []).flatMap((name) => scene.getObjectByName(name) ?? [])
+  if (!parts.length) return false
+  const at = new Vector3()
+  for (const part of parts) at.add(part.getWorldPosition(new Vector3()))
+  at.divideScalar(parts.length)
+  const [yaw, pitch] = [Number(query.get('yaw') ?? 0), Number(query.get('pitch') ?? 20)].map((d) => (d * Math.PI) / 180)
+  const ahead = new Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))
+  camera.position.copy(at).addScaledVector(ahead, -Number(query.get('far') ?? 0.6))
+  camera.lookAt(at)
+  return true
 }
 
 function element<T extends Element>(id: string, kind: new () => T): T {
@@ -132,6 +149,7 @@ export async function play(start: Start) {
     throw error
   })
   const keys = new Keys()
+  const query = new URLSearchParams(location.search)
   addEventListener('keydown', (event) => {
     if (event.repeat) return
     keys.press(event.code)
@@ -146,7 +164,7 @@ export async function play(start: Start) {
     const delta = last === undefined ? 0 : Math.min(LONGEST, (now - last) / 1000)
     last = now
     frame(game, world, delta, keys.read(delta))
-    chase(camera, game.character, keys.yaw)
+    if (!close(camera, scene, query)) chase(camera, game.character, keys.yaw)
     const [wide, high] = [canvas.clientWidth, canvas.clientHeight]
     camera.aspect = wide / high
     camera.updateProjectionMatrix()

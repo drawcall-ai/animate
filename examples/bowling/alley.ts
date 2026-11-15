@@ -9,6 +9,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three'
+import { Thing } from '../thing'
 import { LANE, LINE, RADIUS, release } from './lane'
 
 /** how heavy a ball and a pin are (kg), and how high and thick a pin is at its belly (m) */
@@ -54,26 +55,20 @@ export function alley() {
   return new Group().add(floor, boards, line, cushion, shelf)
 }
 
-/** the balls, drawn */
-export const balls = () => COLORS.map((color) => new Mesh(new SphereGeometry(RADIUS, 24, 16), paint(color)))
+/** the balls, each resting on the return: his while he holds one, the world's once he lets it go */
+export const balls = (scene: Object3D) =>
+  COLORS.map((color, k) => {
+    const mesh = new Mesh(new SphereGeometry(RADIUS, 24, 16), paint(color))
+    mesh.position.copy(home(k))
+    scene.add(mesh)
+    return new Thing(mesh, scene, { mass: MASS.ball, material: OIL }, [new SphereCollider({ radius: RADIUS })])
+  })
 
 /** where a ball rests on the return */
 export const home = (k: number) => new Vector3(RACK.x, RACK.y, RACK.z + (k - 1) * RACK.apart)
 
-/** a ball let go where it is, moving so: a body of its own the world moves */
-export function roll(mesh: Object3D, velocity: Vector3) {
-  const solid = new RigidBody({ mass: MASS.ball, velocity: { linear: velocity.toArray() }, material: OIL })
-  solid.add(new SphereCollider({ radius: RADIUS }))
-  mesh.getWorldPosition(solid.position)
-  mesh.position.set(0, 0, 0)
-  mesh.quaternion.identity()
-  mesh.scale.setScalar(1)
-  solid.add(mesh)
-  return solid
-}
-
 /** whether a ball let go is done: in the pit beyond the pins, or come to rest */
-export const done = (solid: RigidBody) => solid.position.z > END + 0.3 || solid.getVelocity().linear.length() < 0.05
+export const done = (ball: Thing) => ball.place.z > END + 0.3 || ball.velocity.length() < 0.05
 
 /** The ten pins in their triangle at the end of the lane, the head pin nearest: set up anew, and counted as they fall. */
 export class Pins {

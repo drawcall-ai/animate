@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gait drills</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #202020; color: #ddd; font: 13px monospace; overflow: hidden }
+      canvas { display: block; width: 100%; height: 100% }
+      pre { position: absolute; margin: 0; padding: 6px 8px; background: #0008 }
+      #keys { right: 0; top: 0 }
+      #readout { left: 0; bottom: 0 }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <pre id="keys"></pre>
+    <pre id="readout"></pre>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

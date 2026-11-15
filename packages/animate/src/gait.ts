@@ -1,5 +1,5 @@
 import { ANKLE } from './joints'
-import type { Size } from './size'
+import { HEEL, type Size, raised } from './size'
 
 /** how hard a leg on the ground pushes the hips: along it, over half his weight, and up, twice it (m/s²) */
 export const PUSH = { along: 6, up: 20 }
@@ -7,6 +7,8 @@ export const PUSH = { along: 6, up: 20 }
 export const WALK = { speed: 0.476, most: 0.851, push: 2 }
 /** a run: how fast he sprints (in his paces), and how hard a foot on the ground pushes the hips unless it is said (m/s²) */
 export const RUN = { most: 3.4, push: 5 }
+/** how high a foot is lifted in a step, and how much higher for every pace he goes (in lengths of his leg): the heel kicks up behind him, as far as a knee folds */
+export const CLEAR = { least: 0.045, faster: 0.134 }
 /** how fast the hips go at the most while he counts as standing (in his paces) */
 export const SLOW = 0.1
 /** how slow the hips are when they are at rest (in his paces), and how near where they were to come to rest (in lengths of his leg) */
@@ -68,3 +70,40 @@ export const behind = (size: Size, hips: number) => Math.max(0, -overhang(size, 
 /** how far on he comes to rest out of the air: where he lands, both feet braking him, going no faster than he walks, and else stepping on, a foot down half the time (m) */
 export const lands = ({ pace }: Size, going: number) =>
   (going * Math.abs(going)) / ((Math.abs(going) > WALK.speed * pace ? 1 : 2) * PUSH.along)
+
+/** how far he runs rather than walks, going so fast (m/s): from 0 to 1, about the fastest he walks */
+export const runs = ({ pace }: Size, speed: number) => {
+  const share = (Math.abs(speed) / (WALK.most * pace) - 0.85) / 0.3
+  const eased = Math.min(1, Math.max(0, share))
+  return eased * eased * (3 - 2 * eased)
+}
+/** led, how low the hips ride walking and running, and how far they rise and fall in a stride (in lengths of his leg): highest over a foot walking, lowest running */
+const RIDES = { walk: RIDE, run: 0.09 }
+const BOB = { walk: 0.018, run: -0.035 }
+/** how much lower than they stand the hips ride, going so fast (m) */
+export const dip = (size: Size, speed: number) => {
+  const [ran, walks] = [runs(size, speed), Math.min(1, Math.abs(speed) / (WALK.speed * size.pace))]
+  return (RIDES.walk * walks * (1 - ran) + RIDES.run * ran) * size.leg
+}
+/** how far the hips rise over a foot at the middle of its time on the ground, or fall, going so fast (m) */
+export const bob = (size: Size, speed: number) => {
+  const [ran, walks] = [runs(size, speed), Math.min(1, Math.abs(speed) / (WALK.speed * size.pace))]
+  return (BOB.walk * walks * (1 - ran) + BOB.run * ran) * size.leg
+}
+/** how much narrower he runs than he walks, in shares of how far out a hip is */
+const NARROW = 0.45
+/** how far out from under the middle of the hips a foot stands, going so fast (m) */
+export const wide = (size: Size, speed: number) => size.hip * (1 - NARROW * runs(size, speed))
+/** how much of as far as a heel comes up it has come up by as its foot leaves the ground */
+const TOES = 0.8
+/**
+ * how far ahead of the hips a straight leg reaches the ground going so fast, from as low as they ride as it comes
+ * down, and how far behind, from as high, its foot on its toes as it leaves the ground (m)
+ */
+export const span = (size: Size, speed: number) => {
+  const { stand, ankle, leg } = size
+  const [low, high] = [-1, 1].map((by) => stand - dip(size, speed) + by * Math.abs(bob(size, speed)) - ankle)
+  const reach = (up: number) => Math.sqrt(Math.max(0, leg ** 2 - up ** 2))
+  const heel = raised(size, TOES * HEEL)
+  return { ahead: reach(low), behind: reach(high - heel.y) + heel.z }
+}

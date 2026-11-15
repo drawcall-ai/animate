@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { KEEPS, PUSH, SETTLE, SIDLE, SLOW, THERE, TOGETHER, WALK, stride } from './gait'
 import { type Footing, Pelvis, socket } from './pelvis'
 import { SIDES, SIGN, type Side } from './size'
-import { EXACT, clamp, wrap, UP } from './world'
+import { EXACT, clamp, damped, wrap, UP } from './world'
 
 /** how fast he turns round (rad a beat), and how near the way he is to face counts as facing it (rad) */
 export const SPIN = { rate: 0.7, there: 0.02 }
@@ -18,6 +18,15 @@ const TURNS = { twist: 0.6, bend: 4, clear: 0.85 }
  * round, while his pelvis is turned to the way he goes, or to look somewhere (rad)
  */
 export const LEADS = { trunk: 0.8, head: 1.2 }
+/**
+ * led, how long the way he is going takes to come round to the way he is led, and his pelvis to the way he is to face
+ * (in his beats); and how far off where it is to face it is that the pelvis no longer turns with the way he goes (rad)
+ */
+const FOLLOW = { way: 0.12, pelvis: 1.6, near: 0.5 }
+/** how far a leg turns in over its foot at the most, and out (rad) */
+const TWIST = { in: 0.2, out: 0.6 }
+/** how far round from how he faces a foot of a side points at the least and at the most, the leg turned in or out (rad) */
+export const twist = (side: Side) => (side === 'left' ? [-TWIST.in, TWIST.out] : [-TWIST.out, TWIST.in])
 const pivot = new Vector3()
 const skew = new Vector3()
 /** what of a foot stands still in the scene as the way he is going turns: where it is and where it was put, and of a step round, from where to where it goes: any other step goes with him */
@@ -215,6 +224,61 @@ export class Way extends Pelvis {
     const fast = going / this.size.pace
     if (fast >= WALK.most) return SPIN.there
     return Math.acos(Math.sqrt(clamp((fast - SIDLE.most) / (WALK.most - SIDLE.most), 0, 1)))
+  }
+
+  /**
+   * Led, the way he goes is the world's: the way he is going comes round to it within a frame or so, and he goes along
+   * it as fast as he is led, backwards along it while he faces more than a quarter turn from it. He faces as a game
+   * has him, at a walk, or the way he goes, standing as he faced or toward where he looks: his trunk and head at once,
+   * his pelvis coming round after them like a thing with weight, never gated by his feet, which step after it.
+   */
+  protected follow(dt: number) {
+    const { course, velocity } = this
+    const { beat, pace } = this.size
+    const going = course.heading === undefined ? 0 : Math.abs(course.speed)
+    const still = going < SLOW * pace
+    const { look } = this
+    const away = look && this.face === undefined && still ? Math.abs(wrap(look.yaw - this.facing)) : 0
+    if (this.toward !== undefined || away > LEADS.head) this.toward = away < SPIN.there ? undefined : look?.yaw
+    const fast = going > WALK.most * pace
+    const want = (fast ? undefined : this.face) ?? (course.heading ?? this.toward ?? this.face ?? this.facing)
+    // the way he is going, along which he goes forwards or backwards as he faces
+    let turned = 0
+    if (course.heading !== undefined) {
+      const backs = Math.cos(wrap(want - course.heading)) < -SPIN.there && !fast
+      if (backs !== this.way < 0 && Math.abs(velocity.z) > 0) this.reverse()
+      const heading = course.heading + (backs ? Math.PI : 0)
+      turned = wrap(heading - this.heading) * Math.min(1, dt / (FOLLOW.way * beat))
+      velocity.z = (backs ? -1 : 1) * going
+    } else {
+      // (standing, the way he is going is the way he faces)
+      turned = wrap(want - this.heading) * Math.min(1, dt / (FOLLOW.way * beat))
+      velocity.z = 0
+    }
+    this.curves += (turned / dt - this.curves) * Math.min(1, dt / (FOLLOW.way * beat))
+    // (no further from the way he goes than he can face at his speed)
+    const widest = this.widest(going)
+    const faces = clamp(wrap(want - this.heading - turned), -widest, widest)
+    const off = wrap(faces + this.heading + turned - this.facing)
+    const pull = (2 * Math.PI) / (FOLLOW.pelvis * beat)
+    // (going round a curve, as fast round as the way he goes turns, and coming up to where he is to face besides)
+    const along = this.curves * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
+    this.spins = along + damped(this.spins - along, off, pull, dt)
+    // (no further round from a foot on the ground than a hip turns over it: his feet step round for him to come on)
+    let round = this.spins * dt
+    for (const side of SIDES) {
+      const { down, toes } = this.foot[side]
+      if (!down) continue
+      // (how far the foot points from how he faces, as it may: or no further off than it is already)
+      const [least, most] = twist(side)
+      const now = wrap(this.heading + toes - this.facing)
+      const points = now - round
+      round -= clamp(points, Math.min(least, now), Math.max(most, now)) - points
+    }
+    if (round !== this.spins * dt) this.spins = round / dt
+    this.reframe(turned, round, undefined, ({ at, put, step }) => [at, put, step?.from, step?.to])
+    ;[this.rounds, this.yields] = [Infinity, 0]
+    this.aims = wrap(want - this.facing)
   }
 
   /**

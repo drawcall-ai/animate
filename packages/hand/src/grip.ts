@@ -15,6 +15,8 @@ export type Statement = { at: Vector3; from?: Vector3; using?: readonly Element[
 const PRESS = 0.3
 /** how hard skin pulls along a smooth thing at most, for how hard it presses: how far a squeeze may slant, unsheared */
 const FRICTION = 0.5
+/** how little a target's widths across the approach differ, of their size, for it to count as round */
+const ROUND = 0.05
 
 const shift = (place: Matrix4, by: Vector3) => new Matrix4().makeTranslation(by).multiply(place)
 const mean = (points: Vector3[]) => points.reduce((sum, p) => sum.addScaledVector(p, 1 / points.length), new Vector3())
@@ -204,8 +206,19 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
     const [c, s] = [w * Math.cos(a), w * Math.sin(a)]
     ;[xx, xy, yy] = [xx + c * c, xy + c * s, yy + s * s]
   }
+  // a target as wide every way across the approach has no long way: the hand lies on it as the arm comes to it, the
+  // fingers going on away from the shoulder, unless the arm comes along the approach itself
+  const shoulder = hand.bone.parent?.parent
+  const out = shoulder ? point.clone().sub(shoulder.getWorldPosition(new Vector3())) : new Vector3()
+  const reaching = out.clone().projectOnPlane(toward)
+  const onward =
+    !pinch && Math.hypot(xx - yy, 2 * xy) < ROUND * (xx + yy) && reaching.length() > out.length() / 2
+      ? reaching.normalize()
+      : undefined
   // a pinch squeezes the thinnest way across, as a cube's faces and not its corners; a palm lies along the target
-  const long = way(pinch ? thinnest + Math.PI / 2 : Math.atan2(2 * xy, xx - yy) / 2)
+  const long = onward
+    ? new Vector3().crossVectors(toward, onward)
+    : way(pinch ? thinnest + Math.PI / 2 : Math.atan2(2 * xy, xx - yy) / 2)
   const thin = new Vector3().crossVectors(toward, long)
   const across = width(thin)
   // a pinch's pads land on the faces either side of the point across the thin direction
@@ -302,6 +315,10 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   // way the pads close says which that likely is, to try first; where the grip found is not it, or does not hold, the
   // other is tried, and the nearer to holding kept. Where neither side is the thumb's more, as when it lies along the
   // approach, the hand keeps the first way round
+  if (onward) {
+    const led = turns.filter((t) => pointing.clone().applyQuaternion(t).dot(onward) > 0)
+    if (led.length === 1) return solve(led[0]).grip
+  }
   const sides = turns.map((t) => counted(thumbside.clone().applyQuaternion(t).transformDirection(inverse)))
   const [one, other] = sides.length > 1 && preferred(sides) > 0 ? [...turns].reverse() : turns
   const first = solve(one)

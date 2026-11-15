@@ -50,7 +50,7 @@ export const start: Start = async (scene, world) => {
       }
       const speed = searching ? SPEED.search : input.run ? SPEED.run : SPEED.walk
       character.update(delta, { x: input.move.x * speed, z: input.move.z * speed }, searching ? aim : undefined)
-      const { position } = character.capsule
+      const { position } = character.feet
       const eyes = position.y + body.size.stand * 1.7
       character.tried(() => {
         if (!searching) return body.look()
