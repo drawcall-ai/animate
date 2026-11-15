@@ -95,16 +95,6 @@ export class End extends Planner {
     return this.bend(turn.multiply(give.hung(this).invert()), seconds)
   }
 
-  /**
-   * how the wrist bends a step of `dt` from `now` for a hand turning on its way to how a plan has it turned: the short
-   * way from how it is, as much of it as that step is of the time left, however the forearm turns meanwhile
-   */
-  private toward(plan: Plan, now: number, dt: number) {
-    const left = Math.max(plan.when - now, dt)
-    const to = this.turned(plan, left).turned
-    return this.bend(this.turn().slerp(to, Math.min(1, dt / left)), dt)
-  }
-
   /** where a plan has what it carries be `seconds` from now, and how that is turned, in the frame of the body */
   private posed(plan: Plan, seconds: number) {
     const turn = new Quaternion()
@@ -332,10 +322,9 @@ export class End extends Planner {
     if (next && due(now, next.leaves)) this.leave(next, next.when - now)
     const going = this.plan
     // (what it leads it turns with the wrist as the arm goes, as that is to be, unless the hand is to be turned some
-    // way of its own: only what the wrist cannot turn tips it. A hand to be turned its own way, not swinging, turns
-    // there the short way step by step, the wrist making up for how the forearm turns)
+    // way of its own: only what the wrist cannot turn tips it)
     const own = !going?.carries && (going?.palm || going?.pointing)
-    const bend = this.leads && !going?.gives && !own ? this.turning(dt) : own && !moves(going) ? this.toward(going, now, dt) : undefined
+    const bend = this.leads && !going?.gives && !own ? this.turning(dt) : undefined
     if (!going) return void (bend && this.limb.wrist?.to(bend, { velocity: new Vector3() }))
     const seconds = Math.max(going.when - now, dt)
     // (what it carries to a place to stay there it keeps its grip on, as the thing is to be)
