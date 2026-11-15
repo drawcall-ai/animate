@@ -163,7 +163,13 @@ export class Gait {
     const course = this.course
     // (in the air, once he has come down)
     const soonest = Math.max(this.time + CROUCH, (this.jumping?.lands ?? -Infinity) + CROUCH)
-    const leaves = course && this.plant ? Math.max(this.plant.at, soonest) : soonest
+    const leaves = course ? Math.max(this.plant?.at ?? course.when(course.to), soonest) : soonest
+    // (from a run he takes off from the footfall where it ends: the foot his strides bring there, if none is said)
+    if (course && !this.plant) {
+      const then = this.phase + this.rate * (leaves - this.time)
+      const off = (side: Side) => Math.abs(wrap(2 * Math.PI * (start(side) + 1 - this.duty - then)))
+      this.plant = { side: off('left') < off('right') ? 'left' : 'right', at: leaves, stride: -Infinity }
+    }
     const from = this.path(leaves - this.time).setY(lead.place.y)
     const going = course ? course.velocity(leaves) : lead.velocity.clone()
     const takes = this.plant?.side ?? (this.steps.left ? 'right' : 'left')
