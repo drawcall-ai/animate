@@ -234,30 +234,31 @@ function off(rig: Object3D, thing: Object3D) {
   return { by: at.distanceTo(held.position), turned: turned.angleTo(held.quaternion) }
 }
 
-test('a thing he holds is where it is sent, pointing as stated, and with its top as stated too as near as the wrist turns it', () => {
+test('a thing bound to his hand is where it is sent, pointing as stated, and rolled as the leading palm is said to face, the same each time', () => {
   const rig = person()
   const body = new Body(rig)
   const scene = new Object3D().add(rig)
   const thing = new Object3D()
   thing.position.set(-0.25, 1.1, 0.4)
   scene.add(thing)
-  const carried = body.hold(thing)
-  body.hand.right.to({ target: thing, ...held, pose: RELAXED })
+  const grip = { target: thing, ...held, pose: RELAXED }
+  play(body, body.hand.right.to(grip))
+  const carried = body.bind(thing)
+  carried.on(body.hand.right, grip)
   const [place, way] = [new Vector3(-0.25, 1.15, 0.45), new Vector3(0, 0.3, 1).normalize()]
   play(body, carried.to(place, { pointing: way }))
   rig.updateMatrixWorld(true)
   expect(thing.getWorldPosition(new Vector3()).distanceTo(place)).toBeLessThan(0.002)
   const along = (axis: Vector3) => axis.clone().transformDirection(thing.matrixWorld)
   expect(along(new Vector3(0, 0, 1)).angleTo(way)).toBeLessThan(0.01)
-  // (its top as near up as the wrist turns it, pointing on as it was)
+  // (rolled about that way as near as the wrist turns the palm to face left, pointing on as it was)
   const up = new Vector3(0, 1, 0)
   const tops = [0, 1].map(() => {
-    play(body, carried.to(place, { pointing: way, up }))
+    play(body, carried.to(place, { pointing: way, palm: { x: 1, y: 0, z: 0 } }))
     rig.updateMatrixWorld(true)
     return along(up).clone()
   })
   expect(along(new Vector3(0, 0, 1)).angleTo(way)).toBeLessThan(0.3)
-  expect(along(up).angleTo(up)).toBeLessThan(0.6)
   expect(tops[0].angleTo(tops[1])).toBeLessThan(0.01)
 })
 

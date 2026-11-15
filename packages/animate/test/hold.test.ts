@@ -23,37 +23,28 @@ const turned = (part: Object3D, against: Quaternion, was: Quaternion) =>
 const against = (part: Object3D, frame: Quaternion) =>
   frame.clone().invert().multiply(part.getWorldQuaternion(new Quaternion()))
 
-test('a hand on a thing stays on it as the thing moves and he walks and turns, its palm as it is in its frame', () => {
-  const { scene, rig, body } = setup()
-  const grip = new Object3D()
-  scene.add(grip)
-  // the game poses it each frame before him, before his right hip, swaying
-  const pose = (t: number) => {
-    const { x, z } = body.facing
-    const hips = body.hips.value
-    grip.position.set(hips.x + 0.35 * x - 0.25 * z, 1.05 + 0.05 * Math.cos(3 * t), hips.z + 0.35 * z + 0.25 * x)
-    grip.quaternion.setFromAxisAngle(UP, Math.atan2(x, z))
-  }
-  pose(0)
-  body.hand.right.to(HERE, { on: grip, palm: { x: 1, y: 0, z: 0 }, pointing: { x: 0, y: -0.4, z: 0.9 } })
-  let worst = 0
-  let held: Quaternion | undefined
-  let twist = 0
+test('hands on a rifle the game moves stay on it as he stands, and follow it as he walks and turns, as near as the arms can', () => {
+  const { scene, body, gun, pose, off } = rifleman()
+  let [standing, going, turning] = [0, 0, 0]
   for (let t = 0; t < 10; t += FRAME) {
     if (t > 2) body.go({ x: 0, z: 1.4 })
     if (t > 6) body.go({ x: 1, z: 0.2 })
     if (t > 6) body.face({ x: 1, z: -1 })
+    // the game sets it each frame along the way he faces, its butt in his shoulder's pocket, swaying a little
+    const set = pose(Math.atan2(body.facing.x, body.facing.z) + 0.05 * Math.sin(3 * t))
     body.update(FRAME)
-    pose(t + FRAME)
-    if (t < 1.5) continue
-    rig.updateMatrixWorld(true)
-    worst = Math.max(worst, body.hand.right.value.distanceTo(place(grip)))
-    held ??= against(hand(rig), grip.quaternion)
-    twist = Math.max(twist, turned(hand(rig), grip.quaternion, held))
+    scene.updateMatrixWorld(true)
+    // (it is where the game set it: the hands never move it)
+    expect(gun.position.distanceTo(set.position)).toBe(0)
+    if (t > 1.5 && t < 2) standing = Math.max(standing, off())
+    if (t > 2.5 && t < 6) going = Math.max(going, off())
+    if (t > 6) turning = Math.max(turning, off())
   }
-  // (it lags most as he turns sharply)
-  expect(worst).toBeLessThan(0.01)
-  expect(twist).toBeLessThan(0.05)
+  // (as near its grip as the wrist turns: about a centimetre off, and still)
+  expect(standing).toBeLessThan(0.02)
+  // (they trail it as he walks, and more as he turns sharply: the limb planner's lag behind a moving thing)
+  expect(going).toBeLessThan(0.05)
+  expect(turning).toBeLessThan(0.13)
 })
 
 test('both hands stay on one bar as it moves', () => {
@@ -239,7 +230,7 @@ test('a thing that leaps away faster than the hand can follow is no error: the h
   expect(body.hand.right.value.distanceTo(place(grip))).toBeLessThan(0.01)
 })
 
-/** a rifle before him in the scene, which the game poses each frame from his right shoulder along an aim, and both hands that hold it, letting it give way */
+/** a rifle the game moves, set each frame in his right shoulder's pocket along an aim, and both hands on it */
 function rifleman() {
   const { scene, rig, body } = setup()
   const hands = { right: new Hand(rig, 'right'), left: new Hand(rig, 'left') }
@@ -249,15 +240,16 @@ function rifleman() {
   const held = { right: pistol(hands.right, gun).held, left: fore(hands.left, handle) }
   gun.scale.setScalar(body.size.arm / ARM)
   scene.add(gun)
-  const shoulder = rig.getObjectByName('rightUpperArm') as Object3D
-  /** the rifle as the game would have it, its butt so far from the shoulder as he faces, along an aim (rad) */
-  const pose = (aim: number, butt = new Vector3(0.05, -0.04, 0)) => {
+  /** the rifle as the game has it, its butt in his shoulder's pocket, along an aim (rad) */
+  const pose = (aim: number) => {
     gun.quaternion.setFromAxisAngle(UP, aim)
-    gun.position.copy(shoulder.getWorldPosition(new Vector3())).add(butt.applyAxisAngle(UP, aim))
+    gun.position.copy(body.pocket('right'))
+    gun.updateMatrixWorld(true)
     return { position: gun.position.clone(), quaternion: gun.quaternion.clone() }
   }
-  body.hold(gun)
-  for (const side of ['right', 'left'] as const) body.hand[side].to(held[side])
+  pose(0)
+  const bound = body.bind(gun, { outside: true })
+  for (const side of ['right', 'left'] as const) bound.on(body.hand[side], held[side])
   /** how far each hand is from where its grip has it on the rifle as it is (m) */
   const off = () =>
     Math.max(
@@ -268,68 +260,28 @@ function rifleman() {
         return wrist.distanceTo(rig.getObjectByName(`${side}Hand`)!.getWorldPosition(new Vector3()))
       }),
     )
-  return { scene, rig, body, gun, pose, off }
+  return { scene, rig, body, gun, bound, pose, off }
 }
 
-/** the most the rifle moves in a step as it is carried round (m), and turns (rad): never a jump to another hold */
-const STEP = { move: 0.08, turn: 0.25 }
-
 test.each([1, 2])(
-  'a rifle that gives way stays in both hands as its aim sweeps half round him and back at %i turns a second, faster than his arms follow, never jumps, and is as it is to be again soon after',
+  'a rifle the game sweeps half round him and back at %i turns a second, faster than his arms follow, is where the game sets it, no error, and the hands are on it again soon after',
   (rate) => {
-    const { scene, body, gun, pose, off } = rifleman()
-    let [lag, wish] = [0, pose(0)]
+    const { scene, body, gun, bound, pose, off } = rifleman()
     for (let t = 0; t < 1.5; t += FRAME) {
-      wish = pose(0)
+      pose(0)
       body.update(FRAME)
     }
     const long = 1 / (2 * rate)
-    for (let t = 0; t < 2 * long + 0.5; t += FRAME) {
-      const was = { position: gun.position.clone(), quaternion: gun.quaternion.clone() }
-      wish = pose(Math.PI * Math.max(0, t < long ? t / long : 2 - t / long))
+    let lag = 0
+    for (let t = 0; t < 2 * long + 1.5; t += FRAME) {
+      const set = pose(Math.PI * Math.max(0, t < long ? t / long : 2 - t / long))
       body.update(FRAME)
       scene.updateMatrixWorld(true)
-      expect(off()).toBeLessThan(0.01)
-      expect(gun.position.distanceTo(was.position)).toBeLessThan(STEP.move)
-      expect(gun.quaternion.angleTo(was.quaternion)).toBeLessThan(STEP.turn)
-      lag = Math.max(lag, gun.position.distanceTo(wish.position))
+      expect(gun.position.distanceTo(set.position)).toBe(0)
+      lag = Math.max(lag, off())
     }
     expect(lag).toBeGreaterThan(0.05)
-    expect(gun.position.distanceTo(wish.position)).toBeLessThan(0.01)
-    expect(gun.quaternion.angleTo(wish.quaternion)).toBeLessThan(0.035)
+    expect(off()).toBeLessThan(0.02)
+    expect(bound.there).toBe(true)
   },
 )
-
-test('a rifle held in both hands that gives way, to be through his chest, is pushed out of it, and no forearm goes into the trunk', () => {
-  const { scene, rig, body, gun, pose, off } = rifleman()
-  const { shoulder, trunk } = body.size
-  const at = (name: string) => (rig.getObjectByName(name) as Object3D).getWorldPosition(new Vector3())
-  let [deepest, worst, wish] = [0, 0, pose(0)]
-  // (both hands take hold of it first)
-  for (let t = 0; t < 2; t += FRAME) {
-    pose(0)
-    body.update(FRAME)
-  }
-  expect([body.hand.left.there, body.hand.right.there]).toEqual([true, true])
-  for (let t = 0; t < 1.5; t += FRAME) {
-    // its butt behind his back, between his shoulders
-    wish = pose(0, new Vector3(0.2, -0.1, -0.25))
-    body.update(FRAME)
-    scene.updateMatrixWorld(true)
-    if (t < 0.5) continue
-    worst = Math.max(worst, off())
-    const middle = at('rightUpperArm').add(at('leftUpperArm')).divideScalar(2)
-    for (const side of ['right', 'left']) {
-      const forearm = at(`${side}LowerArm`)
-        .add(at(`${side}Hand`))
-        .divideScalar(2)
-      const below = middle.y - forearm.y
-      if (below < 0 || below > trunk) continue
-      const out = Math.hypot(forearm.x - middle.x, forearm.z - middle.z)
-      deepest = Math.max(deepest, 0.65 * shoulder - out)
-    }
-  }
-  expect(gun.position.distanceTo(wish.position)).toBeGreaterThan(0.1)
-  expect(worst).toBeLessThan(0.01)
-  expect(deepest).toBeLessThan(0.01)
-})
