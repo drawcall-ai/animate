@@ -351,7 +351,7 @@ export class Pelvis {
    * weight. And it lists under a leg that is off the ground, whose weight hangs from it while the hip of the other
    * carries it: as heavy as the ground pushes him up
    */
-  protected swivel(dt: number) {
+  protected swivel(dt: number, banks = 0) {
     // (a leg the story has is the story's to swing: where it will be is not the body's to tell)
     const [left, right] = SIDES.map((side) => (this.has(this.foot[side], dt) ? 0 : this.points(side)))
     const { beat, pace } = this.size
@@ -363,7 +363,8 @@ export class Pelvis {
     this.turn += this.turning * dt
     // (and at his ease, the hip over the foot his weight has drifted onto goes up)
     const hung = (Number(this.foot.left.down) - Number(this.foot.right.down)) * (GRAVITY + this.acceleration.y)
-    const lists = TURN.list * hung + DRIFT.list * this.drifts
+    // (and leaning into a turn, the hip on the inside of it goes down with the rest of him)
+    const lists = TURN.list * hung + DRIFT.list * this.drifts - banks
     this.listing = damped(this.listing, lists - this.list, pull, dt)
     this.list += this.listing * dt
   }

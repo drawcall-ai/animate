@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { KEEPS, PUSH, RUN, SETTLE, SIDLE, SLOW, SPEEDS, THERE, TOGETHER, WALK, stride } from './gait'
+import { KEEPS, leant, PUSH, RUN, SETTLE, SIDLE, SLOW, SPEEDS, THERE, TOGETHER, WALK, stride } from './gait'
 import { type Footing, Pelvis, socket } from './pelvis'
 import { clamp, damped, EXACT, type Side, SIDES, SIGN, UP, wrap } from '@drawcall/limbs'
 
@@ -60,6 +60,13 @@ export class Way extends Pelvis {
   /** which way he faces in the scene (rad about y, from +z toward +x) */
   get facing() {
     return this.heading + this.faces
+  }
+
+  /** how far the whole of him leans into the turn the way he goes makes, to the left of the way he faces (rad): over feet put out of it, as far as they are */
+  get banks() {
+    // (led, as the way he is led turns: not as the way he goes catches up with one that jumped round)
+    const curves = this.course.turns ?? this.curves
+    return this.falls ? 0 : Math.atan(leant(this.velocity.z, curves)) * Math.cos(this.faces)
   }
 
   get faced() {
@@ -303,8 +310,8 @@ export class Way extends Pelvis {
     const { course, value, velocity } = this
     const { leg, hip, beat, pace } = this.size
     ;[this.curves, this.spins, this.rounds, this.aims] = [0, 0, Infinity, 0]
-    // (a jump goes the way he is going)
-    if (this.jumps) return
+    // (a jump goes the way he is going: on the way to where he takes off he still turns to it)
+    if (this.aloft || this.drops) return
     const going = Math.abs(velocity.z)
     const still = going < SLOW * pace
     // standing, he turns to face where he looks once his head does not turn that far round, unless he is to face a way

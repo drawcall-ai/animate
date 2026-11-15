@@ -186,7 +186,7 @@ export class Mover extends Way {
       this.bounds = true
     }
     this.lower(dt)
-    this.swivel(dt)
+    this.swivel(dt, this.banks)
   }
 
   /**
@@ -223,7 +223,7 @@ export class Mover extends Way {
     // (no further than over the foot as it stands under its hip: one put out for him to lean into a turn he leans over)
     this.sway(dt, value.x, size.hip)
     this.lower(dt)
-    this.swivel(dt)
+    this.swivel(dt, this.banks)
   }
 
   /**

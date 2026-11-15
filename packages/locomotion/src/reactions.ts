@@ -1,6 +1,7 @@
 import { Vector3 } from 'three'
 import type { Ahead } from './ahead'
 import { behind } from './gait'
+import { flat } from './footfall'
 import { clamp, GRAVITY, type Joints, RANGE, REST, SIDES, SIGN, UP, wrap } from '@drawcall/limbs'
 import type { Mover } from './mover'
 import { LEADS } from './way'
@@ -31,8 +32,8 @@ const want = new Vector3()
 const lean = new Vector3()
 
 /** how far the hips have the trunk lean to his left along the way he is going, as they are: into the turn the ground pushes him round */
-const banks = ({ velocity, curves, falls }: Mover) =>
-  falls ? 0 : LEAN.pushed * Math.atan2(velocity.z * curves, GRAVITY)
+const banks = ({ velocity, curves, course, falls }: Mover) =>
+  falls ? 0 : LEAN.pushed * Math.atan2(velocity.z * (course.turns ?? curves), GRAVITY)
 
 /** how far forward the hips have the trunk lean, facing as he does, and to his left: as far along the way he is going, and across it, as they have it lean */
 export const leans = (mover: Mover) => along(mover) * Math.cos(mover.faces) + banks(mover) * Math.sin(mover.faces)
@@ -99,13 +100,15 @@ export class Reactions {
     // but round off a way he is to face it does not, and the head alone turns from that)
     const looked = this.ahead.gaze()
     const toward = face === undefined ? looked?.y : undefined
-    // (led faster, or slower, the trunk leans into it, or back against it, as he would were he pushed so)
-    const urged = lean.copy(this.urged).applyAxisAngle(UP, -facing)
+    // (led faster, or slower, the trunk leans into it, or back against it, as he would were he pushed so: led round,
+    // he leans into the turn already)
+    const way = flat(this.mover.heading)
+    const urged = lean.copy(way).multiplyScalar(this.urged.dot(way)).applyAxisAngle(UP, -facing)
     const [ahead, aside] = [urged.z, urged.x].map((by) => LEAN.pushed * Math.atan2(by, GRAVITY))
     want.set(
       this.ahead.leans(delta) + (looked?.x ?? 0) + ahead,
       turn + free * (size.shoulder / size.arm) * swung + (toward ?? clamp(aims, -LEADS.trunk, LEADS.trunk)),
-      -LEAN.listed * list - tilts(this.mover) - aside,
+      -LEAN.listed * (list + this.mover.banks) - tilts(this.mover) - aside,
     )
     const loose = trunk.loose
     trunk.react(want, delta)

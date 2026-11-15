@@ -187,6 +187,10 @@ test('the drills of examples/gait, as a viewer would measure them: the feet stay
     expect(r.miss50Mid, r.drill).toBeLessThan(0.08)
     expect(r.wanderMid, r.drill).toBeLessThan(0.15)
   }
+  for (const r of rows.filter(({ drill }) => ['tight', 'tightRight'].includes(drill))) {
+    // round a tight circle at a run he leans well into it, the whole of him
+    expect(Math.abs(r.lean), r.drill).toBeGreaterThan(20)
+  }
 }, 120000)
 
 test('led to a stand and then sent to take something off the floor, a hand gets there: the hips come down as the stoop has them', () => {

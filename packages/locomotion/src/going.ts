@@ -190,7 +190,8 @@ export class Going {
       // (no faster than the ground turns him at the speed he is led, a foot held twice as hard as he weighs at the
       // most: a way he is led that jumps round is no turn)
       const most = (2 * GRAVITY) / Math.max(speed, SLOW * pace)
-      const turned = moved ? clamp(wrap(Math.atan2(now.x, now.z) - Math.atan2(was.velocity.x, was.velocity.z)) / gone, -most, most) : 0
+      const rate = wrap(Math.atan2(now.x, now.z) - Math.atan2(was.velocity.x, was.velocity.z)) / gone
+      const turned = moved ? clamp(rate, -most, most) : 0
       const faster = (now.length() - was.velocity.length()) / gone
       const share = Math.min(1, gone / (TOLD * this.size.beat))
       this.turns += (turned - this.turns) * share

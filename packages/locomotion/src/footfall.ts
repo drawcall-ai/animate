@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
-import { runs, SPEEDS, span, wide } from './gait'
-import { clamp, GRAVITY, type Side, SIGN, type Size, UP, wrap } from '@drawcall/limbs'
+import { leant, runs, SPEEDS, span, wide } from './gait'
+import { clamp, type Side, SIGN, type Size, UP, wrap } from '@drawcall/limbs'
 import { twist } from './way'
 
 /** the hips as the steps need them: where in the scene, going how fast along the way they go and turning so (m, m/s, rad, rad/s), and facing so and turning so */
@@ -19,8 +19,6 @@ export type Going = {
 
 /** how far round past where he turns to a foot comes down, for him to come on round over it (rad) */
 const LEAD = 0.5
-/** how far into a turn he leans at the most, as the tangent of the angle: his feet out from under his hips */
-const LEAN = 0.35
 /** how much further from under its hip than a straight leg reaches from as low as the hips ride a foot comes down at the most, its heel first (in lengths of his leg) */
 const REACH = 0.03
 /** how far apart across him his feet are at the least, in shares of how far out from his middle each stands */
@@ -90,8 +88,7 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
   const toes = hips + clamp(wrap(faces(going, middle) - hips), least, most)
   const out = left(toes).multiplyScalar(SIGN[side] * wide(size, going.speed))
   to.add(out)
-  const pulled = (going.speed * going.curves) / GRAVITY
-  to.addScaledVector(left(going.heading + going.curves * middle), -clamp(pulled, -LEAN, LEAN) * size.stand)
+  to.addScaledVector(left(going.heading + going.curves * middle), -leant(going.speed, going.curves) * size.stand)
   // (at a run the two are on the ground one after the other, half a stride apart, as his way turns between them)
   const apart = (runs(size, going.speed) * going.curves * (lands + stays)) / 2
   clear(size, to, side, onward(going, other, apart), hips, going.speed)

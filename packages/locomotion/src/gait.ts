@@ -1,4 +1,4 @@
-import { ANKLE, HEEL, raised, type Size } from '@drawcall/limbs'
+import { ANKLE, clamp, GRAVITY, HEEL, raised, type Size } from '@drawcall/limbs'
 
 /** how hard a leg on the ground pushes the hips: along it, over half his weight, and up, twice it (m/s²) */
 export const PUSH = { along: 6, up: 20 }
@@ -108,3 +108,7 @@ export const span = (size: Size, speed: number) => {
   const heel = raised(size, TOES * HEEL)
   return { ahead: reach(low), behind: reach(high - heel.y) + heel.z }
 }
+/** how far into a turn he leans at the most, as the tangent of the angle: his feet out from under his hips */
+const LEAN = 0.5
+/** how far he leans into a turn to his left along the way he goes, going so fast (m/s) round it so fast (rad/s): as the tangent of the angle, his weight over a foot the ground pushes round */
+export const leant = (speed: number, curves: number) => clamp((speed * curves) / GRAVITY, -LEAN, LEAN)
