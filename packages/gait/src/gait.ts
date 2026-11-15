@@ -1,7 +1,7 @@
 import { Channel } from '@drawcall/plan'
 import { Quaternion, Vector3 } from 'three'
 import { Lead } from './lead'
-import { angleOf, ahead, bob, dip, HEEL, left, over, raised, type Side, SIDES, SIGN, type Size, SOLE, STILL, TOGETHER, UP, wide, wrap } from './measure'
+import { angleOf, ahead, bob, GRAVITY, dip, HEEL, left, over, raised, type Side, SIDES, SIGN, type Size, SOLE, STILL, TOGETHER, UP, wide, wrap } from './measure'
 import { Pelvis } from './pelvis'
 import { duty, footfall, type Going, rate } from './stride'
 import { type Step, swing } from './swing'
@@ -12,8 +12,10 @@ const MARKS = [0.1, 0.2, 0.35, 0.5, 0.7]
 const SOFT = 0.03
 /** how strong the hips and a foot are (m/s²) */
 const STRENGTH = { hips: 300, foot: 2000 }
+/** how many times as fast the clock goes while a leg reaches its foot on the ground no longer */
+const CATCH = 4
 /** how fast a footfall is moved once aimed, at the most (in paces) */
-const SHIFT = 0.68
+const SHIFT = 0.35
 /** how far through its swing a foot is when its footfall is moved no faster than that */
 const LATE = 0.6
 
@@ -106,19 +108,20 @@ export class Gait {
     const ride = ground.y + size.stand - dip(size, speed) + bounce
     // (from the feet that are down by then, or on their way down)
     const down = SIDES.filter((side) => !this.stepping || this.steps[side] || through(side, phase) >= 1 - this.duty)
-    const reach = Math.max(
-      ...down.map((side) => {
-        const at = this.stands(side, ground, seconds)
-        const hip = left(facing).multiplyScalar(SIGN[side] * size.hip).add(ground)
-        const heel = raised(size, HEEL)
-        const flat = Math.max(0, Math.hypot(at.x - hip.x, at.z - hip.z) - heel.z)
-        return at.y + heel.y + Math.sqrt(Math.max(0, size.leg ** 2 - flat ** 2))
-      }),
-    )
+    const reach = Math.max(...down.map((side) => this.holds(side, this.stands(side, ground, seconds), ground, facing)))
     if (!down.length) return Math.min(ride, ground.y + size.stand)
     const soft = SOFT * size.leg
     const off = reach - ride
     return Math.min(ride + Math.min(0, off) - soft * Math.log1p(Math.exp(-Math.abs(off) / soft)), ground.y + size.stand)
+  }
+
+  /** how high over a place on the ground the hips can be for a leg to reach its foot at a place, the heel up (m) */
+  private holds(side: Side, at: Vector3, ground: Vector3, facing: number) {
+    const { size } = this
+    const hip = left(facing).multiplyScalar(SIGN[side] * size.hip).add(ground)
+    const heel = raised(size, HEEL)
+    const flat = Math.max(0, Math.hypot(at.x - hip.x, at.z - hip.z) - heel.z)
+    return at.y + heel.y + Math.sqrt(Math.max(0, size.leg ** 2 - flat ** 2))
   }
 
   /** how far to his left of the way he goes the hips sway over the foot he stands on, so far through a stride (m) */
@@ -137,7 +140,9 @@ export class Gait {
     const { facing, spins, aims } = this.going
     const turned = facing + Math.sign(spins) * Math.min(Math.abs(spins * seconds), spins * aims > 0 ? Math.abs(aims) : 0)
     const place = left(facing).multiplyScalar(this.sway(phase)).add(ground)
-    place.y = this.ride(ground, seconds, phase, facing)
+    // (and they come down no faster than they fall)
+    const { value, velocity } = this.hips
+    place.y = Math.max(this.ride(ground, seconds, phase, facing), value.y + velocity.y * seconds - (GRAVITY / 2) * seconds ** 2)
     return { place, turn: turned }
   }
 
@@ -171,14 +176,18 @@ export class Gait {
       this.phase = (strays.left >= strays.right ? 0 : 0.5) - 1e-6
     }
     const was = this.phase
-    if (this.stepping) this.phase += this.rate * dt
+    // (a foot down that its leg no longer reaches from where the hips are hurries the clock on to its share)
+    const hips0 = hips.value.clone().setY(this.lead.place.y)
+    const behind = SIDES.some((side) => !this.steps[side] && this.holds(side, feet[side].value, hips0, going.facing) < hips.value.y)
+    if (this.stepping) this.phase += this.rate * (behind ? CATCH : 1) * dt
     // the hips: frames along where he will be, written anew
     if (!hips.busy || hips.owner === 'gait') {
       hips.cancel('gait')
       for (const mark of MARKS) {
         const { place, turn } = this.planned(mark)
-        const later = this.planned(mark + 1e-3).place
-        hips.by({ at: now + mark, place, velocity: later.sub(place).divideScalar(1e-3), turn: yaw(turn), by: 'gait' })
+        const later = this.planned(mark + 1e-3)
+        const [velocity, spin] = [later.place.sub(place).divideScalar(1e-3), { x: 0, y: (later.turn - turn) / 1e-3, z: 0 }]
+        hips.by({ at: now + mark, place, velocity, turn: yaw(turn), spin, by: 'gait' })
       }
     }
     for (const side of SIDES) this.tread(side, was, going, swingShare, moving, strays[side])
