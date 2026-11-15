@@ -1,6 +1,7 @@
-import type { Body } from '@drawcall/animate'
 
 type Flat = { x: number; z: number }
+/** what a drill leads: a body, or anything led as one is */
+export type Led = { go(velocity: Flat): unknown; face(way?: Flat): unknown; hips: { at(place: Flat & { y?: number }): void }; update(delta: number): void }
 /** what a drill asks of a moment: how he is to go along the ground (m/s), and which way he is to face, if it says */
 export type Ask = { velocity: Flat; face?: Flat }
 /** a drill: how long it plays (s), and what it asks at each moment of it */
@@ -87,7 +88,7 @@ export class Drive {
   time = 0
 
   constructor(
-    private readonly body: Body,
+    private readonly body: Led,
     readonly drill: Drill,
   ) {}
 

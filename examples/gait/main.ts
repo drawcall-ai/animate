@@ -1,4 +1,5 @@
 import { Body } from '@drawcall/animate'
+import { drawGait, drawPlan, Pen, shown } from '@drawcall/debug'
 import {
   BoxGeometry,
   CanvasTexture,
@@ -21,6 +22,7 @@ import {
 import { intent } from '../intent'
 import { mannequin } from '../mannequin'
 import { DRILLS, Drive } from './drills'
+import { Walker } from './walker'
 
 /** where the camera is from his hips, which way it never turns, and how high on him it looks (m) */
 const CAMERA = { from: new Vector3(-2.5, 1.9, -1.4), at: 0.75 }
@@ -104,9 +106,15 @@ scene.add(floor())
 const prints = { left: new Prints(0x4080ff), right: new Prints(0xff5040) }
 scene.add(prints.left.mesh, prints.right.mesh)
 intent(scene)
+// (the frame gait draws its own layers: `?debug=gait,plan`)
+const pen = new Pen()
+const layers = shown(location.search)
+scene.add(pen)
 
 let man: Object3D
-let body: Body
+let body: Body | Walker
+/** `?gait=frames` has the frame gait lead him in place of the body's own */
+const frames = new URLSearchParams(location.search).get('gait') === 'frames'
 let drive: Drive
 let held = new Group()
 let name = new URLSearchParams(location.search).get('drill') ?? names[0]
@@ -119,7 +127,7 @@ function begin(drill: string) {
   man = mannequin()
   held = new Group().add(man)
   scene.add(held)
-  body = new Body(man)
+  body = frames ? new Walker(man) : new Body(man)
   drive = new Drive(body, DRILLS[name])
   prints.left.clear()
   prints.right.clear()
@@ -147,6 +155,13 @@ function draw() {
   // (at most 2 pixels drawn to a CSS pixel, which keeps a phone's frame rate)
   renderer.setPixelRatio(Math.min(2, devicePixelRatio))
   renderer.setSize(wide, high, false)
+  if (body instanceof Walker) {
+    pen.begin()
+    const { gait } = body
+    if (layers.has('gait')) drawGait(pen, gait.intent())
+    if (layers.has('plan')) drawPlan(pen, [gait.hips, gait.feet.left, gait.feet.right].map((channel) => channel.intent()))
+    pen.show()
+  }
   renderer.render(scene, camera)
   const { x, z } = drive.velocity
   readout.textContent = `${name}   t ${drive.time.toFixed(2)} s   led ${Math.hypot(x, z).toFixed(1)} m/s`
