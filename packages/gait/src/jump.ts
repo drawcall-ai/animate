@@ -4,6 +4,8 @@ import { GRAVITY, HEEL, left, PUSH, raised, type Side, SIDES, SIGN, type Size, W
 
 /** how high above where he stands the hips go at the least: a hop (in legs) */
 const HOP = 0.05
+/** how much of his weight he lets himself drop with into a crouch */
+const DROP = 0.6
 /** how much of its length a leg is at as he comes down on it, the knee bent to give; how much of the crouch he gives by landing */
 const LANDING = 0.92
 const GIVE = 1
@@ -30,7 +32,7 @@ export type Jump = { hips: Frame[]; feet: Record<Side, Frame[]>; leaves: number;
  * landing on legs that give. A top lower than he stands is a hop or a dive: up a quarter as far as it goes, coming down
  * at it and resting as low. Led, he leaves going as he goes.
  */
-export function jump(size: Size, hipsOf: Mover, top: Vector3, leaves: number, from: Vector3, going: Vector3, facing: number, led: boolean, takes: Side): Jump {
+export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soonest: number, from: Vector3, going: Vector3, facing: number, led: boolean, takes: Side): Jump {
   const { stand, leg, ankle } = size
   const ground = from.y
   const low = top.y - ground < stand
@@ -39,6 +41,8 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, leaves: number, fr
   const up = Math.sqrt(2 * GRAVITY * Math.max(rise, HOP * leg))
   const crouch = (up * up) / (2 * PUSH.up)
   const lasts = (2 * crouch) / up
+  // (standing, he lets himself down into the crouch no faster than he falls)
+  const leaves = Math.max(soonest, now + lasts + Math.sqrt((2 * crouch) / (DROP * GRAVITY)))
   // (a hop comes down at its top: up and down again)
   const flies = (low ? 2 : 1) * (up / GRAVITY)
   const wanted = new Vector3(top.x - from.x, 0, top.z - from.z).divideScalar(flies + lasts / 2)
@@ -53,7 +57,8 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, leaves: number, fr
   const lands = leaves + air
   const place = fall(air)
   const hips: Frame[] = [
-    { at: leaves - lasts, place: from.clone().setY(ground + stand - crouch), velocity: across.clone().multiplyScalar(0.5), by: 'jump' },
+    // (the drop and the push one movement: going on as he comes, he is pushed to how he leaves)
+    { at: leaves - lasts, place: from.clone().addScaledVector(going, -lasts / 2).setY(ground + stand - crouch), velocity: going.clone().add(across).multiplyScalar(0.5), by: 'jump' },
     { at: leaves, place: takeoff, velocity, by: 'jump' },
   ]
   for (let k = 1; k < MARKS; k++) {

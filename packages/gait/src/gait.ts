@@ -179,7 +179,7 @@ export class Gait {
     const from = this.path(leaves - this.time).setY(lead.place.y)
     const going = course ? course.velocity(leaves) : lead.velocity.clone()
     const takes = this.plant?.side ?? (this.steps.left ? 'right' : 'left')
-    const planned = (this.jumping = { ...jump(size, this.hips, new Vector3(top.x, top.y, top.z), leaves, from, going, this.going.facing, !course && lead.velocity.length() > SLOW * size.pace, takes), course })
+    const planned = (this.jumping = { ...jump(size, this.hips, new Vector3(top.x, top.y, top.z), this.time, leaves, from, going, this.going.facing, !course && lead.velocity.length() > SLOW * size.pace, takes), course })
     for (const frame of planned.hips) this.hips.by(frame)
     for (const side of SIDES) for (const frame of planned.feet[side]) this.feet[side].by(frame)
     return planned.top

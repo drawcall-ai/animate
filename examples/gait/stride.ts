@@ -185,7 +185,7 @@ export class Stride {
     // the arms are thrown the way the legs push the hips: forward and up as he pushes off, up while he rises through the air, down as he falls
     const lift = flying ? hips.velocity.y / (FLUNG * size.pace) : pushed.y / GRAVITY
     this.lift += (clamp(lift, LIFT.least, LIFT.most) - this.lift) * (1 - Math.exp(-2 * Math.PI * joints.arms.left.first.rate * dt))
-    const thrown = -ARMS.thrown * Math.max(0, this.lift)
+    const thrown = -ARMS.thrown * this.lift
     for (const side of SIDES) {
       const { first: arm, second: forearm, hand } = joints.arms[side]
       const [forth, rear] = RANGE.arm.x
