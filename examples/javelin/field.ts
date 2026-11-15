@@ -8,7 +8,6 @@ export const LENGTH = { ahead: 1.05, behind: 1.55 }
 export const THICK = 0.012
 /** the palm under the shaft where it is held, the fingers round it */
 export const GRIP: Statement = { at: new Vector3(0, -THICK, 0), from: new Vector3(0, -1, 0) }
-const GRAVITY = 9.81
 
 /** how wide the runway is, where it starts and where its throwing line is, along z (m) */
 export const RUNWAY = { wide: 4, from: -2, line: 30 }
@@ -72,34 +71,4 @@ export function field(high: number) {
     return [bar, ...posts]
   })
   return { drawn: new Group().add(grass, runway, line, ...bars), rack }
-}
-
-/*
- * The scripted throw's javelin (throw.ts), which the library's tests play without a physics world: it flies on its
- * own here, and the game's javelin is ./javelin.
- */
-/** `velocity` is none while it is in the hand; `angle` is how far up from level it points (rad) */
-export type Flight = { position: Vector3; velocity: Vector3 | null; angle: number; landed: boolean }
-
-export const javelin = (): Flight => ({ position: new Vector3(), velocity: null, angle: 0.5, landed: false })
-
-/** an end of the javelin, `along` it from where it is held (m) */
-export const end = (j: Flight, along: number) =>
-  j.position.clone().add(new Vector3(0, Math.sin(j.angle) * along, Math.cos(j.angle) * along))
-
-/** it leaves the hand that holds it, moving so */
-export function letGo(j: Flight, held: Object3D, velocity: Vector3) {
-  held.updateWorldMatrix(true, false)
-  held.getWorldPosition(j.position)
-  j.velocity = velocity.clone()
-  j.angle = Math.atan2(velocity.y, velocity.z)
-}
-
-/** let go, it flies point first until its point comes down */
-export function fly(j: Flight, dt: number) {
-  if (!j.velocity || j.landed) return
-  j.velocity.y -= GRAVITY * dt
-  j.position.addScaledVector(j.velocity, dt)
-  j.angle = Math.atan2(j.velocity.y, j.velocity.z)
-  j.landed = end(j, LENGTH.ahead).y <= 0
 }

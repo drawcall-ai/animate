@@ -1,8 +1,8 @@
-import type { Held, Story } from '@drawcall/animate'
+import type { Story, Thing } from '@drawcall/animate'
 import { grip, Hand, type Statement } from '@drawcall/hand'
 import type { PhysicsWorld } from '@drawcall/physics'
-import { type Object3D, Vector3 } from 'three'
-import { Character, holds } from '../character'
+import { Group, type Object3D, Vector3 } from 'three'
+import { Character, inHand } from '../character'
 import type { Game, Input } from '../play'
 import { POST } from './game'
 
@@ -12,84 +12,80 @@ const SPEED = { walk: 1.4, run: 4.2, guard: 0.9 }
 const GUARD = 'KeyE'
 /** how far along the blade from the middle of the grip the part is that lands (m) */
 const BLADE = 0.35
-/** how long after a blow lands he takes before the next is his to give (s) */
-const RECOVER = 0.25
-/** how far ahead of his right shoulder the grip of a blow in the air is struck through (of his arm) */
-const AHEAD = 0.75
+/** how fast the blade goes through what it meets (m/s) */
+const BLOW = 7
 /** how long from the press until the blow lands, which gives it the whole body's swing (s) */
-const WIND = 0.5
+const WIND = 0.7
+/** how far he steps into a blow with his front foot, and how far ahead of the middle of his shoulders his hand has the sword as a blow lands (of his leg, of his arm) */
+const STEP = 0.4
+const AHEAD = 0.75
 /** how near ahead of him the post must be for a blow at it (cos of the angle off his facing) */
 const FACING = 0.7
 /**
- * the raised shield: where it is held, from his left shoulder, in toward his middle, down and ahead past his
- * front (of his arm); which way its face is turned, ahead and a little in; and which way its top points, up and
- * leaning ahead over his forearm, as he faces (+x his left, +y up, +z ahead)
+ * the raised shield: where its middle is, from his left shoulder, in toward his middle and down, ahead of his front
+ * (of his arm); its top up and leaning ahead over his forearm, and its face, which his palm faces, ahead and a little in
  */
-const RAISED = { inward: 0.3, down: 0.05, ahead: 0.15, face: { x: -0.45, y: 0, z: 1 }, top: { x: 0, y: 0.8, z: 0.6 } }
+const RAISED = { inward: 0.3, down: 0.05, ahead: 0.15, top: { x: 0, y: 1, z: 0.4 }, face: { x: -0.4, y: 0, z: 1 } }
+/** the lowered shield, at his left side: its middle out from his left shoulder and down (of his arm), its top up, its face out */
+const LOWERED = { place: new Vector3(0.35, -0.8, 0.15), top: { x: 0, y: 1, z: 0 }, face: { x: 1, y: 0, z: 0.3 } }
 
 /**
- * The blows he gives in turn: how far below his right shoulder and in from it the grip goes through (of his arm), which way
- * it points as it lands and which way the grip is moving then, as he faces, and how fast (m/s).
+ * The blows he gives in turn, by the way the blade goes through what it meets, as he faces (+x his left, +y up, +z
+ * ahead): cuts across and down, the edge leading, and a thrust, the point leading.
  */
 const BLOWS = [
-  { name: 'cut from the right', down: 0.5, inward: 0.3, pointing: [0.6, 0.8, 1], moving: [1, -0.3, 0], speed: 7 },
-  { name: 'cut from the left', down: 0.5, inward: -0.2, pointing: [0.2, 0.8, 1], moving: [-1, -0.3, 0], speed: 6 },
-  { name: 'cut from above', down: 0.25, inward: 0.1, pointing: [0, 1.2, 1], moving: [0, -1, 0.2], speed: 7 },
-  { name: 'thrust', down: 0.6, inward: 0.1, pointing: [0, 0.6, 1], moving: [0, 0, 1], speed: 4 },
-] as const
+  { name: 'cut from the right', moving: new Vector3(1, -0.4, 0) },
+  { name: 'cut from the left', moving: new Vector3(-1, -0.4, 0) },
+  { name: 'cut from above', moving: new Vector3(0, -1, 0.2) },
+  { name: 'thrust', moving: new Vector3(0, 0, 1) },
+]
 
 /**
- * where the sword and the shield are taken hold of, in their frames (m): the sword's grip on its side, mid-way between
- * the pommel and the guard, the palm on the blade's flat; the shield by the upper of the two bars across its back
+ * where the sword and the shield are taken hold of (m): the sword's grip on its side, mid-way between the pommel and
+ * the guard, the palm on the blade's flat; the shield by the upper of the two bars across its back, in a frame whose
+ * z is its top and whose -y its face
  */
 const GRIP = {
   gladius: { at: new Vector3(0.021, 0, -0.01), from: new Vector3(1, 0, 0) },
   // (the thumb left out: it would go into the board)
-  scutum: {
-    at: new Vector3(0, 0.062, -0.025),
-    from: new Vector3(0, 0, -1),
-    using: ['palm', 'index', 'middle', 'ring', 'little'],
-  },
+  scutum: { at: new Vector3(0, 0.025, 0.062), from: new Vector3(0, 1, 0), using: ['palm', 'index', 'middle', 'ring', 'little'] },
 } satisfies Record<string, Statement>
 
 const UP = new Vector3(0, 1, 0)
 
 /**
  * A gladiator led by the keys: he walks and runs with sword and shield, cuts and thrusts at the air ahead of him or at
- * the post he stands before, and raises his shield while the guard key is held, going slower behind it.
+ * the post he stands before, stepping into each blow, and raises his shield while the guard key is held, going slower
+ * behind it. The sword is bound to his right hand and the shield to his left.
  */
 export class Gladiator implements Game {
   readonly character: Character
   readonly buttons = [{ code: GUARD, label: 'shield' }]
-  /** the sword in his right hand and the shield, its top its y and its face its z, in his left */
-  private readonly sword: Held
-  private readonly shield: Held
+  private readonly sword: Thing
+  private readonly shield: Thing
   /** the blow he gives, while he gives it, the next he is to give, and how many landed on the post */
   private blow?: string
   private next = 0
   hits = 0
-  private guarding = false
-  private errors = 0
+  private guarding?: boolean
 
   /** `rig` is his rigged body at rest, in the `scene` the `world` simulates */
   constructor(rig: Object3D, world: PhysicsWorld, scene: Object3D, things: Record<'gladius' | 'scutum', Object3D>) {
+    // (the shield's top along z, for `pointing` to say where its top goes)
+    const scutum = new Group().add(things.scutum)
+    things.scutum.rotation.x = Math.PI / 2
+    scene.add(rig, things.gladius, scutum)
     // (the hands are read while the rig is at rest, before the body poses it)
     const hands = { right: new Hand(rig, 'right'), left: new Hand(rig, 'left') }
-    scene.add(rig, things.gladius, things.scutum)
     this.character = new Character(rig, world)
-    this.sword = holds(this.character.body, hands.right, grip(hands.right, things.gladius, GRIP.gladius))
-    this.shield = holds(this.character.body, hands.left, grip(hands.left, things.scutum, GRIP.scutum))
+    const { body } = this.character
+    this.sword = inHand(body, hands.right, grip(hands.right, things.gladius, GRIP.gladius))
+    this.shield = inHand(body, hands.left, grip(hands.left, scutum, GRIP.scutum))
   }
 
   /** a frame: what the keys ask of him, and he goes as he is led */
   update(delta: number, input: Input) {
-    // what the body could not do it let go of: a blow is over (it would never end), and a guard still held is raised anew
-    if (this.character.errors.length > this.errors) {
-      this.blow = undefined
-      this.guarding = false
-    }
-    this.errors = this.character.errors.length
-    if (input.act && !this.blow) this.strike()
+    if (input.act && !this.character.acting) this.strike()
     this.guard(input.held.has(GUARD))
     const { move } = input
     const speed = this.guarding ? SPEED.guard : input.run ? SPEED.run : SPEED.walk
@@ -101,65 +97,58 @@ export class Gladiator implements Game {
     return `speed ${this.character.speed.toFixed(1)} m/s   hits ${this.hits}   ${doing}`
   }
 
-  /** he raises the shield before him, or lets it hang at his side again */
+  /** he raises the shield before him, or carries it low at his side again: its face out */
   private guard(up: boolean) {
     if (up === this.guarding) return
     this.guarding = up
     const { body } = this.character
     const { arm } = body.size
-    const { inward, down, ahead, face, top } = RAISED
-    const place = new Vector3(-inward * arm, -down * arm, body.front('left', -down * arm, inward * arm) + ahead * arm)
-    this.character.tried(() => {
-      if (up) this.shield.to(place, { on: body, pointing: face, up: top })
-      else body.hand.left.free()
-    })
+    const { inward, down, ahead, top, face } = RAISED
+    const raised = new Vector3(-inward * arm, -down * arm, body.front('left', -down * arm, inward * arm) + ahead * arm)
+    if (up) void this.shield.to(raised, { on: body, pointing: top, palm: face })
+    else void this.shield.to(LOWERED.place.clone().multiplyScalar(arm), { on: body, pointing: LOWERED.top, palm: LOWERED.face })
+  }
+
+  /** the next blow, as his action: at the post if he stands before it, else at the air ahead of him */
+  private strike() {
+    const blow = BLOWS[this.next++ % BLOWS.length]
+    const { body } = this.character
+    const { arm, trunk } = body.size
+    const facing = body.facing
+    const from = body.hips.value.addScaledVector(UP, trunk)
+    // the near side of the post at his shoulders' height, and the way to it from between them
+    const post = new Vector3(POST.x, from.y, POST.z)
+    const toPost = post.clone().sub(from).setY(0).normalize()
+    post.addScaledVector(toPost, -POST.radius)
+    const atPost = toPost.dot(facing) > FACING && post.distanceTo(from) < arm + BLADE + STEP * body.size.leg
+    const way = atPost ? toPost : facing
+    const at = atPost ? post : from.addScaledVector(way, AHEAD * arm + BLADE)
+    this.blow = blow.name + (atPost ? ' at the post' : '')
+    this.character.act(this.swing(blow.moving, way, at, atPost))
   }
 
   /**
-   * the next blow: the blade lands on the post if he stands before it, a place in the scene, else in the air ahead of
-   * him, a place on him that goes along with him as he goes
+   * he steps into the blow toward `at`, and the blade goes through it the way it is `moving` (as he faces `way`),
+   * pointing ahead and up: a cut with the edge leading, a thrust with the point
    */
-  private strike() {
-    const blow = BLOWS[this.next++ % BLOWS.length]
-    const { body, capsule } = this.character
-    const { arm, shoulder, trunk } = body.size
-    const facing = body.facing
-    const from = body.hips.value
-      .clone()
-      .addScaledVector(UP, trunk)
-      .addScaledVector(new Vector3(-facing.z, 0, facing.x), shoulder)
-    // the near side of the post at the height of the grip, and the way to it
-    const post = new Vector3(POST.x, from.y - blow.down * arm, POST.z)
-    const toPost = post.clone().sub(from).setY(0).normalize()
-    post.addScaledVector(toPost, -POST.radius)
-    const atPost = toPost.dot(facing) > FACING && post.distanceTo(from) < arm + BLADE
-    const scene = turn(atPost ? toPost : facing)
-    // (his own going carries the hand along too)
-    const velocity = scene(blow.moving).setLength(blow.speed).add(capsule.velocity.clone().setY(0))
-    this.blow = blow.name + (atPost ? ' at the post' : '')
-    if (atPost) {
-      const pointing = scene(blow.pointing).normalize()
-      // (the grip short of the post along the blade, which lands on it higher up)
-      const place = post.addScaledVector(pointing.clone().setY(0), -BLADE)
-      body.play(this.swing(place, { velocity, pointing }, true))
-      return
-    }
-    const place = new Vector3(blow.inward * arm, -blow.down * arm, AHEAD * arm)
-    body.play(this.swing(place, { on: body, velocity, pointing: new Vector3(...blow.pointing).normalize() }, false))
-  }
-
-  /** the sword swings so through a place, and he takes a moment after: a hit if it was the post */
-  private *swing(place: Vector3, how: Parameters<Held['by']>[2], atPost: boolean): Story {
+  private *swing(moving: Vector3, way: Vector3, at: Vector3, atPost: boolean): Story {
     const { body } = this.character
-    const landed = yield* this.sword.by(body.time + WIND, place, how)
+    const left = new Vector3(way.z, 0, -way.x)
+    const going = left.clone().multiplyScalar(moving.x).addScaledVector(UP, moving.y).addScaledVector(way, moving.z).normalize()
+    // (as far up as ahead: a fist turns a blade no nearer along the forearm)
+    const pointing = way.clone().add(UP).normalize()
+    const palm = new Vector3().crossVectors(pointing, going)
+    body.face(way)
+    body.foot.left.to(body.ground('left', body.hips.value.addScaledVector(way, STEP * body.size.leg)))
+    const place = at.clone().addScaledVector(pointing, -BLADE)
+    const landed = yield* this.sword.by(body.time + WIND, place, {
+      velocity: going.multiplyScalar(BLOW),
+      pointing,
+      palm: palm.lengthSq() > 0.01 ? palm : undefined,
+    })
     if (landed && atPost) this.hits++
-    yield* body.until(body.time + RECOVER)
     this.blow = undefined
+    body.face()
+    yield* body.stand()
   }
 }
-
-/** a way given as he faces `ahead` (+x his left, +y up, +z ahead), in the scene */
-const turn =
-  (ahead: Vector3) =>
-  ([x, y, z]: readonly number[]) =>
-    new Vector3(ahead.z, 0, -ahead.x).multiplyScalar(x).addScaledVector(UP, y).addScaledVector(ahead, z)

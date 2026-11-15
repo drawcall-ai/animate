@@ -1,14 +1,13 @@
-import type { Held } from '@drawcall/animate'
+import type { Story, Thing } from '@drawcall/animate'
 import { grip, Hand } from '@drawcall/hand'
 import { type Object3D, Vector3 } from 'three'
-import { Character, holds } from '../character'
+import { Character, inHand } from '../character'
 import type { Game, Input } from '../play'
 import { strings } from './ball'
 import { HALF, NET } from './court'
 import { type Ball, Machine } from './machine'
 import { FOREHAND, RACKET, racket } from './racket'
-
-type Stroke = 'forehand' | 'backhand'
+import { type Stroke, stroke } from './stroke'
 
 /** how fast he walks and runs (m/s) */
 const SPEED = { walk: 1.6, run: 5 }
@@ -17,26 +16,14 @@ const FEED = { first: 1.5, every: 4 }
 /** where on the far side a return is aimed: so far beyond the net, on the middle (m) */
 const AIM = new Vector3(0, 0, NET.z + 0.6 * HALF.long)
 /**
- * a swing: how fast the racket's butt goes the way the ball is to go, and up, as the strings meet it (m/s); how far
- * ahead of him, toward the ball, they meet it (of his arm); how soon at the earliest, how long a swing at the air
- * takes, and how long he stays turned after (s)
+ * a swing: how far ahead of him, toward the ball, the strings meet it (of his arm); how soon at the earliest, how
+ * long a swing at the air takes, and how long he stays in it after (s)
  */
-const SWING = {
-  speed: 15,
-  up: 1.5,
-  ahead: { forehand: 0.6, backhand: 1.6 } satisfies Record<Stroke, number>,
-  soonest: 0.4,
-  air: 0.9,
-  after: 0.6,
-}
-/** how far ahead of square to the way the ball is to go the racket points as it meets it (of its length) */
-const LEAD: Record<Stroke, number> = { forehand: 0, backhand: 0.4 }
-/** how far up the strings face as they meet the ball, for it to rise over the net (of how far they face ahead) */
-const OPEN = 0.08
+const SWING = { ahead: { forehand: 0.6, backhand: 1.2 } satisfies Record<Stroke, number>, soonest: 0.4, air: 0.9, after: 0.5 }
 /** how far out past his shoulder a ball is fed to pass him, beyond the racket (of his arm) */
-const ASIDE: Record<Stroke, number> = { forehand: 0.6, backhand: 0.4 }
-/** the left hand through a stroke, from its shoulder: out ahead for a forehand, back for a backhand (of his arm) */
-const LEFT: Record<Stroke, Vector3> = { forehand: new Vector3(0.65, -0.35, 0.5), backhand: new Vector3(0.6, -0.5, 0.1) }
+const ASIDE = 0.5
+/** the racket ready before him between strokes, from his right shoulder: its head up ahead, the palm in (of his arm) */
+const READY = { place: new Vector3(0.3, -0.6, 0.55), pointing: { x: 0, y: 0.6, z: 1 }, palm: { x: 1, y: 0, z: 0 } }
 
 /** his right along the ground, facing a way */
 const right = (way: Vector3) => new Vector3(-way.z, 0, way.x)
@@ -50,9 +37,10 @@ export class Player implements Game {
   readonly character: Character
   readonly machine: Machine
   private readonly racket = racket()
-  private readonly held: Held
-  /** the swing he is in: which stroke, at which ball, the way he faces through it, and when it is over */
-  private swing?: { stroke: Stroke; ball?: Ball; way: Vector3; over: number }
+  /** the racket as bound to him, his right hand leading it */
+  private readonly held: Thing
+  /** the swing he is in: which stroke, and at which ball */
+  private swing?: { stroke: Stroke; ball?: Ball }
   /** where the strings and the ball were a frame ago */
   private was?: { strings: Vector3; ball: Vector3 }
   private next = FEED.first
@@ -62,24 +50,21 @@ export class Player implements Game {
   private said = ''
 
   constructor(rig: Object3D, scene: Object3D) {
-    this.character = new Character(rig)
-    const hand = new Hand(rig, 'right')
-    this.held = holds(this.character.body, hand, grip(hand, this.racket, FOREHAND))
-    this.machine = new Machine(scene)
     scene.add(rig, this.racket)
+    const hand = new Hand(rig, 'right')
+    this.character = new Character(rig)
+    this.held = inHand(this.character.body, hand, grip(hand, this.racket, FOREHAND))
+    this.ready()
+    this.machine = new Machine(scene)
   }
 
   update(delta: number, input: Input) {
     const { body } = this.character
     if (body.time >= this.next) this.feed()
-    if (input.act && !this.swing) this.character.tried(() => this.act())
+    if (input.act && !this.character.acting) this.character.tried(() => this.act())
     const speed = input.run ? SPEED.run : SPEED.walk
-    this.character.update(delta, { x: input.move.x * speed, z: input.move.z * speed }, this.swing?.way)
+    this.character.update(delta, { x: input.move.x * speed, z: input.move.z * speed })
     this.strike(delta)
-    if (this.swing && body.time > this.swing.over) {
-      body.hand.left.free()
-      this.swing = undefined
-    }
     for (const ball of this.returns) {
       if (ball.place.z <= NET.z) continue
       this.over++
@@ -98,7 +83,7 @@ export class Player implements Game {
     const { position } = this.character.feet
     const { size } = this.character.body
     const stroke = this.fed % 2 ? 'backhand' : 'forehand'
-    const aside = (stroke === 'forehand' ? -1 : 1) * (size.shoulder + ASIDE[stroke] * size.arm + RACKET.strings)
+    const aside = (stroke === 'forehand' ? -1 : 1) * (size.shoulder + ASIDE * size.arm + RACKET.strings)
     const x = Math.min(HALF.wide, Math.max(-HALF.wide, position.x + aside))
     const z = Math.min(NET.z - 2, Math.max(NET.z - HALF.long - 2, position.z))
     this.machine.feed({ x, z })
@@ -130,43 +115,39 @@ export class Player implements Game {
     return { time: body.time + seconds, at, way, stroke: stroke() }
   }
 
-  /** Space: a swing at the ball fed last, if it comes within reach, else at the air */
+  /** Space: a stroke at the ball fed last if it comes within reach, else at the air where such a ball would be */
   private act() {
-    const { body } = this.character
-    const { hand, size } = body
+    const { body, feet } = this.character
     const ball = this.machine.last
     const meeting = ball && !ball.struck ? this.meet(ball) : undefined
-    if (!meeting) {
-      const stroke =
-        ball && ball.place.clone().sub(this.character.feet.position).dot(right(body.facing)) < 0
-          ? 'backhand'
-          : 'forehand'
-      const out = stroke === 'forehand' ? -1 : 1
-      // (on him, from the right shoulder: +x his left, +z ahead)
-      const place = new Vector3(out * 0.5 + (out > 0 ? 2 * size.shoulder : 0), -0.4, 0.5).multiplyScalar(size.arm)
-      const velocity = body.facing.multiplyScalar(SWING.speed).setY(SWING.up)
-      this.held.by(body.time + SWING.air, place, {
-        on: body,
-        velocity,
-        pointing: { x: out, y: 0, z: 0.3 },
-        palm: { x: 0, y: 0, z: -out },
-      })
-      hand.left.to(LEFT[stroke].clone().multiplyScalar(size.arm), { on: body })
-      this.swing = { stroke, way: body.facing, over: body.time + SWING.air + SWING.after }
-      return
-    }
-    const { time, at, way, stroke } = meeting
-    const toward = AIM.clone().sub(at).setY(0).normalize()
-    const out = stroke === 'forehand' ? 1 : -1
+    if (meeting) return this.character.act(this.play(meeting.stroke, meeting.time, meeting.at, meeting.way, ball))
+    const way = body.facing
+    const kind: Stroke = ball && ball.place.clone().sub(feet.position).dot(right(way)) < 0 ? 'backhand' : 'forehand'
+    const { size } = body
+    const out = (kind === 'forehand' ? 1 : -1) * (size.shoulder + ASIDE * size.arm + RACKET.strings)
+    const at = feet.position.clone().addScaledVector(right(way), out).addScaledVector(way, SWING.ahead[kind] * size.arm)
+    this.character.act(this.play(kind, body.time + SWING.air, at.setY(0.5 * size.stand), way))
+  }
+
+  /** the stroke as his action, facing the way the ball comes from, and back to the ready after it */
+  private *play(kind: Stroke, time: number, at: Vector3, way: Vector3, ball?: Ball): Story {
+    const { body } = this.character
+    this.swing = { stroke: kind, ball }
     body.face(way)
-    const pointing = right(toward).multiplyScalar(out).addScaledVector(toward, LEAD[stroke]).normalize()
-    this.held.by(time, at.clone().addScaledVector(pointing, -RACKET.strings), {
-      velocity: toward.clone().multiplyScalar(SWING.speed).setY(SWING.up),
-      pointing,
-      palm: stroke === 'forehand' ? toward.clone().setY(OPEN).normalize() : undefined,
-    })
-    hand.left.to(LEFT[stroke].clone().multiplyScalar(size.arm), { on: body })
-    this.swing = { stroke, ball, way, over: time + SWING.after }
+    yield* stroke(body, this.held, kind, time, at, AIM.clone().sub(at).setY(0).normalize())
+    yield* body.until(time + SWING.after)
+    body.hand.left.free()
+    this.ready()
+    body.face()
+    this.swing = undefined
+    yield* body.stand()
+  }
+
+  /** the racket before him, ready */
+  private ready() {
+    const { body } = this.character
+    const { place, ...turned } = READY
+    void this.held.to(place.clone().multiplyScalar(body.size.arm), { on: body, ...turned })
   }
 
   /** strings that sweep through the ball this frame send it off as they meet it, their face giving it back so much of how fast they close on it */

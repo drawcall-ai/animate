@@ -1,5 +1,5 @@
 import { buildWorld } from '@drawcall/physics-rapier'
-import { grip, Hand, type Statement } from '@drawcall/hand'
+import { grip, Hand } from '@drawcall/hand'
 import { Mesh, type Object3D, Scene, SphereGeometry, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { bowl, carry, SIDE } from '../../../examples/bowling/bowl'
@@ -11,9 +11,9 @@ import { bagAt, swing } from '../../../examples/boxing/bag'
 import { combination } from '../../../examples/boxing/combination'
 import { panelAt } from '../../../examples/button/panel'
 import { press } from '../../../examples/button/press'
-import { holds, inHand } from '../../../examples/character'
+import { inHand } from '../../../examples/character'
 import { GRIP as FOIL, foil } from '../../../examples/fencing/foil'
-import { lunge } from '../../../examples/fencing/lunge'
+import { guard, lunge } from '../../../examples/fencing/lunge'
 import { FOIL as POINT, fence, targetAt } from '../../../examples/fencing/target'
 import * as pitch from '../../../examples/football/pitch'
 import { shot } from '../../../examples/football/shot'
@@ -29,21 +29,12 @@ import { shelve } from '../../../examples/shelf/shelve'
 import { level } from '../../../examples/shooter/level'
 import { Soldier as Shooter } from '../../../examples/shooter/soldier'
 import * as tennis from '../../../examples/tennis/ball'
-import { forehand } from '../../../examples/tennis/forehand'
+import { stroke } from '../../../examples/tennis/stroke'
 import { FOREHAND, racket } from '../../../examples/tennis/racket'
 import * as vb from '../../../examples/volleyball/ball'
 import { spike } from '../../../examples/volleyball/spike'
 import { Body } from '../src'
 import { SIDES, tick } from '@drawcall/limbs'
-
-/** a body that holds a thing in his right hand from the start, gripped as stated: and the thing as he holds it */
-function holding(rig: Object3D, thing: Object3D, statement: Statement) {
-  new Scene().add(rig, thing)
-  const hand = new Hand(rig, 'right')
-  const held = grip(hand, thing, statement)
-  const body = new Body(rig)
-  return { body, held: holds(body, hand, held) }
-}
 
 /** each example as its page plays it: the body with its story begun, and what the world does after every update */
 const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: number) => void }> = {
@@ -54,10 +45,12 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   javelin(rig) {
     const shaft = field.shaft()
-    const { body, held } = holding(rig, shaft, field.GRIP)
-    const thrown = field.javelin()
-    body.play(javelinThrow(body, thrown, shaft, held))
-    return { body, world: (dt) => thrown.velocity && field.fly(thrown, dt) }
+    new Scene().add(rig, shaft)
+    const hand = new Hand(rig, 'right')
+    const body = new Body(rig)
+    const held = inHand(body, hand, grip(hand, shaft, field.GRIP))
+    body.play(javelinThrow(body, held, 5.5, new Vector3(0, 0, 10), () => {}))
+    return { body }
   },
   bowling(rig) {
     const ball = lane.sphere()
@@ -105,9 +98,18 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   fencing(rig) {
     const sword = foil()
-    const { body, held } = holding(rig, sword, FOIL)
-    const target = targetAt(2.85)
-    body.play(lunge(body, target, held))
+    new Scene().add(rig, sword)
+    const hand = new Hand(rig, 'right')
+    const body = new Body(rig)
+    const held = inHand(body, hand, grip(hand, sword, FOIL))
+    const target = targetAt(2.3)
+    body.play(
+      (function* () {
+        yield* guard(body, held)
+        yield* lunge(body, held, target)
+        yield* body.stand()
+      })(),
+    )
     return {
       body,
       world() {
@@ -118,9 +120,20 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   tennis(rig) {
     const bat = racket()
-    const { body, held } = holding(rig, bat, FOREHAND)
+    new Scene().add(rig, bat)
+    const hand = new Hand(rig, 'right')
+    const body = new Body(rig)
+    const held = inHand(body, hand, grip(hand, bat, FOREHAND))
     const ball = tennis.ballAt()
-    body.play(forehand(body, ball, bat, held))
+    tennis.feed(ball)
+    const { seconds, at } = tennis.top(ball)
+    body.play(
+      (function* () {
+        yield* stroke(body, held, 'forehand', body.time + seconds, at, new Vector3(0, 0, 1))
+        tennis.strike(ball, bat, body)
+        yield* body.stand()
+      })(),
+    )
     return { body, world: (dt) => tennis.fly(ball, dt) }
   },
   hurdles(rig) {

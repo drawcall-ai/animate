@@ -1,42 +1,49 @@
-import type { Body, Held, Story } from '@drawcall/animate'
+import type { Body, Side, Story, Thing } from '@drawcall/animate'
 import { Vector3 } from 'three'
 import { type Target, touching } from './target'
 
-/** how far apart his feet stand en garde, and in the lunge (m) */
-const APART = { guard: 0.5, lunge: 1.1 }
-/** how far ahead of the hips the sword hand is at the touch (m), and how fast it is going (m/s) */
-const THRUST = { ahead: 0.5, speed: 3 }
-/** the sword hand en garde, from its shoulder: the elbow bent, the hand ahead at the height of the chest */
-const READY = { x: 0, y: -0.25, z: 0.35 }
-/** the blade at the touch: up and in, from the hand low on his right to the middle of the target */
-const BLADE = new Vector3(0.15, 0.4, 1)
-/** the back hand, from its shoulder: down behind him, the arm all but straight */
-const BEHIND = { x: 0.2, y: -0.5, z: -0.25 }
+/** how far apart his feet are en garde, and as the lunge lands (of his leg) */
+const APART = { guard: 0.6, lunge: 1.5 }
+/** the sword hand en garde, from its shoulder: the elbow bent, the hand ahead below the chest (of his arm) */
+const READY = new Vector3(0.15, -0.45, 0.6)
+/** the back hand en garde, raised behind him, and flung back straight as he lunges, from its shoulder (of his arm) */
+const RAISED = new Vector3(0.3, 0.3, -0.3)
+const FLUNG = new Vector3(0.2, -0.5, -0.8)
+/** the way the blade points en garde and at the touch: ahead, up and in from the hand low on his right */
+const BLADE = new Vector3(0.1, 0.12, 1).normalize()
+/** how long the point takes to the target, the front foot landing after it (s) */
+const REACH = 0.5
 
-/** A right-handed fencer, the foil `held` in his right hand, comes en garde, advances two steps, lunges to touch the target with the point, and recovers to en garde. */
-export function* lunge(body: Body, target: Target, held: Held): Story {
-  const touch = touching(target, BLADE)
-  // where the back foot stands for the lunge to end with the point on the target
-  const back = touch.z - THRUST.ahead - APART.lunge / 2
+/** where on the ground a foot steps for his feet to stand so far apart along the piste, the other foot where it is */
+function apart(body: Body, side: Side, of: number) {
+  const other = body.foot[side === 'right' ? 'left' : 'right'].value
+  return body.ground(side, { x: body.hips.value.x, z: other.z + (side === 'right' ? of : -of) * body.size.leg })
+}
 
-  body.hand.right.to(READY, { on: body })
-  body.hand.left.to(BEHIND, { on: body })
-  yield* body.foot.right.to(body.ground('right', body.foot.left.value.z + APART.guard))
+/** en garde: the foil ahead of him, its point toward the target, and the back hand raised */
+function arms(body: Body, foil: Thing) {
+  const { arm } = body.size
+  void foil.to(READY.clone().multiplyScalar(arm), { on: body, pointing: BLADE })
+  body.hand.left.to(RAISED.clone().multiplyScalar(arm), { on: body })
+}
 
-  // the advance: the front foot steps, and the back foot after it
-  for (const z of [back / 2, back]) {
-    yield* body.foot.right.to(body.ground('right', z + APART.guard))
-    yield* body.foot.left.to(body.ground('left', z))
-  }
+/** A right-handed fencer, the `foil` bound to him and led by his right hand, comes en garde: the front foot steps out. */
+export function* guard(body: Body, foil: Thing): Story {
+  const step = body.foot.right.to(apart(body, 'right', APART.guard))
+  arms(body, foil)
+  yield* step
+}
 
-  // the lunge: the front foot goes far out, and the point to the touch as the hips come after it
-  const out = body.foot.right.to(body.ground('right', back + APART.lunge))
-  yield* held.to(touch, { velocity: { x: 0, y: 0, z: THRUST.speed }, pointing: BLADE })
+/**
+ * From en garde he lunges: the front foot goes far out, the back arm is flung back, and the point goes to the middle of
+ * the `target` and stays there as he comes down onto the front foot; then the front foot comes back and he is en garde.
+ * `recovering` is told as the recovery begins.
+ */
+export function* lunge(body: Body, foil: Thing, target: Pick<Target, 'at'>, recovering = () => {}): Story {
+  const out = body.foot.right.to(apart(body, 'right', APART.lunge))
+  body.hand.left.to(FLUNG.clone().multiplyScalar(body.size.arm), { on: body })
+  yield* foil.to(touching(target, BLADE), { pointing: BLADE, seconds: REACH })
   yield* out
-
-  // the recovery: the front foot comes back, and the hand
-  const ready = body.hand.right.to(READY, { on: body })
-  yield* body.foot.right.to(body.ground('right', back + APART.guard))
-  yield* ready
-  yield* body.stand()
+  recovering()
+  yield* guard(body, foil)
 }

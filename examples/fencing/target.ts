@@ -14,7 +14,7 @@ const TOUCH = 0.03
 export const targetAt = (ahead: number): Target => ({ at: new Vector3(0, PAD.middle, ahead), on: false, touches: 0 })
 
 /** where the foil is held as its point meets the middle of the target, the blade pointing a way */
-export const touching = (target: Target, way: Vector3) => target.at.clone().addScaledVector(way, -FOIL / way.length())
+export const touching = (target: Pick<Target, 'at'>, way: Vector3) => target.at.clone().addScaledVector(way, -FOIL / way.length())
 
 /** the point of the foil is somewhere: a touch is counted as it comes onto the pad */
 export function fence(target: Target, point: Vector3) {
