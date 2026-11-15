@@ -10,18 +10,19 @@ const AHEAD = 2.5
 export type Meant = Aim & { at: Vector3; held: boolean }
 /**
  * What he means to do and how far he has come, for whoever looks, in the scene and on the clock of `time`: each hand
- * and foot, the hips and the feet as foreseen, and where each thing he holds is meant to be now.
+ * and foot, the hips and the feet as foreseen, and where each thing he holds is meant to be and when: one he holds
+ * now, one bound to his hands where the next place the leading hand is sent to has it, moved there, turned as it is.
  */
 export type Intent = {
   time: number
   hand: Record<Side, Meant>
   foot: Record<Side, Meant>
   hips: Foreseen & { at: Vector3 }
-  things: { thing: Object3D; at: Matrix4 }[]
+  things: { thing: Object3D; at: Matrix4; time: number }[]
 }
 
 /** what he means to do, told when asked: nothing of it is kept or changes him */
-export function intent({ bones, ends, mover, hips, size }: Workings, time: number): Intent {
+export function intent({ bones, ends, mover, hips, size, bindings }: Workings, time: number): Intent {
   const scene = bones.frame.clone().invert()
   const out = (place: Vector3) => place.applyMatrix4(scene)
   const marks = <T extends Mark>(list: T[]) => {
@@ -41,14 +42,23 @@ export function intent({ bones, ends, mover, hips, size }: Workings, time: numbe
   const yaw = Math.atan2(forward.x, forward.z)
   const led = seen.led && seen.led.clone().applyAxisAngle(UP, yaw)
   const ways = { facing: seen.facing + yaw, face: seen.face + yaw, heading: seen.heading + yaw, led }
-  const things = new Map<Object3D, Matrix4>()
+  const things = new Map<Object3D, { at: Matrix4; time: number }>()
   for (const hand of Object.values(ends.hand)) {
     const give = hand.holding?.give
-    if (give && !things.has(give.thing)) things.set(give.thing, give.at(give.thing, 0, new Matrix4()).premultiply(scene))
+    if (give && !things.has(give.thing)) things.set(give.thing, { at: give.at(give.thing, 0, new Matrix4()).premultiply(scene), time })
+  }
+  const hand = both((side) => meant('hand', side))
+  for (const { thing, hands } of bindings.bound) {
+    const leads = hand[hands[0]]
+    const [next] = leads.sent
+    if (!next) continue
+    thing.updateWorldMatrix(true, false)
+    const by = next.at.clone().sub(leads.at).sub(leads.tip)
+    things.set(thing, { at: thing.matrixWorld.clone().premultiply(new Matrix4().makeTranslation(by)), time: next.time })
   }
   return {
     time,
-    hand: both((side) => meant('hand', side)),
+    hand,
     foot: both((side) => meant('foot', side)),
     hips: {
       ...seen,
@@ -59,6 +69,6 @@ export function intent({ bones, ends, mover, hips, size }: Workings, time: numbe
       top,
       at: out(hips.value.clone()),
     },
-    things: [...things].map(([thing, at]) => ({ thing, at })),
+    things: [...things].map(([thing, meant]) => ({ thing, ...meant })),
   }
 }

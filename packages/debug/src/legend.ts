@@ -21,7 +21,7 @@ export function legend() {
   )
   const marks = [
     '◆ to be there in N s · line: the way there',
-    '○ footfall foreseen · □ put by a story',
+    '○ footfall: bright aimed, faint foreseen · □ put',
     'green→red: plan vs body (cm)',
     'arrows: faces · to face · led',
   ]

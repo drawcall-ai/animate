@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import type { Mark } from '@drawcall/animate'
 
 /** how long a miss is shown once it is made (s) */
-const SHOWN = 1.5
+const SHOWN = 1
 /** how far apart in time two plans for the same place are the same plan, re-aimed (s) */
 const SAME = 0.15
 /** how often what the hips were foreseen to do is looked at anew (s) */
@@ -28,6 +28,10 @@ export function along(path: readonly Mark[], time: number) {
 export class Memory {
   private readonly first = new Map<string, First>()
   private readonly next = new Map<string, Mark>()
+  /** where each end was when last looked at */
+  private readonly last = new Map<string, Mark>()
+  /** how far what each end is sent with was from its wrist, while it was sent somewhere */
+  private readonly tips = new Map<string, Vector3>()
   private hips?: { time: number; path: Mark[] }
   misses: Miss[] = []
 
@@ -42,18 +46,27 @@ export class Memory {
   }
 
   /**
-   * the next moment an end is to be somewhere, as first seen: once that moment has come, where the end `is` then is
-   * set against it, and kept as a miss for a while
+   * the next moment an end is to be somewhere, as first seen: once that moment has come, where the end was then, between
+   * where it was last looked at and where it `is`, is set against it, and kept as a miss for a while
    */
   due(name: string, now: number, is: Vector3, next?: Mark) {
     const kept = this.next.get(name)
+    const last = this.last.get(name)
+    this.last.set(name, { at: is.clone(), time: now })
     if (kept && kept.time <= now) {
-      this.misses.push({ name, meant: kept.at.clone(), was: is.clone(), until: now + SHOWN })
+      const was = last && last.time < now ? along([last, { at: is, time: now }], Math.max(kept.time, last.time)) : undefined
+      this.misses.push({ name, meant: kept.at.clone(), was: was ?? is.clone(), until: now + SHOWN })
       this.next.delete(name)
     }
     const known = this.next.get(name)
     if (next && next.time > now && !(known && Math.abs(known.time - next.time) < SAME)) this.next.set(name, { at: next.at.clone(), time: next.time })
     this.misses = this.misses.filter(({ until }) => until > now)
+  }
+
+  /** how far what an end is sent with is from its wrist: as it was last sent, once it is sent nowhere */
+  tip(name: string, tip: Vector3, sent: boolean) {
+    if (sent) this.tips.set(name, tip.clone())
+    return this.tips.get(name) ?? tip
   }
 
   /** where the hips were foreseen to be now, as foreseen half a second or less ago */

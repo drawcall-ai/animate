@@ -18,7 +18,7 @@ const GAP = { red: 0.25, told: 0.03 }
 /** how large the marks are (m) */
 const MARK = { goal: 0.035, fall: 0.07, arrow: 0.6 }
 /** a way an end arrives moving is drawn as far as it goes in so long (s) */
-const ARRIVES = 0.1
+const ARRIVES = 0.04
 /** the way he is led is drawn as far as he goes in so long (s) */
 const LED = 0.5
 
@@ -35,8 +35,8 @@ const middle = (from: Vector3, to: Vector3) => from.clone().lerp(to, 0.5)
  * What the bodies in a scene mean to do, drawn over it each frame as the scene is drawn, beside what they do: where
  * each hand and foot a story has is to be and when (a diamond, the seconds until), the way its joints are driven
  * there, where the plan as first made has it now (a line to it from where it is, warming with the gap), and what came
- * of each moment (a miss shown for a while); the footfalls foreseen (rings, a square for one put by a story) and how
- * far each came down from where it was first foreseen; the hips' way, where they are sent, the top of a jump asked
+ * of each moment (a miss shown for a while); the footfalls foreseen (rings, a square for one put by a story, fainter
+ * while not yet aimed) and how far each came down from where it was aimed as the foot left the ground; the hips' way, where they are sent, the top of a jump asked
  * for and the one he comes to, which way he faces, is coming round to face, and is led; and a box where each thing
  * he holds is meant to be. Add it to the scene, not to anything that moves: given a body, it shows that one, given a
  * scene or a part of it, every body made for a rig in it.
@@ -93,7 +93,7 @@ export class Intent extends Group {
       else this.steps(told, side, memory)
     }
     this.hips(told, memory)
-    for (const { thing, at } of told.things) this.thing(thing, at)
+    for (const { thing, at, time } of told.things) this.thing(thing, at, time - told.time)
     for (const { name, meant, was } of memory.misses) this.gap(meant, was, `${name} missed `)
   }
 
@@ -109,7 +109,8 @@ export class Intent extends Group {
     const color = hue(name)
     const { pen, labels } = this
     // (what it is sent with, a fingertip or what sits in the hand, as far from the wrist as it is now)
-    const tip = end.at.clone().add(end.tip)
+    const offset = memory.tip(name, end.tip, end.sent.length > 0)
+    const tip = end.at.clone().add(offset)
     pen.dot(tip, color)
     const path = end.path.map(({ at, time }) => ({ at: at.clone().add(end.tip), time }))
     pen.through(
@@ -137,13 +138,15 @@ export class Intent extends Group {
     const at = foot[side].at
     this.pen.dot(at, color)
     falls.forEach((fall, k) => {
-      if (fall.put) this.pen.square(fall.at, MARK.fall, color)
-      else this.pen.ring(fall.at, MARK.fall, color)
+      // (one foreseen later, not yet aimed, is drawn fainter)
+      const shade = fall.swings ? color : color.clone().multiplyScalar(0.55)
+      if (fall.put) this.pen.square(fall.at, MARK.fall, shade)
+      else this.pen.ring(fall.at, MARK.fall, shade)
       if (k === 0) this.labels.say(fall.at, soon(fall.time - time), color)
     })
     const [next] = falls
     if (next && next.time - time < 1) this.pen.line(at, next.at, color)
-    memory.due(`${side === 'left' ? 'L' : 'R'} step`, time, at, next)
+    memory.due(`${side === 'left' ? 'L' : 'R'} step`, time, at, next?.swings ? next : undefined)
   }
 
   private hips(told: Told, memory: Memory) {
@@ -159,7 +162,7 @@ export class Intent extends Group {
       if (k > 0 && Math.floor(then / 0.25) !== Math.floor(hips.hips[k - 1].time / 0.25)) pen.dot(at, color)
     })
     const foreseen = memory.foreseen(hips.hips, time)
-    if (foreseen) this.gap(foreseen, hips.at, 'hips ')
+    if (foreseen) this.gap(foreseen, hips.at, 'hips off foresight ')
     // the ways he faces and is led, on the ground under him
     const ground = Math.min(told.foot.left.at.y, told.foot.right.at.y) - 0.05
     const under = hips.at.clone().setY(ground)
@@ -191,15 +194,18 @@ export class Intent extends Group {
     }
   }
 
-  /** a box where a thing is meant to be, and how far that is from where it is */
-  private thing(thing: Object3D, meant: Matrix4) {
+  /** a box where a thing is meant to be: and how far that is from where it is, or meant to be later, in how long */
+  private thing(thing: Object3D, meant: Matrix4, due: number) {
     const box = this.boxes.get(thing) ?? bounds(thing)
     this.boxes.set(thing, box)
     const color = hue('thing')
     this.pen.box(box, meant, color)
     thing.updateWorldMatrix(true, false)
     const centre = box.getCenter(new Vector3())
-    this.gap(centre.clone().applyMatrix4(meant), centre.clone().applyMatrix4(thing.matrixWorld), `${thing.name || 'thing'} `)
+    const [there, is] = [centre.clone().applyMatrix4(meant), centre.clone().applyMatrix4(thing.matrixWorld)]
+    const name = thing.name || 'thing'
+    if (due > 0) this.labels.say(there, `${name} ${soon(due)}`, color)
+    else this.gap(there, is, `${name} `)
   }
 }
 
