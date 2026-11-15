@@ -10,6 +10,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { intent } from './intent'
 
 function element<T extends Element>(id: string, kind: new () => T): T {
   const found = document.getElementById(id)
@@ -17,7 +18,7 @@ function element<T extends Element>(id: string, kind: new () => T): T {
   return found
 }
 
-/** Shows a scene, at first from the side with +z to the right, keeping `focus` (z) in view as the view is dragged round it: `begin` starts it over and returns what to show, `update` advances it, `readout` says what happened. */
+/** Shows a scene, at first from the side with +z to the right, keeping `focus` (z) in view as the view is dragged round it: `begin` starts it over and returns what to show, `update` advances it, `readout` says what happened. What the bodies in it mean to do is drawn over it with I, a button, or `?debug`. */
 export function run(stage: { begin(): Object3D; update(delta: number): void; focus(): number; readout(): string }) {
   const canvas = element('stage', HTMLCanvasElement)
   const speed = element('speed', HTMLSelectElement)
@@ -32,6 +33,7 @@ export function run(stage: { begin(): Object3D; update(delta: number): void; foc
   const sun = new DirectionalLight(0xffffff, 2.5)
   sun.position.set(-3, 5, -2)
   scene.add(new HemisphereLight(0xffffff, 0x404040, 1.5), sun, new GridHelper(40, 40, 0x808080, 0x404040))
+  intent(scene)
   let shown = stage.begin()
   scene.add(shown)
   element('again', HTMLButtonElement).addEventListener('click', () => {

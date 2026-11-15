@@ -1,0 +1,19 @@
+{
+  "name": "@drawcall/debug",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0"
+  },
+  "dependencies": {
+    "@drawcall/animate": "workspace:*",
+    "three": "^0.187.0"
+  },
+  "files": [
+    "src"
+  ]
+}

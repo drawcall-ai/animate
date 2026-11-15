@@ -10,6 +10,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
+import { intent } from '../intent'
 import '../play.css'
 import { type Button, buttons, controls, drag, Stick, touching } from '../touch'
 import { level } from './level'
@@ -73,6 +74,7 @@ const soldier = new Soldier(rigged.scene, physics)
 /** his head, which is not drawn seen from his eye: it is about the camera */
 const head = rigged.scene.getObjectByName('head')
 scene.add(soldier.shown)
+intent(scene)
 
 const held = new Set<string>()
 const aim = { yaw: 0, pitch: 0 }

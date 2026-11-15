@@ -1,12 +1,13 @@
 # Architecture
 
-Four workspace packages. Dependencies point one way only; a lower package never imports an upper one, not even as a
+Five workspace packages. Dependencies point one way only; a lower package never imports an upper one, not even as a
 type.
 
 ```
 examples ──▶ @drawcall/animate ──▶ @drawcall/locomotion ──▶ @drawcall/limbs ──▶ three
    │                 └──────────────────────────────────────────▲
-   └───────▶ @drawcall/hand ──▶ three        (hand and animate never import each other)
+   ├───────▶ @drawcall/hand ──▶ three        (hand and animate never import each other)
+   └───────▶ @drawcall/debug ──▶ @drawcall/animate, three   (a leaf: nothing imports it but pages)
 ```
 
 | package | one responsibility | lines |
@@ -15,6 +16,7 @@ examples ──▶ @drawcall/animate ──▶ @drawcall/locomotion ──▶ @d
 | `@drawcall/locomotion` (`packages/locomotion`) | The hips and the feet under them: which foot steps where and when, the pelvis over the feet, and the free trunk and arms reacting, as a story or the player has him go. | 2,950 |
 | `@drawcall/animate` (`packages/animate`) | Brings the two together as the one `Body` an author imports, steps it on one clock, and holds the skill. | 490 |
 | `@drawcall/hand` (`packages/hand`) | Finger poses, and how a hand grips a mesh. | |
+| `@drawcall/debug` (`packages/debug`) | Draws what the bodies in a scene mean to do over it, beside what they do (`Intent`, an `Object3D`, and its `legend()`), from `Body.intent()` alone. | 520 |
 
 ## What each gives the layer above
 
@@ -39,6 +41,10 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
 
 **animate → authors** (unchanged by the split): `Body`, `Held`, `Foot`, `Hand`, and the types above. `Foot` and
 `Hand` are declared in `animate/src/ends.ts`, where a place `on` him can be typed as the `Body`.
+`Body.intent()` tells what he means to do as plain data (`Intent`: each end's `Aim` from `Planner.aim()` in limbs,
+the hips and footfalls `foresee`n by locomotion on a copy of `Mover`, and where each held thing is meant to be),
+told only when asked and changing nothing of him; `Body.of(rig)` finds the body made for a rig. `@drawcall/debug`
+draws only that.
 
 ## Inside limbs
 

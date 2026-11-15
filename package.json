@@ -4,11 +4,12 @@
   "type": "module",
   "scripts": {
     "test": "pnpm -F @drawcall/animate -F @drawcall/hand test",
-    "check": "tsc --noEmit -p packages/limbs && tsc --noEmit -p packages/locomotion && tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p examples",
+    "check": "tsc --noEmit -p packages/limbs && tsc --noEmit -p packages/locomotion && tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p packages/debug && tsc --noEmit -p examples",
     "pages": "sh pages/build.sh"
   },
   "devDependencies": {
     "@drawcall/animate": "workspace:*",
+    "@drawcall/debug": "workspace:*",
     "@drawcall/hand": "workspace:*",
     "@drawcall/physics": "0.20.0",
     "@drawcall/physics-rapier": "0.20.0",

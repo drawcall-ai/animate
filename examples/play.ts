@@ -13,6 +13,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import type { Character } from './character'
+import { intent } from './intent'
 import { type Button, buttons, controls, drag, Stick, touching } from './touch'
 
 /**
@@ -145,7 +146,8 @@ function element<T extends Element>(id: string, kind: new () => T): T {
 
 /**
  * Plays a game on the page: its #stage canvas, the keys, the camera behind him, and the #readout under it; played by
- * fingers, a stick, a button for Space and one for each key the game reads held, and a drag turns the camera.
+ * fingers, a stick, a button for Space and one for each key the game reads held, and a drag turns the camera. What
+ * the bodies mean to do is drawn over the game with I, a button, or `?debug`.
  */
 export async function play(start: Start) {
   const canvas = element('stage', HTMLCanvasElement)
@@ -158,6 +160,7 @@ export async function play(start: Start) {
     readout.textContent = `could not start: ${error instanceof Error ? error.message : String(error)}`
     throw error
   })
+  intent(scene)
   const keys = new Keys()
   const query = new URLSearchParams(location.search)
   addEventListener('keydown', (event) => {

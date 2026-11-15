@@ -18,6 +18,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three'
+import { intent } from '../intent'
 import { mannequin } from '../mannequin'
 import { DRILLS, Drive } from './drills'
 
@@ -102,6 +103,7 @@ scene.add(new HemisphereLight(0xffffff, 0x404040, 1.5), sun)
 scene.add(floor())
 const prints = { left: new Prints(0x4080ff), right: new Prints(0xff5040) }
 scene.add(prints.left.mesh, prints.right.mesh)
+intent(scene)
 
 let man: Object3D
 let body: Body
