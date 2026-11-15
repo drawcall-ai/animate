@@ -14,6 +14,10 @@ const MARKS = [0.1, 0.2, 0.35, 0.5, 0.7]
 const SOFT = 0.03
 /** how strong the hips and a foot are (m/s²) */
 const STRENGTH = { hips: 300, foot: 2000 }
+/** how much less than its length a leg reaches standing over a foot put down (in legs) */
+const SLACK = 0.023
+/** how long a foot takes to step where a story puts it, if it does not say (in beats) */
+const PLACE = 1.5
 /** how far off a place is that he steps to as he faces rather than turn to it (in legs) */
 const KEEPS = 0.85
 /** how many times as fast the clock goes while a leg reaches its foot on the ground no longer */
@@ -70,6 +74,8 @@ export class Gait {
   private keeps = false
   /** a jump he is making */
   private jumping?: Jump & { course?: Course }
+  /** a foot a story puts somewhere, on its way there */
+  private readonly placing: Partial<Record<Side, Step>> = {}
 
   constructor(readonly size: Size) {
     this.lead = new Lead(size)
@@ -242,6 +248,9 @@ export class Gait {
 
   /** where the hips are to be in so long: over where he will be, riding and swaying with the stride, and facing so */
   private planned(seconds: number) {
+    // (between feet the story has put down he stands over them, as high as his legs reach both)
+    const stance = this.stance()
+    if (stance) return { place: stance, turn: this.going.facing }
     const ground = this.path(seconds)
     const phase = this.phase + this.rate * seconds
     const { facing, spins, aims } = this.going
@@ -251,6 +260,29 @@ export class Gait {
     const { value, velocity } = this.hips
     place.y = Math.max(this.ride(ground, seconds, phase, facing), value.y + velocity.y * seconds - (GRAVITY / 2) * seconds ** 2)
     return { place, turn: turned }
+  }
+
+  /** whether a foot is someone else's: a story has put it somewhere or sends it */
+  held(side: Side) {
+    const { owner } = this.feet[side]
+    return owner !== undefined && owner !== 'gait' && owner !== 'jump' && owner !== 'on'
+  }
+
+  /** where a foot is or is to be: its last frame, or where it is */
+  private ends(side: Side) {
+    const foot = this.feet[side]
+    return new Vector3().copy(foot.frames.at(-1)?.place ?? foot.value)
+  }
+
+  /** standing between feet the story has put down: where the hips stand over them, and as high as his legs reach both from there */
+  private stance() {
+    if (!SIDES.some((side) => this.held(side)) || this.jumping) return undefined
+    const [left, right] = SIDES.map((side) => this.ends(side))
+    const half = Math.hypot(left.x - right.x, left.z - right.z) / 2
+    const { leg, hip, stand, ankle } = this.size
+    const reach = Math.sqrt(Math.max(0, leg ** 2 - Math.max(0, half - hip) ** 2 - (SLACK * leg) ** 2))
+    const low = Math.min(left.y, right.y) - ankle
+    return left.add(right).multiplyScalar(0.5).setY(Math.min(low + stand, low + ankle + reach))
   }
 
   /** how far a foot down is from where it belongs under the hips, pointing the way he is to face: at its ball (m) */
@@ -321,7 +353,16 @@ export class Gait {
         hips.by({ at: now + mark, place, velocity, turn: yaw(turn), spin, by: 'gait' })
       }
     }
-    for (const side of SIDES) this.tread(side, was, going, swingShare, moving, strays[side])
+    const stance = this.stance()
+    if (stance) {
+      // (he keeps his stance: the other stands where it is, or is to; and stepping off it later, he goes on from between his feet)
+      this.lead.place.set(stance.x, this.lead.place.y, stance.z)
+      this.stepping = !!(this.steps.left || this.steps.right)
+    }
+    for (const side of SIDES) if (!stance || this.steps[side] || this.held(side)) this.tread(side, was, going, swingShare, moving, strays[side])
+    // the ground he stands on is where his lowest foot down stands: up on what a story put him on, down again as he steps off it
+    const lows = SIDES.filter((side) => !this.steps[side] && !this.feet[side].frames.length).map((side) => this.feet[side].value.y - size.ankle)
+    if (lows.length && !this.jumping) this.lead.place.y = Math.min(...lows)
     if (this.stepping && !moving && !this.steps.left && !this.steps.right && away < TOGETHER * leg) this.stepping = false
     const down = Object.fromEntries(SIDES.map((side) => [side, { at: feet[side].value, down: !this.steps[side] }])) as Record<Side, { at: Vector3; down: boolean }>
     const speed = Math.hypot(hips.velocity.x, hips.velocity.z)
@@ -336,6 +377,18 @@ export class Gait {
     const foot = feet[side]
     // (a foot someone else has written frames to is theirs once its step would come down after theirs set off)
     const theirs = foot.frames.find((frame) => frame.by !== 'gait')
+    // (a foot down that a story puts somewhere to stand steps there: lifted clear and swung, its footfall theirs)
+    if (theirs?.place && !theirs.velocity && !theirs.on && theirs.by !== 'jump' && (this.placing[side] || !this.steps[side])) {
+      const lands = this.placing[side]?.lands ?? theirs.at ?? now + PLACE * this.size.beat
+      const pointed = yawOf(foot.turn)
+      const step = (this.placing[side] ??= { side, from: foot.value.clone(), leaves: now, to: new Vector3(), lands, pointed, toes: theirs.turn ? yawOf(theirs.turn) : pointed })
+      step.to.copy(theirs.place)
+      delete this.steps[side]
+      foot.cancel('gait')
+      if (lands - now > 0.02) for (const frame of swing(size, step, now, 0, feet[side === 'left' ? 'right' : 'left'].value, this.going.facing).slice(0, -1)) foot.by(frame)
+      return
+    }
+    delete this.placing[side]
     const sets = theirs ? (theirs.leaves ?? (theirs.at ?? now) - TAKES) : Infinity
     if ((this.steps[side]?.lands ?? now + (1 - this.duty) / this.rate) > sets) {
       delete this.steps[side]

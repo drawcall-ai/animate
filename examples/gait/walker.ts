@@ -40,6 +40,25 @@ export class Walker {
     this.gait.face(way)
   }
 
+  /** a foot a story sends to a place, in so many seconds or as soon as it can: the story is over when it is there */
+  readonly foot = {
+    left: { to: (place: { x: number; y: number; z: number }, way: { seconds?: number } = {}) => this.put('left', place, way.seconds) },
+    right: { to: (place: { x: number; y: number; z: number }, way: { seconds?: number } = {}) => this.put('right', place, way.seconds) },
+  }
+
+  private *put(side: 'left' | 'right', place: { x: number; y: number; z: number }, seconds?: number): Story {
+    const channel = this.gait.feet[side]
+    const frame = channel.by({ at: seconds === undefined ? undefined : this.time + seconds, place, by: 'story' })
+    while (channel.frames.includes(frame)) yield
+  }
+
+  /** where a foot stands on the ground under its hip, he over a place along z, facing as he does */
+  ground(side: 'left' | 'right', z: number) {
+    const facing = this.gait.going.facing
+    const out = (side === 'left' ? 1 : -1) * this.size.hip
+    return { x: out * Math.cos(facing) + Math.sin(facing) * z, y: this.gait.lead.place.y + this.size.ankle, z: -out * Math.sin(facing) + Math.cos(facing) * z }
+  }
+
   /** the scripted words, as the body has them */
   run(run: Parameters<Gait['run']>[0]) {
     this.gait.run(run)
