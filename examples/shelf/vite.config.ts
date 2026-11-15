@@ -10,5 +10,7 @@ export default defineConfig({
   preview: { headers },
   // (its workers are found beside its own modules, which prebundling would move)
   // and what it brings that is not an ES module still has to be bundled for the browser
+  // the game and the scripted bar are both pages of it
+  build: { rolldownOptions: { input: ['index.html', 'bar.html'] } },
   optimizeDeps: { exclude: ['@drawcall/rig'], include: ['vitecache > safe-stable-stringify'] },
 })
