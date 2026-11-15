@@ -1,4 +1,4 @@
-import { Body, type Side, type Story } from '@drawcall/animate'
+import { Body, type Side, type Story, type Thing } from '@drawcall/animate'
 import { type Grip, grip, Hand } from '@drawcall/hand'
 import { type PhysicsWorld, RigidBody } from '@drawcall/physics'
 import { Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three'
@@ -50,8 +50,8 @@ const FAR = 1000
 const LOOSE = 30
 
 /**
- * the ways the rifle is carried, its butt in his right shoulder: how it is turned from the aim, or from the way he
- * faces if it is not `aimed` (rad), to his left and up
+ * the ways the rifle is carried, its butt in the pocket of his right shoulder: how it is turned from the aim, or from
+ * the way he faces if it is not `aimed` (rad), to his left and up
  */
 const CARRY = {
   ready: { yaw: 0, pitch: 0, aimed: true },
@@ -63,13 +63,19 @@ export type Mode = keyof typeof CARRY
 /** how an aim is turned in the scene */
 const turned = (yaw: number, pitch: number) => new Quaternion().setFromEuler(new Euler(-pitch, yaw, 0, 'YXZ'))
 
-/** A soldier: a body led by a capsule the player moves, a rifle in both hands. What he does besides is a story of `actions`. */
+/**
+ * A soldier: a body led by a capsule the player moves, a rifle in both hands. The game moves the rifle: its butt in
+ * the pocket of his right shoulder, pointing along the aim, or as an action has it; the hands on it follow it there.
+ * What he does besides is a story of `actions`.
+ */
 export class Soldier {
   readonly body: Body
   readonly capsule: Capsule
   /** all that is drawn of him and what he carries */
   readonly shown = new Group()
   readonly rifle = rifle()
+  /** the rifle as bound to him, moved from outside: by the game */
+  readonly gun: Thing
   readonly magazine = magazine()
   spent = magazine()
   grenade = Soldier.grenade()
@@ -110,6 +116,7 @@ export class Soldier {
     const hands = (this.hands = { right: new Hand(rig, 'right'), left: new Hand(rig, 'left') })
     const body = (this.body = new Body(rig))
     this.scale = body.size.arm / ARM
+    this.gun = body.bind(this.rifle, { outside: true })
     this.capsule = new Capsule(world, new Object3D(), CAPSULE.radius, CAPSULE.high * body.size.stand)
 
     this.rifle.scale.setScalar(this.scale)
@@ -130,7 +137,6 @@ export class Soldier {
       grenade: grip(hands.right, this.grenade, { at: new Vector3(0, -GRENADE, 0), from: new Vector3(0, -1, 0) }),
     }
     this.shown.add(rig, this.rifle)
-    this.rifle.position.copy(body.eye('right'))
     this.carry({ move: { x: 0, z: 0 }, yaw: 0, pitch: 0 }, false)
     this.look(this.aimed)
     this.hold()
@@ -140,11 +146,10 @@ export class Soldier {
     return new Mesh(new SphereGeometry(GRENADE), new MeshStandardMaterial({ color: 0x405030 }))
   }
 
-  /** both hands take their grips on the rifle, which gives way to them, its butt resting in a shoulder */
+  /** both hands go on the rifle by their grips, and stay on it as it goes */
   hold() {
-    this.body.hold(this.rifle, { rests: RIFLE.butt })
-    this.body.hand.right.to(this.trigger ? this.held.trigger : this.held.grip)
-    this.body.hand.left.to(this.held.fore)
+    this.gun.on(this.body.hand.right, this.trigger ? this.held.trigger : this.held.grip)
+    this.gun.on(this.body.hand.left, this.held.fore)
   }
 
   /** where the eye looks through the rear sight, in the scene, as the rifle is now */
@@ -161,12 +166,17 @@ export class Soldier {
 
   /** the magazine in the hand is pushed home: it sits in its well */
   seat() {
-    this.body.hold(this.magazine).free()
+    if (this.bound(this.magazine)) this.body.bind(this.magazine).free()
     this.well.add(this.magazine)
     this.magazine.position.set(0, 0, 0)
     this.magazine.quaternion.identity()
     this.magazine.scale.setScalar(1)
     this.magazine.visible = this.loaded = true
+  }
+
+  /** whether a thing goes with a hand of his */
+  bound(thing: Object3D) {
+    return this.body.bound.some((bound) => bound.thing === thing)
   }
 
   note(error: unknown) {
@@ -199,10 +209,7 @@ export class Soldier {
           self.rooted = false
           if (!self.loaded) self.seat()
           self.slid = { from: 0, to: 0, since: self.body.time }
-          if (self.grenade.parent) {
-            self.body.hold(self.grenade).free()
-            self.drop(self.grenade, new Vector3())
-          }
+          if (self.bound(self.grenade)) self.drop(self.grenade, self.body.bind(self.grenade).free())
           self.hold()
         }
       })(),
@@ -287,8 +294,8 @@ export class Soldier {
       body.face(runs ? undefined : { x: Math.sin(input.yaw - side), z: Math.cos(input.yaw - side) })
     })
     // (he fires only with both hands on the rifle)
-    const holds = body.hand.right.there && body.hand.left.there
-    if (delta > 0) this.fire(delta, Boolean(input.fire) && !runs && !this.doing && holds)
+    if (delta > 0) this.fire(delta, Boolean(input.fire) && !runs && !this.doing && this.gun.there)
+    // (from where his shoulder was last posed: the hands follow it from there through the update)
     this.carry(input, runs)
     // where the world has him by the end of the frame
     const { position, floor } = capsule
@@ -315,16 +322,16 @@ export class Soldier {
   }
 
   /**
-   * the rifle is to point as an action carries it, or low going faster than a walk, and along the aim else; and the
-   * trigger finger lies along the frame, and is on the trigger for a shot
+   * the rifle is in the pocket of his right shoulder, pointing as an action carries it, or low going faster than a
+   * walk, and along the aim else; and the trigger finger lies along the frame, and is on the trigger for a shot
    */
   private carry(input: Input, runs: boolean) {
     const { yaw, pitch, aimed } = CARRY[this.mode ?? (runs ? 'low' : 'ready')]
     const faces = Math.atan2(this.body.facing.x, this.body.facing.z)
     this.rifle.quaternion.copy(turned((aimed ? input.yaw : faces) + yaw, (aimed ? input.pitch : 0) + pitch))
+    this.rifle.position.copy(this.shown.worldToLocal(this.body.pocket('right')))
     const trigger = Boolean(input.fire) && !runs && !this.doing
-    if (trigger !== this.trigger)
-      this.body.hand.right.shape(((this.trigger = trigger) ? this.held.trigger : this.held.grip).pose)
+    if (trigger !== this.trigger && !this.doing) this.gun.on(this.body.hand.right, (this.trigger = trigger) ? this.held.trigger : this.held.grip)
   }
 
   /** the magazine is as far out of its well as it is sliding */
