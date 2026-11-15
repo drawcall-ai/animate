@@ -1,4 +1,4 @@
-import type { Arriving, Bindings, End, Grip, Reaching, Story, Xyz } from '@drawcall/limbs'
+import type { Arriving, Bindings, End, Grip, Reaching, Side, Story, Xyz } from '@drawcall/limbs'
 import { Object3D, Quaternion, Vector3 } from 'three'
 import type { Body } from './body'
 
@@ -31,9 +31,11 @@ export type Foot = Readonly<Pick<End, 'value' | 'velocity' | 'anchor' | 'free'>>
 export type Sending = Arriving & On & { pointing?: Xyz; palm?: Xyz }
 
 /**
- * What a story or a game has of a thing bound to him: hands go `on` it by grips and come `off` it; it is sent
- * somewhere, or to be somewhere by a moment, as a hand is, and the hands come with it; whether every hand on it is where
- * it is to be; how fast it moves; and `free` lets it go, telling how fast it was moving.
+ * What a story or a game has of a thing bound to him: hands go `on` it by grips and come `off` it, the next on it
+ * leading it from where it is; it is sent somewhere, or to be somewhere by a moment, as a hand is, and the hands come
+ * with it; whether it is moved from `outside`, which hands it over to the game or back to the body at the moment it is
+ * set; whether every hand on it is where it is to be; how fast it moves; and `free` lets it go, telling how fast it
+ * was moving.
  */
 export type Thing = Readonly<{
   on(hand: Hand, grip: Grip, how?: { turning?: boolean }): void
@@ -43,7 +45,7 @@ export type Thing = Readonly<{
   readonly there: boolean
   readonly velocity: Vector3
   free(): Vector3
-}>
+}> & { outside: boolean }
 
 /** what the facades of the hands and things need of the body: its ends behind its hands, its bindings and clock, and the turn of a frame places are counted in */
 export type Binder = {
@@ -52,6 +54,24 @@ export type Binder = {
   end(hand: Hand): End
   /** what turns a way counted as a place `on` him, on a thing or in the scene into the frame of the body */
   ways(on?: Object3D | Body): Quaternion
+  /** the body, which a place is on that is on him */
+  body: Body
+  /** where a place in the scene is on him: from the shoulder on a side, as he faces */
+  onHim(side: Side, place: Vector3): Vector3
+}
+
+/**
+ * the hand leading a thing the body moves has it stay where it is, on him: turned as it is if it turns with the hand,
+ * pointing on as it does
+ */
+export function stay(object: Object3D, binder: Binder) {
+  const lead = binder.bindings.lead(object)
+  if (!lead) return
+  object.updateWorldMatrix(true, false)
+  const place = binder.onHim(lead.hand.side, object.getWorldPosition(new Vector3()))
+  const facing = binder.ways(binder.body).invert().multiply(binder.ways()).multiply(object.getWorldQuaternion(new Quaternion()))
+  const pointing = lead.turning ? new Vector3(0, 0, 1).applyQuaternion(facing) : undefined
+  void lead.hand.to(place, { on: binder.body, with: lead.grip, pointing })
 }
 
 /** a story over at once that came to nothing */
@@ -104,6 +124,7 @@ export function hand(end: End, binder: Binder): Hand {
 export function thing(object: Object3D, outside: boolean, binder: Binder): Thing {
   const { bindings, clock } = binder
   bindings.bind(object, outside, clock.time)
+  let moved = outside
   /** sends the hand leading it, with its grip, for the thing to be there: turning it by the hand, or on its own */
   const send = (go: (end: End, how: Reaching) => Story<boolean>, { pointing, palm, ...how }: Sending) => {
     const lead = bindings.lead(object)
@@ -124,11 +145,24 @@ export function thing(object: Object3D, outside: boolean, binder: Binder): Thing
     on(hand, grip, { turning = true } = {}) {
       const end = binder.end(hand)
       // (freed, it is bound again)
-      bindings.bind(object, outside, clock.time)
+      bindings.ensure(object, moved, clock.time)
       bindings.on(object, end, grip, turning, clock.time)
       void end.shape(grip.pose)
     },
-    off: (hand) => bindings.off(object, binder.end(hand), clock.time),
+    off(hand) {
+      const end = binder.end(hand)
+      const led = bindings.lead(object)?.hand === end
+      bindings.off(object, end, clock.time)
+      if (led) stay(object, binder)
+    },
+    get outside() {
+      return bindings.outside(object) ?? moved
+    },
+    set outside(to) {
+      moved = to
+      bindings.bind(object, to, clock.time)
+      if (!to) stay(object, binder)
+    },
     to: (place, { seconds, ...how } = {}) => send((end, reaching) => end.to(place, { ...reaching, seconds }), how),
     by: (when, place, how = {}) => send((end, reaching) => end.by(when, place, reaching), how),
     get there() {

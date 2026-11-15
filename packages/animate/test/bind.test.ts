@@ -195,3 +195,68 @@ test('a hand is not sent onto a thing it leads, and a thing with no hand on it g
   const sent = held.to({ x: 0, y: 1, z: 0.5 })
   expect(sent.next()).toEqual({ done: true, value: false })
 })
+
+test('a ball bound by a point keeps its turn as he faces: he turns, and it turns with him, not with the wrist', () => {
+  const mesh = ball()
+  const { body, hands } = setup(mesh)
+  const seat = grip(hands.right, mesh, SEAT)
+  const facing = () => new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(body.facing.x, body.facing.z))
+  const against = () => facing().invert().multiply(mesh.getWorldQuaternion(new Quaternion()))
+  let [was, now] = [new Quaternion(), new Quaternion()]
+  play(
+    body,
+    (function* () {
+      yield* body.hand.right.to(seat)
+      const held = body.bind(mesh)
+      held.on(body.hand.right, seat, { turning: false })
+      yield* held.to({ x: 0.1, y: -0.35, z: 0.4 }, { on: body, seconds: 1 })
+      was = against()
+      yield* body.face({ x: 1, z: 0 })
+      yield* body.until(body.time + 0.5)
+      now = against()
+      held.free()
+      yield* body.stand()
+    })(),
+  )
+  expect(now.angleTo(was)).toBeLessThan(0.02)
+})
+
+test('one thing is handed from outside to the body and back, its leading hand comes off and the next leads it where it is, and it is carried through a stand', () => {
+  const box = new Mesh(new BoxGeometry(0.34, 0.24, 0.3))
+  box.position.set(0, 0.95, 0.42)
+  const { body, hands } = setup(box)
+  const side = (s: Side) => {
+    const out = new Vector3(s === 'left' ? 1 : -1, 0, 0)
+    return grip(hands[s], box, { at: out.clone().multiplyScalar(0.17), from: out })
+  }
+  const grips = { left: side('left'), right: side('right') }
+  const { left, right } = body.hand
+  let [drift, through] = [Infinity, Infinity]
+  play(
+    body,
+    (function* () {
+      // the game has it while the hands go to it, then hands it to the body, which raises it
+      const carried = body.bind(box, { outside: true })
+      carried.on(right, grips.right)
+      carried.on(left, grips.left)
+      yield* body.until(body.time + 1.2)
+      carried.outside = false
+      expect(body.bound[0].outside).toBe(false)
+      yield* carried.to({ x: -0.1, y: 1.15, z: 0.42 }, { seconds: 1 })
+      // the right hand comes off: the left leads it, and it stays where it is
+      carried.off(right)
+      const at = place(box)
+      yield* body.until(body.time + 1)
+      drift = place(box).distanceTo(at)
+      expect(body.bound).toEqual([{ thing: box, hands: ['left'], turning: true, outside: false }])
+      // he is let stand: the hand stays on it, and it stays where it is on him
+      const before = place(box)
+      yield* body.stand()
+      through = place(box).distanceTo(before)
+      carried.free()
+      yield* body.stand()
+    })(),
+  )
+  expect(drift).toBeLessThan(0.05)
+  expect(through).toBeLessThan(0.05)
+})

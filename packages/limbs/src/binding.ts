@@ -2,7 +2,7 @@ import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Bones } from './bones'
 import type { End } from './end'
 import type { Grip } from './fingers'
-import { NUDGE } from './world'
+import { NUDGE, UP } from './world'
 
 /**
  * a hand on a thing by a grip, `turning` it with the hand or not, and where the grip seats the thing in the hand: its
@@ -11,8 +11,8 @@ import { NUDGE } from './world'
 type Bond = { hand: End; grip: Grip; turning: boolean; seat: { at: Vector3; turn: Quaternion } }
 /**
  * a thing bound to his hands: whether it is moved from `outside`, the hands on it, the first leading; how large it is
- * in the frame of the body; how it is turned there when its leading hand does not turn it, and how it turns on its way
- * to a way it is sent to point; how far it was from where its hand has it as it was taken, and when, for it to ease
+ * in the frame of the body; how it is turned against the way he faces when its leading hand does not turn it, and how
+ * it turns on its way to a way it is sent to point; how far it was from where its hand has it as it was taken, and when, for it to ease
  * into it; and how it moves, and where it was a nudge on, or last frame
  */
 type Bound = {
@@ -53,15 +53,24 @@ const eased = (share: number) => {
  * The things bound to his hands. A thing is moved by one owner at a time: the body, or from `outside`, by the game or
  * physics setting where it is. Moved by the body, it is the end of the arm of the hand that leads it, the first bound,
  * offset by the grip: wherever that hand goes it goes, turning with it if bound `turning`; bound by a point, its origin
- * goes where the grip seats it in the hand, a ball's middle, and it keeps its own turn, or turns as it is sent to point. Every other hand on it follows it, sent onto its grip, as near as the arm reaches, and never
+ * goes where the grip seats it in the hand, a ball's middle, and it keeps its turn against the way he faces, turning
+ * with neither the wrist nor the scene, or turns as it is sent to point. Every other hand on it follows it, sent onto its grip, as near as the arm reaches, and never
  * moves it. Moved from outside, every hand on it follows it. Taken from where it is, it eases into where its hand has
  * it; freed, it is the scene's again, where it is, moving as it was.
  */
 export class Bindings {
   private readonly all = new Map<Object3D, Bound>()
 
-  /** `bones` are those of the body whose hands have the things */
-  constructor(private readonly bones: Bones) {}
+  /** `bones` are those of the body whose hands have the things, and `facing` the way he faces in their frame (rad about y) */
+  constructor(
+    private readonly bones: Bones,
+    private readonly facing: () => number,
+  ) {}
+
+  /** what turns the frame of the way he faces into the frame of the body, as he faces now */
+  private faces() {
+    return new Quaternion().setFromAxisAngle(UP, this.facing())
+  }
 
   /** what is bound: each thing, the sides of the hands on it, the leading one first, whether it turns with that, and whether it is moved from outside */
   get bound() {
@@ -75,7 +84,17 @@ export class Bindings {
       }))
   }
 
-  /** a thing is bound to him from now on, moved by the body or from `outside`, as of the moment `now` */
+  /** a thing is bound to him if it is not already, moved by the body or from `outside`, as of the moment `now` */
+  ensure(thing: Object3D, outside: boolean, now: number) {
+    if (!this.all.has(thing)) this.bind(thing, outside, now)
+  }
+
+  /** whether a thing bound to him is moved from outside */
+  outside(thing: Object3D) {
+    return this.all.get(thing)?.outside
+  }
+
+  /** a thing is bound to him from now on, moved by the body or from `outside`, handed over at the moment `now` */
   bind(thing: Object3D, outside: boolean, now: number) {
     const bound = this.all.get(thing)
     if (bound?.outside === outside) return
@@ -162,17 +181,22 @@ export class Bindings {
     return bonds.length > 0 && bonds.every(({ hand }) => hand.there || hand.last === undefined)
   }
 
-  /** a thing a hand leads by a point turns, in the frame of the body, from as it is to `to`, between the moments it `leaves` and is there `when` */
+  /**
+   * a thing a hand leads by a point turns from as it is to `to`, in the frame of the body as he faces now, between the
+   * moments it `leaves` and is there `when`
+   */
   turn(thing: Object3D, to: Quaternion, leaves: number, when: number) {
     const bound = this.all.get(thing)
     if (!bound) return
-    bound.turns = { from: this.turning(bound, leaves).clone(), to: to.clone(), leaves, when }
+    const against = this.faces().invert().multiply(to)
+    bound.turns = { from: this.turning(bound, leaves).clone(), to: against, leaves, when }
   }
 
-  /** how a thing is turned, in the frame of the body, as it is now */
-  turned(thing: Object3D) {
-    this.placed(thing, matrix).decompose(at, turned, scaled)
-    return turned.clone()
+  /** every hand that follows a thing is sent onto it again: after he was let stand, which frees his hands */
+  rejoin() {
+    for (const bound of this.all.values()) {
+      for (const bond of bound.outside ? bound.bonds : bound.bonds.slice(1)) void bond.hand.to(bond.grip)
+    }
   }
 
   /** throws if a hand sent onto a thing would follow what moves it: what it leads, or what follows that */
@@ -180,6 +204,12 @@ export class Bindings {
     if (this.loops(hand, [thing])) {
       throw new Error(`the ${hand.name} is sent onto a thing it leads: the thing goes with it, and cannot also lead it`)
     }
+  }
+
+  /** how a thing is turned, in the frame of the body, as it is now */
+  turned(thing: Object3D) {
+    this.placed(thing, matrix).decompose(at, turned, scaled)
+    return turned.clone()
   }
 
   /** after a step, every hand that follows a thing is put where it has it on the thing as it is: derived, not planned */
@@ -266,7 +296,7 @@ export class Bindings {
     return to.multiplyMatrices(this.bones.frame, thing.matrixWorld)
   }
 
-  /** how it is turned at the moment `now`, led by a point: as it was, or on its way to how it is sent to point */
+  /** how it is turned against the way he faces at the moment `now`, led by a point: as it was, or on its way to how it is sent to point */
   private turning(bound: Bound, now: number) {
     const { turns } = bound
     if (!turns) return bound.turn
@@ -280,6 +310,7 @@ export class Bindings {
   private seated(bound: Bound, now: number) {
     const is = this.placed(bound.thing, new Matrix4())
     is.decompose(at, bound.turn, bound.scale)
+    bound.turn.premultiply(this.faces().invert())
     bound.turns = undefined
     const { off } = bound
     off.since = now
@@ -297,7 +328,7 @@ export class Bindings {
     const { hand: { side }, seat, turning } = bonds[0]
     const { wrist, hand } = this.bones
     const pos = new Vector3().copy(seat.at).applyQuaternion(hand[side]).add(wrist[side])
-    const turn = turning ? new Quaternion().copy(hand[side]).multiply(seat.turn) : this.turning(bound, now).clone()
+    const turn = turning ? new Quaternion().copy(hand[side]).multiply(seat.turn) : this.faces().multiply(this.turning(bound, now))
     // (easing in: what was off at the start is left off less and less, until none is)
     const left = 1 - eased((now - off.since) / (EASE * this.bones.size.beat))
     easing.compose(off.at.clone().multiplyScalar(left), new Quaternion().slerp(off.turn, left), ONE)

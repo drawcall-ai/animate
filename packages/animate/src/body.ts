@@ -3,7 +3,7 @@ import { Ahead, carrier, flat, Going, type Ground, Mover, Reactions, type Run, S
 import { type Band, Bindings, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
 import { Clock, type Workings } from './clock'
 import { type Intent, intent } from './intent'
-import { type Binder, type Foot, type Hand, hand as handOf, type On, type Thing, thing } from './ends'
+import { type Binder, type Foot, type Hand, hand as handOf, type On, stay, type Thing, thing } from './ends'
 
 /**
  * where the pocket of a shoulder is that a stock rests in, from its joint: so far above it (of his trunk) and in
@@ -93,7 +93,7 @@ export class Body {
     const hand = both(
       (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], carried, size, rigged('hand', side)),
     )
-    const bindings = (this.bindings = new Bindings(bones))
+    const bindings = (this.bindings = new Bindings(bones, () => mover.facing))
     this.foot = foot
     this.hands = hand
     const ends = new Map<Hand, End>()
@@ -106,6 +106,9 @@ export class Body {
         return found
       },
       ways: (on) => this.ways(on),
+      body: this,
+      onHim: (side, place) =>
+        place.clone().applyMatrix4(bones.frame).sub(bones.shouldered(side, new Vector3())).applyAxisAngle(UP, -mover.facing),
     }
     this.hand = both((side) => handOf(hand[side], this.binder))
     for (const side of SIDES) ends.set(this.hand[side], hand[side])
@@ -332,12 +335,17 @@ export class Body {
   }
 
   /**
-   * Comes to a stand: whatever the story has is let go, how he is to face and where to look with it, and the hips come to
+   * Comes to a stand: whatever the story has is let go but the hands on what is bound to him, which stay on it, how he
+   * is to face and where to look with it, and the hips come to
    * rest where their speed carries them, the feet stepping under them and together. Out of the air he comes down first. The
    * story it returns is over when he stands.
    */
   stand(): Story<boolean> {
-    return this.going.stand()
+    const stands = this.going.stand()
+    // (the hands on what is bound to him stay on it: what the body moves stays where it is on him)
+    this.bindings.rejoin()
+    for (const { thing: object, outside } of this.bindings.bound) if (!outside) stay(object, this.binder)
+    return stands
   }
 
   /**
