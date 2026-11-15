@@ -13,7 +13,8 @@
     "@drawcall/animate": "workspace:*",
     "three": "^0.187.0",
     "@drawcall/plan": "workspace:*",
-    "@drawcall/hand": "workspace:*"
+    "@drawcall/hand": "workspace:*",
+    "@drawcall/gait": "workspace:*"
   },
   "files": [
     "src"

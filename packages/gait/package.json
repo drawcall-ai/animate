@@ -1,0 +1,16 @@
+{
+  "name": "@drawcall/gait",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@drawcall/plan": "workspace:*",
+    "three": "^0.187.0"
+  },
+  "files": [
+    "src"
+  ]
+}
