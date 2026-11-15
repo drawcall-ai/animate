@@ -149,6 +149,7 @@ export class End extends Planner {
     const plan = found ?? { ...target, when: after + sway(this.limb) / 2, leaves: after, swing: 0, near: NONE }
     if (!found) this.claim(plan)
     stoops.forEach((stoop, k) => this.carrier.rise(stoop, Math.min(untils[k], plan.leaves)))
+    if (plan.on instanceof Object3D) plan.lay = new Vector3().setFromMatrixPosition(plan.on.matrixWorld)
     this.waiting.push(plan)
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     const fingers = this.limb.hand?.fingers
@@ -200,8 +201,10 @@ export class End extends Planner {
     if (!plan || !due(this.clock, plan.when)) return
     // it is there while it is as near where it is to be as an end counts as there
     plan.there = this.on(plan)
-    // (what he got down for it he stays down for while it is there, and no longer: going away from it, he comes up)
-    if (!plan.there && plan.stoop && plan.stoop.until > this.clock) this.carrier.rise(plan.stoop, this.clock)
+    // (what he got down for it he stays down for while it is there, and no longer: going away from it, he comes up, and
+    // on a thing raised from where it lay, it is not as low as he got down for)
+    const raised = plan.on instanceof Object3D && plan.lay && plan.on.matrixWorld.elements[13] - plan.lay.y > SLACK.place * this.size.leg
+    if ((!plan.there || raised) && plan.stoop && plan.stoop.until > this.clock) this.carrier.rise(plan.stoop, this.clock)
     const lands = this.kind === 'foot' && this.carrier.landing
     if (!moves(plan) && !(this.waiting.length === 0 && lands)) return
     this.release()

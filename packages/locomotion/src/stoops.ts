@@ -65,7 +65,7 @@ const turned = new Quaternion()
  * little as has a limb that reaches so far reach it, by a look that steps nothing ahead. For a
  * foot the hips come down; for a hand the trunk bends toward the place, forward, or back for what is behind his heels,
  * which costs him least, and only once it is bent as far as it goes do the hips come down, for what is below the
- * shoulder and still out of reach. The hips
+ * shoulder and still out of reach; for what is below his hips the other way round, the knees first and the chest up. The hips
  * come no lower than he gets, lunging if he is going along then, and standing low they ride back
  * as far as they do at the most.
  */
@@ -88,12 +88,15 @@ export function lower(
   const [back, forth] = RANGE.trunk.x
   const rear = off.subVectors(place, from).dot(fore) < -SOLE.behind * size.leg
   const high = ahead.shoulder(side, seconds, at, turned).y
+  // (for what is below his hips he bends his knees first, the chest up, and leans only as far as that leaves short)
+  const deep = place.y < from.y
+  const [first, then] = [(share: number) => Math.min(1, 2 * share), (share: number) => Math.max(0, 2 * share - 1)]
   const down = (share: number) =>
     end === 'foot'
       ? { low: share * squat(size), bend: 0 }
       : {
-          low: place.y < high ? Math.max(0, 2 * share - 1) * squat(size) : 0,
-          bend: Math.min(1, 2 * share) * (rear ? back : forth),
+          low: place.y < high ? (deep ? first : then)(share) * squat(size) : 0,
+          bend: (deep ? then : first)(share) * (rear ? back : forth),
         }
   const root = (share: number) => {
     const { low, bend } = down(share)

@@ -1,4 +1,4 @@
-import { Euler, type Matrix4, Quaternion, Vector3 } from 'three'
+import { Euler, Quaternion, Vector3 } from 'three'
 import { type Aim, aim } from './aim'
 import { AXES, type State, between, longest } from './curve'
 import { EASY, type Goal, MOST, REST } from './goal'
@@ -12,7 +12,7 @@ import { EXACT, NUDGE, clamp, steps } from './world'
 /**
  * how an end gets to a target: the moment it is there, the moment it sets off, how long it swings into a fast arrival,
  * drawn back first (s), what the body gets down for it, and whether it was there at its moment once that has come: on
- * a thing, false while it has let go of it
+ * a thing, false while it has let go of it; and where the thing it is on lay as it was sent there, in the scene
  */
 export type Plan = Target & {
   when: number
@@ -21,7 +21,7 @@ export type Plan = Target & {
   stoop?: Stoop
   there?: boolean
   near?: Near
-  from?: Matrix4
+  lay?: Vector3
 }
 /** the joints of a limb from its first out, the last at the wrist of a hand */
 export const JOINTS = ['first', 'second', 'wrist'] as const
