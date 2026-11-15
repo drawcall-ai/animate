@@ -5,15 +5,13 @@ import { Character } from '../character'
 import type { Game, Input } from '../play'
 import type { Thing } from '../thing'
 import { balls, done, home, Pins } from './alley'
-import { bowl, carry, hold, SIDE } from './bowl'
+import { bowl, carry, SIDE } from './bowl'
 import { GRIP, LINE, RADIUS } from './lane'
 
 /** how fast he walks and runs (m/s) */
 const SPEED = { walk: 1.4, run: 3.5 }
 /** how high above where it rested he lifts a ball off the return, and how long that takes (m, s) */
 const LIFT = { up: 0.15, seconds: 0.5 }
-/** how far a carried ball may point off the way he faces before it is turned to it (the cosine) */
-const TURNED = Math.cos((20 * Math.PI) / 180)
 /** how long the pins have to settle once the ball is done before it comes back on the return (s) */
 const SETTLE = 2
 /**
@@ -48,7 +46,6 @@ export class Bowler implements Game {
     if (input.act) this.act()
     const speed = input.run ? SPEED.run : SPEED.walk
     this.character.update(delta, { x: input.move.x * speed, z: input.move.z * speed })
-    this.turn()
     this.collect(delta)
   }
 
@@ -92,31 +89,22 @@ export class Bowler implements Game {
     yield* right.to(sides.right)
     yield* reached
     const point = { turning: false }
-    const resting = body.bind(mesh, { outside: true })
-    resting.on(right, sides.right, point)
-    resting.on(left, sides.left, point)
+    const ball = body.bind(mesh, { outside: true })
+    ball.on(right, sides.right, point)
+    ball.on(left, sides.left, point)
     // the body has it, the right hand leading, and lifts it
-    const ball = body.bind(mesh)
+    ball.outside = false
     this.held = { k, ball }
     const lifted = mesh.position.clone().setY(mesh.position.y + LIFT.up)
     yield* ball.to(lifted, { seconds: LIFT.seconds })
     // the left leads it, held where it is, while the right goes under it; then the right leads
     const under = grip(hands.right, mesh, GRIP)
     ball.off(right)
-    void ball.to(lifted)
     yield* right.to(under)
     ball.on(right, under, point)
     ball.off(left)
     yield* carry(body, ball, sides.left)
     body.face()
-  }
-
-  /** a ball carried by a point keeps its turn as he turns: turned off the way he faces, it is turned to it again, the left hand staying on its side */
-  private turn() {
-    const { held, body } = this
-    if (!held || this.character.acting) return
-    const pointing = new Vector3(0, 0, 1).applyQuaternion(this.balls[held.k].mesh.quaternion)
-    if (pointing.x * body.facing.x + pointing.z * body.facing.z < TURNED) void hold(body, held.ball)
   }
 
   /** a ball rolled into the pit or come to rest goes back onto the return once the pins settle, and they are set up anew after a frame */

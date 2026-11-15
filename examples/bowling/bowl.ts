@@ -19,18 +19,13 @@ const APPROACH = { speed: 3, arrive: 1 }
 /** the ball leaves the hand beside the left foot, to its right and a little ahead, just over the boards, rolling down the lane (m, m/s) */
 const RELEASE = { aside: -0.2, ahead: 0.1, over: 0.1, speed: 7 }
 /**
- * He carries the `ball`, led by his right hand, on its palm before his belly, turned the way he faces, and once it is
- * there the left hand goes on it by the grip `side`, on its left.
+ * He carries the `ball`, led by his right hand, on its palm before his belly, turned the way he faces, the left hand
+ * on it by the grip `side`, on its left. The story is over once it is there.
  */
-export function* carry(body: Body, ball: Thing, side: Grip): Story {
-  yield* hold(body, ball)
-  ball.on(body.hand.left, side, { turning: false })
-}
-
-/** the `ball` goes to where he carries it, turned the way he faces */
-export function hold(body: Body, ball: Thing) {
+export function carry(body: Body, ball: Thing, side: Grip) {
   const { arm } = body.size
   const { x, y, z } = CARRY.at
+  ball.on(body.hand.left, side, { turning: false })
   return ball.to(place(x * arm, y * arm, z * arm), { on: body, palm: CARRY.palm, pointing: place(0, 0, 1) })
 }
 
