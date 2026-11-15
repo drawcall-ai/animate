@@ -130,7 +130,7 @@ renderer.setAnimationLoop((now) => {
     camera.position.copy(soldier.body.eye('right'))
     camera.lookAt(camera.position.clone().add(ahead))
   } else {
-    // behind his right shoulder, looking the way he aims: from where the capsule is, which goes smoother than he does
+    // behind his right shoulder, looking the way he aims: from where the world has him
     const right = new Vector3(-Math.cos(aim.yaw), 0, Math.sin(aim.yaw))
     near += ((sights ? BEHIND.sights : BEHIND.back) - near) * Math.min(1, 8 * delta)
     camera.position

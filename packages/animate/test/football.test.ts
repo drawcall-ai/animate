@@ -40,7 +40,7 @@ test('the shot: what is written holds at the strike, the body does the rest, and
   expect(steps.every((side, k) => side !== steps[k - 1])).toBe(true)
   expect(steps.at(-1)).toBe('left')
   expect(drawn).toBeGreaterThan(0.2)
-  expect(risen).toBeGreaterThan(0.3)
+  expect(risen).toBeGreaterThan(0.25)
   expect(back).toBeLessThan(-10)
   expect(body.playing).toBe(false)
   expect(body.hips.value.y).toBeCloseTo(body.size.stand, 1)

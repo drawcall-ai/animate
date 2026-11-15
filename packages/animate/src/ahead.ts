@@ -5,7 +5,7 @@ import { socket } from './pelvis'
 import { type Joints, LAGS } from './joints'
 import type { Bones } from './bones'
 import { bent, leans } from './reactions'
-import { HEEL, SIDES, type Side, other, tick } from './size'
+import { HEEL, type Side, other, tick } from './size'
 import { stood } from './stance'
 import type { Stoop } from './stoops'
 import type { Mover } from './mover'
@@ -29,8 +29,15 @@ const round = new Quaternion()
 export class Ahead {
   /** the wind-up for a fast hand, which turns the trunk meanwhile */
   readonly wind: Winder
-  /** from a moment on, the hips as stepped ahead, the trunk coming round, and a copy of what they came to and how far it leant, a tick after another */
-  private cache?: { from: number; mover: Mover; trunk: Goal; leant: number[]; copies: Mover[] }
+  /** from a moment on, the hips as stepped ahead, the trunk coming round from how it was then, and a copy of what they came to and how far it leant, a tick after another */
+  private cache?: {
+    from: number
+    mover: Mover
+    trunk: Goal
+    begun: Record<'value' | 'velocity', Vector3>
+    leant: number[]
+    copies: Mover[]
+  }
 
   constructor(
     private readonly body: { readonly time: number },
@@ -45,8 +52,20 @@ export class Ahead {
     return this.body.time
   }
 
-  stale() {
-    this.cache = undefined
+  /**
+   * what changes where he is going from a moment on makes him be looked ahead anew from then: only what he gets down
+   * for is read as he is stepped on, and not kept in a copy, so anything else changes him from now
+   */
+  stale(from = this.now) {
+    const { cache } = this
+    if (!cache) return
+    const kept = Math.floor((from - cache.from) / tick(this.mover.size) + 1e-6) - 1
+    if (kept < 1 || from <= this.now) return (this.cache = undefined)
+    if (kept >= cache.copies.length) return void (cache.leant.length = 0)
+    cache.copies.length = kept
+    cache.mover = cache.copies[kept - 1].clone()
+    cache.copies.length = kept - 1
+    cache.leant.length = 0
   }
 
   /** how long from now until he first is as `found` tells, looked at a tick at a time for no longer than `most` (s) */
@@ -61,21 +80,32 @@ export class Ahead {
     return this.mover.stoops.longest
   }
 
+  /** he is down for something until a moment: which changes where he is going from then, and never before he got down for it */
   rise(stoop: Stoop, at: number) {
+    const was = stoop.until
     stoop.until = at
-    this.stale()
+    this.stale(Math.max(Math.min(was, at), Math.min(stoop.sinks, stoop.bends)))
   }
 
   /** he as he will be `seconds` from now: the copy of him at the last whole tick, how far forward a free trunk leans then (rad), and how long past that tick it is */
   at(seconds: number) {
-    if (!this.cache) {
-      const trunk = this.joints.trunk.like(this.joints.trunk.value)
-      trunk.velocity.copy(this.joints.trunk.velocity)
-      trunk.free()
-      this.cache = { from: this.mover.time, mover: this.mover.clone(), trunk, leant: [], copies: [] }
+    const { trunk: turning } = this.joints
+    this.cache ??= {
+      from: this.mover.time,
+      mover: this.mover.clone(),
+      trunk: turning.like(turning.value),
+      begun: { value: turning.value.clone(), velocity: turning.velocity.clone() },
+      leant: [],
+      copies: [],
     }
     const dt = tick(this.mover.size)
-    const { from, mover, trunk, leant, copies } = this.cache
+    const { from, mover, leant, copies, begun } = this.cache
+    if (leant.length === 0) {
+      this.cache.trunk = turning.like(begun.value)
+      this.cache.trunk.velocity.copy(begun.velocity)
+      this.cache.trunk.free()
+    }
+    const { trunk } = this.cache
     const on = Math.max(0, this.now + seconds - from) / dt
     // (a whole tick, but for what numbers round to)
     const whole = Math.floor(on + 1e-6)
@@ -100,10 +130,10 @@ export class Ahead {
     return look && { x: -look.pitch * share, y: wrap(look.yaw - facing) * share }
   }
 
-  /** how far forward a free trunk is to lean `seconds` from now: as the hips will have it lean by the time it has come round, or bent for a hand that he gets down for then */
-  leans(seconds: number) {
+  /** how far forward a free trunk is to lean `seconds` from now: as the hips will have it lean by the time it has come round, or bent for a hand that he gets down for then, and `more` */
+  leans(seconds: number, more = 0) {
     const { stoops, size } = this.mover
-    return bent(leans(this.at(seconds + LAGS * tick(size)).copy), stoops.bend(this.now + seconds))
+    return bent(leans(this.at(seconds + LAGS * tick(size)).copy), stoops.bend(this.now + seconds) + more)
   }
 
   /** where the hips will be and how they will move `seconds` from now, in the scene */
@@ -138,18 +168,6 @@ export class Ahead {
     const leant = lean + ((this.at(seconds + dt).lean - lean) * past) / dt
     to.y += this.turn(seconds) - this.turn(0)
     return to.setX(leant)
-  }
-
-  /** how far the hips and the feet go, and the trunk turns, from a moment to another, `seconds` from now: any way at all, before now */
-  goes(from: number, to: number) {
-    if (from < 0) return Infinity
-    const [was, then] = [this.at(from).copy, this.at(to).copy]
-    const gone = (side?: Side) => {
-      const place = (copy: Mover, to: Vector3) => copy.scene(side ? copy.foot[side].at : copy.value, side, to)
-      return place(was, lean).distanceTo(place(then, next))
-    }
-    const far = [gone(), ...SIDES.map(gone), Math.abs(was.facing - then.facing)]
-    return Math.max(this.trunk(from, lean).distanceTo(this.trunk(to, next)), ...far)
   }
 
   /** how far the pelvis will be turned `seconds` from now, and how far it will list (rad) */

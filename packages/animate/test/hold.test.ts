@@ -80,7 +80,7 @@ test('both hands stay on one bar as it moves', () => {
   expect(worst).toBeLessThan(0.005)
 })
 
-test('a thing that goes out of reach is one error naming the hand and how far short it is, and the hand takes it again once it is back', () => {
+test('a thing that goes out of reach is no error: the hand goes as near it as it can, and is on it again once it is back', () => {
   const { scene, body } = setup()
   const grip = new Object3D()
   grip.position.set(-0.2, 1.1, 0.4)
@@ -88,19 +88,12 @@ test('a thing that goes out of reach is one error naming the hand and how far sh
   body.hand.right.to(HERE, { on: grip })
   for (let t = 0; t < 1.5; t += FRAME) body.update(FRAME)
   expect(body.hand.right.there).toBe(true)
-  const said: string[] = []
   for (let t = 0; t < 2; t += FRAME) {
     grip.position.z = Math.min(1.6, grip.position.z + 1.2 * FRAME)
-    try {
-      body.update(FRAME)
-    } catch (error) {
-      said.push(String(error))
-    }
+    body.update(FRAME)
   }
-  expect(said).toHaveLength(1)
-  expect(said[0]).toMatch(
-    /^Error: the right hand is to be on a thing .* its limb is \d\.\d\d m short .* takes it again as soon as it can$/,
-  )
+  // (reaching after it, as far as his arm goes)
+  expect(body.hand.right.value.z).toBeGreaterThan(0.5)
   expect(body.hand.right.there).toBe(false)
   for (let t = 0; t < 2.5; t += FRAME) {
     grip.position.z = Math.max(0.4, grip.position.z - 1.2 * FRAME)
@@ -130,7 +123,7 @@ test('what is stated with no story playing is not undone', () => {
   expect(body.hand.right.value.distanceTo(there)).toBeLessThan(0.005)
 })
 
-test('led with his hips held low he goes at that height, and stopped he settles to it', () => {
+test('led with his hips held low he goes at that height, stopped he settles to it, and held lower than he walks he goes crouched', () => {
   const { body } = setup()
   const low = 0.76 * body.size.stand
   body.hips.to({ y: low })
@@ -143,11 +136,12 @@ test('led with his hips held low he goes at that height, and stopped he settles 
   expect(lowest).toBeGreaterThan(low - 0.05)
   expect(highest).toBeLessThan(low + 0.03)
   expect(body.hips.value.y).toBeCloseTo(low, 2)
-  expect(() => {
-    body.hips.to({ y: 0.5 * body.size.stand })
+  body.hips.to({ y: 0.5 * body.size.stand })
+  for (let t = 0; t < 2; t += FRAME) {
     body.go({ x: 0, z: 0.9 })
     body.update(FRAME)
-  }).toThrow(/hold them higher first/)
+  }
+  expect(body.hips.value.y).toBeGreaterThan(0.7 * body.size.stand)
 })
 
 test('led sideways at 1.2 m/s he keeps up, his feet under him', () => {
@@ -262,10 +256,8 @@ function rifleman() {
     gun.position.copy(shoulder.getWorldPosition(new Vector3())).add(butt.applyAxisAngle(UP, aim))
     return { position: gun.position.clone(), quaternion: gun.quaternion.clone() }
   }
-  for (const side of ['right', 'left'] as const) {
-    body.hand[side].to(held[side], { on: held[side].target, gives: gun })
-    body.hand[side].shape(held[side].pose)
-  }
+  body.hold(gun)
+  for (const side of ['right', 'left'] as const) body.hand[side].to(held[side])
   /** how far each hand is from where its grip has it on the rifle as it is (m) */
   const off = () =>
     Math.max(
@@ -308,11 +300,17 @@ test.each([1, 2])(
   },
 )
 
-test('a rifle that gives way, to be through his chest, is pushed out of it, and no forearm goes into the trunk', () => {
+test('a rifle held in both hands that gives way, to be through his chest, is pushed out of it, and no forearm goes into the trunk', () => {
   const { scene, rig, body, gun, pose, off } = rifleman()
   const { shoulder, trunk } = body.size
   const at = (name: string) => (rig.getObjectByName(name) as Object3D).getWorldPosition(new Vector3())
   let [deepest, worst, wish] = [0, 0, pose(0)]
+  // (both hands take hold of it first)
+  for (let t = 0; t < 2; t += FRAME) {
+    pose(0)
+    body.update(FRAME)
+  }
+  expect([body.hand.left.there, body.hand.right.there]).toEqual([true, true])
   for (let t = 0; t < 1.5; t += FRAME) {
     // its butt behind his back, between his shoulders
     wish = pose(0, new Vector3(0.2, -0.1, -0.25))

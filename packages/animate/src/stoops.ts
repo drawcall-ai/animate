@@ -3,10 +3,9 @@ import type { Ahead } from './ahead'
 import { SETTLE, SINK, behind, lowest, lunge, squat } from './gait'
 import { EASY, type Goal } from './goal'
 import { RANGE } from './joints'
-import { SLACK } from './limb'
 import type { Mover } from './mover'
 import { SOLE, type Side, type Size, tick } from './size'
-import { UP, clamp, due } from './world'
+import { EXACT, UP, clamp, due } from './world'
 
 /** how far he gets down for a hand or a foot to reach: the hips let down (m) and the trunk bent (rad), each from the moment that has it there in time, and until another */
 export type Stoop = { low: number; bend: number; sinks: number; bends: number; until: number }
@@ -56,7 +55,10 @@ export class Stoops {
   }
 }
 
+/** how finely getting down is looked through for the least that has a limb reach, in shares of the most */
+const FINE = 1 / 16
 const hips = new Vector3()
+const from = new Vector3()
 const velocity = new Vector3()
 const trunk = new Vector3()
 const at = new Vector3()
@@ -65,64 +67,57 @@ const off = new Vector3()
 const turned = new Quaternion()
 
 /**
- * He gets down, the hips let down and the trunk bent, to be down at a moment and until another: which changes where
- * he is going. Not if a look that steps nothing ahead tells that what hangs `from` the hips and the trunk would
- * surely be more than `reach` from a place even so: with the hips no lower than he gets, lunging if he is going
- * along when they begin to sink, and standing low, as far back as they ride at the most.
- */
-function sink(
-  mover: Mover,
-  ahead: Ahead,
-  [low, bend, when, until]: number[],
-  from: (seconds: number, hips: Vector3, trunk: Vector3) => Vector3,
-  place: Vector3,
-  reach: number,
-) {
-  const { stoops } = mover
-  // (he is down until the moment: how he is to be then is told a step before it)
-  const [seconds, just] = [when - ahead.now, when - tick(mover.size)]
-  const deeper = Math.max(0, low - stoops.low(just))
-  const stoop = stoops.add(low, bend, when, until, ahead.now)
-  const lunges = ahead.at(Math.max(0, stoop.sinks - ahead.now)).copy.lunging
-  ahead.hips(seconds, hips, velocity)
-  hips.y = Math.min(hips.y, Math.max(hips.y - deeper, (lunges ? lunge : lowest)(mover.size)))
-  const root = from(seconds, hips, trunk.set(ahead.leans(just - ahead.now), 0, 0))
-  // (back from the way he faces)
-  fore.set(0, 0, 1).applyAxisAngle(UP, ahead.facing(seconds))
-  if (!lunges) root.addScaledVector(fore, -clamp(off.subVectors(root, place).dot(fore), 0, behind(mover.size, hips.y)))
-  if (root.distanceTo(place) > reach + SLACK.reach * mover.size.leg) {
-    stoop.until = -Infinity
-    return undefined
-  }
-  ahead.stale()
-  return stoop
-}
-
-/**
- * Has the body get down for a foot or a hand of a side toward a place by a `share` of the most it can, to be down at a
- * moment and until another: not if that would surely leave the limb more than `reach` from the place. For a foot the
- * hips come down; for a hand the trunk bends toward the place, forward, or back for what is behind his heels: and only
- * once it is bent as far as it goes do the hips come down, for what is below the shoulder and still out of reach
+ * Has the body get down for a foot or a hand of a side toward a place, to be down at a moment and until another: as
+ * little as has a limb that reaches so far reach it, by a look that steps nothing ahead. For a
+ * foot the hips come down; for a hand the trunk bends toward the place, forward, or back for what is behind his heels,
+ * which costs him least, and only once it is bent as far as it goes do the hips come down, for what is below the
+ * shoulder and still out of reach. The hips
+ * come no lower than he gets, lunging if he is going along then, and standing low they ride back
+ * as far as they do at the most.
  */
 export function lower(
   end: 'foot' | 'hand',
   side: Side,
   mover: Mover,
   ahead: Ahead,
-  [share, when, until]: number[],
+  [when, until]: number[],
   place: Vector3,
   reach: number,
-) {
-  if (end === 'foot') {
-    const from = (seconds: number, hips: Vector3) => ahead.hip(side, seconds, at, turned, hips)
-    return sink(mover, ahead, [share * squat(mover.size), 0, when, until], from, place, reach)
-  }
-  const [back, forth] = RANGE.trunk.x
-  const seconds = when - ahead.now
-  const high = ahead.shoulder(side, seconds, at, turned).y
+): Stoop {
+  const { stoops, size } = mover
+  // (he is down until the moment: how he is to be then is told a step before it)
+  const [seconds, just] = [when - ahead.now, when - tick(size)]
+  const lunges = ahead.at(seconds).copy.lunging
+  const was = stoops.low(just)
+  ahead.hips(seconds, from, velocity)
   fore.set(0, 0, 1).applyAxisAngle(UP, ahead.facing(seconds))
-  const rear = off.subVectors(place, ahead.hips(seconds, hips, velocity)).dot(fore) < -SOLE.behind * mover.size.leg
-  const low = place.y < high ? Math.max(0, 2 * share - 1) * squat(mover.size) : 0
-  const from = (on: number, hips: Vector3, trunk: Vector3) => ahead.shoulder(side, on, at, turned, hips, trunk)
-  return sink(mover, ahead, [low, Math.min(1, 2 * share) * (rear ? back : forth), when, until], from, place, reach)
+  const [back, forth] = RANGE.trunk.x
+  const rear = off.subVectors(place, from).dot(fore) < -SOLE.behind * size.leg
+  const high = ahead.shoulder(side, seconds, at, turned).y
+  const down = (share: number) =>
+    end === 'foot'
+      ? { low: share * squat(size), bend: 0 }
+      : {
+          low: place.y < high ? Math.max(0, 2 * share - 1) * squat(size) : 0,
+          bend: Math.min(1, 2 * share) * (rear ? back : forth),
+        }
+  const root = (share: number) => {
+    const { low, bend } = down(share)
+    hips.copy(from)
+    hips.y = Math.min(hips.y, Math.max(hips.y - Math.max(0, low - was), (lunges ? lunge : lowest)(size)))
+    if (end === 'foot') ahead.hip(side, seconds, at, turned, hips)
+    else ahead.shoulder(side, seconds, at, turned, hips, trunk.set(ahead.leans(just - ahead.now, bend), 0, 0))
+    if (!lunges) at.addScaledVector(fore, -clamp(off.subVectors(at, place).dot(fore), 0, behind(size, hips.y)))
+    return at
+  }
+  // (the least that has it reach: else as far as brings it nearest)
+  let [share, nearest] = [0, Infinity]
+  for (let tried = FINE; tried <= 1 && nearest > reach; tried += FINE) {
+    const far = root(tried).distanceTo(place)
+    if (far <= reach || far < nearest - EXACT) [share, nearest] = [tried, far]
+  }
+  const { low, bend } = down(share)
+  const stoop = stoops.add(low, bend, when, until, ahead.now)
+  ahead.stale(Math.min(stoop.sinks, stoop.bends))
+  return stoop
 }

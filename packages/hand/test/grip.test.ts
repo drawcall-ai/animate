@@ -204,9 +204,20 @@ test('a thumb left out yields to a bar, and the rest still hook round it', () =>
   for (const finger of using) expect(contacts[finger].gap).toBeLessThan(0.0011)
 })
 
-test('a finger closed to its fist on nothing does not count as holding', () => {
-  const [hand, cube] = [right(), thing([new BoxGeometry(0.01, 0.01, 0.01)])]
-  expect(() => grip(hand, cube, { at: V(0.005, 0, 0), from: V(1, 0, 0) })).toThrow(/closes .* short/)
+test('a handle of any thickness is held from any side, the point anywhere in it, with nothing sunk in', () => {
+  const hand = right()
+  for (const radius of [0.005, 0.017, 0.024, 0.035])
+    for (const from of [V(1, 0, 0), V(0, 0, -1)]) {
+      const { contacts } = grip(hand, rod(radius), { at: V(0, 0.01, 0), from })
+      expect(contacts.palm.gap).toBeLessThan(0.002)
+      for (const c of Object.values(contacts)) expect(c.gap).toBeGreaterThan(-0.002)
+    }
+})
+
+test('a big ball lies on the palm with the fingers and thumb on it, none sunk in', () => {
+  const [hand, ball] = [right(), thing([new SphereGeometry(0.12, 24, 16)])]
+  const { contacts } = grip(hand, ball, { at: V(0, -0.12, 0), from: V(0, -1, 0) })
+  for (const c of Object.values(contacts)) expect(Math.abs(c.gap)).toBeLessThan(0.003)
 })
 
 // the barrel along +z, up +y; the palm on the grip's back strap from behind and the gun's right, the index on the
@@ -241,18 +252,16 @@ test('a grip composed on an earlier one keeps its placement, and puts the hand o
   expect(hand.bone.worldToLocal(carried.localToWorld(V(0, 0, 0))).distanceTo(placed)).toBeLessThan(1e-9)
 })
 
-test('a composed finger that ends away from its point throws, and so does composing onto another target', () => {
+test('composing onto another target, or saying `from` again, throws', () => {
   const [hand, target] = [right(), gun()]
   const held = grip(hand, target, strap)
-  expect(() => grip(hand, target, { at: V(0, -0.1, 0.02), using: ['index'], start: held })).toThrow('the index')
   expect(() => grip(hand, rod(0.02), { at: trigger, using: ['index'], start: held })).toThrow("start from this one's")
   expect(() => grip(hand, target, { at: trigger, from: V(1, 0, 0), using: ['index'], start: held })).toThrow('`from`')
 })
 
-test('what cannot be gripped throws saying so, naming directions in the target frame', () => {
+test('a statement with nothing to grip, or no side to come from, throws saying so', () => {
   const hand = right()
   expect(() => grip(hand, new Group(), { at: V(0, 0, 0), from: V(1, 0, 0) })).toThrow('no mesh')
   expect(() => grip(hand, rod(0.04), { at: V(0, 0, 0) })).toThrow('which side the hand')
-  expect(() => grip(hand, rod(0.04), { at: V(0, 0, 0), from: V(1, 0, 0) })).toThrow('behind the surface')
-  expect(() => grip(hand, rod(0.04), { at: V(0, 0, 0), from: V(1, 0, 0) })).toThrow('toward +x')
+  expect(() => grip(hand, rod(0.04), { at: V(0, 0, 0), from: V(0, 0, 0) })).toThrow('which side the hand')
 })

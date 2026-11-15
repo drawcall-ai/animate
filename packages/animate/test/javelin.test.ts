@@ -1,5 +1,7 @@
+import { grip, Hand } from '@drawcall/hand'
+import { Scene } from 'three'
 import { expect, test } from 'vitest'
-import { carry } from '../../../examples/carry'
+import { holds } from '../../../examples/character'
 import { fly, GRIP, javelin, shaft } from '../../../examples/javelin/field'
 import { javelinThrow } from '../../../examples/javelin/throw'
 import { Body } from '../src'
@@ -8,8 +10,11 @@ import { person } from '../../../examples/person'
 test('the throw: the javelin leaves the hand as written, and he ends standing', () => {
   const man = person()
   const drawn = shaft()
-  const held = carry(man, 'right', drawn, GRIP)
+  new Scene().add(man, drawn)
+  const hand = new Hand(man, 'right')
+  const gripped = grip(hand, drawn, GRIP)
   const body = new Body(man)
+  const held = holds(body, hand, gripped)
   const thrown = javelin()
   body.play(javelinThrow(body, thrown, drawn, held))
   let left: { speed: number; up: number } | undefined

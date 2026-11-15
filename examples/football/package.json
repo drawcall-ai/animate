@@ -7,7 +7,12 @@
   },
   "dependencies": {
     "@drawcall/animate": "workspace:*",
-    "three": "^0.187.0"
+    "@drawcall/hand": "workspace:*",
+    "@drawcall/physics": "0.20.0",
+    "@drawcall/physics-rapier": "0.20.0",
+    "@drawcall/rig": "^0.7.0",
+    "three": "^0.187.0",
+    "vitecache": "^0.5.1"
   },
   "devDependencies": {
     "vite": "^8.3.8"

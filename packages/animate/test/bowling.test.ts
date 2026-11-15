@@ -1,7 +1,9 @@
+import { grip, Hand } from '@drawcall/hand'
+import { Scene } from 'three'
 import { expect, test } from 'vitest'
 import { bowl } from '../../../examples/bowling/bowl'
 import { ball as ballAt, GRIP, sphere } from '../../../examples/bowling/lane'
-import { carry } from '../../../examples/carry'
+import { holds } from '../../../examples/character'
 import { Body } from '../src'
 import { tick } from '../src/size'
 import { person } from '../../../examples/person'
@@ -9,8 +11,11 @@ import { person } from '../../../examples/person'
 test('the delivery: the ball leaves as written, the body does the rest, and he ends standing', () => {
   const man = person()
   const drawn = sphere()
-  const held = carry(man, 'right', drawn, GRIP)
+  new Scene().add(man, drawn)
+  const hand = new Hand(man, 'right')
+  const gripped = grip(hand, drawn, GRIP)
   const body = new Body(man)
+  const held = holds(body, hand, gripped)
   const ball = ballAt()
   body.play(bowl(body, ball, drawn, held))
   let released: { left: number; right: number } | undefined

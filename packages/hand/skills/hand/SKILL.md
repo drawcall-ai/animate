@@ -21,13 +21,13 @@ grip(hand, target, { at, from, using, start })
 
 1. **The target**: the object whose meshes the hand closes on. Grip the closed mesh.
 2. **`at`**, in the target's frame: the point the grip is about.
-   - With the palm: the point the hand takes hold of, on the surface coming from `from`. The palm comes in on it at
-     the crease at the base of the fingers, where a fist's fingers fold over, and the fingers' first bones lie along
-     the target's side. A thing deeper than a finger is long, as a board or a plate held over its edge, the fingers
+   - With the palm: the point the hand takes hold of, on the target or in it: the palm comes in along `from` through
+     it to the surface, meeting it at the crease at the base of the fingers, where a fist's fingers fold over, and the
+     fingers' first bones lie along the target's side. A thing deeper than a finger is long, as a board or a plate held over its edge, the fingers
      hook over instead, and the point is under the palm's middle. The fingers reach about a palm's width either side
      of it along the target, so put it mid-way along the stretch of handle the hand covers.
-   - Without the palm: the point the thumb and fingers hold between them, inside the target; a lone finger's point
-     is on the surface, where its tip arrives.
+   - Without the palm: the point the thumb and fingers hold between them, in the target (a point outside is taken
+     in); a lone finger's point is on the surface, where its tip arrives.
 3. **`from`**, in the target's frame: the side the hand comes from. With the palm taking part the palm faces the
    target from there. Without it the hand is behind the thing, its fingertips leading, and what it holds goes on away
    from the hand, never back over it. A key held by its bow, the blade along −y: `at` the bow's middle,
@@ -88,15 +88,16 @@ the pose what the fingers do. A thing carried in the hand is hung on the hand bo
 goes to has the hand sent to the placement on it. Read the `Hand` while the rig is still at rest, before the
 animation poses it.
 
-## When it throws
+## When it cannot hold as stated
 
-Each error names what failed, by how much, in which direction of the target's frame, and the one change to make to
-the statement: move `at`, come from another `from`, leave an element out, or `start` it elsewhere.
+A grip never fails for the target's size or shape: where the hand cannot close as asked it gives the nearest grip,
+nothing sunk in, and `contacts` say how far each element is off. It throws only for a statement it cannot read: a
+target without a mesh, no or a zero `from`, nothing taking part, or a composed grip of another target or with `from`.
 
 ## Limits
 
-- A ball bigger than the hand spans cannot be held across with the thumb: the thumb ends on the fingers' side.
-  Leave the thumb out, or come from a side where the hand reaches round.
+- A ball bigger than the hand spans is not held across: the palm and fingers lie on it and the thumb rests on it
+  beside them, or out of the way when left out.
 - From above, a lever's stem can stand in the way of the fingers closing round its arm.
 - A straight finger pressing a trigger is only had by composing: a lone finger in a fresh grip presses with its pad,
   slightly bent.

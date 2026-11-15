@@ -59,11 +59,12 @@ test('a hand sent somewhere turned arrives with its palm facing as stated, and s
   )
 })
 
-test('a wrist asked for more than it turns says so at the statement', () => {
-  const hand = new Body(person()).hand.right
-  expect(() => hand.to({ x: -0.2, y: 1.1, z: 0.4 }, { palm: { x: -1, y: 0, z: 0 } })).toThrow(
-    /right hand is sent to .* the right wrist would twist the forearm .* further than it does: have the palm face/,
-  )
+test('a wrist asked for more than it turns is no error: the hand is there, turned as near as the wrist turns it', () => {
+  const body = new Body(person())
+  const place = { x: -0.2, y: 1.1, z: 0.4 }
+  body.hand.right.to(place, { palm: { x: -1, y: 0, z: 0 } })
+  for (let t = 0; t < 1.5; t += 1 / 60) body.update(1 / 60)
+  expect(body.hand.right.value.distanceTo(new Vector3().copy(place))).toBeLessThan(0.02)
 })
 
 /**
@@ -215,6 +216,14 @@ const held = {
   position: new Vector3(0.06, -0.03, 0.02),
   quaternion: new Quaternion().setFromEuler(new Euler(0.4, -1.2, 0.3)),
 }
+/** the fingers hanging loose: a pose for a grip that says nothing of them */
+const RELAXED: Pose = {
+  thumb: { spread: 0, bend: [0.2, 0.1, 0.2] },
+  index: { spread: 0, bend: [0.2, 0.3, 0.2] },
+  middle: { spread: 0, bend: [0.2, 0.3, 0.2] },
+  ring: { spread: 0, bend: [0.2, 0.3, 0.2] },
+  little: { spread: 0, bend: [0.2, 0.3, 0.2] },
+}
 /** how far off a thing sits from where it is to in the right hand's bone (m, rad) */
 function off(rig: Object3D, thing: Object3D) {
   rig.updateMatrixWorld(true)
@@ -224,22 +233,34 @@ function off(rig: Object3D, thing: Object3D) {
   return { by: at.distanceTo(held.position), turned: turned.angleTo(held.quaternion) }
 }
 
-test('a thing carried in the hand is where it is sent, pointing as stated', () => {
+test('a thing he holds is where it is sent, pointing as stated, and with its top as stated too as near as the wrist turns it', () => {
   const rig = person()
   const body = new Body(rig)
+  const scene = new Object3D().add(rig)
   const thing = new Object3D()
-  thing.position.copy(held.position)
-  thing.quaternion.copy(held.quaternion)
-  bone(rig, 'rightHand').add(thing)
+  thing.position.set(-0.25, 1.1, 0.4)
+  scene.add(thing)
+  const carried = body.hold(thing)
+  body.hand.right.to({ target: thing, ...held, pose: RELAXED })
   const [place, way] = [new Vector3(-0.25, 1.15, 0.45), new Vector3(0, 0.3, 1).normalize()]
-  play(body, body.hand.right.to(place, { with: held, pointing: way }))
+  play(body, carried.to(place, { pointing: way }))
   rig.updateMatrixWorld(true)
   expect(thing.getWorldPosition(new Vector3()).distanceTo(place)).toBeLessThan(0.002)
-  const z = new Vector3(0, 0, 1).transformDirection(thing.matrixWorld)
-  expect(z.angleTo(way)).toBeLessThan(0.01)
+  const along = (axis: Vector3) => axis.clone().transformDirection(thing.matrixWorld)
+  expect(along(new Vector3(0, 0, 1)).angleTo(way)).toBeLessThan(0.01)
+  // (its top as near up as the wrist turns it, pointing on as it was)
+  const up = new Vector3(0, 1, 0)
+  const tops = [0, 1].map(() => {
+    play(body, carried.to(place, { pointing: way, up }))
+    rig.updateMatrixWorld(true)
+    return along(up).clone()
+  })
+  expect(along(new Vector3(0, 0, 1)).angleTo(way)).toBeLessThan(0.3)
+  expect(along(up).angleTo(up)).toBeLessThan(0.6)
+  expect(tops[0].angleTo(tops[1])).toBeLessThan(0.01)
 })
 
-test('a hand sent to hold a thing holds it as stated, and keeps it as the thing moves', () => {
+test('a hand sent by a grip to a thing he does not hold holds it as stated, and keeps it as the thing moves', () => {
   const rig = person()
   const body = new Body(rig)
   const scene = new Object3D().add(rig)
@@ -247,7 +268,8 @@ test('a hand sent to hold a thing holds it as stated, and keeps it as the thing 
   thing.position.set(-0.25, 1.1, 0.4)
   thing.quaternion.setFromEuler(new Euler(0, 0.3, 0))
   scene.add(thing)
-  play(body, body.hand.right.to(held, { on: thing }))
+  const grip = { target: thing, ...held, pose: RELAXED }
+  play(body, body.hand.right.to(grip))
   expect(off(rig, thing).by).toBeLessThan(0.002)
   expect(off(rig, thing).turned).toBeLessThan(0.01)
   for (let t = 0; t < 0.5; t += tick(body.size)) {
@@ -255,7 +277,7 @@ test('a hand sent to hold a thing holds it as stated, and keeps it as the thing 
     body.update(tick(body.size))
   }
   expect(off(rig, thing).by).toBeLessThan(0.01)
-  expect(() => body.hand.right.to(held, { on: thing, palm: { x: 0, y: 1, z: 0 } })).toThrow(/leave out `palm`/)
+  expect(() => body.hand.right.to(grip, { palm: { x: 0, y: 1, z: 0 } })).toThrow(/leave out `palm`/)
 })
 
 /** how thick a finger and the palm are about their bones: half the least that two knuckles side by side are apart */
@@ -313,15 +335,21 @@ test('a fingertip sent somewhere is there at its moment, moving as stated, howev
   }
 })
 
-test('a hand turned a way that is none, or faster than its wrist turns, says so at the statement', () => {
-  const body = new Body(person())
+test('a hand turned a way that is none says so at the statement, and one turned faster than its wrist turns is late', () => {
+  const rig = person()
+  const body = new Body(rig)
   const hand = body.hand.right
   const place = { x: -0.2, y: 1.1, z: 0.4 }
   const [up, down] = [new Vector3(0, 1, 0), new Vector3(0, -1, 0)]
   expect(() => hand.to(place, { palm: { x: 0, y: 0, z: 0 } })).toThrow(/leads nowhere/)
   expect(() => hand.to(place, { palm: up, pointing: down })).toThrow(/point the way its palm faces/)
   play(body, hand.to(place, { palm: up }))
-  expect(() => hand.to(place, { palm: down, seconds: 0.02 })).toThrow(/right wrist would have to be pushed/)
+  // (it is there as soon after as its wrist turns it)
+  const from = body.time
+  play(body, hand.to(place, { palm: down, seconds: 0.02 }))
+  expect(body.time - from).toBeGreaterThan(0.1)
+  rig.updateMatrixWorld(true)
+  expect(palm(rig).angleTo(down)).toBeLessThan(0.1)
 })
 
 test('a rig may rest its arms short and bent, the forearms turned and the hands bent back: a palm faces as stated', () => {

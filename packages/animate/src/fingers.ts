@@ -1,4 +1,4 @@
-import { Euler, Matrix4, Quaternion, Vector3 } from 'three'
+import { Euler, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import { quickest } from './curve'
 import { Goal, REST } from './goal'
 import { EXACT, type Story, type Xyz, waits } from './world'
@@ -19,10 +19,13 @@ export const each = <T>(make: (finger: Finger) => T): Record<Finger, T> => ({
  * mirror each other. The poses `@drawcall/hand` makes are such.
  */
 export type Pose = Record<Finger, { spread: number; bend: readonly [number, number, number] }>
-/** a thing as it sits in a hand: where it is and how it is turned in the frame of the rig's hand bone */
-export type Held = { position: Xyz; quaternion: Xyz & { w: number } }
-/** what of a hand can be where it is sent instead of its wrist: the tip of a finger, the middle of the palm, or a thing it carries, as it sits in the hand */
-export type Touch = Finger | 'palm' | Held
+/**
+ * how a hand holds a thing: where the `target`, the thing or the part of it held, sits in the frame of the rig's hand
+ * bone, and the pose of the fingers round it, as `@drawcall/hand`'s `grip` gives them
+ */
+export type Grip = { target: Object3D; position: Xyz; quaternion: Xyz & { w: number }; pose: Pose }
+/** what of a hand can be where it is sent instead of its wrist: the tip of a finger, the middle of the palm, or the knuckles a fist lands with */
+export type Touch = Finger | 'palm' | 'knuckles'
 
 /** the way a part of a limb hangs, and a hand lies from its wrist in line with a forearm that hangs so */
 export const DOWN = new Vector3(0, -1, 0)
@@ -223,9 +226,13 @@ export class Fingers {
     }
   }
 
-  /** where the skin of a part of the hand is from the wrist `seconds` from now, in the frame of the hand: a fingertip's at its end */
-  tip(touch: Finger | 'palm', seconds: number) {
+  /** where the skin of a part of the hand is from the wrist `seconds` from now, in the frame of the hand: a fingertip's at its end, the knuckles' ahead of the middle one */
+  tip(touch: Touch, seconds: number) {
     if (touch === 'palm') return this.centre.clone()
+    if (touch === 'knuckles') {
+      const [knuckle] = this.chains.middle
+      return knuckle.clone().addScaledVector(knuckle.clone().normalize(), this.thick)
+    }
     const then = (goal: Goal) => (goal.reacts ? goal.value.clone() : goal.ahead(seconds, new Vector3(), near))
     const [knuckle, ...bones] = this.chains[touch]
     const [at, turned, last] = [knuckle.clone(), new Quaternion(), new Vector3()]

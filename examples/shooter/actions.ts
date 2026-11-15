@@ -1,7 +1,8 @@
 import type { Body, Side, Story } from '@drawcall/animate'
-import { flat, point } from '@drawcall/hand'
+import { point } from '@drawcall/hand'
 import { Vector3 } from 'three'
-import { hang } from '../carry'
+import { holds } from '../character'
+import { RIFLE } from './rifle'
 import type { Soldier } from './soldier'
 
 /** a panel on a wall with a button on it: where the face of the button is, which way it faces out of the wall, and whether it is pressed */
@@ -9,8 +10,20 @@ export type Panel = { button: Vector3; out: Vector3; pressed: boolean }
 /** how far a button goes in, and how long a finger stays on it (m, s) */
 export const TRAVEL = 0.008
 const PRESSED = 0.3
-/** how long a throw takes from the grenade in the hand to its leaving it, how fast it leaves (in his paces) and how far above the aim (rad) */
-const THROW = { wind: 1, speed: 3, above: 0.35 }
+/**
+ * a throw: how fast the grenade leaves the hand (in his paces), how far above the aim (rad), and how long after it is
+ * in the hand it leaves it, time for the trunk to wind up (s); where the hand is cocked, its elbow bent by his ear,
+ * and where it lets go, out beside and above his shoulder and a little ahead of it, the arm out to the side so that
+ * the hand swings forward across it, which is far faster than it stretches, and on down into his view (of his arm,
+ * from the shoulder: to his left, up, ahead)
+ */
+const THROW = {
+  speed: 3,
+  above: 0.3,
+  wind: 1,
+  cocked: new Vector3(0.1, 0.4, -0.3),
+  release: new Vector3(-0.35, 0.65, 0.25),
+}
 
 /**
  * a place on his chest from a shoulder, counted from his own sizes: so far down it and in toward his middle (of his
@@ -27,19 +40,19 @@ export function* reload(soldier: Soldier): Story {
   const { body, held, magazine, spent } = soldier
   const hand = body.hand.left
   soldier.mode = 'reload'
-  hand.shape(flat)
-  yield* hand.to(held.magazine, { on: soldier.well, gives: soldier.rifle })
-  yield* hand.shape(held.magazine.pose)
+  yield* hand.to(held.magazine)
   yield* soldier.slide(true)
 
   magazine.updateWorldMatrix(true, false)
   magazine.matrixWorld.decompose(spent.position, spent.quaternion, spent.scale)
   soldier.drop(spent, hand.velocity)
   magazine.visible = soldier.loaded = false
+  body.hold(soldier.rifle, { rests: RIFLE.butt }).free('left')
   yield* hand.to(chest(body, 'left', 0.5, -0.3), { on: body })
-  hang(soldier.hands.left, magazine, held.magazine)
+  soldier.shown.attach(magazine)
+  const fresh = holds(body, soldier.hands.left, held.magazine)
   magazine.visible = true
-  yield* hand.to(held.magazine, { on: soldier.well, gives: soldier.rifle })
+  yield* fresh.to({ x: 0, y: 0, z: 0 }, { on: soldier.well, pointing: { x: 0, y: 0, z: 1 }, up: { x: 0, y: 1, z: 0 } })
   soldier.seat()
   yield* soldier.slide(false)
 }
@@ -51,27 +64,26 @@ export function* reload(soldier: Soldier): Story {
 export function* grenade(soldier: Soldier): Story {
   const { body } = soldier
   const hand = body.hand.right
-  hand.shape(flat)
-  // (from the pouch on the flank of his vest, out past his shoulder, where his elbow clears his trunk however it is turned)
-  const fetched = hand.to(chest(body, 'right', 0.55, -0.6), { on: body })
-  // the rifle rests in his left shoulder meanwhile, pointing down ahead of him in his left hand
+  // the rifle hangs in his left hand meanwhile, pointing a little down ahead of him, low in his view
   soldier.mode = 'slung'
-  soldier.hold('left', true)
-  yield* fetched
-  hang(soldier.hands.right, soldier.grenade, soldier.held.grenade)
-  yield* hand.shape(soldier.held.grenade.pose)
+  body.hold(soldier.rifle).free('right')
+  // (from the pouch on the flank of his vest, out past his shoulder, where his elbow clears his trunk however it is turned)
+  yield* hand.to(chest(body, 'right', 0.55, -0.6), { on: body })
+  soldier.shown.add(soldier.grenade)
+  const grenade = holds(body, soldier.hands.right, soldier.held.grenade)
 
   const { yaw, pitch } = soldier.aimed
   const up = pitch + THROW.above
   const way = new Vector3(Math.sin(yaw) * Math.cos(up), Math.sin(up), Math.cos(yaw) * Math.cos(up))
   const { arm, pace } = body.size
-  // cocked up behind his shoulder by his ear, and from there thrown over it: let go ahead of his face
-  hand.to(new Vector3(-0.15 * arm, 0.4 * arm, -0.25 * arm), { on: body })
-  const release = new Vector3(0.1 * arm, 0.4 * arm, 0.45 * arm)
-  yield* hand.by(body.time + THROW.wind, release, { on: body, velocity: way.multiplyScalar(THROW.speed * pace) })
+  const [cocked, release] = [THROW.cocked.clone().multiplyScalar(arm), THROW.release.clone().multiplyScalar(arm)]
+  const velocity = way.multiplyScalar(THROW.speed * pace)
+  hand.to(cocked, { on: body })
+  yield* hand.by(body.time + THROW.wind, release, { on: body, velocity })
+  grenade.free()
   soldier.drop(soldier.grenade, hand.velocity)
-  hand.shape(flat)
-  yield* body.until(body.time + 0.45)
+  // (it swings on across him, and comes back to the rifle)
+  yield* body.until(body.time + 0.4)
 }
 
 /** The left hand leaves the rifle and presses a button with the tip of its index finger: the rifle is lowered meanwhile, and he stays where he is. */

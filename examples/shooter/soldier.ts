@@ -3,7 +3,7 @@ import { type Grip, grip, Hand } from '@drawcall/hand'
 import { type PhysicsWorld, RigidBody } from '@drawcall/physics'
 import { Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three'
 import { grenade, reload, press, type Panel } from './actions'
-import { Capsule } from './capsule'
+import { Capsule } from '../capsule'
 import { ARM, fore, HOLD, magazine, pistol, RIFLE, rifle } from './rifle'
 
 /** what the player asks of him in a frame: `move` is across (to his right) and along the way he aims, `yaw` and `pitch` the aim (rad: about y from +z toward +x, and up) */
@@ -21,10 +21,15 @@ export type Input = {
 const SPEED = { walk: 1.4, crouch: 0.9, sprint: 4.5, low: 2 }
 /** how fast he leaves the ground in a jump (m/s) */
 const JUMP = 3
-/** how many shots a second, and how fast a shot kicks his shoulder back, and a hit sets his chest going (m/s) */
+/** how fast the world has things fall (m/s²) */
+const GRAVITY = 9.81
+/**
+ * how many shots a second, and how fast a shot kicks his shoulder back, a hit sets his chest going, and it shoves him
+ * along the ground (m/s)
+ */
 const SHOTS = 7
 const KICK = 0.6
-const HIT = 2.5
+const HIT = { chest: 2.5, shove: 1.2 }
 /**
  * how far to the right of the aim he faces, side-on to the rifle as a rifleman is, his left shoulder ahead: his trunk
  * keeps so, turned to the aim his left hand would not reach the rifle, and his head with it (rad)
@@ -52,7 +57,7 @@ const CARRY = {
   ready: { yaw: 0, pitch: 0, aimed: true },
   low: { yaw: 0.7, pitch: -0.5, aimed: false },
   reload: { yaw: 0.45, pitch: 0.3, aimed: true },
-  slung: { yaw: 0, pitch: -0.35, aimed: true },
+  slung: { yaw: 0, pitch: -0.15, aimed: true },
 }
 export type Mode = keyof typeof CARRY
 /** how an aim is turned in the scene */
@@ -128,22 +133,18 @@ export class Soldier {
     this.rifle.position.copy(body.eye('right'))
     this.carry({ move: { x: 0, z: 0 }, yaw: 0, pitch: 0 }, false)
     this.look(this.aimed)
-    this.hold('right')
-    this.hold('left')
+    this.hold()
   }
 
   private static grenade() {
     return new Mesh(new SphereGeometry(GRENADE), new MeshStandardMaterial({ color: 0x405030 }))
   }
 
-  /**
-   * a hand takes its grip on the rifle, and keeps it: the rifle gives way to the hands where they cannot be, and its
-   * butt `rests` in that hand's shoulder, the right one's unless that is said
-   */
-  hold(side: Side, rests = side === 'right') {
-    const held = side === 'left' ? this.held.fore : this.trigger ? this.held.trigger : this.held.grip
-    this.body.hand[side].to(held, { on: held.target, gives: this.rifle, rests: rests ? RIFLE.butt : undefined })
-    this.body.hand[side].shape(held.pose)
+  /** both hands take their grips on the rifle, which gives way to them, its butt resting in a shoulder */
+  hold() {
+    this.body.hold(this.rifle, { rests: RIFLE.butt })
+    this.body.hand.right.to(this.trigger ? this.held.trigger : this.held.grip)
+    this.body.hand.left.to(this.held.fore)
   }
 
   /** the magazine is to slide out of its well, or back in */
@@ -154,6 +155,7 @@ export class Soldier {
 
   /** the magazine in the hand is pushed home: it sits in its well */
   seat() {
+    this.body.hold(this.magazine).free()
     this.well.add(this.magazine)
     this.magazine.position.set(0, 0, 0)
     this.magazine.quaternion.identity()
@@ -191,8 +193,11 @@ export class Soldier {
           self.rooted = false
           if (!self.loaded) self.seat()
           self.slid = { from: 0, to: 0, since: self.body.time }
-          if (self.grenade.parent) self.drop(self.grenade, new Vector3())
-          for (const side of ['right', 'left'] as const) self.hold(side)
+          if (self.grenade.parent) {
+            self.body.hold(self.grenade).free()
+            self.drop(self.grenade, new Vector3())
+          }
+          self.hold()
         }
       })(),
     )
@@ -208,17 +213,20 @@ export class Soldier {
     return this.act('press', press(this, panel))
   }
 
-  /** he pushes off and jumps, as the capsule does, if he stands */
+  /** he jumps if he stands: the body drops and pushes off, and the capsule leaves the ground as it does */
   jump() {
-    if (!this.capsule.jump(JUMP)) return false
-    const { x, z } = this.capsule.velocity
-    this.tried(() => this.body.go({ x, y: JUMP, z }))
-    return true
+    const { body, capsule } = this
+    if (!capsule.grounded || body.highest() > body.time) return false
+    const top = capsule.position.clone().setY(capsule.floor + body.size.stand + JUMP ** 2 / (2 * GRAVITY))
+    this.tried(() => body.jump(top))
+    return capsule.jump(JUMP, body.highest() - JUMP / GRAVITY - body.time)
   }
 
-  /** a blow to his chest that goes a way along the ground */
+  /** a blow to his chest that goes a way along the ground: it sways him, and shoves him for him to step after */
   hit(way: { x: number; z: number }) {
-    this.body.knock(new Vector3(way.x, 0, way.z).setLength(HIT))
+    const along = new Vector3(way.x, 0, way.z).normalize()
+    this.body.knock(along.clone().multiplyScalar(HIT.chest))
+    this.capsule.velocity.addScaledVector(along, HIT.shove)
   }
 
   /** lets something go into the world, moving so: a body of its own there, which flies and falls */
@@ -232,11 +240,15 @@ export class Soldier {
     this.shown.add(solid)
     this.loose.push(solid)
     if (this.loose.length > LOOSE) this.loose.shift()?.removeFromParent()
-    if (thing === this.grenade) this.grenade = Soldier.grenade()
+    if (thing === this.grenade) {
+      // (a fresh one, held as the last was)
+      this.grenade = Soldier.grenade()
+      this.held.grenade = { ...this.held.grenade, target: this.grenade }
+    }
     if (thing === this.spent) this.spent = magazine()
   }
 
-  /** a frame: the capsule is asked to go as the player asks, and he is led as it goes, where it is */
+  /** a frame: the capsule goes as the player asks, and he is led as it goes, to where it is by then */
   update(delta: number, input: Input) {
     const { body, capsule } = this
     const aim = { x: Math.sin(input.yaw), z: Math.cos(input.yaw) }
@@ -248,8 +260,9 @@ export class Soldier {
     const [across, along] = [input.move.x * speed, input.move.z * speed]
     capsule.asked.set(aim.x * along - aim.z * across, 0, aim.z * along + aim.x * across)
     capsule.crouch = Boolean(input.crouch)
+    capsule.update(delta)
     // crouched, his hips are held low, lower still once he stands
-    const { x, y, z } = capsule.velocity
+    const { x, z } = capsule.velocity
     const going = far > 0 || Math.hypot(x, z) > 0
     const low = capsule.crouched && capsule.grounded ? (going ? LOW.going : LOW.still) : 1
     const runs = Math.hypot(x, z) > SPEED.low
@@ -261,18 +274,20 @@ export class Soldier {
     this.tried(() => {
       if (low !== this.low) body.hips.to({ y: (this.low = low) * body.size.stand })
       // (off the ground, how fast he goes up or down too)
-      body.go(capsule.grounded ? { x, z } : { x, y, z })
+      body.go({ x, z })
       // (running, he faces the way he goes)
-      body.face(runs ? undefined : { x: Math.sin(input.yaw - STANCE), z: Math.cos(input.yaw - STANCE) })
+      // (throwing, he squares up to the aim: the arm comes over ahead of him, where he sees it let go)
+      const side = this.doing === 'grenade' ? 0 : STANCE
+      body.face(runs ? undefined : { x: Math.sin(input.yaw - side), z: Math.cos(input.yaw - side) })
     })
     // (he fires only with both hands on the rifle)
     const holds = body.hand.right.there && body.hand.left.there
     if (delta > 0) this.fire(delta, Boolean(input.fire) && !runs && !this.doing && holds)
     this.carry(input, runs)
-    this.tried(() => body.update(delta))
-    // where the world has him
+    // where the world has him by the end of the frame
     const { position, floor } = capsule
     this.tried(() => body.hips.at({ x: position.x, y: floor, z: position.z }))
+    this.tried(() => body.update(delta))
     this.place()
   }
 

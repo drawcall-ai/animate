@@ -2,7 +2,6 @@ import { Group, Object3D } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import { Body, type Story } from '../src'
-import { tick } from '../src/size'
 
 const FRAME = 1 / 60
 const HERE = { x: 0, y: 0, z: 0 }
@@ -27,25 +26,16 @@ function run(body: Body, seconds: number, each = (_: number) => {}, frame = FRAM
   return said
 }
 
-test('what cannot be done in a step is thrown once, after the step, and his clock goes on', () => {
-  const { scene, body } = setup()
-  const thing = new Object3D()
-  thing.position.set(-0.25, 1.1, 0.35)
-  scene.add(thing)
-  const dt = tick(body.size)
-  const when = Math.ceil(1 / dt) * dt
-  body.hand.right.by(when, HERE, { on: thing, velocity: { x: 0, y: 0, z: 0.5 } })
-  // (it is somewhere else at the very moment it was to be there, moving)
-  const said = run(
-    body,
-    2,
-    () => {
-      if (Math.abs(body.time - when) < dt / 2) thing.position.y = 1.3
-    },
-    dt,
+test('what a story throws is thrown once, after the step, and his clock goes on', () => {
+  const { body } = setup()
+  body.play(
+    (function* (): Story {
+      yield* body.until(1)
+      throw new Error('the story is wrong')
+    })(),
   )
-  expect(said).toHaveLength(1)
-  expect(said[0]).toMatch(/the right hand was to be/)
+  const said = run(body, 2)
+  expect(said).toEqual(['Error: the story is wrong'])
   expect(body.time).toBeGreaterThan(1.95)
 })
 
@@ -78,21 +68,17 @@ test('a thing that leaves his scene is an error once, and one hanging from his o
   expect(() => body.hand.right.to(HERE, { on: own })).toThrow(/hangs from its own limb/)
 })
 
-test('over feet put down, hips held higher than his legs reach them is an error at the statement', () => {
+test('over feet put down, hips held higher than his legs reach them go as high as they reach', () => {
   const { body } = setup()
-  let said = ''
   body.play(
     (function* (): Story {
       yield* body.foot.left.to(body.ground('left', 0.85))
-      try {
-        body.hips.to({ y: body.size.stand })
-      } catch (error) {
-        said = String(error)
-      }
+      yield* body.hips.to({ y: body.size.stand })
     })(),
   )
   expect(run(body, 4)).toEqual([])
-  expect(said).toMatch(/his legs reach the feet where they were put from no higher than/)
+  expect(body.playing).toBe(false)
+  expect(body.hips.value.y).toBeLessThan(body.size.stand - 0.05)
 })
 
 test('a hand on a moving thing moves as it does', () => {

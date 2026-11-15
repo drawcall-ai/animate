@@ -60,20 +60,21 @@ export function bounds(range: Range, axis: (typeof AXES)[number]) {
   return [least - PAST, most + PAST]
 }
 
-export const inside = (value: Xyz, range: Range) =>
-  AXES.every((axis) => {
+/** how far a value is beyond a range, across its axes: none, inside it */
+export const beyond = (value: Xyz, range: Range) =>
+  AXES.reduce((sum, axis) => {
     const [least, most] = bounds(range, axis)
-    return value[axis] >= least && value[axis] <= most
-  })
+    return sum + Math.max(0, least - value[axis], value[axis] - most)
+  }, 0)
 
 /**
  * Whether that curve keeps within a range. The more time it takes, the further it draws back first. One that starts
  * or ends outside the range has none to keep to.
  */
 export function keeps(from: State, to: State, seconds: number, range: Range) {
-  if (!inside(from.value, range) || !inside(to.value, range)) return true
+  if (beyond(from.value, range) > 0 || beyond(to.value, range) > 0) return true
   for (let k = 1; k < LOOKS; k++) {
-    if (!inside(cubic(k / LOOKS, seconds, from, to, tried, triedVelocity), range)) return false
+    if (beyond(cubic(k / LOOKS, seconds, from, to, tried, triedVelocity), range) > 0) return false
   }
   return true
 }

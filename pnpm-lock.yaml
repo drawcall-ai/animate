@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:packages/animate
       '@drawcall/hand':
         specifier: workspace:*
         version: link:packages/hand
@@ -38,9 +41,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -54,9 +69,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -70,9 +97,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -86,9 +125,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -102,9 +153,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -115,9 +178,52 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../../packages/animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
+  examples/gladiator:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -154,9 +260,24 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../../packages/animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -170,9 +291,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -183,9 +316,24 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../../packages/animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -196,9 +344,24 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../../packages/animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -212,9 +375,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -228,9 +403,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -272,9 +459,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8
@@ -288,9 +487,21 @@ importers:
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
       three:
         specifier: ^0.187.0
         version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
     devDependencies:
       vite:
         specifier: ^8.3.8

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
 import { AXES, type Range, type State, bounds, cubic, hardest, quickest } from './curve'
-import { type Story, type Xyz, waits } from './world'
+import { type Story, type Xyz, clamp, waits } from './world'
 
 export const REST = { x: 0, y: 0, z: 0 }
 /** how much of its strength a part is pushed with that is not sent anywhere: coming round after it has arrived moving, or reacting */
@@ -70,33 +70,18 @@ export class Goal {
   }
 
   /**
-   * Sends the value to a target, in `seconds` if given. The story it returns is over when it has arrived, and gives
-   * false if it was sent elsewhere before that.
+   * Sends the value to a target, in `seconds` if given: as near as it goes, and as soon after as it can be if that is
+   * too soon. The story it returns is over when it has arrived, and gives false if it was sent elsewhere before that.
    */
   to(target: Xyz, { velocity = REST, seconds }: Arrival = {}): Story<boolean> {
     timed(this.name, seconds)
-    for (const axis of AXES) {
-      if (!Number.isFinite(target[axis]) || !Number.isFinite(velocity[axis])) {
-        throw new Error(`the ${this.name} is sent to ${target[axis]} along ${axis}, to arrive at ${velocity[axis]}`)
-      }
-      const [least, most] = this.range[axis] ?? [-Infinity, Infinity]
-      if (target[axis] >= least - 1e-9 && target[axis] <= most + 1e-9) continue
-      throw new Error(
-        `the ${this.name} is sent to ${target[axis].toFixed(2)} along ${axis}, and goes only from ${least.toFixed(2)} to ${most.toFixed(2)}`,
-      )
+    if (![...AXES].every((axis) => Number.isFinite(target[axis]) && Number.isFinite(velocity[axis]))) {
+      throw new Error(`the ${this.name} is sent somewhere, or to arrive moving, as no numbers say`)
     }
-    const to = { value: target, velocity }
-    const needs = quickest(this, to, this.strength, this.range)
-    const takes = this.takes(to, seconds ?? needs)
-    if (takes <= MOST) return this.drive(to, seconds ?? needs)
-    if (this.takes(to, needs) <= MOST) {
-      throw new Error(
-        `the ${this.name} cannot be where it is sent in ${seconds?.toFixed(2)} s: that takes ${takes.toFixed(1)} times its strength. It needs ${needs.toFixed(2)} s`,
-      )
-    }
-    throw new Error(
-      `the ${this.name} cannot get to where it is sent moving as it is to: from where it is that takes ${takes.toFixed(1)} times its strength. Send it there from further off, or to arrive slower`,
-    )
+    // (as near as it turns, and in no less time than it takes)
+    const near = (axis: (typeof AXES)[number]) => clamp(target[axis], ...(this.range[axis] ?? [-Infinity, Infinity]))
+    const to = { value: new Vector3(near('x'), near('y'), near('z')), velocity }
+    return this.drive(to, Math.max(seconds ?? 0, quickest(this, to, MOST * this.strength, this.range)))
   }
 
   /** Sends the value somewhere in `seconds`, however hard that is: what a limb does with its joints, having seen to their strength itself. */

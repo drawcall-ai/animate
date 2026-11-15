@@ -16,7 +16,6 @@ const PRESS = 0.3
 /** how hard skin pulls along a smooth thing at most, for how hard it presses: how far a squeeze may slant, unsheared */
 const FRICTION = 0.5
 
-const cm = (m: number) => `${(m * 100).toFixed(1)} cm`
 const shift = (place: Matrix4, by: Vector3) => new Matrix4().makeTranslation(by).multiply(place)
 const mean = (points: Vector3[]) => points.reduce((sum, p) => sum.addScaledVector(p, 1 / points.length), new Vector3())
 /** where a finger's last bone presses: its pad, two thirds of the way to the tip */
@@ -37,7 +36,8 @@ const preferred = ([a, b]: number[][]) => {
 
 /** Finds how a hand grips a target with the elements `using` (all by default), coming from `from`, held at `at`, both
  * in the target's frame. What is left out keeps its part of `start`: a pose, or an earlier grip of the same target,
- * whose placement is kept. Throws naming the element, by how much, and what to change. */
+ * whose placement is kept. Where the hand cannot hold as stated it gives the nearest it can; it throws only for a
+ * statement that says nothing to hold by. */
 export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS, start = relaxed }: Statement): Grip {
   const earlier = 'target' in start ? start : undefined
   if (!using.length) throw new Error('a grip needs the palm or a finger to take part')
@@ -52,17 +52,18 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   const { skin, radius, fine, spacing, scale } = touch
   /** how wide a finger is: what a grip may be off by and still meet what it aims at */
   const breadth = 2 * radius
-  const point = target.localToWorld(at.clone())
   const inverse = target.matrixWorld.clone().invert()
   /** a finger's half thickness in the target's frame */
   const thick = radius * inverse.getMaxScaleOnAxis()
-  /** a direction of the world as the target's axes name it, the lesser parts left out: `+x`, `-y+z` */
-  const named = (v: Vector3) =>
-    counted(v.clone().transformDirection(inverse))
-      .map((c, i) => (c ? (c < 0 ? '-' : '+') + 'xyz'[i] : ''))
-      .join('')
-  /** a miss as the move that mends it: `1.2 cm toward +x` */
-  const by = (v: Vector3) => `${cm(v.length())} toward ${named(v)}`
+  /** a point outside the target taken in to the middle of the target's thickness under its nearest point */
+  const inside = (p: Vector3) => {
+    if (skin.depth(p) <= 0) return p
+    const { at } = skin.nearest(p)
+    const into = at.clone().sub(p).normalize()
+    const through = skin.cast(at.clone().addScaledVector(into, fine), into)
+    return at.addScaledVector(into, Number.isFinite(through) ? through / 2 : 0)
+  }
+  let point = target.localToWorld(at.clone())
   const fingers = FINGERS.filter((f) => f !== 'thumb' && using.includes(f))
   const [thumb, palm] = [using.includes('thumb'), using.includes('palm')]
   const pinch = !palm && thumb && fingers.length > 0
@@ -74,25 +75,17 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   const rods = (pose: Pose, place: Matrix4, but = (_: Element) => false) =>
     hand.segments(pose, place).filter((g) => g.element !== 'palm' && !but(g.element))
 
-  /** Closing is enclosing. What is left out keeps its pose where the target allows, else moves the least that clears.
-   * The fingers taking part close one by one, each kept from those before; the thumb last, from standing out of the
-   * palm, lowered as far as the target is in the way, folding till each bone meets something. Without the palm its tip
-   * presses instead, from where it reached, on where the fingers touch (nearest `near`) mirrored through `middle` */
+  /** Closing is enclosing. The fingers taking part close one by one, each kept from those before, and in a composed
+   * grip from what it holds already. What is left out then keeps its pose where the target and those fingers allow,
+   * else moves the least that clears: opening, folding, or for the thumb standing out to its side. The thumb, taking
+   * part, closes last, from standing out of the palm, lowered toward its side as far as the target is in the way,
+   * folding till each bone meets something. Without the palm its tip presses instead, from where it reached, on where
+   * the fingers touch (nearest `near`) mirrored through `middle` */
   const close = (place: Matrix4, middle: Vector3, near?: Vector3) => {
     const pose: Pose = { ...held }
-    for (const f of FINGERS.filter((f) => !using.includes(f))) {
-      const now = angles(pose[f])
-      if (!touch.bones(f, now, pose, place).some((g) => touch.sinks(g, []))) continue
-      const ways = [flat, fist].flatMap((to) => {
-        const share = touch.clear(f, place, pose, now, angles(to[f]), [])
-        return share === undefined ? [] : [lerp(now, angles(to[f]), share)]
-      })
-      if (!ways.length) throw new Error(`the ${f}, left out, cannot clear the target: let it take part`)
-      const moved = (values: number[]) => touch.travel(f, now, values)
-      pose[f] = part(ways.reduce((a, b) => (moved(b) < moved(a) ? b : a)))
-    }
     for (const [k, f] of fingers.entries()) {
-      const others = rods(pose, place, (e) => using.includes(e) && !fingers.slice(0, k).some((g) => g === e))
+      const kept = (e: Element) => fingers.slice(0, k).some((g) => g === e) || (earlier && !using.includes(e))
+      const others = rods(pose, place, (e) => !kept(e))
       // what a composed grip adds reaches for its point from its knuckle's side; a fresh grip's fingers wrap the core
       const knuckle = touch.of(f)[0].a.clone().applyMatrix4(place)
       const out = knuckle.sub(skin.nearest(point).at).normalize()
@@ -100,6 +93,17 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
       const curled = () => touch.curl(f, place, pose, core, across / 2, others)
       const closed = () => touch.close(f, place, pose, angles(ready[f]), angles(fist[f]), others)
       pose[f] = part(reached || (palm ? curled() : closed()))
+    }
+    const taking = rods(pose, place, (e) => !fingers.some((g) => g === e))
+    for (const f of FINGERS.filter((f) => !using.includes(f))) {
+      const now = angles(pose[f])
+      if (!touch.bones(f, now, pose, place).some((g) => touch.sinks(g, taking))) continue
+      const ways = [angles(flat[f]), angles(fist[f]), ...(f === 'thumb' ? [splayed] : [])].flatMap((to) => {
+        const share = touch.clear(f, place, pose, now, to, taking)
+        return share === undefined ? [] : [lerp(now, to, share)]
+      })
+      const moved = (values: number[]) => touch.travel(f, now, values)
+      if (ways.length) pose[f] = part(ways.reduce((a, b) => (moved(b) < moved(a) ? b : a)))
     }
     if (!thumb) return pose
     const others = rods(pose, place, (e) => e === 'thumb')
@@ -112,19 +116,18 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
       return pose
     }
     const up = [0, thumbs[1][1], 0, 0]
-    const open = lerp(up, angles(flat.thumb), touch.clear('thumb', place, pose, up, angles(flat.thumb), []) ?? 1)
+    const open = lerp(up, splayed, touch.clear('thumb', place, pose, up, splayed, []) ?? 1)
     const shut = [...angles(fist.thumb).slice(0, 2), thumbs[2][1], thumbs[3][1]]
     pose.thumb = part(touch.close('thumb', place, pose, open, shut, others))
     return pose
   }
 
-  /** what keeps an element taking part from holding: it sinks in, or closes short, unless it is the thumb resting on
-   * the fingers round a handle, or a finger closed as far as its fist or its neighbours let it round something within
-   * its thickness */
-  const failing = (e: Element, pose: Pose, place: Matrix4, { gap, normal }: Contact) => {
-    const mend = `move the point ${by(normal.clone().multiplyScalar(-gap))}`
-    if (gap < -fine) return `sinks ${cm(-gap)} into the target: ${mend}`
-    if (gap <= fine) return
+  /** how far an element taking part is from holding: sunk in, or short, unless it is the thumb resting on the fingers
+   * round a handle, or a finger closed as far as its fist or its neighbours let it round something within its
+   * thickness */
+  const missing = (e: Element, pose: Pose, place: Matrix4, { gap }: Contact) => {
+    if (gap < -fine) return -gap
+    if (gap <= fine) return 0
     const rest = rods(pose, place, (o) => o === 'thumb')
     const thumbs = rods(pose, place).filter((g) => g.element === 'thumb' && g.bone > 0)
     const rests = palm && e === 'thumb' && thumbs.some((g) => apart(g, rest) <= fine)
@@ -132,74 +135,56 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
     const stopped = rods(pose, place).some((g) => g.element === e && apart(g, touch.beside(g, neighbours)) <= fine)
     const fisted = (finger: Finger) => pose[finger].bend.every((v, i) => v === fist[finger].bend[i])
     const closed = e !== 'palm' && e !== 'thumb' && gap <= radius && (stopped || fisted(e))
-    if (!rests && !closed) return `closes ${cm(gap)} short of the target: ${mend}, or leave the ${e} out`
+    return rests || closed ? 0 : gap
   }
 
-  /** the grip a pose and placement make, once nothing sinks in, all taking part hold, and the thumb opposes */
-  const finish = (place: Matrix4, pose: Pose, advice: string): Grip => {
+  /** The grip a pose and placement make, and how far it is from holding: by how much what takes part misses, what is
+   * left out sinks in, the thumb comes round to the fingers' side, and a squeeze is off level */
+  const finish = (place: Matrix4, pose: Pose) => {
     check(pose)
     // a finger's side along a flat thing touches all along it: where it squeezes is across from the thumb
     const near = pinch ? touch.contact(pose, place, 'thumb').at : undefined
     const contacts = all((e) => touch.contact(pose, place, e, near))
-    for (const e of ELEMENTS) {
-      const { gap } = contacts[e]
-      if (!using.includes(e) && gap < -fine)
-        throw new Error(`the ${e}, left out, lies ${cm(-gap)} in the target: let it take part, or \`start\` it clear`)
-      const why = using.includes(e) && failing(e, pose, place, contacts[e])
-      if (why) throw new Error(`the ${e} ${why}`)
-    }
+    let fault = 0
+    for (const e of ELEMENTS)
+      fault += using.includes(e) ? missing(e, pose, place, contacts[e]) : Math.max(0, -contacts[e].gap - fine)
     const pushing = fingers.filter((f) => contacts[f].gap <= fine)
     const squeeze = mean(pushing.map((f) => contacts[f].normal)).normalize()
     const opposed = contacts.thumb.normal.angleTo(squeeze)
     const holds = thumb && pushing.length && contacts.thumb.gap <= fine
-    const degrees = Math.round((opposed * 180) / Math.PI)
-    if (holds && opposed < Math.PI / 2)
-      throw new Error(`the thumb presses on the fingers' side, ${degrees}° from them: ${advice}`)
+    if (holds) fault += Math.max(0, Math.PI / 2 - opposed) * radius
     // without the palm the thumb squeezes the target against the fingers' pads, directly across it from their middle
     const theirs = mean(pushing.map((f) => contacts[f].at))
-    const off = contacts.thumb.at.clone().sub(theirs).projectOnPlane(squeeze)
-    if (holds && !palm && off.length() > PRESS * radius + FRICTION * contacts.thumb.at.distanceTo(theirs))
-      throw new Error(`the thumb lands ${cm(off.length())} off level with the fingers: move the point ${by(off)}`)
-    for (const e of earlier ? using : []) {
-      const ends = hand.segments(pose, place).flatMap((g) => (g.element === e ? samples(g) : []))
-      const end = ends.reduce((a, b) => (a.distanceTo(point) < b.distanceTo(point) ? a : b))
-      const miss = end.distanceTo(point) - radius
-      if (miss > breadth)
-        throw new Error(`the ${e} ends ${cm(miss)} from the point: move it toward ${named(end.sub(point))}`)
-    }
+    const off = contacts.thumb.at.clone().sub(theirs).projectOnPlane(squeeze).length()
+    if (holds && !palm) fault += Math.max(0, off - PRESS * radius - FRICTION * contacts.thumb.at.distanceTo(theirs))
     const [position, quaternion] = [new Vector3(), new Quaternion()]
     place.clone().invert().multiply(target.matrixWorld).decompose(position, quaternion, new Vector3())
     const local = (e: Element) => {
       const { at, gap, normal } = contacts[e]
       return { at: target.worldToLocal(at.clone()), gap, normal: normal.clone().transformDirection(inverse) }
     }
-    return { target, position, quaternion, pose, contacts: all(local) }
+    return { grip: { target, position, quaternion, pose, contacts: all(local) }, fault }
   }
 
+  const thumbs = limits('thumb')
+  /** the thumb standing out to its side, in the palm's plane */
+  const splayed = [thumbs[0][1], 0, 0, 0]
   if (earlier) {
     const turn = target.getWorldQuaternion(new Quaternion()).multiply(earlier.quaternion.clone().invert())
     const place = placed(turn, earlier.position, target.getWorldPosition(new Vector3()))
-    return finish(place, close(place, point), 'start from a grip coming from another side')
+    return finish(place, close(place, point)).grip
   }
   if (!from?.lengthSq()) throw new Error('a grip must say which side the hand comes from')
-  // without the palm the thumb and fingers hold the point between them, so it lies inside the target
-  if (pinch && skin.depth(point) > 0)
-    throw new Error(`the point pinched lies outside the target: move it ${by(skin.nearest(point).at.sub(point))}`)
 
-  // the line along the approach through the point enters the target; from `far` back no part of the hand meets it
+  // the line along the approach through the point enters the target; from `far` back no part of the hand meets it.
+  // A point the line misses, or one pinched, is taken inside
   const toward = from.clone().transformDirection(target.matrixWorld).negate()
   const span = Math.max(...touch.rest.map((s) => s.b.length())) * scale
-  const far = point.distanceTo(skin.bounds.center) + skin.bounds.radius + span
-  const entered = skin.cast(point.clone().addScaledVector(toward, -far), toward)
-  if (entered === Infinity) {
-    const off = skin.nearest(point).at.sub(point).projectOnPlane(toward)
-    throw new Error(`the hand coming from ${named(from)} meets nothing of the target: move the point ${by(off)}`)
-  }
-  const entry = point.clone().addScaledVector(toward, entered - far)
-  const deep = point.clone().sub(entry).dot(toward)
-  const short = `${cm(Math.abs(deep))} ${deep > 0 ? 'behind' : 'short of'} the surface the palm meets`
-  if (palm && Math.abs(deep) > breadth)
-    throw new Error(`the point lies ${short}: move it toward ${named(toward.clone().multiplyScalar(-deep))}`)
+  const reach = (p: Vector3) => p.distanceTo(skin.bounds.center) + skin.bounds.radius + span
+  const enters = (p: Vector3) => skin.cast(p.clone().addScaledVector(toward, -reach(p)), toward)
+  if (pinch || enters(point) === Infinity) point = inside(point)
+  const far = reach(point)
+  const entry = point.clone().addScaledVector(toward, enters(point) - far)
   const through = skin.cast(entry.clone().addScaledVector(toward, 1e-6), toward)
   // the palm and a lone press meet the target's surface, a pinch holds it at the point
   const centre = pinch
@@ -230,9 +215,6 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   const core = [long, long.clone().negate()].map((v) =>
     middle.clone().addScaledVector(v, Math.max(0, reaches(v) - across / 2)),
   )
-  const axis = named(thin).replace(/[+-]/g, '±')
-  const thinner = palm && through < across ? `come from ${axis}, across which the target is thinner, or ` : ''
-  const advice = `${thinner}leave the thumb out`
 
   /** the way a finger's pad faces in a pose: where its tip goes as its last joint folds on */
   const facing = (f: Finger, pose: Pose) => {
@@ -245,7 +227,6 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   // target interrupts: so they bend at every joint and face the thumb, however thin the target
   const palmMiddle = mean(touch.of('palm').flatMap((s) => [s.a, s.b]))
   const up = touch.of('palm')[1].b.clone().normalize()
-  const thumbs = limits('thumb')
   const closing = (s: number) => {
     const pose: Pose = { ...held, thumb: part([thumbs[0][1], fist.thumb.bend[0], thumbs[2][1] * s, thumbs[3][1] * s]) }
     for (const f of FINGERS.slice(1))
@@ -294,16 +275,16 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   /** The grip with the hand turned so. With the palm, it comes in along the approach till the palm touches, on the
    * crease, and the fingers close round. A press comes in till the pads touch. A pinch's target comes in across from
    * the thumb till it meets the fingers, and the thumb goes across it */
-  const solve = (turn: Quaternion): Grip => {
+  const solve = (turn: Quaternion) => {
     if (palm) {
       const place = come(turn, seat, point, held, (e) => e === 'palm')
-      return finish(place, close(place, middle), advice)
+      return finish(place, close(place, middle))
     }
-    if (!pinch) return finish(come(turn, mean(ends.map((g) => g.b)), entry, ready), ready, advice)
+    if (!pinch) return finish(come(turn, mean(ends.map((g) => g.b)), entry, ready), ready)
     const at = (t: number) => placed(turn, contact.clone().addScaledVector(crossing, t), middle)
     const clear = (t: number) => fingers.every((f) => touch.contact(ready, at(t), f).gap >= 0)
     const t = bisect(2 * (hand.radius + across / scale), 0, clear, fine / scale / 2)[0]
-    return finish(at(t), close(at(t), middle, contact.clone().applyMatrix4(at(t))), advice)
+    return finish(at(t), close(at(t), middle, contact.clone().applyMatrix4(at(t))))
   }
 
   // the palm faces along the approach, the target's long way along the pads' line; without it the fingers point along
@@ -317,34 +298,24 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   const turns = [base, base.clone().premultiply(over)].filter(
     (t) => bulk.length() <= breadth || hand.thumbward.clone().applyQuaternion(t).dot(bulk) >= 0,
   )
-  const errors: string[] = []
-  const attempt = (turn: Quaternion) => {
-    try {
-      return solve(turn)
-    } catch (error) {
-      if (!(error instanceof Error)) throw error
-      errors.push(error.message)
-    }
-  }
   // where both hold, the thumb goes to the target's +y side, else +z, else +x, not to whichever is tried first. The
-  // way the pads close says which that likely is, to try first; where the grip found is not it, the other is tried.
-  // Where neither side is the thumb's more, as when it lies along the approach, the hand keeps the first way round
+  // way the pads close says which that likely is, to try first; where the grip found is not it, or does not hold, the
+  // other is tried, and the nearer to holding kept. Where neither side is the thumb's more, as when it lies along the
+  // approach, the hand keeps the first way round
   const sides = turns.map((t) => counted(thumbside.clone().applyQuaternion(t).transformDirection(inverse)))
   const [one, other] = sides.length > 1 && preferred(sides) > 0 ? [...turns].reverse() : turns
-  const first = attempt(one)
-  if (!other || !first) return first ?? (other && attempt(other)) ?? fail(errors)
+  const first = solve(one)
+  if (!other) return first.grip
   // the side the thumb ended on, from the fingers' bones, past a finger's thickness: thin things leave little between
-  const { contacts } = first
+  const { contacts } = first.grip
   const bone = (e: Element) => contacts[e].at.clone().addScaledVector(contacts[e].normal, thick)
   const side = bone('thumb').sub(mean((fingers.length ? fingers : FINGERS.slice(1)).map(bone)))
   const beyond = (v: Vector3) => v.toArray().map((c) => (Math.abs(c) < thick ? 0 : c))
   const along = toward.clone().transformDirection(inverse)
   const better = preferred([side, along.multiplyScalar(2 * side.dot(along)).sub(side)].map(beyond))
-  return ((better > 0 || (!better && other === turns[0])) && attempt(other)) || first
-}
-
-const fail = (errors: string[]): never => {
-  throw new Error([...new Set(errors)].join('; turned over, '))
+  if (!first.fault && !(better > 0 || (!better && other === turns[0]))) return first.grip
+  const second = solve(other)
+  return (first.fault ? second.fault < first.fault : !second.fault) ? second.grip : first.grip
 }
 
 /** Puts a hand in a grip's pose and the target in it: moving the target if it hangs from the hand, else the hand */

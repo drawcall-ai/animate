@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { KEEPS, PUSH, SETTLE, SIDLE, STILL, THERE, TOGETHER, WALK, stride } from './gait'
+import { KEEPS, PUSH, SETTLE, SIDLE, SLOW, THERE, TOGETHER, WALK, stride } from './gait'
 import { type Footing, Pelvis, socket } from './pelvis'
 import { SIDES, SIGN, type Side } from './size'
 import { EXACT, clamp, wrap, UP } from './world'
@@ -41,6 +41,8 @@ export class Way extends Pelvis {
   yields = 0
   /** the way a story has him face in the scene, if it does (rad about y, from +z toward +x) */
   face?: number
+  /** where the world has the hips on the ground at a moment, until they have been carried there */
+  world?: { place: Vector3; time: number }
   /** where he looks, if he does, from his shoulders in the scene: about y from +z toward +x, and up (rad) */
   look?: { yaw: number; pitch: number }
   /** standing, the way he turns to face where he looks, when that is further round than his head turns, until he faces it (rad about y) */
@@ -94,7 +96,7 @@ export class Way extends Pelvis {
     for (const [place, side] of still) this.scene(place, side)
     const hips = this.scene(pivot.set(0, 0, value.z)).clone()
     this.heading += turn
-    this.faces += round - turn
+    this.faces = wrap(this.faces + round - turn)
     this.origin.copy(hips).sub(pivot.set(0, 0, value.z).applyAxisAngle(UP, this.heading))
     if (shift) this.origin.add(shift)
     for (const [place, side] of still) this.local(place, side)
@@ -107,24 +109,43 @@ export class Way extends Pelvis {
   }
 
   /**
-   * The world has put the hips at a place on the ground: the way he is going goes with them, and what speed he had
-   * against being put there is gone; led a way, he goes as fast as he is led. His feet stay where they stand, for him
-   * to step after the hips, if that is no further than he steps: further, he is there as he was, feet and all.
+   * The world has the hips at a place on the ground at a moment: as they go on from here they are carried there by
+   * then, their share of the way in each step, his feet standing where they are for him to step after them. Standing
+   * between feet the story has put down he keeps to them, as near the place as they let him, and only his going moves
+   * them. Further off where his going takes him by then than he steps, he is there at once, feet and all.
    */
-  shift(place: { x: number; z: number }) {
-    const at = this.scene(pivot.copy(this.value))
-    const by = new Vector3(place.x - at.x, 0, place.z - at.z)
-    const [{ course }, whole] = [this, by.length() > KEEPS.near * this.size.leg]
-    // (at rest where he was to be, he is at rest where he is put)
-    const rest = this.halted && course.z !== undefined ? [course.x, course.z] : undefined
-    this.reframe(0, 0, by, whole ? ({ put }) => [put] : stands)
+  at(place: Vector3, time: number) {
+    this.world = { place, time }
+    const off = this.off(place, time - this.time)
+    if (off.length() > KEEPS.near * this.size.leg) this.carry(off, () => [])
+  }
+
+  /** a step of time from now: the hips are carried their share of the way to where the world has them, by the time it does */
+  protected carried(dt: number) {
+    const { world } = this
+    if (!world) return
+    const left = world.time - this.time
+    if (!this.placed) this.carry(this.off(world.place, left).multiplyScalar(left > dt ? dt / left : 1))
+    if (left <= dt) this.world = undefined
+  }
+
+  /**
+   * how far a place is from where his going takes him `left` from now: where he stands, between feet the story has put
+   * down, or where the hips stand, which ride back as he stands low
+   */
+  private off(place: Vector3, left: number) {
+    const { value, velocity } = this
+    const stood = this.placed ? this.between() : new Vector3(0, 0, value.z + this.back)
+    const by = this.scene(stood.setY(0).add(skew.set(0, 0, velocity.z * Math.max(0, left))))
+    return by.set(place.x - by.x, 0, place.z - by.z)
+  }
+
+  /** he is carried along the ground with the way he is going: what `stays` stands where it is, and where he is to rest and where his feet were put go with him */
+  private carry(by: Vector3, stays = ({ at, step }: Footing) => [at, step?.points === undefined ? undefined : step.from]) {
+    const { course } = this
+    const rest = course.z !== undefined && (this.led || this.halted) ? [course.x, course.z] : undefined
+    this.reframe(0, 0, by, stays)
     if (rest && course.z !== undefined) [course.x, course.z] = rest
-    const pushed = by.applyAxisAngle(UP, -this.heading).normalize()
-    this.velocity.addScaledVector(pushed, Math.max(0, -pushed.dot(this.velocity)))
-    // (led a way, he goes as fast as he is led along the way he is going: the world has him going so, and his strides
-    // are to keep up with it, backwards while what he is led is behind him)
-    if (this.led && course.heading !== undefined)
-      this.velocity.z = Math.abs(course.speed) * Math.cos(course.heading - this.heading)
   }
 
   /**
@@ -150,7 +171,8 @@ export class Way extends Pelvis {
 
   /**
    * the hips are knocked going so along the ground in the scene (m/s), no faster than a step catches: at his ease, carried
-   * further than a step is worth, he is to rest there and steps after them; else he sways back over his feet
+   * further than a step is worth, he is to rest there and steps after them; else he sways back over his feet. Led,
+   * where he is is the world's to say: he sways, and is carried off only as he is led
    */
   knock(by: Vector3) {
     const { velocity, course } = this
@@ -159,7 +181,7 @@ export class Way extends Pelvis {
     const speed = Math.min(knocked.length(), Math.sqrt(KEEPS.near * leg * PUSH.along))
     knocked.setLength(speed)
     const carries = (speed * speed) / PUSH.along
-    if (this.idle === 0 || carries < TOGETHER * leg || course.z === undefined) {
+    if (this.led || this.idle === 0 || carries < TOGETHER * leg || course.z === undefined) {
       velocity.add(knocked)
       return
     }
@@ -188,13 +210,23 @@ export class Way extends Pelvis {
     return ((along > 0 ? WALK.most : KEEPS.back) * along ** 2 + SIDLE.most * (1 - along ** 2)) * this.size.pace
   }
 
+  /** how far off the way he goes he faces at the most going forward so fast (rad): the turn of `fastest` */
+  private widest(going: number) {
+    const fast = going / this.size.pace
+    if (fast >= WALK.most) return SPIN.there
+    return Math.acos(Math.sqrt(clamp((fast - SIDLE.most) / (WALK.most - SIDLE.most), 0, 1)))
+  }
+
   /**
-   * The way he is going turns toward where he is to go, and he with it: or he turns to face as a story has him, and
-   * goes backwards or sideways along it rather than turn from that, as he does to a place close by. Only a foot on the
-   * ground turns him. Standing, the way he is going is free: he turns where he stands, his feet stepping round, until
-   * he faces near enough to set off. Going, he comes round no faster than the ground pushes him round, no further in a
-   * stride than his legs take, and over a foot on the ground no further than keeps it clear of his other leg; and he
-   * goes no faster than has him round by the time he is there, nor than he goes facing as he does.
+   * His legs and pelvis belong to the way he goes, his trunk and head to the way he faces. The way he is going turns
+   * toward where he is to go, or led, is the world's at once; he faces as a story or a game has him, at a walk, or else
+   * the way he goes. His trunk turns to face so as far as it twists on the pelvis, and the pelvis comes after it as
+   * his feet step: all the way, facing up to an eighth of a turn off the way he goes, less again up to a quarter, and
+   * further off it he sidesteps, and behind it backs. Only a foot on the ground turns him, and over a foot on the
+   * ground no further than keeps it clear of his other leg. Standing, the way he is going is free: he turns where he
+   * stands, his feet stepping round. Going his own way, he comes round no faster than the ground pushes him round, no
+   * further in a stride than his legs take, and goes no faster than has him round by the time he is there, nor than
+   * he goes facing as he does.
    */
   protected steer(dt: number, down: boolean) {
     const { course, value, velocity } = this
@@ -203,7 +235,7 @@ export class Way extends Pelvis {
     // (a jump goes the way he is going)
     if (this.jumps) return
     const going = Math.abs(velocity.z)
-    const still = going < STILL * pace
+    const still = going < SLOW * pace
     // standing, he turns to face where he looks once his head does not turn that far round, unless he is to face a way
     const { look } = this
     const away = look && this.face === undefined && still ? Math.abs(wrap(look.yaw - this.facing)) : 0
@@ -212,43 +244,43 @@ export class Way extends Pelvis {
     const far = course.z === undefined ? TURNS.bend * leg : Math.hypot(course.x, course.z - value.z)
     // to a place close by he keeps facing as he does, and wherever he goes at a walk, as a story has him face
     const held = far <= KEEPS.near * leg || (face !== undefined && Math.abs(course.speed) <= WALK.most * pace)
-    // (and led free, the way he goes, the way he is led, comes round no further than a quarter turn: further he is
-    // carried on backwards along it, and turns round to it)
-    const behind = !held && course.heading !== undefined && Math.cos(course.heading - this.heading) < 0
-    if ((held && Math.cos(this.faces) < -SPIN.there) || behind) this.reverse()
-    const stated = held && face !== undefined ? wrap(face - this.heading) : undefined
+    // (the way he goes is not his to turn from where he is to go when he keeps facing as he does, nor led: he goes
+    // along it backwards, told as a way that runs the other way, while his pelvis is turned more than a quarter from it)
+    const kept = held
+    if ((kept ? Math.cos(this.faces) : this.way) < -SPIN.there) this.reverse()
     // how far round from the way he is going where he is to go lies: nowhere, once he is there
-    const placed = course.z === undefined ? undefined : far > THERE * leg && Math.atan2(course.x, course.z - value.z)
+    // (hips that ride back as he stands low are there as far behind it)
+    const there = THERE * leg + this.back
+    const placed = course.z === undefined ? undefined : far > there && Math.atan2(course.x, course.z - value.z)
     const led = course.heading === undefined ? undefined : wrap(course.heading - this.heading)
     const bears = placed === undefined ? led : placed === false ? undefined : placed
-    // he backs to what is behind the way he keeps facing; and standing with nowhere to go, the way he is going is the way he faces
-    const backs = held && bears !== undefined && Math.cos(bears) < 0
+    // and standing with nowhere to go, the way he is going is the way he faces
+    const backs = kept && bears !== undefined && Math.cos(bears) < 0
     const turn =
       bears === undefined ? (still && placed === false ? this.faces : 0) : backs ? wrap(bears + Math.PI) : bears
-    // going another way than he is to face, his pelvis turns toward the way he goes: all the way, facing up to an eighth of a turn off it, and less again up to a quarter, and coming to a place, on the last stride. His trunk makes up for it
-    const across = Math.abs((stated ?? 0) - turn)
-    const most =
-      bears === undefined ? 0 : Math.min(1, far / (KEEPS.near * leg)) * Math.min(across, Math.PI / 2 - across)
-    this.yields = Math.sign((stated ?? 0) - turn) * Math.max(0, most)
-    const faced = !held ? undefined : stated === undefined ? this.faces : stated - this.yields
-    // standing, the way he is going turns at once: going, as the ground pushes him round and, he turning with it, his strides take him
+    // standing, the way he is going turns at once, and led, it is the way the world has him going: else, as the ground
+    // pushes him round and, he turning with it, his strides take him
     const spin = SPIN.rate / beat
     const twist = held ? Infinity : (2 * TURNS.twist * going) / stride(this.size, going / pace)
-    const moving = going > 0 ? Math.min(PUSH.along / going, twist) : 0
-    const rate = still ? Infinity : moving
-    let turned = down ? clamp(turn, -rate * dt, rate * dt) : 0
-    // he turns with the way he goes, and round to it if he faces off it: or to face as he is to, the last of it ever slower
-    const carried = faced === undefined && !still ? turned : 0
-    const off = (faced ?? turned) - this.faces - carried
-    const eased = Math.sign(off) * Math.min(Math.abs(off), Math.min(spin, (2 * Math.abs(off)) / (SETTLE * beat)) * dt)
-    // (facing further off the way he goes than he sets off, to face it, he steps round however his feet stand, and
-    // comes round in the air too)
-    const steps = still || (!held && Math.abs(this.faces) > TURNS.twist)
-    let round = down || steps ? carried + eased : 0
+    const rate = still ? Infinity : going > 0 ? Math.min(PUSH.along / going, twist) : 0
+    let turned = led !== undefined ? turn : down ? clamp(turn, -rate * dt, rate * dt) : 0
+    // the way he is to face: as he is to, or keeps facing, or where he goes
+    const faced = !held ? turn : face === undefined ? this.faces : wrap(face - this.heading)
+    // (his pelvis gives to the way he goes as he is to face another way, coming to a place on the last stride: his
+    // trunk makes up for it)
+    const across = wrap(faced - turn)
+    const gives = held && face !== undefined && bears !== undefined
+    const most = Math.min(1, far / (KEEPS.near * leg)) * Math.min(Math.abs(across), Math.PI / 2 - Math.abs(across))
+    this.yields = gives ? Math.sign(across) * Math.max(0, most) : 0
+    // his pelvis comes round to where it is to face, the way he goes or as he is to face less what it gives to that: as
+    // fast as the way he goes turns, even in the air, and on a foot faster again, the last of it ever slower
+    const off = (held ? faced - this.yields : turned) - this.faces
+    const eased = down || still ? Math.min(spin, (2 * Math.abs(off)) / (SETTLE * beat)) * dt : 0
+    let round = Math.sign(off) * Math.min(Math.abs(off), (still ? 0 : Math.abs(turned)) + eased)
     // (no further from the way he goes than he can face at his speed: he slows for it first)
-    const [now, then] = [this.fastest(this.faces), this.fastest(this.faces - turned + round)]
+    const [now, then] = [this.fastest(this.faces - turned), this.fastest(this.faces - turned + round)]
     if (held && then < Math.min(going - PUSH.along * dt, now)) round = 0
-    for (const side of steps ? [] : SIDES) {
+    for (const side of still ? [] : SIDES) {
       const { at, down } = this.foot[side]
       const [aside, on] = [at.x - value.x - SIGN[side] * hip, at.z - value.z]
       const fore = aside * Math.sin(this.faces) + on * Math.cos(this.faces)
@@ -256,17 +288,24 @@ export class Way extends Pelvis {
       if (!down || SIGN[side] * fore * round <= 0) continue
       const most = Math.max(0, out - TURNS.clear * hip) / Math.max(Math.abs(fore), EXACT)
       const cut = Math.max(0, Math.abs(round) - most)
-      if (faced === undefined && turned * round > 0) turned -= Math.sign(turned) * Math.min(Math.abs(turned), cut)
+      if (!held && led === undefined && turned * round > 0)
+        turned -= Math.sign(turned) * Math.min(Math.abs(turned), cut)
       round = clamp(round, -most, most)
     }
-    if (turned !== 0 || round !== 0) this.reframe(turned, round)
+    // (led faster than he goes facing so far off the way he goes, he faces nearer it, over a foot on the ground or not)
+    const widest = this.widest(going)
+    if (led !== undefined && this.way > 0)
+      round = clamp(this.faces - turned + round, -widest, widest) - this.faces + turned
+    // (led, it is the world that turns the way he goes: a foot in the air goes on where it was going in the scene)
+    const stays = led === undefined ? stands : ({ at, put, step }: Footing) => [at, put, step?.from, step?.to]
+    if (turned !== 0 || round !== 0) this.reframe(turned, round, undefined, stays)
     ;[this.curves, this.spins] = [turned / dt, round / dt]
-    this.aims = (stated ?? faced ?? turn) - turned - this.faces
+    this.aims = faced - turned - this.faces
     if (course.z === undefined ? bears !== undefined : this.veers)
       course.speed = (backs ? -1 : 1) * Math.abs(course.speed)
     // he goes no faster than has him round by the time he is there, his turning as often held up as not: nor than he goes facing as he does, nor at all until he faces near enough the way he is to go
     this.rounds = bears === undefined || turn === 0 ? Infinity : (far * rate) / (held ? 1 : 2) / Math.abs(turn)
     if (held) this.rounds = Math.min(this.rounds, this.fastest(this.faces))
-    else if (Math.abs(this.faces) > TURNS.twist) this.rounds = 0
+    else if (!kept && Math.abs(this.faces) > TURNS.twist) this.rounds = 0
   }
 }

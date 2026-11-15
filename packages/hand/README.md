@@ -23,7 +23,7 @@ hold(hand, racket, held) // the hand onto the racket, or the racket into the han
   earlier grip on the same target to build on.
 - `hold(hand, target, grip)`: puts the two together.
 
-Whatever cannot be done throws, naming the part, by how much, and what to change.
+Where the hand cannot hold as stated it gives the nearest grip it can; only a statement it cannot read throws.
 
 A grip handed to an animation is both halves: `@drawcall/animate` takes the placement as where the hand bone is
 against a thing, and the pose as what the fingers do.

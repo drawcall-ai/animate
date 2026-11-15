@@ -2,9 +2,9 @@ import type { Vector3 } from 'three'
 import type { Ahead } from './ahead'
 import type { Bones } from './bones'
 import type { End } from './end'
-import type { Gives } from './gives'
+import type { Gives } from './give'
 import type { Going } from './going'
-import { carried, least } from './heights'
+import { held } from './heights'
 import { type Joints, parts } from './joints'
 import type { Mover } from './mover'
 import type { Reactions } from './reactions'
@@ -41,6 +41,10 @@ export class Clock {
   /** whether there has been an update since the last step, and what went wrong in the step being made */
   private updated = false
   private readonly faults: unknown[] = []
+  /** how far each foot is bent toe down against its shin, as it was in the last step (rad) */
+  private readonly bent = both(() => 0)
+  /** from when until when on his clock the update being made goes on */
+  private span = { from: 0, to: 0 }
 
   constructor(private readonly body: Workings) {}
 
@@ -48,55 +52,64 @@ export class Clock {
     if (!(delta >= 0 && delta < Infinity)) throw new Error(`time goes on by ${delta} s`)
     const dt = tick(this.body.size)
     this.updated = true
+    // (the steps go on from him as he is, not as he was drawn ahead of them)
+    if (this.owed > 0) this.draw(0)
+    this.span = { from: this.time + this.owed, to: this.time + this.owed + delta }
+    this.body.going.places(this.span.to)
     for (this.owed += delta; this.owed >= dt; this.updated = false) {
       this.owed -= dt
       this.advance(dt, this.updated)
     }
-  }
-
-  /**
-   * What cannot be done in a step is an error once the step is done: what it was is given up as `otherwise` says, the
-   * rest of the step is made and his clock goes on, and the error is thrown then, once.
-   */
-  private tried(act: () => void, otherwise?: () => void) {
-    try {
-      act()
-    } catch (error) {
-      otherwise?.()
-      this.faults.push(error)
+    this.body.going.looks()
+    // he is drawn as he is at the moment the update is for, between his steps, and so is what his hands hold
+    if (this.owed > 0) {
+      this.draw(this.owed)
+      this.body.gives.write(
+        SIDES.map((side) => this.body.ends.hand[side]),
+        this.owed,
+      )
     }
   }
 
   private advance(delta: number, frame: boolean) {
-    const { mover, joints, ends, ahead, gives, going, reactions, size, stood } = this.body
+    const { mover, joints, ends, ahead, gives, going, reactions, stood } = this.body
     const all = SIDES.flatMap((side) => [ends.foot[side], ends.hand[side]])
     const hands = SIDES.map((side) => ends.hand[side])
-    if (frame) gives.begin(hands)
+    if (frame) gives.begin()
     // what was to arrive by now has, before the stories go on from it
-    for (const end of all)
-      this.tried(
-        () => end.arrive(frame),
-        () => end.free(),
-      )
+    // (one sent to a thing that has left his scene is let free, and that is told once the step is done)
+    const kept = (end: End, act: () => void) => {
+      try {
+        act()
+      } catch (error) {
+        end.free()
+        this.faults.push(error)
+      }
+    }
+    for (const end of all) kept(end, () => end.arrive(frame))
+    // (what a story throws is thrown once the step is done, and the story is over)
     for (let k = 0; k < this.stories.length; k++) {
       let done = true
-      this.tried(() => (done = this.stories[k].next().done === true))
+      try {
+        done = this.stories[k].next().done === true
+      } catch (error) {
+        this.faults.push(error)
+      }
       if (done) this.stories.splice(k--, 1)
     }
     // where he looks is told as it lies from his shoulders now
-    mover.look = going.looked && going.sight(going.looked)
+    const { from, to } = this.span
+    const looked = going.looking(to > from ? Math.min(1, (this.time + delta - from) / (to - from)) : 1)
+    mover.look = looked && going.sight(looked)
     // the ground moves the hips and the feet. Where a foot the story has is, is told to the ground: and where the ground holds a foot of the body's own, to whoever looks at the foot
     const feet = SIDES.map((side) => [side, ends.foot[side], mover.foot[side]] as const)
     for (const [side, end, foot] of feet) if (end.held) mover.local(end.value, side, foot.at)
     // (he is looked ahead at from before this step, not from the middle of it: his clock goes on at the end of it)
     ahead.at(0)
     // (led, he may be told how high and how fast in either order between two steps: led faster than his hips are held
-    // for, he rises as far as that takes, and is told so once)
-    const speed = Math.abs(mover.course.speed)
-    const wrong = mover.course.heading === undefined ? undefined : carried(size, speed, mover.height)
-    if (wrong) {
-      mover.height = mover.course.y = least(size, speed)
-      this.faults.push(new Error(wrong))
+    // for, he rises as far as that takes)
+    if (mover.course.heading !== undefined) {
+      mover.height = mover.course.y = held(mover, mover.height, { speed: Math.abs(mover.course.speed) })
     }
     mover.advance(delta)
     const { fault } = mover
@@ -111,12 +124,8 @@ export class Clock {
     const swing = ahead.wind.start()
     if (swing) this.stories.push(swing)
     // (looking over a thing, his head comes down to the line it has his eye on)
-    reactions.sights = gives.correct(hands, delta, { place: going.looked, over: going.over })
-    for (const end of all)
-      this.tried(
-        () => this.faults.push(...end.advance(this.time, delta)),
-        () => end.free(),
-      )
+    reactions.sights = gives.correct(hands, delta, { place: looked, over: going.over })
+    for (const end of all) kept(end, () => end.advance(this.time, delta))
     for (const part of parts(joints)) part.advance(delta)
     reactions.react(delta)
     this.pose(delta)
@@ -130,17 +139,31 @@ export class Clock {
 
   pose(delta: number) {
     const { mover, joints, bones, ends, hips, stance } = this.body
-    for (const side of SIDES)
-      this.tried(
-        () => stance[side].pose(mover, delta),
-        () => ends.foot[side].free(),
-      )
+    // (a foot to stay where the hips have gone further from than its leg reaches is let free, for him to step after them)
+    for (const side of SIDES) if (stance[side].pose(mover, delta)) ends.foot[side].free()
     mover.scene(mover.value, undefined, hips.value)
     hips.velocity.copy(mover.velocity).applyAxisAngle(UP, mover.heading)
+    // where the feet and the hands are, and from where they are a moment on as everything is moving, how they move
+    const places = SIDES.flatMap((side) => [
+      { end: ends.foot[side], at: bones.ankle[side] },
+      { end: ends.hand[side], at: bones.wrist[side] },
+    ])
+    bones.pose(this.posed(), joints, NUDGE)
+    for (const { end, at } of places) end.velocity.copy(at)
+    for (const side of SIDES) {
+      const { first: thigh, second: shin } = joints.legs[side]
+      this.bent[side] = stance[side].foot(thigh.value.x, shin.value.x, mover.falls, delta)
+    }
+    this.draw(0)
+    for (const { end, at } of places) end.velocity.sub(end.value.copy(at)).divideScalar(NUDGE)
+  }
+
+  /** the hips as the bones are turned from them */
+  private posed() {
+    const { mover, hips } = this.body
     const { turn, turning, list, listing, facing, spins } = mover
     const toes = both((side) => mover.heading + mover.foot[side].toes)
-    const lifted = mover.breathes
-    const posed = {
+    return {
       value: hips.value,
       velocity: hips.velocity,
       turn,
@@ -149,25 +172,22 @@ export class Clock {
       listing,
       facing,
       spins,
-      lifted,
+      lifted: mover.breathes,
       toes,
     }
-    // where the feet and the hands are, and from where they are a moment on as everything is moving, how they move
-    const places = SIDES.flatMap((side) => [
-      { end: ends.foot[side], at: bones.ankle[side] },
-      { end: ends.hand[side], at: bones.wrist[side] },
-    ])
-    bones.pose(posed, joints, NUDGE)
-    for (const { end, at } of places) end.velocity.copy(at)
-    bones.pose(posed, joints, 0)
+  }
+
+  /** the bones are turned to where everything is `seconds` on from his last step, going as it goes then */
+  private draw(seconds: number) {
+    const { joints, bones, ends } = this.body
+    const posed = this.posed()
+    bones.pose(posed, joints, seconds)
     bones.grasp(joints)
-    for (const { end, at } of places) end.velocity.sub(end.value.copy(at)).divideScalar(NUDGE)
     for (const side of SIDES) {
       const { first: thigh, second: shin } = joints.legs[side]
-      const bent = stance[side].foot(thigh.value.x, shin.value.x, mover.falls, delta)
       // (a foot the story has goes with its shin)
-      if (ends.foot[side].held) bones.pitch(side, bent)
-      else bones.tread(side, bent + thigh.value.x + shin.value.x, toes[side])
+      if (ends.foot[side].held) bones.pitch(side, this.bent[side])
+      else bones.tread(side, this.bent[side] + thigh.value.x + shin.value.x, posed.toes[side])
     }
   }
 }

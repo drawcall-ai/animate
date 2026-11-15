@@ -3,7 +3,7 @@ import { Ahead } from './ahead'
 import { Bones } from './bones'
 import { Clock } from './clock'
 import { End, type Foot, type Hand } from './end'
-import { Gives } from './gives'
+import { Gives } from './give'
 import type { Part } from './goal'
 import { type Ground, Going, type Run, type Walk, flat } from './going'
 import { joints, parts } from './joints'
@@ -13,6 +13,7 @@ import type { Band } from './shape'
 import { SIDES, SIGN, type Side, type Size, both } from './size'
 import { Stance } from './stance'
 import { Stoops } from './stoops'
+import type { Carrying } from './track'
 import { type Story, type Xyz, UP, due } from './world'
 
 /**
@@ -20,6 +21,17 @@ import { type Story, type Xyz, UP, due } from './world'
  * toward his middle (of how far out a shoulder is), on his front
  */
 const POCKET = { up: 0.1, inward: 0.25 }
+
+/**
+ * A thing he holds, which the hands that hold it move: sent to a place, it is there, turned as said, as near as the
+ * right hand can have it if that holds it, else the left, the other on it going with it; `free` has the hand on a side let go of it, or
+ * with none every hand, and he holds it no more.
+ */
+export type Held = {
+  to(place: Xyz, how?: Carrying & { seconds?: number }): Story<boolean>
+  by(when: number, place: Xyz, how?: Carrying): Story<boolean>
+  free(side?: Side): void
+}
 
 /**
  * A person as joints that turn, which turn the bones of a rigged humanoid. The hips are given somewhere to go, and the
@@ -37,7 +49,9 @@ export class Body {
   private readonly clock: Clock
   /**
    * the hips: where they are and how they move, `to` a place they go at a walk, or to a height alone, which they are
-   * held at wherever he goes, and `at` a place on the ground the world has put them, the ground there as high as its y
+   * held at wherever he goes, and `at` the place on the ground the world has them at by the end of the next update,
+   * the ground there as high as its y: standing between feet the story has put down, he keeps to them, as near it as
+   * they let him
    */
   readonly hips: Readonly<Record<'value' | 'velocity', Vector3>> & {
     to(target: Xyz | { y: number }, way?: Walk): Story<boolean>
@@ -51,6 +65,8 @@ export class Body {
   /** what a story sends to places (m) */
   readonly foot: Record<Side, Foot>
   readonly hand: Record<Side, Hand>
+  private readonly hands: Record<Side, End>
+  private readonly gives: Gives
 
   /** the body of a rigged humanoid, as it is posed now: its rest pose. Places are told from where the `rig` is, along its axes */
   constructor(rig: Object3D) {
@@ -65,14 +81,14 @@ export class Body {
       const [up, inward] = [POCKET.up * trunk, POCKET.inward * wide]
       return new Vector3(-SIGN[side] * inward, up, this.front(side, up, inward))
     }
-    const gives = new Gives(bones, ahead, both(pocket))
+    const gives = (this.gives = new Gives(bones, ahead, both(pocket)))
     const rigged = (end: 'foot' | 'hand', side: Side) => ({
       frame: bones.frame,
       rig,
       limb: bones.starts[end][side],
       body: this,
       ...bones.lies(end, side),
-      give: (thing: Object3D) => gives.of(thing),
+      held: (part: Object3D) => gives.held(part),
     })
     const foot = both(
       (side) => new End(`${side} foot`, 'foot', side, turning.legs[side], mover, ahead, size, rigged('foot', side)),
@@ -82,7 +98,7 @@ export class Body {
     )
     const ends = { foot, hand }
     this.foot = foot
-    this.hand = hand
+    this.hand = this.hands = hand
     const stance = both((side) => new Stance(size, side, turning.legs[side], foot[side], mover.foot[side]))
     const at = { value: new Vector3(), velocity: new Vector3() }
     const going = (this.going = new Going(this, size, mover, ahead, turning, ends, reactions, at))
@@ -97,6 +113,30 @@ export class Body {
     const all = { size, bones, mover, joints: turning, ahead, reactions, gives, going, ends, stance, stood, hips: at }
     this.clock = new Clock(all)
     this.clock.pose(0)
+  }
+
+  /**
+   * He holds a thing from now on: a hand sent to it by a grip takes hold of it where it is, and the hands that hold it
+   * move it, written in its parent's frame, as near where it is set or sent as they can have it, out of him; held by
+   * none, it is the scene's. With a point of it, in its frame, that `rests`, that point rests in the pocket of the
+   * shoulder of the hand that holds it nearest it, while no hand carries it.
+   */
+  hold(thing: Object3D, { rests }: { rests?: Xyz } = {}): Held {
+    if (rests && !Number.isFinite(rests.x + rests.y + rests.z)) throw new Error('a point rests that no numbers say')
+    const give = this.gives.hold(thing, rests && new Vector3().copy(rests))
+    // (the right hand carries it if it holds it, or is on its way to: else the left; with neither, it stays)
+    const lead = (place: Xyz, how: Carrying & { seconds?: number; by?: number }) => {
+      const hand = [this.hands.right, this.hands.left].find((hand) => hand.takes(give))
+      return hand ? hand.carry(give, place, how) : (function* (): Story<boolean> { return false })()
+    }
+    return {
+      to: (place, how = {}) => lead(place, how),
+      by: (when, place, how = {}) => lead(place, { ...how, by: when }),
+      free: (side) => {
+        for (const each of side ? [side] : SIDES) if (this.hands[each].takes(give)) this.hands[each].letGo()
+        if (!side) this.gives.drop(thing)
+      },
+    }
   }
 
   /** the place on the ground where a foot stands under its hip, he over a place, facing as he does: where a story puts one down */
@@ -153,12 +193,12 @@ export class Body {
     while (!due(this.time, when)) yield
   }
 
-  /** the moment the hips come by a place on the ground, going as they are, it on their way: or to rest, where they are to come to rest there */
+  /** the moment the hips come by a place on the ground, going as they are, it on their way: or to rest, where they are to come to rest there; NaN if they never do */
   when(to: Ground) {
     return this.going.when(to)
   }
 
-  /** the moment he is highest in the jump he is making, or in the air, is to make next: on the clock of `time` */
+  /** the moment he is highest in the jump he is making, or in the air, is to make next, on the clock of `time`: with none, now */
   highest() {
     return this.going.highest()
   }
@@ -187,10 +227,9 @@ export class Body {
    * He is to be going so: `velocity` is how fast and which way along the ground, in the scene (m/s). He gets up to it
    * and round to it by his own gait, walking or running by how fast it is, and keeps to it until he is told otherwise:
    * at none, he comes to rest where his speed carries him. It takes the place of a walk or a run he is on, a jump he
-   * is making he still makes, and he is not brought to a stand for want of a story. Going up, `y` above what is at rest,
-   * on his feet, he leaves the ground so fast as he does in a jump, and in the air he flies as he left it.
+   * is making he still makes, and he is not brought to a stand for want of a story.
    */
-  go(velocity: { x: number; y?: number; z: number }) {
+  go(velocity: { x: number; z: number }) {
     return this.going.go(velocity)
   }
 
@@ -227,8 +266,9 @@ export class Body {
   /**
    * Jumps for the hips to be at a place at the top of it, up and on the way he is going by then: `highest()` tells
    * that moment. Going to where a run or a walk ends, he drops on the way in and takes off from the footfall there;
-   * nearer than that, or standing, he drops at once; in the air, once he has come down. The story it returns is over
-   * when he has landed.
+   * nearer than that, standing or led, he drops at once; in the air, once he has come down. Led, he leaves the ground
+   * going as he is led, and a top his legs cannot push him to he goes as near as they push. The story it returns is
+   * over when he has landed.
    */
   jump(top: Xyz): Story<boolean> {
     return this.going.jump(top)

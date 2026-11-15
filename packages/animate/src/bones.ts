@@ -12,8 +12,11 @@ import { GRAVITY, clamp, UP } from './world'
  * left along +x, from the hips up to the shoulders, and from an ankle up to its hip, by the length of a leg
  */
 const SQUARE = 0.97
-/** where an eye is from the middle of the head, upright: out to its side, up and ahead (in how far the head is round) */
-const EYE = { aside: 0.28, up: -0.1, ahead: 0.65 }
+/**
+ * where an eye is from the joint of the head, upright: out to its side, up and ahead (in lengths of his trunk, not of
+ * the head's skin, which a helmet or hair makes larger)
+ */
+const EYE = { aside: 0.065, up: 0.146, ahead: 0.146 }
 const euler = new Euler()
 const swivel = new Euler(0, 0, 0, 'YZX')
 const matrix = new Matrix4()
@@ -62,9 +65,10 @@ export class Bones {
   readonly shape: Shape
   /** how much of a turn to look somewhere the trunk makes, its neck and head the rest */
   readonly looks: number
-  /** where the ankles and the wrists are, in that frame */
+  /** where the ankles and the wrists are, in that frame, and how the hands are turned there from hanging straight down */
   readonly ankle: Record<Side, Vector3>
   readonly wrist: Record<Side, Vector3>
+  readonly hand: Record<Side, Quaternion>
   /** (the joint of the hips is counted from the middle between the hips) */
   private readonly hips: Bone
   /**
@@ -158,6 +162,7 @@ export class Bones {
     this.starts = { foot: both((side) => legs[side][0].bone), hand: both((side) => arms[side][0].bone) }
     this.ankle = both((side) => legs[side][2].place)
     this.wrist = both((side) => arms[side][2].place)
+    this.hand = both((side) => arms[side][2].turned)
     this.into = above(hips.bone).matrixWorld.clone().invert().multiply(sits)
 
     // he is as large as his joints are apart at rest, the two sides taken together
@@ -235,8 +240,7 @@ export class Bones {
 
   /** where an eye is from the joint of the head, the head upright */
   private eyed(side: Side) {
-    const { middle, round } = this.shape.head
-    return new Vector3(SIGN[side] * EYE.aside, EYE.up, EYE.ahead).multiplyScalar(round).add(middle)
+    return new Vector3(SIGN[side] * EYE.aside, EYE.up, EYE.ahead).multiplyScalar(this.size.trunk)
   }
 
   /** where an eye is, as he was posed last, in the frame of the body */

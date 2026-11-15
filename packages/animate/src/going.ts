@@ -2,23 +2,20 @@ import { type Object3D, Quaternion, Vector3 } from 'three'
 import type { Ahead } from './ahead'
 import type { Body } from './body'
 import type { End } from './end'
-import { HIGH, PUSH, RIDE, RUN, SLOW, SPOT, STILL, THERE, TOGETHER, WALK } from './gait'
-import { carries, reaches, walks, within } from './heights'
+import { HIGH, PUSH, RIDE, RUN, SLOW, STILL, THERE, TOGETHER, WALK } from './gait'
+import { held } from './heights'
 import type { Joints } from './joints'
-import { SLACK } from './limb'
 import type { Mover } from './mover'
 import { type Course, toRest } from './pelvis'
 import type { Reactions } from './reactions'
-import { SIDES, type Side, type Size, tick } from './size'
-import { EXACT, GRAVITY, type Story, type Xyz, UP, waits } from './world'
+import { SIDES, type Side, type Size } from './size'
+import { EXACT, type Story, type Xyz, UP, waits } from './world'
 
 /** a place on the ground: or told as a number, so far along z on x = 0 */
 export type Ground = number | { x: number; z: number }
 export const flat = (to: Ground) => (typeof to === 'number' ? { x: 0, z: to } : to)
 export type Run = { speed: number; at: Ground; plant?: Side; push?: number; arrive?: number }
 export type Walk = { speed?: number; plant?: Side }
-/** how near the speed he is to arrive at a way that ends on a planted foot has to get him, in shares of it */
-const NEAR = 0.1
 /** how far ahead he is looked at for a moment to come, in his beats */
 const LONG = 400
 const spot = new Vector3()
@@ -30,7 +27,11 @@ const spot = new Vector3()
 export class Going {
   /** the place he looks at, if he does, and the point of a thing he looks over at it */
   looked?: Vector3
+  /** where he looked at the end of the last update: he looks from there to where he is to look as the update goes on */
+  private before?: Vector3
   over?: { on: Object3D; at: Vector3 }
+  /** where the world has the hips at the moment the next update is for, until it is made */
+  private placed?: Vector3
   /** how he was last led to go along the ground, and when: the change of it is how he is urged on */
   private told?: { velocity: Vector3; time: number }
 
@@ -50,39 +51,35 @@ export class Going {
     return 'x' in target ? this.walkTo(target, way) : this.height(target.y, way)
   }
 
-  /** the hips are at a place on the ground now, where the world has put them, and the ground there is as high as its y */
+  /**
+   * the hips are at a place on the ground at the moment the next update is for, where the world has them, and the
+   * ground there is as high as its y
+   */
   at(place: { x: number; y?: number; z: number }) {
-    const { mover } = this
     if (!Number.isFinite(place.x + place.z + (place.y ?? 0)))
       throw new Error('the hips are at a place that no numbers say')
-    if (place.y !== undefined) mover.floor(place.y)
-    mover.shift(place)
-    this.ahead.stale()
-    mover.scene(mover.value, undefined, this.hips.value)
+    if (place.y !== undefined) this.mover.floor(place.y)
+    this.placed = new Vector3(place.x, 0, place.z)
   }
 
-  /** the hips go to a place at a walk: one no further off than he shifts his weight where he stands, along the way he is going */
+  /** an update is to be made for a moment: where the world has the hips is where they are by then */
+  places(time: number) {
+    if (!this.placed) return
+    this.mover.at(this.placed, time)
+    this.placed = undefined
+    this.ahead.stale()
+  }
+
+  /** the hips go to a place at a walk */
   private walkTo(target: Xyz, { speed = WALK.speed * this.size.pace, plant }: Walk = {}) {
     const { mover } = this
-    const { leg, pace } = this.size
-    const [most, spot] = [WALK.most * pace, SPOT * leg]
-    if (!(speed > 0 && speed <= most)) {
-      throw new Error(
-        `the hips are sent somewhere at ${speed} m/s, and he walks at up to ${most.toFixed(2)} m/s: faster, he runs`,
-      )
-    }
+    if (!(speed > 0)) throw new Error(`the hips are sent somewhere at ${speed} m/s`)
     const to = mover.local(new Vector3().copy(target))
     const [along, far] = [to.z - mover.value.z, Math.hypot(to.x, to.z - mover.value.z)]
-    walks(this.size, target.y, far)
-    const going = mover.velocity.z
-    const stops = (going * going) / PUSH.along
-    if (going * along > 0 && stops > far + spot) {
-      throw new Error(
-        `the hips are sent ${far.toFixed(2)} m on, and going ${Math.abs(going).toFixed(1)} m/s they come to rest no sooner than ${stops.toFixed(2)} m on: send them further, or stand() first`,
-      )
-    }
-    reaches(mover, target.y, to.z)
-    const course = { z: to.z, x: to.x, y: target.y, speed: (Math.sign(along) || 1) * speed, push: WALK.push, arrive: 0 }
+    // (no faster than he walks)
+    const fast = Math.min(speed, WALK.most * this.size.pace)
+    const y = held(mover, target.y, { far, z: to.z })
+    const course = { z: to.z, x: to.x, y, speed: (Math.sign(along) || 1) * fast, push: WALK.push, arrive: 0 }
     return plant ? this.plant(course, target, plant).arrives : this.send(course)
   }
 
@@ -94,8 +91,7 @@ export class Going {
     const { mover } = this
     const { course } = mover
     if (way) throw new Error('the hips are held at a height, at no speed and on no foot: walk somewhere for that')
-    within(this.size, y)
-    reaches(mover, y, mover.value.z)
+    y = held(mover, y)
     mover.height = course.y = y
     this.ahead.stale()
     const off = () => mover.value.y + mover.low - y
@@ -121,15 +117,13 @@ export class Going {
       way = off ? undefined : (way ?? (Math.sign(there.z - copy.value.z) || 1))
       return (way !== undefined && copy.value.z * way >= there.z * way) || (halts && copy.halted)
     }, LONG * this.size.beat)
-    if (seconds !== undefined) return this.body.time + seconds
-    throw new Error(`the hips do not come by (${x.toFixed(2)}, ${z.toFixed(2)}) on the ground, going as they are`)
+    return seconds === undefined ? Number.NaN : this.body.time + seconds
   }
 
   highest() {
     const past = ({ falls, velocity, spring }: Mover) => falls && velocity.y <= 0 && !spring
     const seconds = this.mover.jumps && !past(this.mover) ? this.ahead.first(past, LONG * this.size.beat) : undefined
-    if (seconds === undefined) throw new Error('he is not on his way up: ask after jump()')
-    return this.body.time + seconds
+    return this.body.time + (seconds ?? 0)
   }
 
   walk(to: Ground, way: Walk = {}) {
@@ -137,27 +131,34 @@ export class Going {
   }
 
   run({ speed, at, plant, push = RUN.push, arrive = speed }: Run): Story {
-    carries(this.size, speed, this.mover.height)
     const place = { ...flat(at), y: this.size.stand }
     const to = this.mover.local(new Vector3().copy(place))
     if (!(speed > 0 && push > 0 && arrive > 0 && Number.isFinite(to.x + to.z))) {
       throw new Error('a run has a place to end at, and a speed, a push and a speed to arrive at above 0')
     }
-    if (arrive > speed) throw new Error(`a run at ${speed} m/s does not arrive at ${arrive} m/s`)
-    if (push > PUSH.along) throw new Error(`a run is pushed ${push} m/s², and a leg pushes ${PUSH.along} at the most`)
-    const most = RUN.most * this.size.pace
-    if (speed > most) throw new Error(`a run at ${speed} m/s is faster than he sprints: ${most.toFixed(1)} m/s`)
-    this.forward(speed, this.mover.face)
-    return this.body.until(this.plant({ z: to.z, x: to.x, y: place.y, speed, push, arrive }, place, plant).over)
+    // (no faster than he sprints, pushed no harder than a leg pushes, and arriving no faster than he runs)
+    const fast = Math.min(speed, RUN.most * this.size.pace)
+    const course = {
+      z: to.z,
+      x: to.x,
+      y: place.y,
+      speed: fast,
+      push: Math.min(push, PUSH.along),
+      arrive: Math.min(arrive, fast),
+    }
+    this.mover.height = held(this.mover, this.mover.height, { speed: fast })
+    return this.body.until(this.plant(course, place, plant).over)
   }
 
-  go(velocity: { x: number; y?: number; z: number }) {
+  go(velocity: { x: number; z: number }) {
     const { mover } = this
     const { pace } = this.size
-    const [speed, most] = [Math.hypot(velocity.x, velocity.z), RUN.most * pace]
-    if (!(speed <= most)) throw new Error(`he is to be going ${speed} m/s, and sprints at ${most.toFixed(1)} m/s`)
+    if (!Number.isFinite(velocity.x + velocity.z))
+      throw new Error('he is to be going as no numbers say')
+    // (no faster than he sprints)
+    const speed = Math.min(Math.hypot(velocity.x, velocity.z), RUN.most * pace)
     // (how fast he is led faster, or slower, no harder than his legs push, as it has been over the last beat)
-    const now = new Vector3(velocity.x, 0, velocity.z)
+    const now = new Vector3(velocity.x, 0, velocity.z).clampLength(0, speed)
     const was = this.told
     if (was && this.body.time > was.time) {
       const gone = this.body.time - was.time
@@ -165,11 +166,11 @@ export class Going {
       this.reactions.urged.lerp(urged, Math.min(1, gone / this.size.beat))
     }
     this.told = { velocity: now, time: this.body.time }
-    if (velocity.y !== undefined && velocity.y > STILL * pace && !mover.jumps) this.leave(velocity.y)
     const { course, led } = mover
     if (speed < STILL * pace) {
       if (led && course.arrive === 0) return
-      mover.send(this.stopping(), true)
+      if (mover.placed) mover.settle(true)
+      else mover.send(this.stopping(), true)
     } else {
       const heading = Math.atan2(velocity.x, velocity.z)
       if (led && course.heading === heading && Math.abs(course.speed) === speed) return
@@ -179,21 +180,9 @@ export class Going {
     this.ahead.stale()
   }
 
-  /**
-   * he jumps to leave the ground going up so fast (m/s), on the way he is going: the top is as high as that carries
-   * him, and as far on as his speed does by then, the push before it a beat
-   */
-  private leave(up: number) {
-    const { value, velocity } = this.hips
-    const rises = up / GRAVITY + this.size.beat
-    const top = new Vector3(velocity.x, 0, velocity.z).multiplyScalar(rises).add(value)
-    this.jump(top.setY(this.mover.origin.y + this.size.stand + (up * up) / (2 * GRAVITY)))
-  }
-
   face(way?: { x: number; z: number }): Story<boolean> {
     if (way && !(Math.hypot(way.x, way.z) > 0)) throw new Error('he is to face a way that leads nowhere')
     const face = way && Math.atan2(way.x, way.z)
-    if (!this.mover.led) this.forward(this.mover.course.speed, face)
     if (face !== this.mover.face) this.ahead.stale()
     this.mover.face = face
     return waits(
@@ -224,47 +213,34 @@ export class Going {
     this.ahead.stale()
   }
 
+  /**
+   * where he looks so far through the update being made: on the way from where he looked at the end of the last one,
+   * as the place to look at is said once an update, for its end
+   */
+  looking(share: number) {
+    const { looked, before } = this
+    return looked && before ? before.clone().lerp(looked, share) : looked
+  }
+
+  /** the update is made: where he looks now is where he looks from in the next */
+  looks() {
+    this.before = this.looked?.clone()
+  }
+
   /** how a place lies from his shoulders: about y in the scene, from +z toward +x, and up (rad) */
   sight(place: Vector3) {
     const { x, y, z } = place.clone().sub(this.hips.value)
     return { yaw: Math.atan2(x, z), pitch: Math.atan2(y - this.size.trunk, Math.hypot(x, z)) }
   }
 
-  /** faster than he walks he faces the way he goes: a way to `face` stated with that is an error */
-  private forward(speed: number, face?: number) {
-    const most = WALK.most * this.size.pace
-    if (face === undefined || Math.abs(speed) <= most) return
-    throw new Error(
-      `he is to face a way and to go ${Math.abs(speed).toFixed(1)} m/s, and faster than he walks, ${most.toFixed(2)} m/s, he faces the way he goes: let the way he faces go, face(), or have him walk`,
-    )
-  }
-
   /**
-   * Gives the hips a way to go that ends on a footfall where it ends: the `side` foot's, if it matters which. Going
-   * as he will, with only a foot on the ground to push him, the way has to get him there as fast as he is to arrive,
-   * and his strides out onto that foot: one that does not is an error, and is not begun. Tells the story of the way,
-   * and the moment it is `over`.
+   * Gives the hips a way to go that ends on a footfall where it ends: the `side` foot's, if it matters which, as near
+   * as his strides come out onto it. Tells the story of the way, and the moment it is `over`.
    */
   private plant(course: Course & { z: number; x: number }, place: { x: number; z: number }, side?: Side) {
-    const { mover } = this
-    const { course: was, plant, spring, sent, led } = mover
-    const before = { course: was, plant, spring, sent, led }
-    const far = Math.hypot(course.x, course.z - mover.value.z)
     const arrives = this.send(course)
-    mover.plant = { at: course.z, side }
-    const over = this.when(place)
-    const { copy } = this.ahead.at(over - this.body.time)
-    const reached = Math.abs(copy.velocity.z)
-    const at = copy.local(spot.set(place.x, 0, place.z)).z
-    const off = Math.min(...(side ? [side] : SIDES).map((each) => Math.abs(copy.foot[each].at.z - at)))
-    const { leg, pace } = this.size
-    const near = Math.max(NEAR * course.arrive, STILL * pace)
-    if (Math.abs(reached - course.arrive) <= near && off <= SLACK.place * leg) return { arrives, over }
-    Object.assign(mover, before)
-    this.ahead.stale()
-    throw new Error(
-      `a ${course.arrive ? 'run' : 'walk'} of ${far.toFixed(2)} m gets the hips to ${reached.toFixed(1)} m/s at its end, with ${side ? `the ${side}` : 'a'} foot ${off.toFixed(2)} m from where it is to be planted, not to ${course.arrive} m/s over it: ask for a longer way, less speed or a harder push${side ? ', or leave open which foot' : ''}`,
-    )
+    this.mover.plant = { at: course.z, side }
+    return { arrives, over: this.when(place) }
   }
 
   jump(top: Xyz): Story<boolean> {
@@ -272,13 +248,7 @@ export class Going {
     if (!(top.y - mover.origin.y > this.size.stand && Number.isFinite(top.x + top.y + top.z))) {
       throw new Error(`a jump goes up: at its top the hips are above the ${this.size.stand.toFixed(2)} m they stand at`)
     }
-    const spring = () => ({ top: mover.local(new Vector3().copy(top)), from: mover.course.z })
-    // (what his legs cannot do for it shows as they begin to push: he is stepped on ahead to there now, out of the air first)
-    const trial = Object.assign(mover.clone(), { spring: spring() })
-    while (trial.aloft && !trial.fault) trial.advance(tick(this.size))
-    while (!trial.falls && !trial.fault) trial.advance(tick(this.size))
-    if (trial.fault) throw new Error(trial.fault)
-    mover.spring = spring()
+    mover.spring = { top: mover.local(new Vector3().copy(top)), from: mover.course.z }
     this.ahead.stale()
     return waits(
       () => true,
@@ -333,7 +303,7 @@ export class Going {
     if (!numbers || !(course.push > 0)) {
       throw new Error('the hips are sent somewhere, at a speed or pushed so hard, that is no number above 0')
     }
-    within(this.size, course.y)
+    course.y = held(mover, course.y)
     mover.send(course)
     this.ahead.stale()
     // at rest there, as high as his legs let him, and up again from where a hand or a foot had him down as far as he is to come

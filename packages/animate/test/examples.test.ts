@@ -1,4 +1,5 @@
 import { buildWorld } from '@drawcall/physics-rapier'
+import { grip, Hand, type Statement } from '@drawcall/hand'
 import { Mesh, type Object3D, Scene, SphereGeometry, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { bowl } from '../../../examples/bowling/bowl'
@@ -9,7 +10,7 @@ import { bagAt, swing } from '../../../examples/boxing/bag'
 import { combination } from '../../../examples/boxing/combination'
 import { panelAt } from '../../../examples/button/panel'
 import { press } from '../../../examples/button/press'
-import { carry } from '../../../examples/carry'
+import { holds } from '../../../examples/character'
 import { GRIP as FOIL, foil } from '../../../examples/fencing/foil'
 import { lunge } from '../../../examples/fencing/lunge'
 import { FOIL as POINT, fence, targetAt } from '../../../examples/fencing/target'
@@ -34,6 +35,15 @@ import { spike } from '../../../examples/volleyball/spike'
 import { Body } from '../src'
 import { SIDES, tick } from '../src/size'
 
+/** a body that holds a thing in his right hand from the start, gripped as stated: and the thing as he holds it */
+function holding(rig: Object3D, thing: Object3D, statement: Statement) {
+  new Scene().add(rig, thing)
+  const hand = new Hand(rig, 'right')
+  const held = grip(hand, thing, statement)
+  const body = new Body(rig)
+  return { body, held: holds(body, hand, held) }
+}
+
 /** each example as its page plays it: the body with its story begun, and what the world does after every update */
 const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: number) => void }> = {
   football(rig) {
@@ -43,22 +53,22 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   javelin(rig) {
     const shaft = field.shaft()
-    const held = carry(rig, 'right', shaft, field.GRIP)
-    const [body, thrown] = [new Body(rig), field.javelin()]
+    const { body, held } = holding(rig, shaft, field.GRIP)
+    const thrown = field.javelin()
     body.play(javelinThrow(body, thrown, shaft, held))
     return { body, world: (dt) => thrown.velocity && field.fly(thrown, dt) }
   },
   bowling(rig) {
     const ball = lane.sphere()
-    const held = carry(rig, 'right', ball, lane.GRIP)
-    const [body, bowled] = [new Body(rig), lane.ball()]
+    const { body, held } = holding(rig, ball, lane.GRIP)
+    const bowled = lane.ball()
     body.play(bowl(body, bowled, ball, held))
     return { body, world: (dt) => bowled.velocity && lane.roll(bowled, dt) }
   },
   basketball(rig) {
     const ball = new Mesh(new SphereGeometry(court.RADIUS))
-    const held = carry(rig, 'right', ball, court.GRIP)
-    const [body, thrown] = [new Body(rig), court.ball()]
+    const { body, held } = holding(rig, ball, court.GRIP)
+    const thrown = court.ball()
     body.play(jumpShot(body, thrown, ball, held))
     return { body, world: (dt) => thrown.velocity && court.fly(thrown, dt) }
   },
@@ -68,9 +78,12 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
     return { body, world: (dt) => vb.fly(ball, dt) }
   },
   shelf(rig) {
-    const [body, box] = [new Body(rig), shelf.boxAt(2)]
-    body.play(shelve(body, box))
-    return { body, world: (dt) => shelf.carry(box, body.hand.left.value, body.hand.right.value, dt) }
+    const box = shelf.boxAt(2)
+    new Scene().add(rig, box.mesh)
+    const hands = { left: new Hand(rig, 'left'), right: new Hand(rig, 'right') }
+    const body = new Body(rig)
+    body.play(shelve(body, box, hands))
+    return { body, world: (dt) => shelf.fall(box, dt) }
   },
   boxing(rig) {
     const [body, bag] = [new Body(rig), bagAt(1.2)]
@@ -79,8 +92,8 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   fencing(rig) {
     const sword = foil()
-    const held = carry(rig, 'right', sword, FOIL)
-    const [body, target] = [new Body(rig), targetAt(2.85)]
+    const { body, held } = holding(rig, sword, FOIL)
+    const target = targetAt(2.85)
     body.play(lunge(body, target, held))
     return {
       body,
@@ -92,8 +105,8 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   tennis(rig) {
     const bat = racket()
-    const held = carry(rig, 'right', bat, FOREHAND)
-    const [body, ball] = [new Body(rig), tennis.ballAt()]
+    const { body, held } = holding(rig, bat, FOREHAND)
+    const ball = tennis.ballAt()
     body.play(forehand(body, ball, bat, held))
     return { body, world: (dt) => tennis.fly(ball, dt) }
   },
@@ -186,5 +199,6 @@ for (const [name, make] of Object.entries(SOLDIERS)) {
     for (let t = 0; t < 22; t += dt) step(t)
     expect(soldier.errors).toEqual([])
     expect(soldier.body.hand.left.there && soldier.body.hand.right.there).toBe(true)
-  })
+    // (22 s of a game played a frame at a time takes longer than a test is given)
+  }, 20000)
 }

@@ -1,7 +1,7 @@
-import type { Body, Story } from '@drawcall/animate'
-import { flat, type Grip } from '@drawcall/hand'
+import type { Body, Held, Story } from '@drawcall/animate'
+import { flat } from '@drawcall/hand'
 import { type Object3D, Vector3 } from 'three'
-import { type Javelin, letGo } from './field'
+import { type Flight, letGo } from './field'
 
 const degrees = (angle: number) => (angle * Math.PI) / 180
 const place = (x: number, y: number, z: number) => new Vector3(x, y, z)
@@ -9,9 +9,8 @@ const place = (x: number, y: number, z: number) => new Vector3(x, y, z)
 const PLANT = 10
 
 /** A run-up and a throw with the right arm, the javelin `held` in its hand: it leaves the hand at 20 m/s, 30° up. */
-export function* javelinThrow(body: Body, javelin: Javelin, shaft: Object3D, held: Grip): Story {
+export function* javelinThrow(body: Body, javelin: Flight, shaft: Object3D, held: Held): Story {
   // the javelin is carried over the shoulder, the hand beside his head
-  body.hand.right.shape(held.pose)
   body.hand.right.to(place(-0.05, 0.3, -0.1), { on: body })
   // he brakes onto the front leg, and as he comes over it the hand lets go, above and behind the shoulder, moving across the arm:
   // the run, the trunk and the arm make up that speed between them, and the fingers open as it goes
@@ -20,7 +19,8 @@ export function* javelinThrow(body: Body, javelin: Javelin, shaft: Object3D, hel
   const flying = place(0, speed * Math.sin(up), speed * Math.cos(up))
   const release = body.when(PLANT)
   body.hand.right.shape(flat, { by: release })
-  yield* body.hand.right.by(release, place(0, 0.46, -0.3), { velocity: flying, on: body, with: held })
+  yield* held.by(release, place(0, 0.46, -0.3), { velocity: flying, on: body })
+  held.free()
   letGo(javelin, shaft, flying)
 
   yield* body.stand()

@@ -6,7 +6,7 @@ import { TRAIL } from './joints'
 import { SLACK } from './limb'
 import { HEEL, SIDES, SIGN, SOLE, type Side, both, ground, other, raised } from './size'
 import { Way } from './way'
-import { GRAVITY, clamp, ease } from './world'
+import { EXACT, GRAVITY, clamp, ease } from './world'
 
 /** how long a foot is in the air for a step at the least and at the most (in his beats) */
 const AIR = { least: 0.5, most: 1.67 }
@@ -105,27 +105,30 @@ export class Mover extends Way {
       if (!this.placed && this.course === this.stance) this.course = { ...this.course, y: this.height }
       return
     }
-    if (partner.put && !partner.at.equals(partner.put)) {
-      throw new Error(
-        `the ${side} foot is sent to step somewhere, and the ${other(side)} foot is on its way to where it was sent: wait for that`,
-      )
-    }
+    // (no further from the other than his legs span)
     const stands = partner.step?.to ?? partner.at
-    const half = Math.abs(place.z - stands.z) / 2
     const span = this.span(lunge(this.size))
-    if (half > span) {
-      throw new Error(
-        `the ${side} foot is sent to stand ${(2 * half).toFixed(2)} m from the ${other(side)}, and his legs span ${(2 * span).toFixed(2)} m`,
-      )
-    }
-    const z = (place.z + stands.z) / 2
-    // (as high as legs reach feet that are further apart by what he may be off: a foot comes down where its leg reaches it)
+    place.z = clamp(place.z, stands.z - 2 * span, stands.z + 2 * span)
+    // (the other stands where it is, or is to: the two are his stance)
+    partner.put ??= stands.clone()
+    foot.put = place
+    this.settle(this.led)
+  }
+
+  /**
+   * he comes to rest between his feet, as they stand or are to, and stands over them: as high as legs reach feet that
+   * are so far apart, by what he may be off, a foot coming down where its leg reaches it
+   */
+  settle(led: boolean) {
+    const [left, right] = SIDES.map((side) => this.foot[side].put ?? this.foot[side].step?.to ?? this.foot[side].at)
+    const half = Math.abs(left.z - right.z) / 2
     const { ankle, leg, pace } = this.size
-    const y = ankle + Math.sqrt(leg ** 2 - (half + SLACK.reach * leg) ** 2)
-    const kept = partner.put
-    this.send(toRest(y, z, (Math.sign(z - this.value.z) || 1) * WALK.speed * pace))
+    const y = ankle + Math.sqrt(Math.max(0, leg ** 2 - (half + SLACK.reach * leg) ** 2))
+    const z = this.between().z
+    const puts = SIDES.map((side) => this.foot[side].put)
+    this.send(toRest(y, z, (Math.sign(z - this.value.z) || 1) * WALK.speed * pace), led)
+    ;[this.foot.left.put, this.foot.right.put] = puts
     this.stance = this.course
-    ;[foot.put, partner.put] = [place, kept]
   }
 
   /** how far along the way he is going a foot comes down at the most: where the hips come to rest, if they are to, once that is on his way */
@@ -147,20 +150,6 @@ export class Mover extends Way {
     return this.halted || this.rounds === 0 ? clamp(this.aims, points - REACH, points + REACH) : 0
   }
 
-  /**
-   * the world has put the hips at a place: a foot in the air that was to come down where his speed no longer carries
-   * him by then comes down where it does, as far ahead of him as he now goes
-   */
-  shift(place: { x: number; z: number }) {
-    super.shift(place)
-    const { value, velocity, way } = this
-    for (const side of SIDES) {
-      const { step } = this.foot[side]
-      if (step)
-        step.to.z = way * Math.min(step.to.z * way, (value.z + velocity.z * step.remains) * way + this.fore(side))
-    }
-  }
-
   /** how far from under the hips a leg reaches the ground, its foot flat, when they are this high (m) */
   private span(hips: number) {
     const height = hips - this.size.ankle
@@ -168,6 +157,7 @@ export class Mover extends Way {
   }
 
   advance(dt: number) {
+    this.carried(dt)
     this.time += dt
     this.idles(dt)
     const down = SIDES.some((side) => this.foot[side].down)
@@ -253,15 +243,27 @@ export class Mover extends Way {
     const { ankle, leg, beat, pace } = this.size
     // it comes down as the hips come to where it is to be ahead of them, as far as it will stand ahead of them where
     // the story has put it: no sooner after the last footfall than feet step, nor sooner than a foot gets through the air
-    const hips = this.comes(step.to.z, foot.put && halt !== undefined ? (step.to.z - halt) * way : this.fore(side))
     const soonest = Math.max(this.trod + CADENCE * beat - this.time, AIR.least * beat * (1 - step.through))
+    const fore = this.fore(side)
+    const [going, most] = [Math.max(Math.abs(this.velocity.z), STILL * pace), AIR.most * beat * (1 - step.through)]
+    const reaches = (z: number) => Math.hypot(this.value.y - ankle, z - this.value.z) <= leg
+    // (led a way, how fast he goes is the world's, which a step set off before did not foresee: it comes down under
+    // the hips at the least, and where they will be by the time a foot is down at the latest, as far ahead of them as
+    // it is to be)
+    if (this.course.heading !== undefined && !foot.put) {
+      if (this.comes(step.to.z, 0) < soonest) step.to.z = this.value.z + way * soonest * going
+      else if (this.comes(step.to.z, fore) > most && !reaches(step.to.z))
+        step.to.z = this.value.z + way * (most * going + fore)
+    }
+    // (led along, a foot steps its stance along as fast as feet step)
+    const along = foot.put && halt === undefined && this.led
+    const hips = along ? 0 : this.comes(step.to.z, foot.put && halt !== undefined ? (step.to.z - halt) * way : fore)
     // no further on than where the hips now come to rest: nor, led slower, to a walk, than his leg reaches
     const within = this.led && !this.bounds ? this.value.z * way + leg : Infinity
     const on = foot.put ? step.to.z : Math.min(step.to.z * way, this.furthest, within) * way
     step.to.z += clamp(on - step.to.z, -SHIFT * pace * dt, SHIFT * pace * dt)
     // and where its leg reaches it, no later than a foot stays in the air
-    const reached = Math.hypot(this.value.y - ankle, step.to.z - this.value.z) <= leg
-    const latest = reached ? Math.max(soonest, AIR.most * beat * (1 - step.through)) : Infinity
+    const latest = reaches(step.to.z) ? Math.max(soonest, most) : Infinity
     const remains = (step.remains = clamp(hips, soonest, latest))
     if (remains <= dt) {
       foot.at.copy(step.to)
@@ -284,8 +286,12 @@ export class Mover extends Way {
     const [foot, partner] = [this.foot[side], this.foot[other(side)]]
     const together = TOGETHER * this.size.leg
     if (this.launch || !partner.down) return undefined
-    // where the story has put a foot it steps to, and from there neither steps
-    if (foot.put && !foot.at.equals(foot.put)) return foot.put
+    // where the story has put a foot it steps to, and from there neither steps: led, the one further from where it is to
+    // be first, of two as far the one ahead the way he goes, so his feet never cross
+    const off = ({ at, put }: Footing) => (put ? at.distanceTo(put) : 0)
+    const leads = (partner.put?.z ?? partner.at.z) * this.way < (foot.put?.z ?? foot.at.z) * this.way
+    const sooner = off(foot) > off(partner) + EXACT || (off(foot) > off(partner) - EXACT && leads)
+    if (foot.put && off(foot) > 0 && sooner) return foot.put
     if (this.placed || this.planted === this.course) return undefined
     const lags = (partner.at.z - foot.at.z) * this.way
     if (this.halted || this.rounds === 0) {
@@ -320,11 +326,6 @@ export class Mover extends Way {
     const from = this.foot[side].at.clone()
     const ahead = this.around(side)
     const points = ahead ? this.facing + ahead : undefined
-    // (a foot his leg reaches only up on its ball leaves the ground from there)
-    const heel = raised(this.size, HEEL)
-    const along = Math.hypot(this.value.y - from.y, from.z - this.value.z)
-    if (Math.hypot(along, from.x - SIGN[side] * this.size.hip) > this.size.leg)
-      from.set(from.x, from.y + heel.y, from.z + heel.z)
     return { from, to, through: 0, remains: AIR.least * this.size.beat, points }
   }
 
@@ -351,10 +352,8 @@ export class Mover extends Way {
     )
     // (sidestepping, the foot whose hip is behind steps up to the other, and not past it)
     let on = this.sidles && !this.leads(side) ? last : last + far
-    if (plant && plant.at * way <= last) {
-      this.fault = `a foot is to be planted at ${plant.at.toFixed(2)} m, and his feet are past it`
-      this.plant = plant = undefined
-    }
+    // (one his feet are past already is none)
+    if (plant && plant.at * way <= last) this.plant = plant = undefined
     if (plant) {
       const togo = plant.at * way - last
       // as many strides as come nearest to his own, the last of them the foot's that is to be planted

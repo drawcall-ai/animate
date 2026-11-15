@@ -1,4 +1,4 @@
-import { Euler, Quaternion, Vector3 } from 'three'
+import { Euler, type Matrix4, Quaternion, Vector3 } from 'three'
 import { AXES, type State, between, longest } from './curve'
 import { EASY, type Goal, MOST, REST } from './goal'
 import { type Limb, sway } from './limb'
@@ -13,17 +13,27 @@ import { EXACT, NUDGE, clamp, steps } from './world'
  * drawn back first (s), what the body gets down for it, and whether it was there at its moment once that has come: on
  * a thing, false while it has let go of it
  */
-export type Plan = Target & { when: number; leaves: number; swing: number; stoop?: Stoop; there?: boolean }
+export type Plan = Target & {
+  when: number
+  leaves: number
+  swing: number
+  stoop?: Stoop
+  there?: boolean
+  near?: Near
+  from?: Matrix4
+}
 /** the joints of a limb from its first out, the last at the wrist of a hand */
 export const JOINTS = ['first', 'second', 'wrist'] as const
 type Turning = { first: State; second: State; wrist?: State }
 /** how a joint is drawn back, and how long it swings from there (s) */
 type Drawn = State & { value: Vector3; swing: number }
-/** why there is no plan for a moment: how far the planning got, by how much it fell short, and what to say of it */
-type Miss = { rank: number; by: number; say: string }
-/** how far the planning gets with a moment: the limb reaches, its joints turn that far, it has had the time to swing at its ease, the body spares it, and its joints are strong enough */
-/** how far the planning gets with a moment: the limb reaches, its joints turn that far, it has had the time to swing at its ease, the body spares it, and its joints are strong enough */
-const GOT = { reach: 0, turn: 1, ease: 2, spare: 3, strength: 4 }
+/** how near a plan comes to what was asked, if not quite: higher ranks nearer, then by less: short of the place (m), turned short of it, or too weak to get there in time, `slow` (in times their strength) */
+type Near = { rank: number; by: number; slow?: boolean }
+/** why there is no plan for a moment yet: it has not had the time to swing at its ease, or the body does not spare it */
+type Miss = { miss: 'ease' | 'spare' }
+const RANK = { reach: 0, turn: 1, strength: 2 }
+/** how near a plan comes that was made for no moment: as near as it does */
+export const NONE: Near = { rank: RANK.reach, by: Infinity }
 
 /**
  * how much nearer than it has to he gets down for a limb, if he can, and a limb is to what it arrives at moving, at the
@@ -32,10 +42,10 @@ const GOT = { reach: 0, turn: 1, ease: 2, spare: 3, strength: 4 }
 const MARGIN = 0.034
 /**
  * how far ahead the way the body is going is looked along for where a limb will reach, in his beats, and how finely, in
- * steps of his time; and how little changes from one look to the next when nothing will (m)
+ * steps of his time; and how long a stride takes, in his beats
  */
-const LOOK = { far: 200, fine: 4, same: 1e-4 }
-/** how finely getting down is looked through for the least that has a limb reach, and drawing back for the most its joints turn: in shares of the most */
+const LOOK = { far: 200, fine: 4, stride: 2 }
+/** how finely drawing back is looked through for the most its joints turn: in shares of the most */
 const FINE = 1 / 16
 const turned = new Quaternion()
 const to = new Vector3()
@@ -79,7 +89,10 @@ export function drawn(aimed: Aimed, swing: number, limb: Limb): Record<'first' |
   }
 }
 
-const missed = (found: Plan | Miss): found is Miss => 'say' in found
+const missed = (found: Plan | Miss): found is Miss => !('when' in found)
+/** whether one plan comes nearer what was asked than another, by more than `by` */
+const nearer = (one: Near, other: Near, by: number) =>
+  one.rank > other.rank || (one.rank === other.rank && one.by < other.by - by)
 
 /**
  * How the far end of a limb gets to where it is sent. A plan is made looking ahead along the way the body is going:
@@ -88,7 +101,8 @@ const missed = (found: Plan | Miss): found is Miss => 'say' in found
  * as long as the limb sways under its own weight: before a fast arrival it first draws back so, as one limb about its
  * first joint, as far as its joints turn clear of the trunk, and swings from there. With less, it draws back only as
  * far as speeding up at its ease takes; with little, it sets off as late as the body spares it, and swings in one,
- * drawing back on its way.
+ * drawing back on its way. What cannot be done as asked is done as near as it can be: the end goes as near the place
+ * as the limb has it, as fast as it can and as soon as it can.
  */
 export class Planner extends Reach {
   /** the plan it is carrying out: on its way, or staying where it came to rest */
@@ -104,13 +118,6 @@ export class Planner extends Reach {
 
   protected get sent() {
     return this.plan ? [this.plan, ...this.waiting] : this.waiting
-  }
-
-  /** where the end is to be `seconds` from now, and the nearest place to that where the limb can have it, or has it, `held` after a step: see `closest` */
-  nearest(seconds: number, held = false) {
-    const { plan } = this
-    if (!plan) throw new Error(`the ${this.name} is asked how near it comes to where it is sent, and is sent nowhere`)
-    return this.closest(plan, seconds, held)
   }
 
   /** how soon it can set off for what it is sent to next (s from now): at the moment of what it was sent to last, and no sooner */
@@ -149,8 +156,19 @@ export class Planner extends Reach {
    */
   private starts(seconds: number): Turning {
     const last = this.sent.at(-1)
-    if (!last) return this.strides(seconds) ?? this.limb
-    return this.solve(last, moves(last) ? this.after : seconds, moves(last))
+    if (!last) return this.strides(seconds) ?? this.swinging(seconds)
+    return this.solve(last, moves(last) ? this.after : seconds)
+  }
+
+  /** how the joints will be turned and turning `seconds` from now: one let go swings on and comes round, the others stay as they are */
+  private swinging(seconds: number): Turning {
+    const then = (joint: Goal) => {
+      if (!joint.loose) return joint
+      const velocity = new Vector3()
+      return { value: joint.ahead(seconds, new Vector3(), velocity), velocity }
+    }
+    const { first, second, wrist } = this.limb
+    return { first: then(first), second: then(second), wrist: wrist && then(wrist) }
   }
 
   /**
@@ -189,43 +207,69 @@ export class Planner extends Reach {
   }
 
   /**
-   * The plan for the first moment that has one, or what was missed at the first moment the limb reaches, or at the
-   * first of all: with the body getting down for it if it `stoops`, which is looked for only once no moment has a plan
-   * otherwise, and what that misses is what is told.
+   * The plan for the first moment after the `soonest` (s from now) that has the end there as asked, or the one that
+   * comes nearest: with the body getting down for it if it `stoops`, which is looked for only once no moment has it
+   * there otherwise. The moments are looked at ever further apart, and between the last two closely once one has it
+   * there; what comes no nearer for as long as getting down takes him and a stride after comes no nearer later.
    */
-  protected scan(target: Target, stoops: boolean): Plan | Miss {
-    const { ahead } = this
+  protected scan(target: Target, stoops: boolean, soonest = this.after): Plan | undefined {
     const fine = LOOK.fine * tick(this.size)
-    const first = this.after + fine
-    // (getting down takes him a while: only a moment that leaves him that is as near as he will come)
-    const down = stoops ? ahead.down : fine
-    let last = this.fit(target, first, { stoops })
-    if (!missed(last)) return last
-    const missing = last
-    let reached = last.rank > GOT.reach ? last : undefined
-    // (a thing is looked ahead at only as it is from him now: what does not reach it or turn for it now does no later)
-    for (
-      let wait = first + fine;
-      wait < LOOK.far * this.size.beat && !(target.on && last.rank < GOT.ease);
-      wait += fine
-    ) {
+    const down = (stoops ? this.ahead.down : 0) + LOOK.stride * this.size.beat
+    const exact = (wait: number) => {
+      const found = this.fit(target, wait, { stoops })
+      if (!missed(found) && !found.near) return found
+      this.drop(found)
+      return missed(found) ? undefined : found.near
+    }
+    let best: { near: Near; wait: number } | undefined
+    let [before, wait, step] = [soonest, soonest + fine, fine]
+    for (; wait < LOOK.far * this.size.beat && !(best && wait - best.wait > down + step); wait += step) {
+      const found = exact(wait)
+      if (found && !('rank' in found)) {
+        this.drop(found)
+        break
+      }
+      // (what gives way to the hands is carried on with him: what does not have them there now does no later, but for
+      // his getting down for what is out of reach)
+      if (found && target.gives && !stoops) {
+        const short = found.rank === RANK.reach && found.by > MARGIN * this.size.leg
+        return short ? this.scan(target, true, soonest) : undefined
+      }
+      if (found && (!best || nearer(found, best.near, MARGIN * this.size.leg))) best = { near: found, wait }
+      before = wait
+      step = Math.min(2 * step, down / 4)
+    }
+    if (wait < LOOK.far * this.size.beat && !(best && wait - best.wait > down + step)) {
+      while (wait - before > fine + EXACT) {
+        const middle = before + Math.round((wait - before) / 2 / fine) * fine
+        const found = exact(middle)
+        if (found && !('rank' in found)) [wait] = [middle, this.drop(found)]
+        else before = middle
+      }
       const found = this.fit(target, wait, { stoops })
       if (!missed(found)) return found
-      reached ??= found.rank > GOT.reach ? found : undefined
-      // with the body at rest for as long as getting down takes him, and what is short as short as a moment ago, no later moment has a plan either
-      const same = found.rank === last.rank && Math.abs(found.by - last.by) < LOOK.same
-      if (same && ahead.goes(wait - down, wait) < LOOK.same) break
-      last = found
     }
-    return stoops ? (reached ?? missing) : this.scan(target, true)
+    const low = stoops ? undefined : this.scan(target, true, soonest)
+    if (low && !(best && low.near && nearer(best.near, low.near, 0))) return low
+    if (low) this.drop(low)
+    const found = best && this.fit(target, best.wait, { stoops })
+    return found && !missed(found) ? found : undefined
+  }
+
+  /** a plan it does not carry out after all: what the body was to do for it, it does not */
+  protected drop(plan: Plan | Miss | undefined) {
+    if (!plan || missed(plan)) return
+    if (plan.stoop) this.ahead.rise(plan.stoop, -Infinity)
+    if (this.kind === 'hand') this.ahead.wind.off(this.side)
+    this.claim()
   }
 
   /**
-   * The plan that has the end at a target after a `wait` of so many seconds, or what it misses by. If he `stoops` for
-   * it, the body gets down as little as has the limb reach, and the joints have to turn that far. Then it sets off as
-   * soon as the body spares it and it has been where it was sent before: then, if it is to be `direct`, and otherwise
-   * no sooner than has it swing at its ease. With no moment `given`, a moment so soon that it could not is no moment
-   * for it.
+   * The plan that has the end at a target after a `wait` of so many seconds, as near as it can: or none yet. If he
+   * `stoops` for it, the body gets down as little as has the limb reach. Then it sets off as soon as the body spares
+   * it and it has been where it was sent before: then, if it is to be `direct`, and otherwise no sooner than has it
+   * swing at its ease. With no moment `given`, a moment so soon that it could not is no moment for it, and it swings
+   * only as far as it does at its ease.
    */
   protected fit(
     target: Target,
@@ -238,53 +282,33 @@ export class Planner extends Reach {
     const wait = steps(asked, dt) * dt
     const when = this.clock + wait
     const fast = moves(target)
-    const until = fast ? when : Infinity
     // the rest of the body winds up for a fast arrival: which changes where he is going
     const wind = (leaves: number) =>
       fast && kind === 'hand' && ahead.wind.up(side, leaves, when, this.where(target, wait), target.velocity)
-    let upright = this.solve(target, wait)
-    let aimed = upright
+    let aimed = this.solve(target, wait)
     let stoop: Stoop | undefined
-    const stooped = (share: number) => {
-      if (stoop) ahead.rise(stoop, -Infinity)
-      stoop = lower(kind, side, this.mover, ahead, [share, when, until], this.where(target, wait), limb.length)
-      wind(when)
-      aimed = this.solve(target, wait)
-      return aimed.short <= -margin
-    }
-    let plan: Plan | undefined
-    const miss = (rank: number, by: number, say: string): Miss => {
-      if (stoop) ahead.rise(stoop, -Infinity)
-      if (kind === 'hand') ahead.wind.off(side)
-      if (plan) this.claim()
-      const sent = `the ${this.name} is sent to ${this.spot(target, wait)}, and ${wait.toFixed(2)} s on`
-      return { rank, by, say: `${sent} ${say}` }
-    }
     // (what arrives moving at the first moment it can is short of its stretch: he gets down for that too)
     const near = fast && !given ? -margin : EXACT
-    const unreached = (most = near) => {
-      if (aimed.short > most) {
-        return miss(
-          GOT.reach,
-          upright.short,
-          `its limb is ${Math.max(aimed.short, upright.short).toFixed(2)} m short of there, and he does not get down far enough for it: have the body come nearer first, or send it nearer`,
-        )
-      }
-      if (!aimed.stuck) return undefined
-      return miss(GOT.turn, 0, aimed.stuck)
-    }
-    // the least he has to get down: further down can be further off again, so it is looked for from upright on
-    let short: Miss | undefined
-    if (stoops && upright.short > near) {
+    if (stoops && aimed.short > near) {
       // (how far, and whether it reaches, is told from how he would wind up with all the time for it)
       wind(when)
-      aimed = upright = this.solve(target, wait)
-      for (let share = FINE; upright.short > near && share <= 1 && !stooped(share); share += FINE);
-      short = unreached()
+      // (as little as a look that steps nothing ahead tells has it reach, and as much again as that falls short, if that
+      // comes nearer)
+      let [short, reach] = [this.solve(target, wait).short, limb.length + near]
+      const down = (reach: number) => {
+        if (stoop) ahead.rise(stoop, -Infinity)
+        stoop = lower(kind, side, this.mover, ahead, [when, fast ? when : Infinity], this.where(target, wait), reach)
+        return this.solve(target, wait).short
+      }
+      if (short > near) short = down(reach)
+      if (short > near && down(reach - short + near) > short) down(reach)
       if (kind === 'hand') ahead.wind.off(side)
-      if (!short) aimed = this.solve(target, wait)
-    } else short = unreached()
-    if (short) return short
+      aimed = this.solve(target, wait)
+    }
+    const none = (miss: Miss['miss']): Miss => {
+      this.drop({ ...target, when, leaves: when, swing: 0, stoop })
+      return { miss }
+    }
     // it sets off in time to turn at its ease, from how it will be then, for no longer than keeps its joints within how far they turn: twice round is near enough. Within a look of as soon as it can, it sets off then: and no sooner than the body spares it, a foot it stands on
     let [easy, leaves] = [0, after]
     const spared = (from: number) => {
@@ -302,45 +326,34 @@ export class Planner extends Reach {
       }
     }
     // as long as the limb sways: and before a fast arrival, that long to draw back as far as its joints turn, and then it swings
-    let swing = fast ? this.swing(aimed, false) : 0
-    sets(swing, sway(limb))
+    const most = given ? sway(limb) : sway(limb) / 2
+    let swing = fast ? this.swing(aimed, !given) : 0
+    sets(swing, most)
     // with less time than that it draws back in half of it, and only as far as it swings from at its ease
-    if (fast && wait - leaves < easy - EXACT) sets((swing = this.swing(aimed, true)), sway(limb) / 2)
-    if (!given && wait - after < easy - EXACT) {
-      const from = after > 0 ? `where it was sent before, which it is kept at ${after.toFixed(2)} s yet` : 'where it is'
-      const help = `send it by a moment ${(easy - wait + after).toFixed(2)} s later, or nearer${after > 0 ? ', or free it first' : ''}`
-      const takes = `its limb takes ${easy.toFixed(2)} s from ${from} to get there at its ease, and has ${(wait - after).toFixed(2)}`
-      return miss(GOT.ease, easy - wait + after, `${takes}: ${help}`)
-    }
+    if (fast && given && wait - leaves < easy - EXACT) sets((swing = this.swing(aimed, true)), sway(limb) / 2)
+    if (!given && wait - after < easy - EXACT) return none('ease')
     // and with less than that it swings in one, drawing back on its way
     if (fast && wait - leaves < easy - EXACT) sets((swing = 0), 2 * sway(limb))
-    if (leaves >= wait) return miss(GOT.spare, 0, 'he stands on it until then: send it later, or plant the other foot')
+    if (leaves >= wait) return none('spare')
     // the body does not step with a foot the story has, and the rest of it winds up for a fast arrival the limb draws back for: which changes where he is going, and leaves the limb less to do
     const from = this.starts(leaves)
-    plan = { ...target, when, leaves: this.clock + leaves, swing, stoop }
+    const plan: Plan = { ...target, when, leaves: this.clock + leaves, swing, stoop }
     this.claim(plan)
     const wound = swing > 0 && wind(plan.leaves)
     aimed = this.solve(target, wait)
-    short = unreached(EXACT)
-    if (short) return short
+    if (aimed.short > EXACT) plan.near = { rank: RANK.reach, by: aimed.short }
+    else if (aimed.stuck) plan.near = { rank: RANK.turn, by: 0 }
     const turns = this.pushed(aimed, wait - leaves, swing, from)
     const takes = wound && wound.times > turns.times ? wound : turns
     // (with no time at all, there is no telling how hard)
-    if (!(takes.times <= MOST)) {
-      const slowed = (by: number) => ({ ...target, velocity: target.velocity.clone().multiplyScalar(by) })
-      const strong = (by: number) => this.pushed(this.solve(slowed(by), wait), wait - leaves, swing, from).times <= MOST
-      const share = fast && given ? between(0, 1, strong)[0] : 0
-      const speed = share > 0 ? `at ${(share * target.velocity.length()).toFixed(1)} m/s or slower` : 'slower'
-      const less = fast
-        ? `it to arrive ${speed}, or moving more across its limb: a limb swings its end across itself far faster than it stretches`
-        : 'a place nearer where it is'
-      const help = `${given ? 'Give it longer, or ask' : 'Ask'} for ${less}`
-      return miss(GOT.strength, takes.times, `${this.cannot(takes, wait - leaves, fast)}. ${help}`)
-    }
+    if (plan.near || takes.times <= MOST) return plan
+    const slowed = (by: number) => target.velocity.clone().multiplyScalar(by)
+    const strong = (by: number) =>
+      this.pushed(this.solve({ ...target, velocity: slowed(by) }, wait), wait - leaves, swing, from).times <= MOST
+    // (asked to arrive faster than it can, it arrives as fast as it can: waiting longer gives it no more swing)
+    const share = fast && strong(0) ? between(0, 1, strong)[0] : 0
+    if (share > 0) plan.velocity = slowed(share)
+    else plan.near = { rank: RANK.strength, by: Number.isNaN(takes.times) ? Infinity : takes.times, slow: true }
     return plan
-  }
-
-  protected cannot({ joint, times }: { joint: Goal; times: number }, seconds: number, moving: boolean) {
-    return `it cannot be where it is to be in the ${seconds.toFixed(2)} s it has${moving ? ', moving as it is to' : ''}: the ${joint.name} would have to be pushed ${times.toFixed(1)} times as hard as it can be`
   }
 }

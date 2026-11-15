@@ -1,7 +1,7 @@
-import { Body, type Side, type Story, type Xyz } from '@drawcall/animate'
-import { flat, type Grip, grip, Hand, point, type Statement } from '@drawcall/hand'
-import { BoxGeometry, Euler, Group, Mesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three'
-import { hang } from '../carry'
+import { Body, type Held, type Side, type Story, type Xyz } from '@drawcall/animate'
+import { type Grip, grip, Hand, point, type Statement } from '@drawcall/hand'
+import { BoxGeometry, Euler, Group, Matrix4, Mesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three'
+import { holds } from '../character'
 
 /** what leads him: how far he is asked to go forward and to his left, how he turns his aim (left positive), how far up he aims (rad), and what he is asked to do */
 export type Input = {
@@ -63,10 +63,10 @@ const BODY = { pouch: [-0.12, -0.3, 0.28], belt: [0.02, -0.5, 0.2], release: [-0
 const THROW = { speed: 6.5, lift: 0.5, wind: 0.9 }
 
 /**
- * how the rifle is carried, its butt in a shoulder: how far its muzzle is down from where he aims (rad), and whether it
- * rests in his left shoulder, held in his left hand alone
+ * how the rifle is carried, its butt in the shoulder of the hand nearest it: how far its muzzle is down from where he
+ * aims (rad)
  */
-const CARRY = { shoulder: { down: 0, left: false }, low: { down: 0.5, left: false }, hung: { down: 0.6, left: true } }
+const CARRY = { shoulder: { down: 0 }, low: { down: 0.5 }, hung: { down: 0.6 } }
 type Carry = keyof typeof CARRY
 /** where the butt of the rifle is, which rests in his shoulder */
 const BUTT = new Vector3()
@@ -98,9 +98,10 @@ export class Soldier {
   readonly guard = box(GUARD.size, GUARD.at)
   mag = box(MAG.size, [0, 0, 0])
   ball = new Mesh(new SphereGeometry(BALL), metal)
-  /** the hands, as they were read from the rig at rest, and how each takes hold of what it holds */
+  /** the hands, as they were read from the rig at rest, how each takes hold of what it holds, and the rifle as he holds it */
   private readonly hands: Record<Side, Hand>
   private readonly held: Record<keyof typeof GRIP, Grip>
+  private readonly gun: Held
   readonly errors: string[] = []
   private readonly loose: Loose[] = []
   private readonly was = { reload: false, grenade: false }
@@ -125,14 +126,14 @@ export class Soldier {
     this.body = new Body(man)
     this.rifle.position.copy(this.body.eye('right'))
     this.pose()
-    this.onRifle('right', this.held.grip)
-    this.onRifle('left', this.held.fore)
+    this.gun = this.body.hold(this.rifle, { rests: BUTT })
+    this.onRifle()
   }
 
-  /** a hand takes hold of the rifle, as it is held there: the rifle gives way to the hands, its butt in a shoulder */
-  private onRifle(side: Side, held: Grip, rests = side === 'right') {
-    this.body.hand[side].shape(held.pose)
-    return this.body.hand[side].to(held, { on: held.target, gives: this.rifle, rests: rests ? BUTT : undefined })
+  /** both hands take hold of the rifle, as it is held there */
+  private onRifle() {
+    this.body.hand.right.to(this.held.grip)
+    this.body.hand.left.to(this.held.fore)
   }
 
   /** the magazine is to slide out of its well, or back in */
@@ -200,8 +201,7 @@ export class Soldier {
         } finally {
           // (over, or cut short by what the body could not do, the hands are on the rifle again)
           soldier.busy = false
-          soldier.onRifle('right', soldier.held.grip)
-          soldier.onRifle('left', soldier.held.fore)
+          soldier.onRifle()
         }
       })(),
     )
@@ -224,42 +224,46 @@ export class Soldier {
   }
 
   private *reload(): Story {
-    const { body, held } = this
+    const { body, held, hands } = this
     const { left } = body.hand
     // the left hand takes the magazine and pulls it out, lets it fall, and fetches a fresh one from his chest
     this.carry = 'shoulder'
-    left.shape(flat)
-    yield* left.to(held.mag, { on: this.well })
-    yield* left.shape(held.mag.pose)
+    yield* left.to(held.mag)
     yield* this.slide(true)
-    left.free()
+    this.gun.free('left')
     this.drop(this.mag, left.velocity)
     yield* left.to(place(BODY.pouch), { on: body })
+    // (the fresh one is in his hand as it comes out of the pouch)
     this.mag = box(MAG.size, [0, 0, 0])
-    hang(this.hands.left, this.mag, held.mag)
+    this.object.add(this.mag)
+    const fresh = grip(hands.left, this.mag, GRIP.mag)
+    const inHand = new Matrix4().compose(fresh.position, fresh.quaternion, new Vector3(1, 1, 1)).invert()
+    this.object.updateWorldMatrix(true, false)
+    hands.left.bone.updateWorldMatrix(true, false)
+    const at = this.object.matrixWorld.clone().invert().multiply(hands.left.bone.matrixWorld).multiply(inHand)
+    at.decompose(this.mag.position, this.mag.quaternion, this.mag.scale)
+    const mag = holds(body, hands.left, fresh)
     // pushes it in, and goes back to the handguard
-    yield* left.to(held.mag, { on: this.well })
+    yield* mag.to({ x: 0, y: 0, z: 0 }, { on: this.well, pointing: { x: 0, y: 0, z: 1 }, up: { x: 0, y: 1, z: 0 } })
+    mag.free()
     this.well.attach(this.mag)
     yield* this.slide(false)
-    yield* left.shape(flat)
   }
 
   private *grenade(): Story {
-    const { body, held, ball } = this
+    const { body, held, hands, ball } = this
     const { right } = body.hand
     // the rifle rests in his left shoulder in his left hand, the right takes the grenade from his belt and throws it
     // overarm the way he aims
-    right.shape(flat)
-    const fetched = right.to(place(BODY.belt), { on: body })
+    this.gun.free('right')
     this.carry = 'hung'
-    this.onRifle('left', held.fore, CARRY.hung.left)
-    yield* fetched
-    hang(this.hands.right, ball, held.ball)
-    yield* right.shape(held.ball.pose)
+    yield* right.to(place(BODY.belt), { on: body })
+    this.object.add(ball)
+    const grenade = holds(body, hands.right, grip(hands.right, ball, GRIP.ball))
     const way = new Vector3(Math.sin(this.aim), 0, Math.cos(this.aim))
     const velocity = way.multiplyScalar(THROW.speed * Math.cos(THROW.lift)).setY(THROW.speed * Math.sin(THROW.lift))
     yield* right.by(body.time + THROW.wind, place(BODY.release), { on: body, velocity })
+    grenade.free()
     this.drop(ball, right.velocity)
-    yield* right.shape(flat)
   }
 }

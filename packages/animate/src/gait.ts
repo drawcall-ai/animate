@@ -51,11 +51,10 @@ export const STRIDE = { least: 0.568, faster: 0.567, first: 0.5, flown: 0.434 }
 /** how long his stride is at a walk, going so many of his paces (m) */
 export const stride = ({ leg }: Size, fast: number) => (STRIDE.least + STRIDE.faster * fast) * leg
 /**
- * how far off the way he goes he faces before his legs would cross in a stride (rad): from there he sidesteps, the foot
- * whose hip is ahead stepping out so far, and so much further for every pace he goes (in lengths of his leg), and the
- * other up to it, at up to so many of his paces: as fast as his feet step
+ * sidestepping, the foot whose hip is ahead steps out so far, and so much further for every pace he goes (in lengths
+ * of his leg), and the other up to it, at up to so many of his paces: as fast as his feet step
  */
-export const SIDLE = { from: 0.9, step: 0.4, faster: 0.6, most: 0.5 }
+export const SIDLE = { step: 0.4, faster: 0.6, most: 0.5 }
 /** how far he steps out sidestepping, going so many of his paces (in lengths of his leg) */
 export const sidle = (fast: number) => SIDLE.step + SIDLE.faster * fast
 

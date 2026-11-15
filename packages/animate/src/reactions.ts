@@ -94,10 +94,9 @@ export class Reactions {
     const swung =
       ((right.first.value.x - left.first.value.x) / 2) * Math.min(ARMS.most, ARMS.least + ARMS.faster * fast)
     // (the trunk turns with the arms by as much of their swing as a shoulder is out from the spine against an arm's
-    // length, and ahead of the pelvis into a turn he is making: as far as the arms are free, for an arm the story has
-    // holds it to the pelvis. As far as the pelvis gives to the way he goes, it keeps facing as he is to, whatever the
-    // arms hold)
-    const { aims, yields, look, facing, face } = this.mover
+    // length, as far as the arms are free, for an arm the story has holds it to the pelvis; and ahead of the pelvis to
+    // face as he is to, whatever the arms hold)
+    const { aims, look, facing, face } = this.mover
     const free = SIDES.filter((side) => joints.arms[side].first.reacts).length / SIDES.length
     // (looking somewhere, it turns there however the arms are held, and the body's own turns and leans go on in it:
     // but round off a way he is to face it does not, and the head alone turns from that)
@@ -108,9 +107,7 @@ export class Reactions {
     const [ahead, aside] = [urged.z, urged.x].map((by) => LEAN.pushed * Math.atan2(by, GRAVITY))
     want.set(
       this.ahead.leans(delta) + (looked?.x ?? 0) + ahead,
-      turn +
-        free * (size.shoulder / size.arm) * swung +
-        (toward ?? clamp(yields + free * (aims - yields), -LEADS.trunk, LEADS.trunk)),
+      turn + free * (size.shoulder / size.arm) * swung + (toward ?? clamp(aims, -LEADS.trunk, LEADS.trunk)),
       -LEAN.listed * list - tilts(this.mover) - aside,
     )
     const loose = trunk.loose

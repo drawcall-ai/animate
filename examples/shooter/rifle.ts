@@ -9,13 +9,14 @@ export const ARM = 0.61
 /**
  * Where the parts of the rifle are, counted from the butt of its stock: z toward the muzzle, y up, x to his left (m).
  * `grip` is the top and the foot of the pistol grip's back, where the palm meets it, and `trigger` the trigger's back.
+ * `sight` is where the eye looks through the notch of the rear sight, level with the tip of the front sight's post.
  */
 export const RIFLE = {
   butt: new Vector3(),
   grip: { top: new Vector3(0, -0.035, 0.2325), foot: new Vector3(0, -0.135, 0.2325) },
   trigger: new Vector3(0, -0.045, 0.311),
   well: new Vector3(0, -0.05, 0.38),
-  sight: new Vector3(0, 0.06, 0.25),
+  sight: new Vector3(0, 0.058, 0.25),
   muzzle: new Vector3(0, 0, 0.8),
 }
 /** how wide and how long the grip under the handguard is (m) */
@@ -23,8 +24,6 @@ const FORE = { wide: 0.03, long: 0.08 }
 /** how long a magazine is, hanging down out of the well, and how thick (m) */
 export const MAGAZINE = { long: 0.15, wide: 0.025, deep: 0.05 }
 
-/** how far apart the places along a grip are that a hand is tried at (m) */
-const STEP = 0.005
 /**
  * how the left hand takes hold of the magazine: from his side, the palm on its flank and the fingers hooked round its
  * front, the thumb left out, as across so thin a thing a thumb presses on the side of the fingers and not against them
@@ -38,48 +37,22 @@ export const HOLD = {
 } satisfies Record<string, Statement>
 
 /**
- * A grip taken at the first of some places a hand holds at: where along a grip that is depends on how the hand is
- * made, where its thumb has its root and how wide it is against the grip's length. Throws if it holds at none.
- */
-function first<T>(hand: Hand, what: string, places: Vector3[], take: (at: Vector3) => T) {
-  const errors: string[] = []
-  for (const at of places) {
-    try {
-      return take(at)
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : String(error))
-    }
-  }
-  throw new Error(`the ${hand.side} hand holds the ${what} nowhere along it: ${errors.at(-1)}`)
-}
-/** places a step apart from `from` to `to` */
-const down = (from: Vector3, to: Vector3) =>
-  Array.from({ length: Math.floor(from.distanceTo(to) / STEP) + 1 }, (_, k) =>
-    from.clone().lerp(to, (k * STEP) / from.distanceTo(to)),
-  )
-
-/**
- * How the right hand takes the pistol grip: from behind, as high under the receiver as it holds, the web of the thumb up
- * in the tang as a shooter has it, the index lying along the frame; and with that index on the trigger, the rest kept.
+ * How the right hand takes the pistol grip: from behind, round the middle of its back, the index lying along the frame;
+ * and with that index on the trigger, the rest kept.
  */
 export function pistol(hand: Hand, rifle: Object3D) {
+  const at = RIFLE.grip.top.clone().lerp(RIFLE.grip.foot, 0.5)
   const from = new Vector3(-1, 0, -0.5).normalize()
-  const using = ['palm', 'thumb', 'middle', 'ring', 'little'] as const
-  return first(hand, 'pistol grip', down(RIFLE.grip.top, RIFLE.grip.foot), (at) => {
-    const held = grip(hand, rifle, { at, from, using, start: point })
-    return { held, trigger: grip(hand, rifle, { at: RIFLE.trigger, using: ['index'], start: held }) }
-  })
+  const held = grip(hand, rifle, { at, from, using: ['palm', 'thumb', 'middle', 'ring', 'little'], start: point })
+  return { held, trigger: grip(hand, rifle, { at: RIFLE.trigger, using: ['index'], start: held }) }
 }
 
 /**
- * How the left hand takes the grip under the handguard: round it from his side, as near its middle as it holds, on its
- * own, as the rifle's bulk behind it would turn the thumb back toward it.
+ * How the left hand takes the grip under the handguard: round its middle from his side, on its own, as the rifle's bulk
+ * behind it would turn the thumb back toward it.
  */
 export function fore(hand: Hand, handle: Object3D) {
-  const side = (y: number) => new Vector3(FORE.wide / 2, y, 0)
-  const [up, under] = [down(side(0), side(FORE.long / 2)), down(side(0), side(-FORE.long / 2))]
-  const places = up.flatMap((at, k) => [at, under[k]]).slice(1)
-  return first(hand, 'grip under the handguard', places, (at) => grip(hand, handle, { at, from: new Vector3(1, 0, 0) }))
+  return grip(hand, handle, { at: new Vector3(FORE.wide / 2, 0, 0), from: new Vector3(1, 0, 0) })
 }
 
 /**
@@ -104,8 +77,10 @@ const BOXES: [
   [0, -0.08, 0.48, FORE.wide, FORE.long, FORE.wide, 0x2a2a2a, 'fore'],
   [0, -0.085, 0.25, 0.03, 0.1, 0.035, 0x2a2a2a, 'grip'],
   [0, -0.045, 0.315, 0.008, 0.025, 0.008, 0xc0c0c0, 'trigger'],
-  [0, 0.05, 0.25, 0.01, 0.03, 0.02, 0x1a1a1a, 'rear sight'],
-  [0, 0.03, 0.78, 0.008, 0.04, 0.008, 0x1a1a1a, 'front sight'],
+  [0, 0.045, 0.25, 0.012, 0.02, 0.02, 0x1a1a1a, 'rear sight'],
+  [0.0045, 0.0615, 0.25, 0.003, 0.013, 0.02, 0x1a1a1a, 'rear sight'],
+  [-0.0045, 0.0615, 0.25, 0.003, 0.013, 0.02, 0x1a1a1a, 'rear sight'],
+  [0, 0.034, 0.78, 0.004, 0.048, 0.008, 0x1a1a1a, 'front sight'],
 ]
 
 /** a magazine, hanging from the middle of its top */

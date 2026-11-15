@@ -70,7 +70,8 @@ export class Stance {
 
   /**
    * the leg reaches from its hip, where the hips, the pelvis turned and listing as it is, have it, for where its foot
-   * is: on the ground, or the body's own in a step. It faces as its foot points, and all of it is told as it faces
+   * is: on the ground, or the body's own in a step. It faces as its foot points, and all of it is told as it faces.
+   * Tells whether its foot is where the story put it and the hips have gone further from it than its leg reaches
    */
   pose(hips: Way, delta: number) {
     const { size, leg, end, footing, side } = this
@@ -99,11 +100,7 @@ export class Stance {
     const within = footing.down ? 0 : footing.step?.remains
     leg.first.follow(first, delta, within)
     leg.second.follow(from.set(fold, 0, 0), delta, within)
-    if (lost) {
-      throw new Error(
-        `the ${this.side} foot is to stay where it was sent, and the hips have gone further from it than its leg reaches: it is let free`,
-      )
-    }
+    return lost
   }
 
   /**

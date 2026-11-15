@@ -116,7 +116,8 @@ test('the top of a jump is a place and a moment: a hand told to be somewhere by 
   expect(moving.x).toBeCloseTo(0, 1)
   expect(moving.y).toBeCloseTo(5.5, 1)
   expect(moving.z).toBeCloseTo(4.4, 1)
-  expect(() => body.highest()).toThrow(/not on his way up/)
+  // (with no jump to make, he is highest now)
+  expect(body.highest()).toBe(body.time)
 })
 
 test('a walk that leaves him no foot on the ground is an error, not a walk that quietly ends elsewhere', () => {

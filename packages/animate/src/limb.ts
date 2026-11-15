@@ -9,12 +9,10 @@ import { GRAVITY } from './world'
 /** how much of its length a limb stretches to at the most, and how much further than straight back on itself it folds to at the least: its middle joint is never quite straight nor shut */
 const STRETCH = { most: 0.999, least: 0.011 }
 /**
- * how far off a plan may turn out when it is carried out, the body being not quite where it was looked ahead to be: how
- * far short of where its end is to be a limb may come (in lengths of his leg), how much harder than a plan may ask a
- * joint may be pushed (in times its strength), and how far from where it was sent an end may be at its moment (in
- * lengths of his leg), or off the speed it was to have there, in shares of it
+ * how far off a limb may be and still count as where it is: short of where its end is to be (in lengths of his leg),
+ * and a foot from where it is to come down (in lengths of his leg)
  */
-export const SLACK = { reach: 0.023, push: 0.2, place: 0.057, speed: 0.05 }
+export const SLACK = { reach: 0.023, place: 0.057 }
 const first = new Vector3()
 const turn = new Euler()
 const swung = new Quaternion()
@@ -46,8 +44,8 @@ export class Limb<Hand extends Handed | undefined = Handed | undefined> {
   constructor(
     readonly first: Goal,
     readonly second: Goal,
-    private readonly upper: number,
-    private readonly lower: number,
+    readonly upper: number,
+    readonly lower: number,
     private readonly forward: boolean,
     private readonly trunk: { side: number; bands: Beside[]; upper: number; fore: number } | undefined,
     readonly hand: Hand,

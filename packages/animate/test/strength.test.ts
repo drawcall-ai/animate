@@ -8,16 +8,32 @@ const step = (body: Body, seconds: number) => {
   for (let n = 0; n < seconds * 60; n++) body.update(1 / 60)
 }
 
-test('a part asked for more than it is strong enough for says so', () => {
-  const hand = new Body(person()).hand.right
-  expect(() => hand.by(0.3, new Vector3(-0.2, 1.6, 0.3), { velocity: new Vector3(0, 0, 80) })).toThrow(
-    /right hand .* cannot be where it is to be.*times as hard as it can be/,
+test('a hand asked to arrive faster than it can arrives as fast as it can; a trunk asked for more says so', () => {
+  const body = new Body(person())
+  const hand = body.hand.right
+  const moving = new Vector3()
+  body.play(
+    (function* () {
+      yield* hand.by(0.3, new Vector3(-0.2, 1.6, 0.3), { velocity: new Vector3(0, 0, 80) })
+      moving.copy(hand.velocity)
+    })(),
   )
+  while (body.playing) body.update(tick(body.size))
+  expect(moving.z).toBeGreaterThan(1)
+  expect(moving.z).toBeLessThan(80)
 
-  const trunk = new Body(person()).trunk
-  expect(() => trunk.to(new Vector3(0.8, 0, 0), { seconds: 0.05 })).toThrow(
-    /trunk cannot be where it is sent in 0.05 s.*times its strength. It needs/,
+  // (a part given too little time is there as soon after as it can be)
+  const leaning = new Body(person())
+  let late = 0
+  leaning.play(
+    (function* () {
+      yield* leaning.trunk.to(new Vector3(0.8, 0, 0), { seconds: 0.05 })
+      late = leaning.time
+    })(),
   )
+  while (leaning.playing) leaning.update(tick(leaning.size))
+  expect(late).toBeGreaterThan(0.2)
+  expect(leaning.trunk.value.x).toBeCloseTo(0.8, 2)
 })
 
 test('a part told to be somewhere by a moment waits, draws back before a fast arrival, and is there as asked', () => {

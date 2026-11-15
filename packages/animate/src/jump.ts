@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
-import { PUSH, SETTLE, TOGETHER, lands, lowest, squat } from './gait'
+import { PUSH, SETTLE, lands } from './gait'
 import { type Pelvis, toRest } from './pelvis'
-import { GRAVITY } from './world'
+import { GRAVITY, clamp } from './world'
 
 /**
  * For a jump he lets himself drop, going on as he is going, until the legs, pushing up as hard as they push, have him
@@ -33,31 +33,14 @@ export function drop(pelvis: Pelvis, dt: number, spring: { top: Vector3; from?: 
   // from lower than that they push less hard, over the whole way up; coming down faster than he is to go up, as hard as they push
   const lasts = up + velocity.y > 0 ? (2 * way) / (up + velocity.y) : speed / PUSH.up
   // (led, he leaves the ground going on as he goes: how far on the top is, is the world's)
-  const along = pelvis.led ? velocity.z : (top.z - value.z - (velocity.z * lasts) / 2) / (lasts / 2 + up / GRAVITY)
-  // the ground pushes him along the harder the harder the legs push up
-  const [hard, most] = [Math.abs(along - velocity.z) / lasts, PUSH.along * (1 + PUSH.up / GRAVITY)]
-  if (value.y < lowest(pelvis.size) || hard > most) {
-    return fault(
-      pelvis,
-      `a jump that has the hips ${top.y.toFixed(2)} m up at the top, ${(top.z - value.z).toFixed(2)} m on from where the legs begin to push, takes them a push over ${way.toFixed(2)} m, and to push him ${hard.toFixed(1)} m/s² along: they bend ${squat(pelvis.size).toFixed(2)} m, and push ${most.toFixed(1)} m/s² along. Ask for a top that is lower, or ${Math.abs(along) < Math.abs(velocity.z) ? 'further on, or to come in slower' : 'nearer where he takes off'}`,
-    )
-  }
-  if (!pelvis.led && Math.abs(top.x) > TOGETHER * pelvis.size.leg) {
-    return fault(
-      pelvis,
-      `a jump goes the way he is going, and its top is ${Math.abs(top.x).toFixed(2)} m to the side of that as the legs begin to push: have him go toward it first`,
-    )
-  }
+  const wanted = pelvis.led ? velocity.z : (top.z - value.z - (velocity.z * lasts) / 2) / (lasts / 2 + up / GRAVITY)
+  // the ground pushes him along the harder the harder the legs push up: no harder than they can
+  const most = PUSH.along * (1 + PUSH.up / GRAVITY) * lasts
+  const along = clamp(wanted, velocity.z - most, velocity.z + most)
   pelvis.launch = { velocity: new Vector3(0, up, along), until: pelvis.time - dt + lasts }
   pelvis.spring = undefined
   push(pelvis, dt, pelvis.launch)
   return true
-}
-
-function fault(pelvis: Pelvis, say: string) {
-  pelvis.spring = undefined
-  pelvis.fault = say
-  return false
 }
 
 /** the legs push him off the ground, as hard as gets him going as he is to leave it by then */
@@ -81,7 +64,7 @@ export function fly(pelvis: Pelvis, dt: number, down: boolean) {
   value.addScaledVector(velocity, dt)
   // (the ground stops him: told as he comes to it)
   if (value.y < 0) {
-    if (was > 0) pelvis.fault = pelvis.fallen('he has fallen to the ground with no foot under him', 'leave him one')
+    if (was > 0) pelvis.fault = pelvis.fallen('he has fallen to the ground with no foot under him')
     value.y = velocity.y = 0
   }
   if (!down || velocity.y > 0) return

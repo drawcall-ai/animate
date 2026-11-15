@@ -1,5 +1,4 @@
-import type { Body, Story } from '@drawcall/animate'
-import type { Grip } from '@drawcall/hand'
+import type { Body, Held, Story } from '@drawcall/animate'
 import { Vector3 } from 'three'
 import { type Target, touching } from './target'
 
@@ -15,12 +14,11 @@ const BLADE = new Vector3(0.15, 0.4, 1)
 const BEHIND = { x: 0.2, y: -0.5, z: -0.25 }
 
 /** A right-handed fencer, the foil `held` in his right hand, comes en garde, advances two steps, lunges to touch the target with the point, and recovers to en garde. */
-export function* lunge(body: Body, target: Target, held: Grip): Story {
+export function* lunge(body: Body, target: Target, held: Held): Story {
   const touch = touching(target, BLADE)
   // where the back foot stands for the lunge to end with the point on the target
   const back = touch.z - THRUST.ahead - APART.lunge / 2
 
-  body.hand.right.shape(held.pose)
   body.hand.right.to(READY, { on: body })
   body.hand.left.to(BEHIND, { on: body })
   yield* body.foot.right.to(body.ground('right', body.foot.left.value.z + APART.guard))
@@ -33,7 +31,7 @@ export function* lunge(body: Body, target: Target, held: Grip): Story {
 
   // the lunge: the front foot goes far out, and the point to the touch as the hips come after it
   const out = body.foot.right.to(body.ground('right', back + APART.lunge))
-  yield* body.hand.right.to(touch, { velocity: { x: 0, y: 0, z: THRUST.speed }, with: held, pointing: BLADE })
+  yield* held.to(touch, { velocity: { x: 0, y: 0, z: THRUST.speed }, pointing: BLADE })
   yield* out
 
   // the recovery: the front foot comes back, and the hand

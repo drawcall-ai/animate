@@ -115,7 +115,7 @@ export class Pelvis {
   height: number
   /** in the air, with nothing to push him */
   falls = false
-  /** what went wrong in the last step, to be told: he has fallen, or his legs cannot make the jump or the footfall */
+  /** what went wrong in the last step, to be told: the story's feet left him none to come down on */
   fault?: string
   /** a jump he is to make: where the hips are at the top of it, and until he lets himself drop for it, the footfall along z he is going to, to take off from */
   spring?: { top: Vector3; from?: number }
@@ -158,8 +158,8 @@ export class Pelvis {
    * were going is off. Or has him be going as he is `led` from now on: a jump he is making he still makes
    */
   send(course: Course, led = false) {
-    // he steps off feet the story put down: they are his again
-    for (const side of SIDES) this.foot[side].put = undefined
+    // sent somewhere, he steps off feet the story put down: they are his again. Led, he keeps his stance
+    if (!led) for (const side of SIDES) this.foot[side].put = undefined
     this.plant = undefined
     if (!led) this.spring = undefined
     this.course = course
@@ -180,9 +180,19 @@ export class Pelvis {
     return Math.sign(course.z === undefined || this.veers ? course.speed : course.z - value.z) || 1
   }
 
-  /** whether he faces so far off the way he goes that his legs would cross in a stride: he sidesteps */
+  /**
+   * whether he faces so far off the way he goes that his legs would cross, his feet as far apart along it as they are
+   * or are stepping to and as far apart as his hips across him: he sidesteps. Feet side by side cross only as he faces
+   * square to it
+   */
   get sidles() {
-    return Math.abs(Math.sin(this.faces)) > Math.sin(SIDLE.from)
+    const { left, right } = this.foot
+    const far = Math.max(
+      Math.abs(left.at.z - right.at.z),
+      Math.abs((left.step?.to ?? left.at).z - (right.step?.to ?? right.at).z),
+      THERE * this.size.leg,
+    )
+    return far * Math.abs(Math.sin(this.faces)) > 2 * this.size.hip * Math.abs(Math.cos(this.faces))
   }
 
   /** how far the ball of a foot is from where it belongs: under its hip, pointing the way he faces, or would, turned on by up to `ahead`, whichever is nearest how it points (m) */
@@ -243,6 +253,15 @@ export class Pelvis {
     return SIDES.some((side) => this.foot[side].put)
   }
 
+  /** where he stands between his feet, as they stand or are to, told along the way he is going */
+  between() {
+    const [left, right] = SIDES.map((side) => {
+      const { put, step, at } = this.foot[side]
+      return put ?? step?.to ?? at
+    })
+    return new Vector3().addVectors(left, right).multiplyScalar(0.5)
+  }
+
   /** whether getting down is a lunge for him: his feet are apart, and he is going along or stands between feet the story has put down */
   get lunging() {
     return !this.together && (!this.halted || this.placed)
@@ -253,10 +272,10 @@ export class Pelvis {
     return Math.abs(this.velocity.z) > WALK.most * this.size.pace ? this.size.stand : this.course.y
   }
 
-  /** whether he stands lower than he is to go along: he comes up before he sets off, once what he is down for is over, from all that ever is */
+  /** whether he stands lower than he is to go along: he comes up before he sets off, once what he is down for now is over */
   protected get squats() {
     const { leg, pace } = this.size
-    const walks = this.course.y - this.stoops.low(Number.MAX_VALUE) - RIDE * leg
+    const walks = this.course.y - this.stoops.low(this.time) - RIDE * leg
     return this.together && Math.abs(this.velocity.z) < SHIFTS * pace && this.value.y < walks
   }
 
@@ -304,11 +323,11 @@ export class Pelvis {
     return taken !== undefined && due(from, taken.from) && !due(from, taken.until)
   }
 
-  /** what an error says of his falling `how` he did: what would help, or the feet the story has, which he did not land on */
-  fallen(how: string, help: string) {
+  /** what an error says of his falling `how` he did, if the story made him: the feet it has, which he did not land on */
+  fallen(how: string) {
     const held = SIDES.filter((side) => this.has(this.foot[side], 0))
     const them = held.length > 1 ? 'them' : 'it'
-    if (!held.length) return `${how}: ${help}`
+    if (!held.length) return undefined
     return `${how}, the ${held.join(' and ')} foot the story's: free ${them} before he comes down, or send ${them} to the ground`
   }
 
@@ -357,11 +376,14 @@ export class Pelvis {
     const { leg, beat, pace, hip } = size
     const [settle, fastest] = [SETTLE * beat, WALK.most * pace]
     const way = Math.sign(this.course.speed || 1)
+    // (led a way, he goes as fast as the world has him going, a foot down or not)
+    const led = this.course.heading !== undefined
     // standing lower than he is to go along, they make for no further on than his feet, to rest there until he has come up
     const { z = way * Infinity, x = 0 } = this.course
-    const course: Course = this.squats
-      ? { ...this.course, heading: undefined, x, z: way * Math.min(z * way, foot.left.at.z * way), arrive: 0 }
-      : this.course
+    const course: Course =
+      this.squats && !led
+        ? { ...this.course, heading: undefined, x, z: way * Math.min(z * way, foot.left.at.z * way), arrive: 0 }
+        : this.course
     // wound up where he is to come to rest between his feet, his weight goes onto the one behind, and onto the one ahead as he swings through: as hard as his legs push
     const stands = SIDES.filter((side) => foot[side].down).map((side) => foot[side].at.z)
     const [rear, front] = [Math.min(...stands), Math.max(...stands)]
@@ -377,19 +399,24 @@ export class Pelvis {
     // (braked half the time, a foot being down only so much of it: so they are as slow as they are to arrive a stride in the air early)
     const brakes = Math.max(0, Math.abs(far) - (course.arrive && FLIGHT * beat * velocity.z * way))
     // as fast as they are to go, and no faster than lets them slow to how they are to arrive, the last of the way ever slower
-    const most = Math.min(
-      Math.abs(course.speed),
-      Math.sqrt(course.arrive ** 2 + PUSH.along * brakes),
-      course.arrive > 0 ? Infinity : Math.abs(far) / settle,
-      this.rounds,
-    )
+    const most = led
+      ? Math.abs(course.speed)
+      : Math.min(
+          Math.abs(course.speed),
+          Math.sqrt(course.arrive ** 2 + PUSH.along * brakes),
+          course.arrive > 0 ? Infinity : Math.abs(far) / settle,
+          this.rounds,
+        )
     const want = Math.sign(far) * way * most
     const faster = Math.abs(want) > Math.abs(velocity.z) && want * velocity.z >= 0
     const hard = faster && shift === undefined ? course.push : PUSH.along
     this.wanted = clamp((want - velocity.z) / settle, -hard, hard)
-    acceleration.z = down ? clamp((want - velocity.z) / dt, -hard, hard) : 0
-    velocity.z += acceleration.z * dt
+    // (how hard the world urges him on, he leans into as it is said)
+    acceleration.z = down && !led ? clamp((want - velocity.z) / dt, -hard, hard) : 0
+    velocity.z = led ? want : velocity.z + acceleration.z * dt
     value.z += velocity.z * dt
+    // (led, where his feet were put goes with him: he steps his stance along)
+    if (led) for (const side of SIDES) if (foot[side].put) foot[side].put.z += velocity.z * dt
     // they ride as high as they are to, and as a leg on the ground lets them: down for a leg to reach ahead, and at a walk up over the foot he stands on while the other is off the ground, down again as it comes down. Onto a footfall the steps are to come out at he stays down
     const rises = !this.bounds && this.halt !== undefined && this.planted !== this.course
     const up = ({ step }: Footing) => (step && rises ? 1 - ease(step.through) : 0)
@@ -425,7 +452,7 @@ export class Pelvis {
     this.back += clamp(back - this.back, -SINK * pace * dt, SINK * pace * dt)
     if (this.unheld > FLIGHT * beat) {
       this.falls = true
-      this.fault = this.fallen('he has fallen, no foot under him as he went', 'ask less of his legs')
+      this.fault = this.fallen('he has fallen, no foot under him as he went')
     }
   }
 

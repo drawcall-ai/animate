@@ -192,16 +192,7 @@ test('led round a corner and through a turn of 120 degrees, his knees stay clear
   expect(near).toBeGreaterThan(0.12)
 })
 
-test('a way to face stated with a run is an error: led, he faces the way he goes, and takes it up again as he slows', () => {
-  const run = stage()
-  expect(() => {
-    run.body.face({ x: 1, z: 0 })
-    run.body.run({ speed: 5, at: 12 })
-  }).toThrow(/faces the way he goes/)
-  const running = stage((body) => body.run({ speed: 5, at: 12 }))
-  running.until(1)
-  expect(() => running.body.face({ x: 1, z: 0 })).toThrow(/faces the way he goes/)
-
+test('faster than he walks he faces the way he goes, and takes up the way he is to face again as he slows', () => {
   const { rig, body, until } = stage()
   const led = (speed: number) => {
     body.go({ x: speed, z: 0 })
