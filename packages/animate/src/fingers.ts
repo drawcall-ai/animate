@@ -32,7 +32,7 @@ const RANGE = {
   thumb: { spread: [-0.4, 0.5], bend: [-0.2, 1.5], middle: [-0.2, 1], end: [-0.3, 1.4] },
 } satisfies Record<string, Record<string, [number, number]>>
 /** what a pose's angles turn, as an error names them */
-const JOINTS = ['spread', 'bent at the knuckle', 'bent at the middle joint', 'bent at the last joint']
+const ANGLES = ['spread', 'bent at the knuckle', 'bent at the middle joint', 'bent at the last joint']
 /**
  * how the fingers hang, left alone: each a little more curled than the one before it, and the thumb turned in to
  * rest by the index
@@ -98,18 +98,22 @@ export class Fingers {
   /** the pose they were last given, and when it is for one by a moment, how long until then (s) */
   private posed?: { pose: Pose }
   private due?: { pose: Pose; left: number }
-  /** the middle of the palm: halfway from the wrist to the knuckles */
+  /** how thick a finger and the palm are about their bones, as measured, or half the least that two knuckles side by side are apart (m) */
+  private readonly thick: number
+  /** the middle of the palm, on its skin: halfway from the wrist to the knuckles, and out of the palm as thick as it is */
   private readonly centre: Vector3
 
   /**
    * `chains` tell each finger's knuckle from the wrist and where each of its bones ends from where it starts, the
-   * fingertip last, the hand lying against a forearm that hangs straight down
+   * fingertip last, the hand lying against a forearm that hangs straight down; and how `thick` the fingers are, if
+   * that is measured
    */
   constructor(
     private readonly name: string,
     side: 'left' | 'right',
     private readonly chains: Record<Finger, Vector3[]>,
     beat: number,
+    thick?: number,
   ) {
     const along = chains.middle[0].clone().normalize()
     const thumbward = square(chains.index[0].clone().sub(chains.little[0]), along)
@@ -139,7 +143,9 @@ export class Fingers {
       return goal(finger, '', curl(RELAXED[finger]), { x: bend, y: middle, z: end })
     })
     const knuckles = FINGERS.slice(1).map((finger) => chains[finger][0])
-    this.centre = knuckles.reduce((sum, knuckle) => sum.add(knuckle), new Vector3()).divideScalar(2 * knuckles.length)
+    this.thick = thick ?? Math.min(...knuckles.slice(1).map((knuckle, k) => knuckle.distanceTo(knuckles[k]))) / 2
+    const middle = knuckles.reduce((sum, knuckle) => sum.add(knuckle), new Vector3()).divideScalar(2 * knuckles.length)
+    this.centre = middle.addScaledVector(normal, this.thick)
   }
 
   /** how each joint of a finger is turned against the one before it from the rest, spread and bent so (rad) */
@@ -168,7 +174,7 @@ export class Fingers {
         const angle = k ? part.bend[k - 1] : part.spread
         if (angle >= least && angle <= most) return
         throw new Error(
-          `the ${this.name}'s ${finger} is to be ${JOINTS[k]} ${angle} rad, and goes only from ${least.toFixed(2)} to ${most.toFixed(2)}`,
+          `the ${this.name}'s ${finger} is to be ${ANGLES[k]} ${angle} rad, and goes only from ${least.toFixed(2)} to ${most.toFixed(2)}`,
         )
       })
     }
@@ -217,16 +223,16 @@ export class Fingers {
     }
   }
 
-  /** where a part of the hand is from the wrist `seconds` from now, in the frame of the hand */
+  /** where the skin of a part of the hand is from the wrist `seconds` from now, in the frame of the hand: a fingertip's at its end */
   tip(touch: Finger | 'palm', seconds: number) {
     if (touch === 'palm') return this.centre.clone()
     const then = (goal: Goal) => (goal.reacts ? goal.value.clone() : goal.ahead(seconds, new Vector3(), near))
     const [knuckle, ...bones] = this.chains[touch]
-    const [at, turned] = [knuckle.clone(), new Quaternion()]
+    const [at, turned, last] = [knuckle.clone(), new Quaternion(), new Vector3()]
     this.turns(touch, then(this.spread[touch]).x, then(this.bend[touch])).forEach((by, k) =>
-      at.add(bones[k].clone().applyQuaternion(turned.multiply(by))),
+      at.add(last.copy(bones[k]).applyQuaternion(turned.multiply(by))),
     )
-    return at
+    return at.addScaledVector(last.normalize(), this.thick)
   }
 }
 

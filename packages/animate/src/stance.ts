@@ -1,16 +1,16 @@
 import { Vector3 } from 'three'
 import type { End } from './end'
-import { type Footing, UP } from './hips'
+import { type Footing } from './pelvis'
 import { RANGE } from './joints'
 import { type Limb, SLACK } from './limb'
 import type { Way } from './way'
 import { HEEL, SOLE, type Side, type Size, raised } from './size'
-import { clamp } from './world'
+import { clamp, UP } from './world'
 
 /** how fast a heel comes down again, and comes up (rad a beat) */
 const ROLL = { down: 1.8, up: 9 }
 /** how finely a heel is brought up to where its leg reaches, at first and in the end (rad) */
-const [FINE, EXACT] = [0.01, 1e-4]
+const RAISE = { step: 0.01, exact: 1e-4 }
 /** how many times a beat an ankle eases to where it is to be, from where it was as its foot came down or left the ground */
 const EASE = 6
 /** how many times a beat a foot in the air comes round to how it hangs */
@@ -43,8 +43,8 @@ export function stood(size: Size, leg: Limb, anchor: Vector3, hip: Vector3, leas
   }
   // as little up as fits, and that told exactly, a leg at its stretch folding far for a little: behind him, or under a hip too high for the leg, where that brings it nearer the hip
   let angle = least
-  while (angle < HEEL && !fits(angle) && (anchor.z < hip.z || short())) angle += FINE
-  for (let step = FINE / 2; angle > least && step > EXACT; step /= 2) if (fits(angle - step)) angle -= step
+  while (angle < HEEL && !fits(angle) && (anchor.z < hip.z || short())) angle += RAISE.step
+  for (let step = RAISE.step / 2; angle > least && step > RAISE.exact; step /= 2) if (fits(angle - step)) angle -= step
   const heel = Math.min(most, angle)
   fits(heel)
   return heel

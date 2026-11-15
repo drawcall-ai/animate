@@ -11,6 +11,7 @@ export const ARM = 0.61
  * `grip` is the top and the foot of the pistol grip's back, where the palm meets it, and `trigger` the trigger's back.
  */
 export const RIFLE = {
+  butt: new Vector3(),
   grip: { top: new Vector3(0, -0.035, 0.2325), foot: new Vector3(0, -0.135, 0.2325) },
   trigger: new Vector3(0, -0.045, 0.311),
   well: new Vector3(0, -0.05, 0.38),

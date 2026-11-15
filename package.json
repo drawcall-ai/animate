@@ -8,6 +8,8 @@
   },
   "devDependencies": {
     "@drawcall/hand": "workspace:*",
+    "@drawcall/physics": "0.20.0",
+    "@drawcall/physics-rapier": "0.20.0",
     "@drawcall/rig": "^0.7.0",
     "@types/three": "^0.187.0",
     "three": "^0.187.0",

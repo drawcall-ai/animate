@@ -1,20 +1,7 @@
 import { Vector3 } from 'three'
-import type { Footing, Step } from './hips'
-import {
-  CADENCE,
-  RIDE,
-  STILL,
-  sidle,
-  STRIDE,
-  TOGETHER,
-  WALK,
-  behind,
-  lands,
-  lunge,
-  overhang,
-  stride,
-  toRest,
-} from './hips'
+import type { Footing, Step } from './pelvis'
+import { CADENCE, RIDE, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
+import { toRest } from './pelvis'
 import { TRAIL } from './joints'
 import { SLACK } from './limb'
 import { HEEL, SIDES, SIGN, SOLE, type Side, both, ground, other, raised } from './size'
@@ -100,7 +87,7 @@ export class Mover extends Way {
 
   /** whether he stands: at rest where he was to, on both feet, side by side under him and pointing the way he faces */
   get stands() {
-    return this.rests && this.together && SIDES.every((side) => this.strays(side) <= TOGETHER * this.size.leg)
+    return this.halted && this.together && SIDES.every((side) => this.strays(side) <= TOGETHER * this.size.leg)
   }
 
   /**
@@ -155,9 +142,23 @@ export class Mover extends Way {
   }
 
   /** how far on in his turning a foot that steps as he turns where he stands is put, and points: no further round from how it stands than a foot swings (rad) */
-  private swing(side: Side) {
+  private around(side: Side) {
     const points = this.foot[side].toes - this.faces
-    return this.rests || this.rounds === 0 ? clamp(this.aims, points - REACH, points + REACH) : 0
+    return this.halted || this.rounds === 0 ? clamp(this.aims, points - REACH, points + REACH) : 0
+  }
+
+  /**
+   * the world has put the hips at a place: a foot in the air that was to come down where his speed no longer carries
+   * him by then comes down where it does, as far ahead of him as he now goes
+   */
+  shift(place: { x: number; z: number }) {
+    super.shift(place)
+    const { value, velocity, way } = this
+    for (const side of SIDES) {
+      const { step } = this.foot[side]
+      if (step)
+        step.to.z = way * Math.min(step.to.z * way, (value.z + velocity.z * step.remains) * way + this.fore(side))
+    }
   }
 
   /** how far from under the hips a leg reaches the ground, its foot flat, when they are this high (m) */
@@ -168,6 +169,7 @@ export class Mover extends Way {
 
   advance(dt: number) {
     this.time += dt
+    this.idles(dt)
     const down = SIDES.some((side) => this.foot[side].down)
     this.steer(dt, down)
     const { x } = this.value
@@ -200,7 +202,7 @@ export class Mover extends Way {
     return clamp(
       FORE.carries * beat * Math.abs(velocity.z) + brakes,
       0,
-      FORE.within * this.span(this.course.y - this.low - RIDE * leg),
+      FORE.within * this.span(this.rides - this.low - RIDE * leg),
     )
   }
 
@@ -286,12 +288,12 @@ export class Mover extends Way {
     if (foot.put && !foot.at.equals(foot.put)) return foot.put
     if (this.placed || this.planted === this.course) return undefined
     const lags = (partner.at.z - foot.at.z) * this.way
-    if (this.rests || this.rounds === 0) {
+    if (this.halted || this.rounds === 0) {
       // at rest he stands with his feet together under him, pointing the way he faces: turning where he stands, the foot he has turned further from steps on round, to where it stands when he has turned on, in the scene
-      const [ahead, off] = [this.swing(side), this.strays(side, this.swing(side))]
+      const [ahead, off] = [this.around(side), this.strays(side, this.around(side))]
       const apart = (ahead === 0 && Math.abs(lags) > together) || off > together
-      if (!apart || off < this.strays(other(side), this.swing(other(side)))) return undefined
-      const to = this.rests ? this.place(side) : ground(this.size, side, this.value.z)
+      if (!apart || off < this.strays(other(side), this.around(other(side)))) return undefined
+      const to = this.halted ? this.place(side) : ground(this.size, side, this.value.z)
       return to.add(this.turned(side, this.faces + ahead))
     }
     // the foot behind steps, and of two side by side the left: sidestepping, the one whose hip is ahead steps out, and the other up to it
@@ -316,7 +318,7 @@ export class Mover extends Way {
     // the footfall that was to be is on its way
     if (to.z === this.plant?.at) [this.plant, this.planted] = [undefined, this.course]
     const from = this.foot[side].at.clone()
-    const ahead = this.swing(side)
+    const ahead = this.around(side)
     const points = ahead ? this.facing + ahead : undefined
     // (a foot his leg reaches only up on its ball leaves the ground from there)
     const heel = raised(this.size, HEEL)
@@ -387,9 +389,16 @@ export class Mover extends Way {
     // sent on, he comes down on the foot that has been off the ground for longer, and the other steps on from there
     const waits = this.sent && foot.stood > this.foot[other(side)].stood && !this.has(this.foot[other(side)], dt)
     const tucked = air > UNTUCK * beat || waits
+    // (reaching for the ground, it is ahead of the hips by as much as it lands ahead of them, the leg stretching from
+    // drawn up to as long as it lands, as they come down)
+    const drawn = Math.min(1, air / (UNTUCK * beat))
     const to = tucked
       ? new Vector3(aside, value.y - (1 - TUCK) * leg, value.z + TUCK * leg * this.way + split)
-      : new Vector3(aside, ankle + ball.y, value.z + velocity.z * air + brakes + ball.z)
+      : new Vector3(
+          aside,
+          Math.max(ankle + ball.y, value.y - (LANDING - TUCK * drawn) * leg),
+          value.z + brakes + ball.z + split * drawn,
+        )
     if (air <= dt && !waits) {
       // (the ground holds it where it stands once its heel is down)
       foot.at.set(to.x, ankle, to.z - ball.z)

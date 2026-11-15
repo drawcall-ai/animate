@@ -1,7 +1,10 @@
 import { Euler, Quaternion, Vector3 } from 'three'
+import type { Beside } from './bones'
+import { between } from './curve'
 import type { Goal } from './goal'
-import type { Fingers } from './hand'
-import { clamp } from './world'
+import type { Fingers } from './fingers'
+import { deep } from './shape'
+import { GRAVITY } from './world'
 
 /** how much of its length a limb stretches to at the most, and how much further than straight back on itself it folds to at the least: its middle joint is never quite straight nor shut */
 const STRETCH = { most: 0.999, least: 0.011 }
@@ -18,6 +21,9 @@ const swung = new Quaternion()
 const about = new Quaternion()
 const axis = new Vector3()
 
+/** how long a limb takes to swing from one side to the other under its own weight, hanging from its first joint (s): the pace it moves at when it is at its ease */
+export const sway = (limb: { length: number }) => Math.PI * Math.sqrt((2 * limb.length) / (3 * GRAVITY))
+
 /** the corner of a triangle opposite the side `across`, between the sides `a` and `b` (rad) */
 const corner = (a: number, b: number, across: number) =>
   Math.acos(Math.min(1, Math.max(-1, (a * a + b * b - across * across) / (2 * a * b))))
@@ -30,8 +36,8 @@ type Handed = { wrist: Goal; palm: Vector3; fingers?: Fingers }
 
 /**
  * A limb of two parts, a leg or an arm: the joints its parts turn at, how long they are, which way its middle joint
- * folds: `forward` is a knee; and for an arm, the `trunk` it hangs beside: how far out from the middle of it the arm's
- * first joint is, how far down from there it goes, and how thick it is (m), and the `hand` at its end.
+ * folds: `forward` is a knee; and for an arm, the `trunk` it hangs beside: on which `side` of it, its bands as the
+ * arm's first joint has them, and how thick the upper arm and the forearm are (m), and the `hand` at its end.
  */
 export class Limb<Hand extends Handed | undefined = Handed | undefined> {
   /** how long it is, from its first joint to its end (m) */
@@ -43,7 +49,7 @@ export class Limb<Hand extends Handed | undefined = Handed | undefined> {
     private readonly upper: number,
     private readonly lower: number,
     private readonly forward: boolean,
-    private readonly trunk: { beside: number; long: number; thick: number } | undefined,
+    private readonly trunk: { side: number; bands: Beside[]; upper: number; fore: number } | undefined,
     readonly hand: Hand,
   ) {
     this.length = upper + lower
@@ -62,25 +68,35 @@ export class Limb<Hand extends Handed | undefined = Handed | undefined> {
 
   /**
    * what of an arm turned and folded so is in the trunk, if any: its elbow, the middle of its forearm or its wrist, how
-   * far in it is (m), and the nearest way out, as he faces. The trunk is as thick as it is from the shoulders down, and
-   * an arm does not go round behind it to the other side
+   * far in it is (m), and the nearest way out, as he faces. The arm is as thick as it is, the trunk as it is shaped
+   * band by band, upright, and an arm does not go round behind it to the other side
    */
   inside(turned: Vector3, fold: number) {
     const { trunk, lower } = this
     if (!trunk) return undefined
-    const { beside, long, thick } = trunk
-    for (const [part, along] of [
-      ['elbow', 0],
-      ['forearm', lower / 2],
-      ['wrist', lower],
+    for (const [part, along, thick] of [
+      ['elbow', 0, trunk.upper],
+      ['forearm', lower / 2, trunk.fore],
+      ['wrist', lower, trunk.fore],
     ] as const) {
-      const { x, y, z } = this.at(turned, fold, along)
-      const [out, past] = [x + beside, y - clamp(y, thick - long, -thick)]
-      const [far, side] = [Math.hypot(out, past, z), out > 0 ? 'to his left' : 'to his right']
-      if (far < thick) return { part, by: thick - far, way: Math.abs(out) > z ? side : 'ahead' }
-      if (past === 0 && z <= 0 && out * beside <= 0) return { part, by: Math.abs(out), way: side }
+      const at = this.at(turned, fold, along)
+      const band = trunk.bands.find(({ low, high }) => at.y >= low && at.y <= high)
+      if (!band) continue
+      const [x, z] = [at.x - band.x, at.z - band.z]
+      const [by, side] = [deep(band, x, z) + thick, x > 0 ? 'to his left' : 'to his right']
+      if (by > 0) return { part, by, way: Math.abs(x) > z ? side : 'ahead' }
+      if (z <= 0 && x * trunk.side <= 0) return { part, by: Math.abs(x), way: side }
     }
     return undefined
+  }
+
+  /** an arm turned and folded so, held off the trunk out to its side as little as clears it, as far as it turns */
+  off(turned: Vector3, fold: number) {
+    const { trunk } = this
+    const [, most] = this.first.range.z ?? [-Infinity, Infinity]
+    if (!trunk || !this.inside(turned, fold)) return turned
+    const [, clear] = between(turned.z, trunk.side * most, (z) => this.inside(turned.setZ(z), fold) !== undefined)
+    return turned.setZ(clear)
   }
 
   /**

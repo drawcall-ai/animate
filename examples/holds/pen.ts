@@ -15,10 +15,11 @@ export const pen: Thing = {
     return new Group().add(body, nib)
   },
   grip: (hand, target) =>
-    // pinched between the thumb and index 3.5 cm above the nib, the hand behind it, the nib ahead of the fingertips
+    // pinched between the thumb and the curled index 3.5 cm above the nib, the hand at its side, the barrel going out
+    // between the thumb and the index
     grip(hand, target, {
       at: new Vector3(0, -PEN.long / 2 + 0.035, 0),
-      from: new Vector3(0, 1, 0),
+      from: new Vector3(1, 0, 0),
       using: ['thumb', 'index'],
       start: fist,
     }),

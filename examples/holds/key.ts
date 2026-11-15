@@ -15,7 +15,7 @@ export const key: Thing = {
     return new Group().add(bow, blade)
   },
   grip: (hand, target) =>
-    // the bow pinched at its middle, the hand behind it, the blade leaving over the web of the thumb
+    // the bow pinched at its middle between the thumb and the curled index, the hand behind it, the blade going on away
     grip(hand, target, {
       at: new Vector3(0, 0, 0),
       from: new Vector3(0, 1, 0),

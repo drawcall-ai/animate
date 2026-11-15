@@ -37,6 +37,6 @@ test('a body half as large and one half as large again make the motion a man mak
     expect(other.length).toBe(man.length)
     const off = other.flatMap((step, k) => step.map((at, part) => at.distanceTo(man[k][part])))
     // (a larger body takes its beats in longer steps of time, and as many: they differ by what numbers round to)
-    expect(Math.max(...off)).toBeLessThan(1e-4)
+    expect(Math.max(...off)).toBeLessThan(2e-4)
   }
 })

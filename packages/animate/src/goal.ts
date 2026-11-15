@@ -44,7 +44,7 @@ export class Goal {
   private gone = 0
   private way?: Way
   /** what moves it: its own goal, what it follows, or its reactions */
-  private moved: 'sent' | 'led' | 'free' = 'sent'
+  private moved: 'sent' | 'follows' | 'free' = 'sent'
   /** whether it has been let go, and is swinging out: once it has come round it is the body's */
   loose = false
   /** what the body last wanted of it, free */
@@ -223,7 +223,7 @@ export class Goal {
   follow(value: Xyz, dt: number, within?: number) {
     if (this.comes(value, within)) return
     this.loose = false
-    this.moved = 'led'
+    this.moved = 'follows'
     if (dt > 0) this.velocity.copy(value).sub(this.value).divideScalar(dt)
     this.value.copy(value)
   }

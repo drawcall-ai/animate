@@ -34,8 +34,8 @@ test('what cannot be done in a step is thrown once, after the step, and his cloc
   scene.add(thing)
   const dt = tick(body.size)
   const when = Math.ceil(1 / dt) * dt
-  body.hand.right.by(when, HERE, { on: thing })
-  // (it is somewhere else at the very moment it was to be there)
+  body.hand.right.by(when, HERE, { on: thing, velocity: { x: 0, y: 0, z: 0.5 } })
+  // (it is somewhere else at the very moment it was to be there, moving)
   const said = run(
     body,
     2,

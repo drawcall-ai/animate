@@ -1,33 +1,28 @@
+import { RigidBody } from '@drawcall/physics'
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three'
 import { type Panel, TRAVEL } from './actions'
 
-/** how far from the middle of his hips he stays clear of a box (m) */
-const GIRTH = 0.3
-/** the boxes in his way: where the middle of each is on the ground, how far it reaches from there along x and along z, and how high it is (m): the first is the wall the panel is on */
+/**
+ * the floor and the boxes on it: where the middle of each is on the ground, how far it reaches from there along x and
+ * along z, and how high it is (m). The first box is the wall the panel is on, and the low one is to jump onto
+ */
+const FLOOR = { x: 0, z: 0, wide: 20, long: 20, high: 0.2 }
 const BOXES = [
   { x: 0, z: 6, wide: 3, long: 0.2, high: 2.4 },
   { x: 2.5, z: 2.5, wide: 0.5, long: 0.5, high: 1 },
-  { x: -3, z: 3, wide: 1, long: 0.3, high: 0.6 },
+  { x: -3, z: 3, wide: 0.8, long: 0.8, high: 0.4 },
   { x: -1, z: -4, wide: 0.4, long: 1.5, high: 1.4 },
 ]
-/** the button: how thick it is, its radius, and how far it stands out of the wall (m) */
+/** the button: its radius, and how far it stands out of the wall (m) */
 const BUTTON = { radius: 0.02, proud: 0.015 }
-const clamp = (value: number, least: number, most: number) => Math.min(most, Math.max(least, value))
 
-/** where the boxes let the middle of his hips be, that would be at a place: out of each, the shortest way */
-export function clear({ x, z }: { x: number; z: number }) {
-  for (const box of BOXES) {
-    const [off, on] = [
-      x - clamp(x, box.x - box.wide, box.x + box.wide),
-      z - clamp(z, box.z - box.long, box.z + box.long),
-    ]
-    const far = Math.hypot(off, on)
-    if (far >= GIRTH) continue
-    // (in it, out by the nearer of its sides along x)
-    if (far === 0) x = box.x + Math.sign(x - box.x || 1) * (box.wide + GIRTH)
-    else [x, z] = [x + (off / far) * (GIRTH - far), z + (on / far) * (GIRTH - far)]
-  }
-  return { x, z }
+/** a box that stands where it is, which the world has him collide with and stand on */
+function box({ x, z, wide, long, high }: (typeof BOXES)[number], color: number) {
+  const solid = new RigidBody({ bodyType: 'static' })
+  const mesh = new Mesh(new BoxGeometry(2 * wide, high, 2 * long), new MeshStandardMaterial({ color }))
+  solid.position.set(x, high / 2, z)
+  solid.add(mesh)
+  return solid
 }
 
 /** The floor's boxes and the wall with its panel: what is drawn, the panel, and whether he is near enough to press its button: within an arm's length of it along the ground. */
@@ -38,15 +33,10 @@ export function level() {
     out: new Vector3(0, 0, -1),
     pressed: false,
   }
-  const drawn = new Group()
-  for (const box of BOXES) {
-    const mesh = new Mesh(
-      new BoxGeometry(2 * box.wide, box.high, 2 * box.long),
-      new MeshStandardMaterial({ color: 0x607080 }),
-    )
-    mesh.position.set(box.x, box.high / 2, box.z)
-    drawn.add(mesh)
-  }
+  // (the floor's top is the ground)
+  const floor = box(FLOOR, 0x303030)
+  floor.position.y = -FLOOR.high / 2
+  const drawn = new Group().add(floor, ...BOXES.map((each) => box(each, 0x607080)))
   const plate = new Mesh(new BoxGeometry(0.3, 0.3, 0.01), new MeshStandardMaterial({ color: 0x303840 }))
   plate.position.set(panel.button.x, panel.button.y, wall.z - wall.long - 0.005)
   const button = new Mesh(

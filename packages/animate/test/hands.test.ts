@@ -172,8 +172,9 @@ test('a pose bends a finger toward the palm and spreads it toward the thumb, the
     )
     expect(index.y - ring.y).toBeGreaterThan(0.25)
     expect(Math.abs(index.z)).toBeLessThan(thick / 4)
-    const [left, right] = [at(rig, 'leftIndexDistal_end'), at(rig, 'rightIndexDistal_end')]
-    expect(right.toArray()).toEqual([-left.x, left.y, left.z].map((v) => expect.closeTo(v, 6)))
+    // (each in its own hand: standing at his ease, his weight is over one foot)
+    const [left, right] = (['left', 'right'] as const).map((side) => hand(rig, side).local('IndexDistal_end'))
+    expect(right.toArray()).toEqual(left.toArray().map((v) => expect.closeTo(v, 6)))
   }
 })
 
@@ -257,16 +258,22 @@ test('a hand sent to hold a thing holds it as stated, and keeps it as the thing 
   expect(() => body.hand.right.to(held, { on: thing, palm: { x: 0, y: 1, z: 0 } })).toThrow(/leave out `palm`/)
 })
 
-test('a palm sent flat to a wall is on it', () => {
+/** how thick a finger and the palm are about their bones: half the least that two knuckles side by side are apart */
+const thick = (rig: Object3D) => {
+  const knuckles = DIGITS.map((finger) => at(rig, `right${finger}Proximal`))
+  return Math.min(...knuckles.slice(1).map((knuckle, k) => knuckle.distanceTo(knuckles[k]))) / 2
+}
+
+test('a palm sent flat to a wall is on it with its skin', () => {
   const rig = person()
   const body = new Body(rig)
   const wall = 0.5
   play(body, body.hand.right.to({ x: -0.2, y: 1.3, z: wall }, { with: 'palm', palm: { x: 0, y: 0, z: 1 } }))
   rig.updateMatrixWorld(true)
-  // (the middle of the palm: halfway from the wrist to the knuckles)
+  // (the middle of the palm: halfway from the wrist to the knuckles, as thick as a finger short of the wall)
   const knuckles = DIGITS.map((finger) => at(rig, `right${finger}Proximal`))
   const centre = knuckles.reduce((sum, knuckle) => sum.add(knuckle), new Vector3()).divideScalar(4)
-  expect(Math.abs(centre.lerp(at(rig, 'rightHand'), 0.5).z - wall)).toBeLessThan(0.005)
+  expect(Math.abs(centre.lerp(at(rig, 'rightHand'), 0.5).z - (wall - thick(rig)))).toBeLessThan(0.005)
 })
 
 test('a fingertip sent somewhere is there at its moment, moving as stated, however the arm is bent and whenever the fingers were shaped', () => {
@@ -278,7 +285,12 @@ test('a fingertip sent somewhere is there at its moment, moving as stated, howev
     const rig = person()
     const body = new Body(rig)
     const hand = body.hand.right
-    const tip = () => (rig.updateMatrixWorld(true), at(rig, 'rightIndexDistal_end'))
+    // (the skin at the end of the index: as thick as a finger on from the end of its last bone)
+    const tip = () => {
+      rig.updateMatrixWorld(true)
+      const end = at(rig, 'rightIndexDistal_end')
+      return end.clone().sub(at(rig, 'rightIndexDistal')).setLength(thick(rig)).add(end)
+    }
     play(
       body,
       (function* () {

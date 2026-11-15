@@ -1,6 +1,8 @@
-import { Group, Object3D, Quaternion, Vector3 } from 'three'
+import { Hand } from '@drawcall/hand'
+import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
+import { ARM, fore, pistol, rifle } from '../../../examples/shooter/rifle'
 import { Body } from '../src'
 
 const FRAME = 1 / 60
@@ -78,24 +80,34 @@ test('both hands stay on one bar as it moves', () => {
   expect(worst).toBeLessThan(0.005)
 })
 
-test('a thing that goes out of reach is an error naming the hand and how far short it is, and lets the hand go', () => {
+test('a thing that goes out of reach is one error naming the hand and how far short it is, and the hand takes it again once it is back', () => {
   const { scene, body } = setup()
   const grip = new Object3D()
   grip.position.set(-0.2, 1.1, 0.4)
   scene.add(grip)
   body.hand.right.to(HERE, { on: grip })
   for (let t = 0; t < 1.5; t += FRAME) body.update(FRAME)
-  let said = ''
-  for (let t = 0; t < 2 && !said; t += FRAME) {
-    grip.position.z += 1.2 * FRAME
+  expect(body.hand.right.there).toBe(true)
+  const said: string[] = []
+  for (let t = 0; t < 2; t += FRAME) {
+    grip.position.z = Math.min(1.6, grip.position.z + 1.2 * FRAME)
     try {
       body.update(FRAME)
     } catch (error) {
-      said = String(error)
+      said.push(String(error))
     }
   }
-  expect(said).toMatch(/^Error: the right hand is to be on a thing .* its limb is \d\.\d\d m short .* It is let free$/)
-  for (let t = 0; t < 1; t += FRAME) body.update(FRAME)
+  expect(said).toHaveLength(1)
+  expect(said[0]).toMatch(
+    /^Error: the right hand is to be on a thing .* its limb is \d\.\d\d m short .* takes it again as soon as it can$/,
+  )
+  expect(body.hand.right.there).toBe(false)
+  for (let t = 0; t < 2.5; t += FRAME) {
+    grip.position.z = Math.max(0.4, grip.position.z - 1.2 * FRAME)
+    body.update(FRAME)
+  }
+  expect(body.hand.right.there).toBe(true)
+  expect(body.hand.right.value.distanceTo(place(grip))).toBeLessThan(0.01)
 })
 
 test('a palm carried before him faces the same way from him as he turns', () => {
@@ -218,22 +230,108 @@ test('both hands stay on a bar carried before his chest, the left palm up under 
   }
 })
 
-test('a thing that leaps away faster than the hand can follow is one error, and the hand is let free', () => {
+test('a thing that leaps away faster than the hand can follow is no error: the hand lags behind it and catches up', () => {
   const { scene, body } = setup()
   const grip = new Object3D()
   grip.position.set(-0.2, 1.1, 0.4)
   scene.add(grip)
   body.hand.right.to(HERE, { on: grip })
   for (let t = 0; t < 1.5; t += FRAME) body.update(FRAME)
-  const said: string[] = []
-  grip.position.set(-0.3, 1.3, 0.2)
-  for (let t = 0; t < 1; t += FRAME) {
-    try {
+  grip.position.set(-0.24, 1.18, 0.44)
+  body.update(FRAME)
+  expect(body.hand.right.value.distanceTo(place(grip))).toBeGreaterThan(0.02)
+  for (let t = 0; t < 1; t += FRAME) body.update(FRAME)
+  expect(body.hand.right.there).toBe(true)
+  expect(body.hand.right.value.distanceTo(place(grip))).toBeLessThan(0.01)
+})
+
+/** a rifle before him in the scene, which the game poses each frame from his right shoulder along an aim, and both hands that hold it, letting it give way */
+function rifleman() {
+  const { scene, rig, body } = setup()
+  const hands = { right: new Hand(rig, 'right'), left: new Hand(rig, 'left') }
+  const gun = rifle()
+  const handle = gun.getObjectByName('fore')
+  if (!handle) throw new Error('the rifle has no foregrip')
+  const held = { right: pistol(hands.right, gun).held, left: fore(hands.left, handle) }
+  gun.scale.setScalar(body.size.arm / ARM)
+  scene.add(gun)
+  const shoulder = rig.getObjectByName('rightUpperArm') as Object3D
+  /** the rifle as the game would have it, its butt so far from the shoulder as he faces, along an aim (rad) */
+  const pose = (aim: number, butt = new Vector3(0.05, -0.04, 0)) => {
+    gun.quaternion.setFromAxisAngle(UP, aim)
+    gun.position.copy(shoulder.getWorldPosition(new Vector3())).add(butt.applyAxisAngle(UP, aim))
+    return { position: gun.position.clone(), quaternion: gun.quaternion.clone() }
+  }
+  for (const side of ['right', 'left'] as const) {
+    body.hand[side].to(held[side], { on: held[side].target, gives: gun })
+    body.hand[side].shape(held[side].pose)
+  }
+  /** how far each hand is from where its grip has it on the rifle as it is (m) */
+  const off = () =>
+    Math.max(
+      ...(['right', 'left'] as const).map((side) => {
+        const { target, position, quaternion } = held[side]
+        const sits = new Matrix4().compose(position, quaternion, new Vector3(1, 1, 1))
+        const wrist = new Vector3().setFromMatrixPosition(target.matrixWorld.clone().multiply(sits.invert()))
+        return wrist.distanceTo(rig.getObjectByName(`${side}Hand`)!.getWorldPosition(new Vector3()))
+      }),
+    )
+  return { scene, rig, body, gun, pose, off }
+}
+
+/** the most the rifle moves in a step as it is carried round (m), and turns (rad): never a jump to another hold */
+const STEP = { move: 0.08, turn: 0.25 }
+
+test.each([1, 2])(
+  'a rifle that gives way stays in both hands as its aim sweeps half round him and back at %i turns a second, faster than his arms follow, never jumps, and is as it is to be again soon after',
+  (rate) => {
+    const { scene, body, gun, pose, off } = rifleman()
+    let [lag, wish] = [0, pose(0)]
+    for (let t = 0; t < 1.5; t += FRAME) {
+      wish = pose(0)
       body.update(FRAME)
-    } catch (error) {
-      said.push(String(error))
+    }
+    const long = 1 / (2 * rate)
+    for (let t = 0; t < 2 * long + 0.5; t += FRAME) {
+      const was = { position: gun.position.clone(), quaternion: gun.quaternion.clone() }
+      wish = pose(Math.PI * Math.max(0, t < long ? t / long : 2 - t / long))
+      body.update(FRAME)
+      scene.updateMatrixWorld(true)
+      expect(off()).toBeLessThan(0.01)
+      expect(gun.position.distanceTo(was.position)).toBeLessThan(STEP.move)
+      expect(gun.quaternion.angleTo(was.quaternion)).toBeLessThan(STEP.turn)
+      lag = Math.max(lag, gun.position.distanceTo(wish.position))
+    }
+    expect(lag).toBeGreaterThan(0.05)
+    expect(gun.position.distanceTo(wish.position)).toBeLessThan(0.01)
+    expect(gun.quaternion.angleTo(wish.quaternion)).toBeLessThan(0.035)
+  },
+)
+
+test('a rifle that gives way, to be through his chest, is pushed out of it, and no forearm goes into the trunk', () => {
+  const { scene, rig, body, gun, pose, off } = rifleman()
+  const { shoulder, trunk } = body.size
+  const at = (name: string) => (rig.getObjectByName(name) as Object3D).getWorldPosition(new Vector3())
+  let [deepest, worst, wish] = [0, 0, pose(0)]
+  for (let t = 0; t < 1.5; t += FRAME) {
+    // its butt behind his back, between his shoulders
+    wish = pose(0, new Vector3(0.2, -0.1, -0.25))
+    body.update(FRAME)
+    scene.updateMatrixWorld(true)
+    if (t < 0.5) continue
+    worst = Math.max(worst, off())
+    const middle = at('rightUpperArm').add(at('leftUpperArm')).divideScalar(2)
+    for (const side of ['right', 'left']) {
+      const forearm = at(`${side}LowerArm`)
+        .add(at(`${side}Hand`))
+        .divideScalar(2)
+      const below = middle.y - forearm.y
+      if (below < 0 || below > trunk) continue
+      const out = Math.hypot(forearm.x - middle.x, forearm.z - middle.z)
+      deepest = Math.max(deepest, 0.65 * shoulder - out)
     }
   }
-  expect(said).toHaveLength(1)
-  expect(said[0]).toMatch(/moves faster than its limb can follow: it is \d\.\d\d m behind it/)
+  expect(gun.position.distanceTo(wish.position)).toBeGreaterThan(0.1)
+  expect(worst).toBeLessThan(0.01)
+  expect(deepest).toBeLessThan(0.01)
 })

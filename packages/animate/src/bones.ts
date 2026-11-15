@@ -1,107 +1,45 @@
-import { Euler, Bone as Joint, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
+import { Euler, Bone as Joint, Line3, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { State } from './curve'
-import { DOWN, FINGERS, type Finger, each } from './hand'
-import { UP } from './hips'
-import type { Joints } from './joints'
-import { SIDES, SOLE, type Side, type Size, both } from './size'
-import { GRAVITY } from './world'
+import { Bone, above } from './bone'
+import { DOWN, FINGERS, type Finger, each } from './fingers'
+import { type Joints, RANGE } from './joints'
+import { type Band, type Shape, deep, measure } from './shape'
+import { SIDES, SIGN, SOLE, type Side, type Size, both } from './size'
+import { GRAVITY, clamp, UP } from './world'
 
 /**
  * how much of its length a line across a rig at rest runs along what it is to run along, at the least: from right to
  * left along +x, from the hips up to the shoulders, and from an ankle up to its hip, by the length of a leg
  */
 const SQUARE = 0.97
+/** where an eye is from the middle of the head, upright: out to its side, up and ahead (in how far the head is round) */
+const EYE = { aside: 0.28, up: -0.1, ahead: 0.65 }
 const euler = new Euler()
 const swivel = new Euler(0, 0, 0, 'YZX')
 const matrix = new Matrix4()
 const scale = new Vector3()
 const along = new Vector3()
-const about = new Vector3()
+const thigh = new Line3()
 const at = new Vector3()
-const bend = new Quaternion()
 const trunk = new Quaternion()
+const pelvis = new Quaternion()
 const turned = new Quaternion()
 const folded = new Quaternion()
 const round = new Quaternion()
 const twist = new Quaternion()
+const spun = new Quaternion()
+const tipped = new Quaternion()
+const ACROSS = new Vector3(1, 0, 0)
 
-/** how the pelvis is turned: about the vertical and listing as the hips have it, and about the line between the hips as the trunk is, which bends there */
-function pelvis(turn: number, list: number, trunk: Quaternion, to: Quaternion) {
+/** how the pelvis is turned: about the vertical and listing as the hips have it, and about the line between the hips as far as the trunk leans further than the back curves */
+function tilt(turn: number, list: number, lean: number, to: Quaternion) {
+  const [back, forth] = RANGE.back.x
   to.setFromEuler(swivel.set(0, turn, list))
-  along.set(1, 0, 0).applyQuaternion(to)
-  bend.copy(to).invert().premultiply(trunk)
-  along.multiplyScalar(along.dot(about.set(bend.x, bend.y, bend.z)))
-  return to.premultiply(bend.set(along.x, along.y, along.z, bend.w).normalize())
+  return to.multiply(tipped.setFromAxisAngle(ACROSS, lean - clamp(lean, back, forth)))
 }
 
-function above(bone: Object3D) {
-  if (!bone.parent) throw new Error(`the rig's ${bone.name} hangs from nothing: a body is given what holds its bones`)
-  return bone.parent
-}
-
-/**
- * A bone the body turns, counted from the pose the body counts from: the trunk upright as the rig has it at rest, and
- * the parts of the limbs hanging straight down, each brought there from where the rig has it the shortest way. So
- * the rig may rest with its arms out or half down.
- */
-class Bone {
-  /** where its joint is and how it is turned from that pose, in the frame of the body */
-  readonly place = new Vector3()
-  readonly turned = new Quaternion()
-  /** where its joint is at rest, and in that pose from the joint `on` which it hangs */
-  readonly rest = new Vector3()
-  readonly at = new Vector3()
-  /** in that pose: how the part is turned from where the rig has it at rest, how the bone it hangs from in the rig is turned, and its own */
-  private readonly straight = new Quaternion()
-  private readonly rides = new Quaternion()
-  readonly hangs = new Quaternion()
-  /** how large the bone is in the frame of the body */
-  readonly large: number
-
-  /**
-   * `frame` takes the world to the frame of the body; a part of a limb reaches from its joint to an `end`, the joint of
-   * the next, and hangs `twisted` so far about its length: a hand without knuckles, or a bone of a finger, is given a
-   * bone instead, and lies as it does against that
-   */
-  constructor(
-    frame: Matrix4,
-    readonly bone: Object3D,
-    private readonly on?: Bone,
-    end?: Object3D | Bone,
-    twisted = 0,
-  ) {
-    matrix.multiplyMatrices(frame, bone.matrixWorld).decompose(this.rest, this.hangs, scale)
-    this.large = scale.x
-    if (end instanceof Bone) this.straight.copy(end.straight)
-    else if (end) {
-      at.setFromMatrixPosition(matrix.multiplyMatrices(frame, end.matrixWorld))
-      this.straight.setFromUnitVectors(at.sub(this.rest).normalize(), DOWN)
-      this.straight.premultiply(twist.setFromAxisAngle(DOWN, twisted))
-    }
-    this.hangs.premultiply(this.straight)
-    matrix.multiplyMatrices(frame, above(bone).matrixWorld).decompose(at, this.rides, scale)
-    if (!on) return
-    this.rides.premultiply(on.straight)
-    this.at.copy(this.rest).sub(on.rest).applyQuaternion(on.straight)
-  }
-
-  carry(on: Bone) {
-    this.place.copy(this.at).applyQuaternion(on.turned).add(on.place)
-  }
-
-  /** the bone is turned so, in the frame of the body */
-  turn(turned: Quaternion) {
-    const { bone, on } = this
-    this.turned.copy(turned)
-    bone.quaternion.copy(this.rides)
-    if (on) {
-      this.carry(on)
-      bone.quaternion.premultiply(on.turned)
-    }
-    bone.quaternion.invert().multiply(turned).multiply(this.hangs)
-  }
-}
-
+/** a band of the trunk as a shoulder has it, the trunk upright: how far it is from the shoulder along x and z to the line up through its joint, and along y to where it starts and ends (m) */
+export type Beside = Band & { x: number; z: number }
 /** the two parts of each leg and arm and what is at its end, from the trunk out */
 type Limbs = Record<Side, Bone[]>
 /** what the bones of a finger are named after its side and its own name, from the knuckle out */
@@ -110,7 +48,8 @@ const DIGIT = { finger: ['Proximal', 'Intermediate', 'Distal'], thumb: ['Metacar
 /**
  * The bones of a rig as the body turns them, found under it by the names a body asks of a humanoid: `hips`, `spine`
  * and `head`, and on each side `UpperLeg`, `LowerLeg`, `Foot`, `UpperArm`, `LowerArm` and `Hand` after `left` or
- * `right`, each hanging from the one before it. How they stand when the body is made is the rest pose, which it is
+ * `right`, each hanging from the one before it; and `chest` and `neck` between, if the rig has them, which then share
+ * the turns of the trunk and of the head. How they stand when the body is made is the rest pose, which it is
  * measured by: facing +z, its left at +x, upright on y = 0, in the frame the body's places are told in. That is where
  * the rig is, turned as it is, in the lengths of what holds it: the rig's own scale is part of how large he is. A hand
  * may have fingers: `Thumb`, `Index`, `Middle`, `Ring` and `Little`, each three bones hanging from one another,
@@ -119,13 +58,26 @@ const DIGIT = { finger: ['Proximal', 'Intermediate', 'Distal'], thumb: ['Metacar
  */
 export class Bones {
   readonly size: Size
+  /** what he is like about his bones, as measured on the rig's skin */
+  readonly shape: Shape
+  /** how much of a turn to look somewhere the trunk makes, its neck and head the rest */
+  readonly looks: number
   /** where the ankles and the wrists are, in that frame */
   readonly ankle: Record<Side, Vector3>
   readonly wrist: Record<Side, Vector3>
   /** (the joint of the hips is counted from the middle between the hips) */
   private readonly hips: Bone
-  private readonly spine: Bone
+  /**
+   * the bones of the trunk from the hips up, and the neck, if there is one, under the head; and how much of the trunk's
+   * turn against the pelvis each bone of it has made, and the neck of the head's against the trunk: a joint makes the
+   * more of a turn the higher up he it is, as the less of him it has to move. The last, which the arms hang from, has
+   * made all of it
+   */
+  private readonly trunk: Bone[]
+  private readonly neck?: Bone
   private readonly head: Bone
+  private readonly shares: number[]
+  private readonly bows: number
   private readonly legs: Limbs
   private readonly arms: Limbs
   /** the bones of the fingers of a hand that has them, from the knuckle out, and the fingertip last */
@@ -189,10 +141,15 @@ export class Bones {
       )
     }
     const hips = (this.hips = bone('hips'))
-    const spine = (this.spine = bone('spine', hips))
-    this.head = bone('head', spine)
+    const spine = bone('spine', hips)
+    const has = (name: string, on: Bone) => (on.bone.getObjectByName(name) ? bone(name, on) : undefined)
+    const chest = has('chest', spine)
+    const trunk = (this.trunk = chest ? [spine, chest] : [spine])
+    const top = trunk[trunk.length - 1]
+    const neck = (this.neck = has('neck', top))
+    const head = (this.head = bone('head', neck ?? top))
     const legs = (this.legs = limb(['UpperLeg', 'LowerLeg', 'Foot'], hips, false))
-    const arms = (this.arms = limb(['UpperArm', 'LowerArm', 'Hand'], spine, true))
+    const arms = (this.arms = limb(['UpperArm', 'LowerArm', 'Hand'], top, true))
     this.fingers = both((side) => {
       const hand = arms[side][2]
       const has = FINGERS.some((name) => hand.bone.getObjectByName(named(side, name)[0]))
@@ -246,6 +203,72 @@ export class Bones {
       beat,
       pace: leg / beat,
     }
+    const high = (bone: Bone) => bone.rest.y - waist.y
+    const [bent, bowed] = [trunk, neck ? [neck, head] : [head]].map((bones) => bones.map(high))
+    const sum = (heights: number[]) => heights.reduce((sum, height) => sum + height)
+    this.shares = bent.map((_, k) => sum(bent.slice(0, k + 1)) / sum(bent))
+    this.bows = high(neck ?? head) / sum(bowed)
+    this.looks = sum(bent) / (sum(bent) + sum(bowed))
+    const part = (bone: Bone, end: Vector3) => ({ bone: bone.bone, at: bone.rest, end })
+    const limbs = (from: Limbs, k: number) => SIDES.map((side) => part(from[side][k], from[side][k + 1].rest))
+    const ends = [...trunk.slice(1).map(({ rest }) => rest), shoulders]
+    const bones = SIDES.flatMap((side) => {
+      const hand = this.fingers[side]
+      return hand
+        ? FINGERS.flatMap((name) => hand[name].slice(0, 3).map((bone, k) => part(bone, hand[name][k + 1].rest)))
+        : []
+    })
+    this.shape = measure(
+      rig,
+      frame,
+      {
+        trunk: [hips, ...trunk].map((bone, k) => part(bone, k ? ends[k - 1] : trunk[0].rest)),
+        head: [part(head, head.rest)],
+        thighs: limbs(legs, 0),
+        upperArms: limbs(arms, 0),
+        forearms: limbs(arms, 1),
+        fingers: bones,
+      },
+      this.size,
+    )
+  }
+
+  /** where an eye is from the joint of the head, the head upright */
+  private eyed(side: Side) {
+    const { middle, round } = this.shape.head
+    return new Vector3(SIGN[side] * EYE.aside, EYE.up, EYE.ahead).multiplyScalar(round).add(middle)
+  }
+
+  /** where an eye is, as he was posed last, in the frame of the body */
+  eye(side: Side) {
+    return this.eyed(side).applyQuaternion(this.head.turned).add(this.head.place)
+  }
+
+  /**
+   * how the head is to be turned against the trunk, as he was posed last, to look a `way` with an eye on the line
+   * along it `through` a place: turned to look that way, level across, and then the least that brings the eye onto the
+   * line, or nearest it
+   */
+  sighting(side: Side, through: Vector3, way: Vector3) {
+    const looks = new Quaternion().setFromEuler(new Euler(-Math.asin(way.y), Math.atan2(way.x, way.z), 0, 'YXZ'))
+    const eye = this.eyed(side).applyQuaternion(looks)
+    // (the point of the line as far from the joint of the head as the eye is, on the eye's side of the nearest)
+    const square = through.clone().sub(this.head.place)
+    square.addScaledVector(way, -square.dot(way))
+    const reach = Math.sqrt(Math.max(0, eye.lengthSq() - square.lengthSq()))
+    const onto = square.clone().addScaledVector(way, eye.clone().sub(square).dot(way) >= 0 ? reach : -reach)
+    const head = new Quaternion().setFromUnitVectors(eye.normalize(), onto.normalize()).multiply(looks)
+    head.premultiply(spun.copy(this.trunk[this.trunk.length - 1].turned).invert())
+    return new Vector3().setFromEuler(new Euler().setFromQuaternion(head))
+  }
+
+  /** the bands of the trunk as a shoulder has them, upright */
+  beside(side: Side): Beside[] {
+    const shoulder = this.arms[side][0].rest
+    return this.shape.trunk.map((band, k) => {
+      const { x, y, z } = [this.hips, ...this.trunk][k].rest.clone().sub(shoulder)
+      return { ...band, low: band.low + y, high: band.high + y, x, z }
+    })
   }
 
   /** of the fingers of a hand that has them: where the knuckle is from the wrist, and where each bone ends from where it starts, the hand as it rests against a forearm that hangs straight down */
@@ -260,39 +283,70 @@ export class Bones {
     return { hangs, large }
   }
 
-  /** where a shoulder is, the hips at a place, he `facing` a way there (rad about y), and against that the pelvis turned and listing and the trunk turned so */
-  shoulder(side: Side, hips: Vector3, facing: number, turn: number, list: number, trunk: Quaternion, to: Vector3) {
-    at.copy(this.hips.at)
-      .add(this.spine.at)
-      .applyQuaternion(pelvis(turn, list, trunk, turned))
-    to.copy(hips).add(at.applyAxisAngle(UP, facing))
-    return to.add(at.copy(this.arms[side][0].at).applyQuaternion(trunk).applyAxisAngle(UP, facing))
+  /**
+   * where a shoulder is, the hips at a place, he `facing` a way there (rad about y), and against that the pelvis turned
+   * and listing, the trunk turned so up to where the arms hang from it, and that `lifted` with his breath (m)
+   */
+  shoulder(
+    side: Side,
+    hips: Vector3,
+    facing: number,
+    turn: number,
+    list: number,
+    trunk: Quaternion,
+    lifted: number,
+    to: Vector3,
+  ) {
+    tilt(turn, list, euler.setFromQuaternion(trunk).x, pelvis)
+    at.copy(this.hips.at).applyQuaternion(pelvis)
+    spun.copy(pelvis)
+    this.trunk.forEach((bone, k) => {
+      const last = k === this.trunk.length - 1
+      at.add(
+        along
+          .copy(bone.at)
+          .multiplyScalar(last ? 1 + lifted / bone.at.length() : 1)
+          .applyQuaternion(spun),
+      )
+      spun.slerpQuaternions(pelvis, trunk, this.shares[k])
+    })
+    at.add(along.copy(this.arms[side][0].at).applyQuaternion(trunk))
+    return to.copy(hips).add(at.applyAxisAngle(UP, facing))
   }
 
   /**
    * Turns the bones to where the hips and the joints are `seconds` on, going as they go now. The hips are at a place in
    * the scene, he `facing` a way there and turning round as he `spins`, and each leg faces as its foot points, its
-   * `toes` (rad about y).
+   * `toes` (rad about y); the top of the trunk is `lifted` with his breath (m).
    */
   pose(
     hips: State &
-      Record<'turn' | 'turning' | 'list' | 'listing' | 'facing' | 'spins', number> & { toes: Record<Side, number> },
+      Record<'turn' | 'turning' | 'list' | 'listing' | 'facing' | 'spins' | 'lifted', number> & {
+        toes: Record<Side, number>
+      },
     joints: Joints,
     seconds: number,
   ) {
     const on = ({ value, velocity }: State) => euler.setFromVector3(at.copy(value).addScaledVector(velocity, seconds))
     const fold = (by: State) => folded.setFromEuler(euler.set(on(by).x, 0, 0))
-    trunk.setFromEuler(on(joints.trunk))
-    pelvis(hips.turn + hips.turning * seconds, hips.list + hips.listing * seconds, trunk, turned)
+    const lean = on(joints.trunk).x
+    trunk.setFromEuler(euler)
+    tilt(hips.turn + hips.turning * seconds, hips.list + hips.listing * seconds, lean, pelvis)
     round.setFromAxisAngle(UP, hips.facing + hips.spins * seconds)
-    turned.premultiply(round)
+    pelvis.premultiply(round)
     trunk.premultiply(round)
     const { place, bone } = this.hips
-    place.copy(this.hips.at).applyQuaternion(turned).add(at.copy(hips.value).addScaledVector(hips.velocity, seconds))
-    this.hips.turn(turned)
+    place.copy(this.hips.at).applyQuaternion(pelvis).add(at.copy(hips.value).addScaledVector(hips.velocity, seconds))
+    this.hips.turn(pelvis)
     bone.position.copy(place).applyMatrix4(this.into)
-    this.spine.turn(trunk)
-    this.head.turn(turned.setFromEuler(on(joints.head)).premultiply(trunk))
+    // the trunk's turn is shared up it, and the head's down the neck
+    const last = this.trunk.length - 1
+    this.trunk.forEach((bone, k) =>
+      bone.turn(spun.slerpQuaternions(pelvis, trunk, this.shares[k]), k === last ? hips.lifted : undefined),
+    )
+    turned.setFromEuler(on(joints.head)).premultiply(trunk)
+    this.neck?.turn(spun.slerpQuaternions(trunk, turned, this.bows))
+    this.head.turn(turned)
     for (const side of SIDES) {
       const [thigh, shin, foot] = this.legs[side]
       thigh.turn(
@@ -307,6 +361,35 @@ export class Bones {
       fore.turn(turned.multiply(fold(joints.arms[side].second)).multiply(folded.setFromEuler(euler.set(0, twist, 0))))
       hand.turn(turned.multiply(folded.setFromEuler(euler.set(aside, 0, bent))))
     }
+  }
+
+  /**
+   * How far a place is inside him, as he was posed last: in the trunk, band by band as each goes with its bone, the
+   * head round its middle, or a thigh from its hip to its knee (m), below 0 outside. `line` is set to the line in him
+   * it is deepest in from: up through the band's joint, the head's middle or the thigh.
+   */
+  depth(place: Vector3, line: Line3) {
+    let deepest = -Infinity
+    const found = (by: number, a: Vector3, b: Vector3) => {
+      if (by <= deepest) return
+      deepest = by
+      line.set(a, b)
+    }
+    const { trunk, head } = this.shape
+    trunk.forEach((band, k) => {
+      const { place: joint, turned } = [this.hips, ...this.trunk][k]
+      const from = at.copy(place).sub(joint).applyQuaternion(spun.copy(turned).invert())
+      if (from.y < band.low || from.y > band.high) return
+      found(deep(band, from.x, from.z), joint, along.copy(UP).applyQuaternion(turned).add(joint))
+    })
+    const middle = at.copy(head.middle).applyQuaternion(this.head.turned).add(this.head.place)
+    found(head.round - place.distanceTo(middle), middle, middle)
+    for (const side of SIDES) {
+      const [hip, knee] = [this.legs[side][0].place, this.legs[side][1].place]
+      const off = place.distanceTo(thigh.set(hip, knee).closestPointToPoint(place, true, along))
+      found(this.shape.thigh - off, hip, knee)
+    }
+    return deepest
   }
 
   /** turns the bones of the fingers to how they are spread and bent, on hands turned as they were last */

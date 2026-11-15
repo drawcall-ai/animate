@@ -92,35 +92,60 @@ test('a fingertip pinch leaves the palm clear, the thumb level with the index', 
   expect(off.addScaledVector(contacts.index.normal, -off.dot(contacts.index.normal)).length()).toBeLessThan(0.02)
 })
 
-test('a key gripped by its bow from behind lies along the index, away from the wrist, pressed against its side', () => {
-  const hand = right()
-  // the bow round the origin in x-y, 3 mm thick, the blade going off down -y
-  const key = thing(
-    [new CylinderGeometry(0.0125, 0.0125, 0.003, 32).rotateX(Math.PI / 2)],
-    [new BoxGeometry(0.01, 0.03, 0.003), V(0, -0.0275, 0)],
-  )
-  const held = grip(hand, key, { at: V(0, 0, 0), from: V(0, 1, 0), using: ['thumb', 'index'], start: fist })
-  const [knuckle, , end] = rods(hand, key, held, 'index')
-  // the palm's rod from the wrist to the middle knuckle: the forearm's line
-  const forearm = rods(hand, key, held, 'palm')[1]
-  const off = (a: Vector3, b: Vector3) =>
-    (a
-      .clone()
-      .sub(b)
-      .angleTo(V(0, -1, 0)) *
-      180) /
-    Math.PI
-  expect(off(end.b, knuckle.a)).toBeLessThan(25)
-  expect(off(forearm.b, forearm.a)).toBeLessThan(35)
+/** a pinch's index as the grip holds it: its bends, whether its contact lies on its pad, how far the thumb's lands from
+ * it along the target's face, and the angle at the grip between the target's long end and the way to the wrist */
+function pinched(hand: Hand, target: Group, held: Grip, long: Vector3) {
+  const last = (pose: Grip['pose']) => rods(hand, target, { ...held, pose }, 'index')[2]
+  const { a, b } = last(held.pose)
+  // the pad faces the way the tip goes as the last joint folds on
+  const [knuckle, middle, end] = held.pose.index.bend
+  const folded = last({ ...held.pose, index: { ...held.pose.index, bend: [knuckle, middle, end + 1e-3] } })
+  const along = b.clone().sub(a).normalize()
+  const pad = folded.b.clone().sub(b).projectOnPlane(along).normalize()
   const { thumb, index } = held.contacts
-  expect(
-    thumb.at
-      .clone()
-      .sub(index.at)
-      .projectOnPlane(V(0, 0, 1))
-      .length(),
-  ).toBeLessThan(0.003)
-})
+  const share = index.at.clone().sub(a).dot(along) / a.distanceTo(b)
+  const off = index.at.clone().sub(a).projectOnPlane(along)
+  const wrist = target.worldToLocal(hand.bone.getWorldPosition(new Vector3()))
+  const between = thumb.at.clone().add(index.at).multiplyScalar(0.5)
+  return {
+    bends: held.pose.index.bend,
+    onPad: share > 0 && share < 1 && off.angleTo(pad) < Math.PI / 4,
+    apart: thumb.at.clone().sub(index.at).projectOnPlane(index.normal).length(),
+    away: long.angleTo(wrist.sub(between)),
+  }
+}
+
+for (const [name, make, at, from, long] of [
+  // the bow round the origin in x-y, 3 mm thick, the blade going off down -y
+  [
+    'a key by its bow',
+    () =>
+      thing(
+        [new CylinderGeometry(0.0125, 0.0125, 0.003, 32).rotateX(Math.PI / 2)],
+        [new BoxGeometry(0.01, 0.03, 0.003), V(0, -0.0275, 0)],
+      ),
+    V(0, 0, 0),
+    V(0, 1, 0),
+    V(0, -1, 0),
+  ],
+  [
+    'a card by its near edge',
+    () => thing([new BoxGeometry(0.0856, 0.0008, 0.054)]),
+    V(0.0328, 0, 0),
+    V(1, 0, 0),
+    V(-1, 0, 0),
+  ],
+] as const)
+  test(`${name}, pinched, lies on the pad of a curled index, the thumb across it, its far end away from the wrist`, () => {
+    const [hand, target] = [right(), make()]
+    const held = grip(hand, target, { at, from, using: ['thumb', 'index'], start: fist })
+    const { bends, onPad, apart, away } = pinched(hand, target, held, long)
+    // the knuckle, the middle and the last joint all bent, as in an O
+    for (const [k, least] of [15, 35, 15].entries()) expect(bends[k]).toBeGreaterThan((least * Math.PI) / 180)
+    expect(onPad).toBe(true)
+    expect(apart).toBeLessThan(0.003)
+    expect(away).toBeGreaterThan(Math.PI / 2)
+  })
 
 test('a tennis ball held up from below sits in the fingertips, the thumb across from them and the palm clear', () => {
   const [hand, ball] = [right(), thing([new SphereGeometry(0.033, 32, 20)])]

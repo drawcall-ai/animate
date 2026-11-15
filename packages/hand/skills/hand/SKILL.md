@@ -29,15 +29,14 @@ grip(hand, target, { at, from, using, start })
    - Without the palm: the point the thumb and fingers hold between them, inside the target; a lone finger's point
      is on the surface, where its tip arrives.
 3. **`from`**, in the target's frame: the side the hand comes from. With the palm taking part the palm faces the
-   target from there. Without it the hand is behind the thing, its fingers pointing the way it comes, along −`from`.
-   A key held by its bow, the blade along −y: `at` the bow's middle, `from: (0, 1, 0)`, `using: ['thumb', 'index']`;
-   the hand is behind the bow, the index running the way the blade points, the blade going on past its tip.
-   - A pen: from behind the nib, `from` toward the long end, which lies back over the web, the nib ahead.
+   target from there. Without it the hand is behind the thing, its fingertips leading, and what it holds goes on away
+   from the hand, never back over it. A key held by its bow, the blade along −y: `at` the bow's middle,
+   `from: (0, 1, 0)`, `using: ['thumb', 'index']`; the hand is behind the bow, the index curled in and its pad on one
+   face, the thumb's tip on the other, the blade going on away from the hand.
+   - A pen: from its side, the barrel going out between the thumb and the index.
    - A card off a table: from its near edge, `from` out past that edge.
    - A ball held up: from below, `from: (0, −1, 0)`, in the fingertips.
    - A button: from the side it faces, `using: ['index']`.
-
-   A flat thing may be pressed by the thumb against the side of the index, as the key is.
 
 4. **`using`**: what takes part, the palm and fingers, all by default.
    - All: a power grip — handles, bottles, a bar, a board's edge.
