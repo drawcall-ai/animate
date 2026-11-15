@@ -5,6 +5,8 @@ import { Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, Vector3 } fr
 /** how large a ball is, and how heavy (m, kg) */
 export const RADIUS = 0.12
 const MASS = 0.62
+/** how fast its spin dies away, which brings it to rest rolling on the floor, its flight untouched (1/s) */
+const ROLLING = 1
 /** how much of its speed it keeps off the floor */
 const BOUNCE = 0.85
 const GRAVITY = 9.81
@@ -60,6 +62,7 @@ export class Ball {
   /** it is let go where it is, moving so: a body of its own in the world */
   release(velocity: Vector3) {
     const solid = new RigidBody({ mass: MASS, velocity: { linear: velocity.toArray() }, material: { restitution: BOUNCE } })
+    solid.setAngularDamping(ROLLING)
     solid.position.copy(this.place)
     solid.add(this.mesh)
     this.mesh.position.set(0, 0, 0)
@@ -90,8 +93,8 @@ export class Ball {
     return { time: since + seconds, ...flown(from, velocity, seconds) }
   }
 
-  /** it is taken where it is, by a grip: no body of its own, nor bouncing */
-  take(held: Grip) {
+  /** it is taken where it is, by a grip if that is said yet: no body of its own, nor bouncing */
+  take(held?: Grip) {
     this.scene.attach(this.mesh)
     this.solid?.removeFromParent()
     this.solid = this.bounce = undefined

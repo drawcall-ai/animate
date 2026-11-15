@@ -220,6 +220,28 @@ test('a big ball lies on the palm with the fingers and thumb on it, none sunk in
   for (const c of Object.values(contacts)) expect(Math.abs(c.gap)).toBeLessThan(0.003)
 })
 
+test('on a ball the fingers go the way they are said to point, wherever the ball is from the shoulder', () => {
+  const hand = right()
+  const ball = thing([new SphereGeometry(0.12, 24, 16)])
+  const statement = (pointing: Vector3) => ({
+    at: V(-0.12, 0, 0),
+    from: V(-1, 0, 0),
+    pointing,
+    using: ['palm', 'middle', 'ring', 'little'] as const,
+  })
+  const way = (held: Grip) => {
+    const [knuckle, , last] = rods(hand, ball, held, 'middle')
+    return last.b.clone().sub(knuckle.a)
+  }
+  const up = grip(hand, ball, statement(V(0, 1, 0)))
+  expect(way(up).y).toBeGreaterThan(0.05)
+  expect(way(grip(hand, ball, statement(V(0, 0, 1)))).z).toBeGreaterThan(0.05)
+  // (the ball far off below and ahead of the shoulder, the grip is the same)
+  ball.position.set(1, -1, 2)
+  ball.updateMatrixWorld(true)
+  expect(grip(hand, ball, statement(V(0, 1, 0))).quaternion.angleTo(up.quaternion)).toBeLessThan(1e-6)
+})
+
 // the barrel along +z, up +y; the palm on the grip's back strap from behind and the gun's right, the index on the
 // trigger's rear face
 const gun = () => {

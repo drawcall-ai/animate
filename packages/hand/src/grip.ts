@@ -8,8 +8,17 @@ import { apart, bisect, type Contact, samples, Touch } from './touch'
 export type Grip = { target: Object3D; position: Vector3; quaternion: Quaternion; pose: Pose; contacts: Contacts }
 type Contacts = Record<Element, Contact>
 
-/** what a grip says: where on the target, the side the hand comes from, what takes part, and how the rest is held */
-export type Statement = { at: Vector3; from?: Vector3; using?: readonly Element[]; start?: Pose | Grip }
+/**
+ * what a grip says: where on the target, the side the hand comes from, on a round target the way the fingers go, what
+ * takes part, and how the rest is held
+ */
+export type Statement = {
+  at: Vector3
+  from?: Vector3
+  pointing?: Vector3
+  using?: readonly Element[]
+  start?: Pose | Grip
+}
 
 /** how far off level with the fingers' pads the thumb's may land and squeeze, not shear: skin rolling, about 3 mm */
 const PRESS = 0.3
@@ -37,16 +46,21 @@ const preferred = ([a, b]: number[][]) => {
 }
 
 /** Finds how a hand grips a target with the elements `using` (all by default), coming from `from`, held at `at`, both
- * in the target's frame. What is left out keeps its part of `start`: a pose, or an earlier grip of the same target,
- * whose placement is kept. Where the hand cannot hold as stated it gives the nearest it can; it throws only for a
+ * in the target's frame. On a target as wide every way across the approach the fingers go on `pointing` (in its frame)
+ * as far as the approach lets them, or unsaid, on away from the shoulder as the arm comes to it now. What is left out
+ * keeps its part of `start`: a pose, or an earlier grip of the same target, whose placement is kept. Where the hand cannot hold as stated it gives the nearest it can; it throws only for a
  * statement that says nothing to hold by. */
-export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS, start = relaxed }: Statement): Grip {
+export function grip(
+  hand: Hand,
+  target: Object3D,
+  { at, from, pointing: aimed, using = ELEMENTS, start = relaxed }: Statement,
+): Grip {
   const earlier = 'target' in start ? start : undefined
   if (!using.length) throw new Error('a grip needs the palm or a finger to take part')
   if (earlier && earlier.target !== target)
     throw new Error(`the grip started from holds ${earlier.target.name || 'another target'}: start from this one's`)
-  if (earlier && (from || using.includes('palm')))
-    throw new Error('a grip composed onto another keeps its placement: leave out `from` and the palm')
+  if (earlier && (from || aimed || using.includes('palm')))
+    throw new Error('a grip composed onto another keeps its placement: leave out `from`, `pointing` and the palm')
   const held: Pose = { ...('target' in start ? start.pose : start) }
   check(held)
   target.updateMatrixWorld(true)
@@ -206,10 +220,15 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
     const [c, s] = [w * Math.cos(a), w * Math.sin(a)]
     ;[xx, xy, yy] = [xx + c * c, xy + c * s, yy + s * s]
   }
-  // a target as wide every way across the approach has no long way: the hand lies on it as the arm comes to it, the
-  // fingers going on away from the shoulder, unless the arm comes along the approach itself
+  // a target as wide every way across the approach has no long way: the fingers go on the way they are said to point,
+  // or the hand lies on it as the arm comes to it, the fingers going on away from the shoulder; unless that is along
+  // the approach itself
   const shoulder = hand.bone.parent?.parent
-  const out = shoulder ? point.clone().sub(shoulder.getWorldPosition(new Vector3())) : new Vector3()
+  const out = aimed
+    ? aimed.clone().transformDirection(target.matrixWorld)
+    : shoulder
+      ? point.clone().sub(shoulder.getWorldPosition(new Vector3()))
+      : new Vector3()
   const reaching = out.clone().projectOnPlane(toward)
   const onward =
     !pinch && Math.hypot(xx - yy, 2 * xy) < ROUND * (xx + yy) && reaching.length() > out.length() / 2

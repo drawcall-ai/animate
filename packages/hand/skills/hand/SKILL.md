@@ -49,8 +49,16 @@ solver does. The hand rolls by itself about `from`: without the palm the line fr
 target's thin direction, so the pads land on its two broad faces; with it a long thing lies along the palm from the
 heel to the index knuckle, and the
 target's bulk (a racket's head, a mug's body) goes out on the thumb's side. Where there is no bulk to one side, as
-round the middle of a rod, a ball or a plate, either way round holds; the thumb then goes to the target's +y side,
+round the middle of a rod or a plate, either way round holds; the thumb then goes to the target's +y side,
 else +z, else +x. To have it the other way, state `from` and `at` on the target turned over, or give it a bulk.
+
+A target as wide every way across `from`, as a ball from any side or a rod from its end, has no long way to lie along:
+the fingers go on away from the shoulder, as the arm comes to it from where the shoulder and the target are **when
+`grip` is called**. So make such a grip when and where the hand goes to take the thing (a ball off the floor: the
+fingers down past it), not ahead of time with the body or the thing elsewhere. Where the hand is to sit otherwise than
+the arm comes to it now, as on a ball held before the chest or shot (the fingers up), say the way the fingers go with
+`pointing`, in the target's frame: the grip is then the same wherever he stands. The ball keeps its grip as it is
+carried, so a hand that is to sit otherwise further on takes it again there by another grip.
 
 Closing is enclosing: each joint turns in until its bone meets the target. The fingers close first, each straight
 from its knuckle and spread only as far as it must to reach the target, and wrap it joint by joint. The thumb closes
@@ -92,7 +100,7 @@ animation poses it.
 
 A grip never fails for the target's size or shape: where the hand cannot close as asked it gives the nearest grip,
 nothing sunk in, and `contacts` say how far each element is off. It throws only for a statement it cannot read: a
-target without a mesh, no or a zero `from`, nothing taking part, or a composed grip of another target or with `from`.
+target without a mesh, no or a zero `from`, nothing taking part, or a composed grip of another target or with `from` or `pointing`.
 
 ## Limits
 
