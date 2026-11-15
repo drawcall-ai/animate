@@ -1,23 +1,29 @@
-import { Intent, legend } from '@drawcall/debug'
+import { Grips, Intent, legend, shown } from '@drawcall/debug'
 import type { Object3D } from 'three'
 import { touching } from './touch'
 
 /**
- * The view of what the bodies in a scene mean to do, drawn over it with its legend: shown from the start with `?debug`
- * in the address, and switched on and off by the I key, or played by fingers, a button at the top.
+ * The views of what the bodies in a scene mean to do, with its legend, and of how the hands hold what they hold: shown
+ * from the start with `?debug` in the address (`?debug=hand`: the hands' alone), and switched on and off by the I key,
+ * or played by fingers, a button at the top.
  */
 export function intent(scene: Object3D) {
-  const view = new Intent(scene)
-  const key = legend()
+  const [view, hands, key] = [new Intent(scene), new Grips(scene), legend()]
+  // (the layers `?debug=…` names; the I key shows all of them where none was named)
+  const asked = shown(location.search)
+  const layers = asked.size ? asked : shown('?debug')
+  let showing = false
   const show = (on: boolean) => {
-    view.visible = on
-    key.hidden = !on
+    showing = on
+    hands.visible = on && layers.has('hand')
+    view.visible = on && (layers.has('plan') || layers.has('gait') || layers.has('body'))
+    key.hidden = !view.visible
     if (button) button.style.background = on ? 'rgb(255 225 77 / 70%)' : 'rgb(0 0 0 / 50%)'
   }
-  scene.add(view)
+  scene.add(view, hands)
   document.body.append(key)
   addEventListener('keydown', (event) => {
-    if (event.code === 'KeyI' && !event.repeat) show(!view.visible)
+    if (event.code === 'KeyI' && !event.repeat) show(!showing)
   })
   const button = touching ? document.createElement('button') : undefined
   if (button) {
@@ -38,9 +44,9 @@ export function intent(scene: Object3D) {
     })
     button.addEventListener('pointerdown', (event) => {
       event.preventDefault()
-      show(!view.visible)
+      show(!showing)
     })
     document.body.append(button)
   }
-  show(new URLSearchParams(location.search).has('debug'))
+  show(asked.size > 0)
 }

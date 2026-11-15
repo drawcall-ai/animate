@@ -7,7 +7,7 @@ type.
 examples ──▶ @drawcall/animate ──▶ @drawcall/locomotion ──▶ @drawcall/limbs ──▶ three
    │                 └──────────────────────────────────────────▲
    ├───────▶ @drawcall/hand ──▶ three        (hand and animate never import each other)
-   └───────▶ @drawcall/debug ──▶ @drawcall/animate, three   (a leaf: nothing imports it but pages)
+   └───────▶ @drawcall/debug ──▶ @drawcall/animate, @drawcall/hand, three   (a leaf: nothing imports it but pages)
 ```
 
 | package | one responsibility | lines |
@@ -16,7 +16,7 @@ examples ──▶ @drawcall/animate ──▶ @drawcall/locomotion ──▶ @d
 | `@drawcall/locomotion` (`packages/locomotion`) | The hips and the feet under them: which foot steps where and when, the pelvis over the feet, and the free trunk and arms reacting, as a story or the player has him go. | 2,950 |
 | `@drawcall/animate` (`packages/animate`) | Brings the two together as the one `Body` an author imports, steps it on one clock, and holds the skill. | 700 |
 | `@drawcall/hand` (`packages/hand`) | Finger poses, and how a hand grips a mesh. | |
-| `@drawcall/debug` (`packages/debug`) | Draws what the bodies in a scene mean to do over it, beside what they do (`Intent`, an `Object3D`, and its `legend()`), from `Body.intent()` alone. | 520 |
+| `@drawcall/debug` (`packages/debug`) | One view for each layer, each an `Object3D` to add to the scene: what the bodies in it mean to do, beside what they do (`Intent` and its `legend()`, from `Body.intent()` alone), and why each grip came out as it did (`Grips`, from `Body.bound` and the `Grip` data of `@drawcall/hand`: what was asked, each element's contact, how far from holding). | 660 |
 
 ## What each gives the layer above
 
@@ -49,7 +49,7 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
 `Body.intent()` tells what he means to do as plain data (`Intent`: each end's `Aim` from `Planner.aim()` in limbs,
 the hips and footfalls `foresee`n by locomotion on a copy of `Mover`, and where each held thing is meant to be),
 told only when asked and changing nothing of him; `Body.of(rig)` finds the body made for a rig. `@drawcall/debug`
-draws only that.
+draws only that, and the grips.
 
 ## Inside limbs
 

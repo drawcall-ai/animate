@@ -17,10 +17,9 @@ const CLOSE = 4
 const KEYS = THINGS.map((_, i) => String(i + 1))
 
 let shown = 0
-let swap = () => {}
 const show = (at: number) => {
   shown = at
-  swap()
+  document.getElementById('again')?.click()
 }
 addEventListener('keydown', (event) => {
   const at = KEYS.indexOf(event.key)
@@ -38,22 +37,17 @@ run({
   begin() {
     const man = mannequin()
     const hand = new Hand(man, 'right') // at rest, before anything moves
-    // each thing is gripped where it stands, then carried in the hand
-    const things = THINGS.map((held) => {
-      const object = held.make()
-      return { object, grip: held.by(hand, object) }
-    })
+    // the thing is gripped where it stands, then carried in the hand
+    const object = THINGS[shown].make()
+    const grip = THINGS[shown].by(hand, object)
     const view = new Group().add(man)
     view.scale.setScalar(CLOSE)
     view.updateMatrixWorld(true)
-    view.position.set(0, 1, 0.6).sub(hand.bone.getWorldPosition(new Vector3()))
-    swap = () => {
-      for (const { object } of things) object.removeFromParent()
-      const { object, grip } = things[shown]
-      hand.bone.add(object)
-      hold(hand, object, grip)
-    }
-    swap()
+    hand.bone.add(object)
+    hold(hand, object, grip)
+    // (the point the grip is about, put where the view looks)
+    const about = object.localToWorld(grip.asked[0].at.clone())
+    view.position.set(0, 1, 0.6).sub(about)
     return view
   },
   update() {},

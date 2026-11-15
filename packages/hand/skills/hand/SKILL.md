@@ -94,6 +94,12 @@ A grip never fails for the target's size or shape: where the hand cannot close a
 nothing sunk in, and `contacts` say how far each element is off. It throws only for a statement it cannot read: a
 target without a mesh, no or a zero `from`, nothing taking part, or a composed grip of another target or with `from`.
 
+## Seeing why a grip came out so
+
+A `Grip` also carries what it was asked (`asked`), the target's long way (`roll`), how far it is from holding (`fault`,
+0 when it holds) and each element's `contacts`. `@drawcall/debug`'s `Grips` draws them over the thing: add `?debug=hand`
+to a page of the examples, or press I.
+
 ## Limits
 
 - A ball bigger than the hand spans is not held across: the palm and fingers lie on it and the thumb rests on it

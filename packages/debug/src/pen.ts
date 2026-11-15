@@ -5,6 +5,7 @@ import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js
 
 /** how wide a line is drawn and how large a dot (px) */
 const WIDE = { line: 2.5, dot: 9 }
+const [UP, RIGHT] = [new Vector3(0, 1, 0), new Vector3(1, 0, 0)]
 /** drawn over everything else in the scene */
 const OVER = 1000
 
@@ -94,8 +95,9 @@ export class Pen extends Group {
   arrow(from: Vector3, way: Vector3, long: number, color: Color) {
     const along = way.clone().normalize()
     const tip = from.clone().addScaledVector(along, long)
-    const back = along.clone().multiplyScalar(-0.12)
-    const aside = new Vector3(-along.z, 0, along.x).multiplyScalar(0.06)
+    const head = Math.min(0.12, long / 4)
+    const back = along.clone().multiplyScalar(-head)
+    const aside = new Vector3().crossVectors(along, Math.abs(along.y) < 0.9 ? UP : RIGHT).setLength(head / 2)
     this.line(from, tip, color)
     this.line(tip, tip.clone().add(back).add(aside), color)
     this.line(tip, tip.clone().add(back).sub(aside), color)

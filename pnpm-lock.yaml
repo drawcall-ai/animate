@@ -556,6 +556,9 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../hand
       '@drawcall/plan':
         specifier: workspace:*
         version: link:../plan

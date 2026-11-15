@@ -40,11 +40,13 @@ run({
     const target = thing.make()
     hand.bone.add(target)
     man.updateMatrixWorld(true)
-    hold(hand, target, thing.grip(hand, target))
-    // the hand, put where the view looks
+    const held = thing.grip(hand, target)
+    hold(hand, target, held)
+    // the point the grip is about, put where the view looks
+    const wrist = target.localToWorld(held.asked[0].at.clone()).multiplyScalar(ENLARGE)
     const view = new Group().add(man)
     view.scale.setScalar(ENLARGE)
-    view.position.set(0, 1, 0.6).sub(hand.bone.getWorldPosition(new Vector3()).multiplyScalar(ENLARGE))
+    view.position.set(0, 1, 0.6).sub(wrist)
     return view
   },
   update() {},

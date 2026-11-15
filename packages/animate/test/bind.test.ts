@@ -52,7 +52,7 @@ test('a ball bound by a point is sent, not the hand: it eases in from where it w
       // (where it was taken, it does not jump)
       jump = 0
       yield* body.until(body.time + 0.5)
-      expect(body.bound).toEqual([{ thing: mesh, hands: ['right'], turning: false, outside: false }])
+      expect(body.bound).toMatchObject([{ thing: mesh, hands: ['right'], turning: false, outside: false }])
       yield* held.by(body.time + 1, release, { velocity: flying })
       turned = mesh.quaternion.angleTo(own)
       velocity = held.free()
@@ -95,7 +95,7 @@ test('a bar in both hands is sent to point a way: the right hand leads it there 
       carried.on(right, grips.right)
       carried.on(left, grips.left)
       yield* body.until(body.time + 0.5)
-      expect(body.bound).toEqual([{ thing: bar, hands: ['right', 'left'], turning: true, outside: false }])
+      expect(body.bound).toMatchObject([{ thing: bar, hands: ['right', 'left'], turning: true, outside: false }])
       // its right end raised: it points down to his left
       const way = new Vector3(1, -0.5, 0).normalize()
       yield* carried.to({ x: 0, y: 1.1, z: 0.4 }, { pointing: { x: -way.x, y: -way.y, z: 0 }, seconds: 1.2 })
@@ -248,7 +248,7 @@ test('one thing is handed from outside to the body and back, its leading hand co
       const at = place(box)
       yield* body.until(body.time + 1)
       drift = place(box).distanceTo(at)
-      expect(body.bound).toEqual([{ thing: box, hands: ['left'], turning: true, outside: false }])
+      expect(body.bound).toMatchObject([{ thing: box, hands: ['left'], turning: true, outside: false }])
       // he is let stand: the hand stays on it, and it stays where it is on him
       const before = place(box)
       yield* body.stand()

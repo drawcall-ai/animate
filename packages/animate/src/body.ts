@@ -109,7 +109,7 @@ export class Body {
     return thing(object, outside, this.binder)
   }
 
-  /** what is bound to him: each thing, the sides of the hands on it, the leading one first, whether it turns with that hand, and whether it is moved from outside */
+  /** what is bound to him: each thing, the sides of the hands on it, the leading one first, the grips they hold it by, whether it turns with that hand, and whether it is moved from outside */
   get bound() {
     return this.bindings.bound
   }

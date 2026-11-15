@@ -4,9 +4,24 @@ import { type Finger, limits, part, type Pose, relaxed, type Segment, square } f
 import { surface } from './surface'
 import { apart, bisect, type Contact, samples, Touch } from './touch'
 
-/** how a hand holds a target: its place in the hand bone's frame, the pose, and each element's contact, in its frame */
-export type Grip = { target: Object3D; position: Vector3; quaternion: Quaternion; pose: Pose; contacts: Contacts }
+/** how a hand holds a target: its place in the hand bone's frame, the pose, and each element's contact, in its frame.
+ * For a debug view, what was asked and how it came out: each statement's point, side and elements in the target's
+ * frame, the target's long way (`round`: it has none, and the arm chose the roll), how far it is from holding (0:
+ * holds), and a finger's half thickness (m) and the target's world scale, when the hand gripped */
+export type Grip = {
+  target: Object3D
+  position: Vector3
+  quaternion: Quaternion
+  pose: Pose
+  contacts: Contacts
+  asked: Asked[]
+  roll: { long: Vector3; round: boolean }
+  fault: number
+  radius: number
+  scale: number
+}
 type Contacts = Record<Element, Contact>
+type Asked = { at: Vector3; from?: Vector3; using: readonly Element[] }
 
 /** what a grip says: where on the target, the side the hand comes from, what takes part, and how the rest is held */
 export type Statement = { at: Vector3; from?: Vector3; using?: readonly Element[]; start?: Pose | Grip }
@@ -57,6 +72,8 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   const inverse = target.matrixWorld.clone().invert()
   /** a finger's half thickness in the target's frame */
   const thick = radius * inverse.getMaxScaleOnAxis()
+  const asked = [...(earlier?.asked ?? []), { at: at.clone(), from: from?.clone(), using }]
+  const roll = earlier ? { ...earlier.roll } : { long: new Vector3(), round: false }
   /** a point outside the target taken in to the middle of the target's thickness under its nearest point */
   const inside = (p: Vector3) => {
     if (skin.depth(p) <= 0) return p
@@ -165,7 +182,8 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
       const { at, gap, normal } = contacts[e]
       return { at: target.worldToLocal(at.clone()), gap, normal: normal.clone().transformDirection(inverse) }
     }
-    return { grip: { target, position, quaternion, pose, contacts: all(local) }, fault }
+    const scale = 1 / inverse.getMaxScaleOnAxis()
+    return { grip: { target, position, quaternion, pose, contacts: all(local), asked, roll, fault, radius, scale }, fault }
   }
 
   const thumbs = limits('thumb')
@@ -219,6 +237,7 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
   const long = onward
     ? new Vector3().crossVectors(toward, onward)
     : way(pinch ? thinnest + Math.PI / 2 : Math.atan2(2 * xy, xx - yy) / 2)
+  Object.assign(roll, { long: long.clone().transformDirection(inverse), round: !!onward })
   const thin = new Vector3().crossVectors(toward, long)
   const across = width(thin)
   // a pinch's pads land on the faces either side of the point across the thin direction
@@ -336,8 +355,10 @@ export function grip(hand: Hand, target: Object3D, { at, from, using = ELEMENTS,
 }
 
 /** Puts a hand in a grip's pose and the target in it: moving the target if it hangs from the hand, else the hand */
-export function hold(hand: Hand, target: Object3D, { position, quaternion, pose }: Grip) {
+export function hold(hand: Hand, target: Object3D, held: Grip) {
+  const { position, quaternion, pose } = held
   hand.pose(pose)
+  target.userData.grip = held // for a debug view to find
   hand.bone.updateWorldMatrix(true, false)
   target.updateWorldMatrix(true, false)
   const sizes = target.getWorldScale(new Vector3()).divide(hand.bone.getWorldScale(new Vector3()))

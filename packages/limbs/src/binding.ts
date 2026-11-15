@@ -72,13 +72,14 @@ export class Bindings {
     return new Quaternion().setFromAxisAngle(UP, this.facing())
   }
 
-  /** what is bound: each thing, the sides of the hands on it, the leading one first, whether it turns with that, and whether it is moved from outside */
+  /** what is bound: each thing, the sides of the hands on it, the leading one first, the grips they hold it by in the same order, whether it turns with that, and whether it is moved from outside */
   get bound() {
     return [...this.all.values()]
       .filter(({ bonds }) => bonds.length > 0)
       .map(({ thing, bonds, outside }) => ({
         thing,
         hands: bonds.map(({ hand }) => hand.side),
+        grips: bonds.map(({ grip }) => grip),
         turning: !outside && bonds[0].turning,
         outside,
       }))

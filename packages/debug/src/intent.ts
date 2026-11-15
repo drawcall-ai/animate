@@ -24,7 +24,7 @@ const LED = 0.5
 
 const hue = (name: keyof typeof HUES) => new Color(HUES[name])
 /** a colour that warms with how wide a gap is */
-export const warm = (gap: number) => new Color().setHSL(Math.max(0, 1 - gap / GAP.red) / 3, 1, 0.55)
+export const warm = (gap: number, red = GAP.red) => new Color().setHSL(Math.max(0, 1 - gap / red) / 3, 1, 0.55)
 const cm = (gap: number) => `${Math.round(gap * 100)} cm`
 const soon = (seconds: number) => `${seconds.toFixed(2)}s`
 /** a part's name, short: `L hand` */
@@ -59,23 +59,12 @@ export class Intent extends Group {
     super.updateMatrixWorld(force)
   }
 
-  private bodies() {
-    const { shows } = this
-    if (shows instanceof Body) return [shows]
-    const found: Body[] = []
-    shows.traverse((part) => {
-      const body = Body.of(part)
-      if (body) found.push(body)
-    })
-    return found
-  }
-
   private draw() {
-    const bodies = this.bodies()
-    if (bodies.every((body) => this.drawn.get(body) === body.time)) return
+    const found = bodies(this.shows)
+    if (found.every((body) => this.drawn.get(body) === body.time)) return
     this.pen.begin()
     this.labels.begin()
-    for (const body of bodies) {
+    for (const body of found) {
       this.drawn.set(body, body.time)
       const memory = this.memories.get(body) ?? new Memory()
       this.memories.set(body, memory)
@@ -210,6 +199,17 @@ export class Intent extends Group {
     if (due > 0) this.labels.say(there, `${name} ${soon(due)}`, color)
     else this.gap(there, is, `${name} `)
   }
+}
+
+/** the bodies a body, or a scene or a part of it, has: one, or every one made for a rig in it */
+export function bodies(shows: Body | Object3D) {
+  if (shows instanceof Body) return [shows]
+  const found: Body[] = []
+  shows.traverse((part) => {
+    const body = Body.of(part)
+    if (body) found.push(body)
+  })
+  return found
 }
 
 /** the box of the meshes a thing is made of, in its own frame */

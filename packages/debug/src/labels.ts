@@ -54,8 +54,8 @@ export class Labels extends Group {
     this.used = 0
   }
 
-  /** a line of text just right of a place */
-  say(at: Vector3, text: string, color: Color) {
+  /** a line of text just right of a place, or so many lines below it, to list several at one place */
+  say(at: Vector3, text: string, color: Color, row = 0) {
     let label = this.pool[this.used++]
     if (!label) {
       label = new Label()
@@ -63,6 +63,7 @@ export class Labels extends Group {
       this.add(label)
     }
     label.position.copy(at)
+    label.center.y = 0.5 + 1.1 * row
     label.say(text, color)
   }
 
