@@ -36,9 +36,13 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
 - the types `animate` re-exports to authors: `Finger`, `Grip`, `Part`, `Pose`, `Side`, `Size`, `Story`, `Touch`, `Xyz`.
 
 **locomotion → animate**
-- `Mover` (hips and feet), `Ahead` (him looked ahead along), `carrier(mover, ahead)` (the `Carrier` for the planner),
-  `Going` (the movement intention: walk, run, go, face, look, knock, jump, stand) with `Ground`, `Run`, `Walk`, `flat`,
-  `Reactions`, `Stance`, `Stoops`, `held`.
+- `Locomotion`, made from the rig's `Bones` and `Joints`: it owns the hips and feet (`Mover`), the look-ahead
+  (`Ahead`), the free parts' reactions, the legs' stances and the movement intention. animate says where he goes
+  through its `going` (`Going`: walk, run, go, face, look, knock, jump) and `stand(free)`, hands the planner its
+  `carrier`, steps it with `step(dt, feet, looked)` (telling a fault and a wind-up to play), `react(dt, sights)`,
+  `pose(delta, feet)` and `tread(side, foot, delta)`, and reads `hips`, `facing`, `ground`, `stands(side)`, `posed()`
+  and, for the intent, `foresee(seconds)`. With it `Ground`, `Run`, `Walk`, `flat`, and the types `Footfall`,
+  `Foreseen`.
 
 **animate → authors**: `Body` (with `bind` and `bound`), `Thing` (a thing bound to him: `on`, `off`, `to`, `by`,
 `free`), `Held` (going away), `Foot`, `Hand` (its `take` and `letGo` going away), and the types above. `Foot` and
@@ -78,12 +82,10 @@ from outside is never written; every hand on it follows it. `binding` knows an `
    from the eye (`gives.correct` feeding `reactions.sights`), and a resting stock sits in the shoulder's pocket. The
    rifle's conversion needs those as a statement of their own (a hand sent so the sight is on the line, or a
    `Carrier` request), not a solver.
-2. **The step loop reaches into locomotion's workings.** `animate/src/clock.ts` and `body.ts` build `Mover`, `Ahead`,
-   `Reactions`, `Stance` and `Going` one by one and step them field by field (`mover.look`, `mover.local`,
-   `mover.course`, `mover.height`, `mover.advance`, `mover.fault`, `ahead.at`, `ahead.wind.start`, `stance.pose`,
-   `reactions.react`, `held`). That is why locomotion exports its classes rather than one small surface. Fix: one
-   `Locomotion` object owning those, with a `step(dt)` and the hips' pose and the feet as outputs; animate then only
-   orders the step: ends arrive, stories go on, locomotion steps, ends advance, joints advance, bones are posed.
+2. **The step is ordered in two halves.** animate builds one `Locomotion` and orders the step: ends arrive, stories
+   go on, `locomotion.step`, ends advance, joints advance, `locomotion.react`, `locomotion.pose`, bones are posed. The
+   feet ends are passed in where a step needs them, because they are made from locomotion's `Carrier` and so after
+   it. What is left: reactions still come after the joints advance, so locomotion is entered twice a step.
 3. **The planner talks back to locomotion.** Through `Carrier.stoop`, `rise`, `wind`, `take` and `put` the planner
    changes where the hips go (getting down, winding up, the story taking a foot). The direction of imports is right,
    but it is a two-way conversation, not a query; keep any new request on `Carrier`, never a direct import.

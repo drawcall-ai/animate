@@ -1,5 +1,5 @@
 import { Object3D, Quaternion, Vector3 } from 'three'
-import { Ahead, carrier, flat, Going, type Ground, Mover, Reactions, type Run, Stance, Stoops, type Walk } from '@drawcall/locomotion'
+import { flat, type Ground, Locomotion, type Run, type Walk } from '@drawcall/locomotion'
 import { type Band, Bindings, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
 import { Clock, type Workings } from './clock'
 import { type Intent, intent } from './intent'
@@ -36,8 +36,7 @@ export class Body {
   /** how large he is, as the rig is at rest */
   readonly size: Size
   private readonly bones: Bones
-  private readonly mover: Mover
-  private readonly going: Going
+  private readonly locomotion: Locomotion
   private readonly clock: Clock
   /**
    * the hips: where they are and how they move, `to` a place they go at a walk, or to a height alone, which they are
@@ -69,10 +68,8 @@ export class Body {
     const bones = (this.bones = new Bones(rig))
     const size = (this.size = bones.size)
     const turning = joints(bones)
-    const mover = (this.mover = new Mover(size, new Stoops(size, turning.trunk)))
-    const ahead = new Ahead(this, mover, turning, bones)
-    const reactions = new Reactions(mover, turning, ahead)
-    const carried = carrier(mover, ahead)
+    const locomotion = (this.locomotion = new Locomotion(this, bones, turning))
+    const carried = locomotion.carrier
     const { trunk, shoulder: wide } = size
     const pocket = (side: Side) => {
       const [up, inward] = [POCKET.up * trunk, POCKET.inward * wide]
@@ -93,7 +90,7 @@ export class Body {
     const hand = both(
       (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], carried, size, rigged('hand', side)),
     )
-    const bindings = (this.bindings = new Bindings(bones, () => mover.facing))
+    const bindings = (this.bindings = new Bindings(bones, () => locomotion.facing))
     this.foot = foot
     this.hands = hand
     const ends = new Map<Hand, End>()
@@ -108,22 +105,19 @@ export class Body {
       ways: (on) => this.ways(on),
       body: this,
       onHim: (side, place) =>
-        place.clone().applyMatrix4(bones.frame).sub(bones.shouldered(side, new Vector3())).applyAxisAngle(UP, -mover.facing),
+        place.clone().applyMatrix4(bones.frame).sub(bones.shouldered(side, new Vector3())).applyAxisAngle(UP, -locomotion.facing),
     }
     this.hand = both((side) => handOf(hand[side], this.binder))
     for (const side of SIDES) ends.set(this.hand[side], hand[side])
-    const stance = both((side) => new Stance(size, side, turning.legs[side], foot[side], mover.foot[side]))
-    const at = { value: new Vector3(), velocity: new Vector3() }
-    const going = (this.going = new Going(this, size, mover, ahead, turning, { foot, hand }, reactions, at))
+    const { going, hips: at } = locomotion
     this.hips = { ...at, to: (target, way) => going.to(target, way), at: (place) => going.at(place) }
     this.trunk = turning.trunk
     this.head = turning.head
     this.arm = both((side) => turning.arms[side].first)
     this.forearm = both((side) => turning.arms[side].second)
     for (const part of parts(turning)) part.free()
-    const stood = both(() => new Vector3())
-    for (const side of SIDES) foot[side].anchor = stood[side].copy(mover.foot[side].at)
-    const all = { size, bones, mover, joints: turning, ahead, reactions, gives, bindings, going, ends: { foot, hand }, stance, stood, hips: at }
+    for (const side of SIDES) foot[side].anchor = locomotion.stands(side)
+    const all = { size, bones, locomotion, joints: turning, gives, bindings, ends: { foot, hand } }
     this.clock = new Clock((this.workings = all))
     rigs.set(rig, this)
     this.clock.pose(0)
@@ -172,7 +166,7 @@ export class Body {
   /** what turns a way counted as a place `on` him, on a thing or in the scene into the frame of the body */
   private ways(on?: Object3D | Body) {
     const turn = new Quaternion().setFromRotationMatrix(this.bones.frame)
-    if (on === this) return new Quaternion().setFromAxisAngle(UP, this.mover.facing)
+    if (on === this) return new Quaternion().setFromAxisAngle(UP, this.locomotion.facing)
     if (!(on instanceof Object3D)) return turn
     on.updateWorldMatrix(true, false)
     return turn.multiply(on.getWorldQuaternion(new Quaternion()))
@@ -182,8 +176,8 @@ export class Body {
   ground(side: Side, to: Ground) {
     const { x, z } = flat(to)
     const { hip, ankle } = this.size
-    const y = this.mover.origin.y + ankle
-    return new Vector3(SIGN[side] * hip, 0, 0).applyAxisAngle(UP, this.mover.facing).add({ x, y, z })
+    const y = this.locomotion.ground + ankle
+    return new Vector3(SIGN[side] * hip, 0, 0).applyAxisAngle(UP, this.locomotion.facing).add({ x, y, z })
   }
 
   /**
@@ -220,7 +214,7 @@ export class Body {
 
   /** which way he faces along the ground, in the scene: what `face` turns him to */
   get facing() {
-    return new Vector3(0, 0, 1).applyAxisAngle(UP, this.mover.facing)
+    return new Vector3(0, 0, 1).applyAxisAngle(UP, this.locomotion.facing)
   }
 
   /** the body made for a rig, if one was */
@@ -255,12 +249,12 @@ export class Body {
 
   /** the moment the hips come by a place on the ground, going as they are, it on their way: or to rest, where they are to come to rest there; NaN if they never do */
   when(to: Ground) {
-    return this.going.when(to)
+    return this.locomotion.going.when(to)
   }
 
   /** the moment he is highest in the jump he is making, or in the air, is to make next, on the clock of `time`: with none, now */
   highest() {
-    return this.going.highest()
+    return this.locomotion.going.highest()
   }
 
   /**
@@ -270,7 +264,7 @@ export class Body {
    * he is there.
    */
   walk(to: Ground, way: Walk = {}) {
-    return this.going.walk(to, way)
+    return this.locomotion.going.walk(to, way)
   }
 
   /**
@@ -280,7 +274,7 @@ export class Body {
    * returns is over when the hips are over that foot: `when(at)` tells that moment.
    */
   run(run: Run): Story {
-    return this.going.run(run)
+    return this.locomotion.going.run(run)
   }
 
   /**
@@ -290,7 +284,7 @@ export class Body {
    * is making he still makes, and he is not brought to a stand for want of a story.
    */
   go(velocity: { x: number; z: number }) {
-    return this.going.go(velocity)
+    return this.locomotion.going.go(velocity)
   }
 
   /**
@@ -298,7 +292,7 @@ export class Body {
    * at a walk. With none he faces the way he goes again. The story it returns is over when he faces so.
    */
   face(way?: { x: number; z: number }): Story<boolean> {
-    return this.going.face(way)
+    return this.locomotion.going.face(way)
   }
 
   /**
@@ -310,7 +304,7 @@ export class Body {
    * the eye on the side of that shoulder.
    */
   look(place?: Xyz, how: { over?: Xyz; on?: Object3D } = {}) {
-    return this.going.look(place, how)
+    return this.locomotion.going.look(place, how)
   }
 
   /**
@@ -320,7 +314,7 @@ export class Body {
    * two. A rifle's kick at the shoulder is about 0.5 m/s, a shove 1, a blow that has him step 2 and more.
    */
   knock(velocity: Xyz, at?: Xyz) {
-    return this.going.knock(velocity, at)
+    return this.locomotion.going.knock(velocity, at)
   }
 
   /**
@@ -331,7 +325,7 @@ export class Body {
    * over when he has landed.
    */
   jump(top: Xyz): Story<boolean> {
-    return this.going.jump(top)
+    return this.locomotion.going.jump(top)
   }
 
   /**
@@ -341,7 +335,9 @@ export class Body {
    * story it returns is over when he stands.
    */
   stand(): Story<boolean> {
-    const stands = this.going.stand()
+    const stands = this.locomotion.stand(() => {
+      for (const side of SIDES) for (const end of [this.foot[side], this.hands[side]]) end.free()
+    })
     // (the hands on what is bound to him stay on it: what the body moves stays where it is on him)
     this.bindings.rejoin()
     for (const { thing: object, outside } of this.bindings.bound) if (!outside) stay(object, this.binder)

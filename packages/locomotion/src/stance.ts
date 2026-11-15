@@ -55,12 +55,11 @@ export class Stance {
   private readonly eased = new Vector3()
   private posed: 'stood' | 'sent' | 'stepped' = 'stood'
 
-  /** a leg, and the foot at its end as the story has it and as the ground has it */
+  /** a leg, and the foot at its end as the ground has it: the story's end of it is told as it is posed */
   constructor(
     private readonly size: Size,
     private readonly side: Side,
     private readonly leg: Limb,
-    private readonly end: End,
     private readonly footing: Footing,
   ) {}
 
@@ -69,8 +68,8 @@ export class Stance {
    * is: on the ground, or the body's own in a step. It faces as its foot points, and all of it is told as it faces.
    * Tells whether its foot is where the story put it and the hips have gone further from it than its leg reaches
    */
-  pose(hips: Way, delta: number) {
-    const { size, leg, end, footing, side } = this
+  pose(hips: Way, end: End, delta: number) {
+    const { size, leg, footing, side } = this
     const round = -hips.heading - footing.toes
     hips.hip(side, hip).applyAxisAngle(UP, round)
     const anchor = end.anchor && holds.copy(end.anchor).applyAxisAngle(UP, round)
@@ -104,13 +103,13 @@ export class Stance {
    * it in a stride it hangs square to its shin, and where he `falls` toe down for the ground: no further than the
    * ground under it lets its toe or its heel, and as far as an ankle bends.
    */
-  foot(thigh: number, shin: number, falls: boolean, delta: number) {
+  foot(end: End, thigh: number, shin: number, falls: boolean, delta: number) {
     const { ankle, leg, beat } = this.size
-    const high = Math.max(0, this.end.value.y - ankle)
+    const high = Math.max(0, end.value.y - ankle)
     const [toe, heel] = [tipped(ankle, high, SOLE.ball * leg), tipped(ankle, high, SOLE.behind * leg)]
     const hangs =
       this.pitch + ((falls ? Math.min(HEEL, toe) : thigh + shin) - this.pitch) * Math.min(1, (DROOP * delta) / beat)
-    this.pitch = this.end.anchor ? this.heel : clamp(hangs, -heel, toe)
+    this.pitch = end.anchor ? this.heel : clamp(hangs, -heel, toe)
     const [least, most] = RANGE.ankle.x
     return clamp(this.pitch - thigh - shin, -most, -least)
   }

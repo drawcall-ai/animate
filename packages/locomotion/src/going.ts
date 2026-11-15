@@ -1,6 +1,6 @@
 import { type Object3D, Quaternion, Vector3 } from 'three'
 import type { Ahead } from './ahead'
-import { clamp, type End, EXACT, GRAVITY, type Joints, type Side, SIDES, type Size, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
+import { clamp, EXACT, GRAVITY, type Joints, type Side, SIDES, type Size, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
 import { HIGH, PUSH, RIDE, RUN, SLOW, STILL, THERE, TOGETHER, WALK } from './gait'
 import { held } from './heights'
 import type { Mover } from './mover'
@@ -49,7 +49,6 @@ export class Going {
     private readonly mover: Mover,
     private readonly ahead: Ahead,
     private readonly joints: Joints,
-    private readonly ends: Record<'foot' | 'hand', Record<Side, End>>,
     private readonly reactions: Reactions,
     private readonly hips: Readonly<Record<'value' | 'velocity', Vector3>>,
   ) {}
@@ -299,13 +298,12 @@ export class Going {
     )
   }
 
-  stand(): Story<boolean> {
-    const { mover, joints, ends } = this
-    if (mover.jumps) return this.landed()
+  stand(free: () => void): Story<boolean> {
+    const { mover, joints } = this
+    if (mover.jumps) return this.landed(free)
+    free()
     for (const part of [joints.trunk, joints.head]) part.free()
     for (const side of SIDES) {
-      ends.hand[side].free()
-      ends.foot[side].free()
       // (an arm that is swinging out from what its hand was let go from is the body's when it has)
       for (const part of [joints.arms[side].first, joints.arms[side].second]) if (!part.loose) part.free()
     }
@@ -316,12 +314,12 @@ export class Going {
     return this.send(this.stopping(), true)
   }
 
-  private *landed(): Story<boolean> {
+  private *landed(free: () => void): Story<boolean> {
     yield* waits(
       () => true,
       () => !this.mover.jumps,
     )
-    return yield* this.stand()
+    return yield* this.stand(free)
   }
 
   /** the way to rest for hips that are going: where their speed carries them, or standing already, or coming to rest short of that, where he is to */

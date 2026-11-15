@@ -1,5 +1,5 @@
 import { Matrix4, type Object3D, Vector3 } from 'three'
-import { type Foreseen, foresee } from '@drawcall/locomotion'
+import type { Foreseen } from '@drawcall/locomotion'
 import { type Aim, both, type Mark, type Side, UP } from '@drawcall/limbs'
 import type { Workings } from './clock'
 
@@ -23,7 +23,7 @@ export type Intent = {
 }
 
 /** what he means to do, told when asked: nothing of it is kept or changes him */
-export function intent({ bones, ends, mover, hips, size, bindings }: Workings, time: number): Intent {
+export function intent({ bones, ends, locomotion, size, bindings }: Workings, time: number): Intent {
   const scene = bones.frame.clone().invert()
   const out = (place: Vector3) => place.applyMatrix4(scene)
   const marks = <T extends Mark>(list: T[]) => {
@@ -36,7 +36,7 @@ export function intent({ bones, ends, mover, hips, size, bindings }: Workings, t
     const turn = new Matrix4().extractRotation(scene)
     return { sent: marks(sent), path: marks(path), tip: tip.applyMatrix4(turn), at: out(end.value.clone()), held: end.held }
   }
-  const seen = foresee(mover, AHEAD * size.beat)
+  const seen = locomotion.foresee(AHEAD * size.beat)
   const top = seen.top && { asked: seen.top.asked && out(seen.top.asked), comes: seen.top.comes && marks([seen.top.comes])[0] }
   // (the ways he faces and goes, and is led, turned as the scene is from the frame of the body)
   const forward = new Vector3(0, 0, 1).transformDirection(scene)
@@ -72,7 +72,7 @@ export function intent({ bones, ends, mover, hips, size, bindings }: Workings, t
       footfalls: marks(seen.footfalls),
       to: seen.to && out(seen.to),
       top,
-      at: out(hips.value.clone()),
+      at: out(locomotion.hips.value.clone()),
     },
     things: [...things].map(([thing, meant]) => ({ thing, ...meant })),
   }
