@@ -112,7 +112,7 @@ export class Intent extends Group {
     const offset = memory.tip(name, end.tip, end.sent.length > 0)
     const tip = end.at.clone().add(offset)
     pen.dot(tip, color)
-    const path = end.path.map(({ at, time }) => ({ at: at.clone().add(end.tip), time }))
+    const path = end.path
     pen.through(
       path.map(({ at }) => at),
       color,

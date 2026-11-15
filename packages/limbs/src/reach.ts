@@ -50,13 +50,18 @@ const fore = (trunk: Quaternion, first: Xyz, fold: number, to: Quaternion) =>
  */
 export class Reach extends Track {
   /** where what a target is sent with is `seconds` on, from where the end is, as its joints are turning: there, or at a part of the hand */
-  protected tipped({ with: touch }: Target, seconds: number, at: Vector3) {
+  protected tipped(target: Target, seconds: number, at: Vector3) {
     const { first, second, wrist } = this.limb
-    if (!touch || !wrist) return at
     const on = ({ value, velocity }: State) => new Vector3().copy(value).addScaledVector(velocity, seconds)
+    return at.add(this.sits(target, seconds, on(first), on(second).x, wrist ? on(wrist) : REST))
+  }
+
+  /** where what a target is sent with is from the wrist `seconds` from now, the limb turned and folded so and the wrist bent so: none, sent with the wrist */
+  protected sits({ with: touch }: Target, seconds: number, first: Xyz, fold: number, wrist: Xyz) {
+    if (!touch || !this.limb.wrist) return new Vector3()
     this.root(seconds, start, turned)
-    bent(fore(turned, on(first), on(second).x, forearm), on(wrist), bend)
-    return at.add(this.touch(touch, seconds).applyQuaternion(bend))
+    bent(fore(turned, first, fold, forearm), wrist, bend)
+    return this.touch(touch, seconds).applyQuaternion(bend)
   }
 
   /** where a part of the hand is from the wrist `seconds` from now, in the frame of the hand */

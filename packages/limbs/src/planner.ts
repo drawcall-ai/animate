@@ -56,12 +56,15 @@ const rotation = new Euler()
  * how the joints are drawn back before a fast arrival, and how long each then swings: at rest, where a `swing` of so
  * long, speeding up evenly, has them turn as aimed. The limb is turned back as one about its first joint, the way that
  * is turning, and its second joint stretches out freely but folds only for as long as speeds it up at its ease, as the
- * wrist of a hand bends back: a limb swings long, and whips. With none, as aimed.
+ * wrist of a hand bends back: a limb swings long, and whips. With none, as aimed. Each swings for whole steps of his
+ * time, `dt`, so that it sets off from where it is drawn back on the step it is to.
  */
-export function drawn(aimed: Aimed, swing: number, limb: Limb): Record<'first' | 'second', Drawn> & { wrist?: Drawn } {
+export function drawn(aimed: Aimed, given: number, limb: Limb, dt: number): Record<'first' | 'second', Drawn> & { wrist?: Drawn } {
   const { first, second, wrist } = aimed
-  if (!(swing > 0))
-    return { first: { ...first, swing }, second: { ...second, swing }, wrist: wrist && { ...wrist, swing } }
+  const whole = (swing: number) => Math.max(dt, Math.floor(swing / dt + EXACT) * dt)
+  if (!(given > 0))
+    return { first: { ...first, swing: given }, second: { ...second, swing: given }, wrist: wrist && { ...wrist, swing: given } }
+  const swing = whole(given)
   const turn = (at: number) => rotation.setFromVector3(to.copy(first.value).addScaledVector(first.velocity, at))
   const [was, on] = [new Quaternion().setFromEuler(turn(0)), turned.setFromEuler(turn(NUDGE))]
   const about = on.multiply(was.clone().invert())
@@ -74,7 +77,16 @@ export function drawn(aimed: Aimed, swing: number, limb: Limb): Record<'first' |
   value.x -= FULL * Math.round((value.x - first.value.x + (first.velocity.x * swing) / 2) / FULL)
   const eased = (turn: Turn, joint: Goal) => Math.min(swing, turn.velocity.length() / (EASY * joint.strength))
   const back = (turn: Turn, joint: Goal, late: number) => {
-    // (no further than its range, nor than where it is to be turned, at the end of that range already)
+    // (no further than its range, nor than where it is to be turned, at the end of that range already: drawn back less
+    // far, it swings for less long, speeding up as evenly, so that it never swings back past its range on the way)
+    for (const axis of AXES) {
+      const [least, most] = joint.range[axis] ?? [-Infinity, Infinity]
+      const [to, velocity] = [turn.value[axis], turn.velocity[axis]]
+      const room = velocity > 0 ? to - Math.min(least, to) : Math.max(most, to) - to
+      if (velocity !== 0) late = Math.min(late, (2 * room) / Math.abs(velocity))
+    }
+    late = whole(late)
+    // (a step of his time may still carry it a little past)
     const at = (axis: (typeof AXES)[number]) => {
       const [least, most] = joint.range[axis] ?? [-Infinity, Infinity]
       const to = turn.value[axis]
@@ -127,8 +139,9 @@ export class Planner extends Reach {
       limb: this.limb,
       where: (plan, seconds) => this.where(plan, seconds),
       solve: (plan, seconds) => this.solve(plan, seconds),
-      drawn: (aimed, swing) => drawn(aimed, swing, this.limb),
+      drawn: (aimed, swing) => drawn(aimed, swing, this.limb, tick(this.size)),
       root: (seconds, at, turned) => this.root(seconds, at, turned),
+      sits: (plan, seconds, first, fold, wrist) => this.sits(plan, seconds, first, fold, wrist),
       tip: going ? this.tipped(going, 0, new Vector3()) : new Vector3(),
     })
   }
@@ -198,7 +211,7 @@ export class Planner extends Reach {
     const eased = aimed.first.velocity.length() / (EASY * limb.first.strength)
     const most = brief ? Math.min(eased, sway(limb) / 2) : sway(limb) / 2
     let share = 0
-    while (share < 1 && !this.stuck(drawn(aimed, (share + FINE) * most, limb))) share += FINE
+    while (share < 1 && !this.stuck(drawn(aimed, (share + FINE) * most, limb, tick(this.size)))) share += FINE
     // (in less than two steps of his time the joints would draw back and never swing: an arrival so slow has none)
     return share * most < 2 * tick(this.size) ? 0 : share * most
   }
@@ -209,7 +222,7 @@ export class Planner extends Reach {
    */
   protected pushed(aimed: Aimed, seconds: number, swing: number, from: Turning = this.limb) {
     const { limb } = this
-    const back = drawn(aimed, swing, limb)
+    const back = drawn(aimed, swing, limb, tick(this.size))
     const takes = JOINTS.flatMap((joint) => {
       const [part, was, drawn, to] = [limb[joint], from[joint], back[joint], aimed[joint]]
       if (!part || !was || !drawn || !to) return []
@@ -327,7 +340,7 @@ export class Planner extends Reach {
       return from
     }
     const sets = (swing: number, most: number) => {
-      const to = drawn(aimed, swing, limb)
+      const to = drawn(aimed, swing, limb, dt)
       const soonest = (leaves = direct ? after : spared(Math.max(after, wait - swing - most)))
       for (let k = 0; k < 2; k++) {
         const from = this.starts(leaves)
@@ -356,15 +369,16 @@ export class Planner extends Reach {
     else if (aimed.stuck) plan.near = { rank: RANK.turn, by: 0 }
     const turns = this.pushed(aimed, wait - leaves, swing, from)
     const takes = wound && wound.times > turns.times ? wound : turns
-    // (with no time at all, there is no telling how hard)
-    if (plan.near || takes.times <= MOST) return plan
+    // (with no time at all, there is no telling how hard; what comes short of the place or the turn is still made as
+    // strong as the body is)
+    if (takes.times <= MOST) return plan
     const slowed = (by: number) => target.velocity.clone().multiplyScalar(by)
     const strong = (by: number) =>
       this.pushed(this.solve({ ...target, velocity: slowed(by) }, wait), wait - leaves, swing, from).times <= MOST
     // (asked to arrive faster than it can, it arrives as fast as it can: waiting longer gives it no more swing)
     const share = fast && strong(0) ? between(0, 1, strong)[0] : 0
     if (share > 0) plan.velocity = slowed(share)
-    else plan.near = { rank: RANK.strength, by: Number.isNaN(takes.times) ? Infinity : takes.times, slow: true }
+    else plan.near ??= { rank: RANK.strength, by: Number.isNaN(takes.times) ? Infinity : takes.times, slow: true }
     return plan
   }
 }

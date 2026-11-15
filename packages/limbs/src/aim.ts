@@ -20,8 +20,9 @@ export type Sent = Mark & {
 }
 /**
  * What an end means to do, for whoever looks: the places it is sent to, the one it is on its way to first, and the way
- * its joints are driven there, as marks of the wrist or ankle on the way to the first, the body going as foreseen; and
- * how far what it is sent `with`, a fingertip or what sits in the hand, is from the wrist now
+ * its joints are driven there, as marks of what it is sent `with` (a fingertip or what sits in the hand, turning with
+ * the hand; or the wrist or ankle) on the way to the first, the body going as foreseen; and how far what it is sent
+ * with is from the wrist now
  */
 export type Aim = { sent: Sent[]; path: Mark[]; tip: Vector3 }
 
@@ -37,12 +38,13 @@ export type Aiming = {
   limb: Limb
   where(plan: Plan, seconds: number): Vector3
   solve(plan: Plan, seconds: number): Aimed
-  drawn(aimed: Aimed, swing: number): Record<'first' | 'second', State & { swing: number }>
+  drawn(aimed: Aimed, swing: number): Record<'first' | 'second', State & { swing: number }> & { wrist?: State & { swing: number } }
   root(seconds: number, at: Vector3, turned: Quaternion): Vector3
+  sits(plan: Plan, seconds: number, first: Vector3, fold: number, wrist: Vector3): Vector3
   tip: Vector3
 }
 
-export function aim({ now, sent, going, limb, where, solve, drawn, root, tip }: Aiming): Aim {
+export function aim({ now, sent, going, limb, where, solve, drawn, root, sits, tip }: Aiming): Aim {
   const told = sent.map(
     (plan): Sent => ({
       at: where(plan, Math.max(0, plan.when - now)).clone(),
@@ -60,8 +62,9 @@ export function aim({ now, sent, going, limb, where, solve, drawn, root, tip }: 
   const back = drawn(aimed, going.swing)
   const turned = new Quaternion()
   const [value, velocity, start] = [new Vector3(), new Vector3(), new Vector3()]
-  const at = (joint: 'first' | 'second', t: number) => {
+  const at = (joint: 'first' | 'second' | 'wrist', t: number) => {
     const [from, to, drawing] = [limb[joint], aimed[joint], back[joint]]
+    if (!from || !to || !drawing) return new Vector3()
     const lead = seconds - drawing.swing
     if (lead > 0 && t < lead) return cubic(t / lead, lead, from, drawing, value, velocity).clone()
     const swing = Math.min(drawing.swing, seconds)
@@ -70,9 +73,10 @@ export function aim({ now, sent, going, limb, where, solve, drawn, root, tip }: 
   const path: Mark[] = []
   for (let k = 0; k <= MARKS; k++) {
     const t = (seconds * k) / MARKS
-    const place = limb.at(at('first', t), at('second', t).x)
+    const [first, fold, wrist] = [at('first', t), at('second', t).x, at('wrist', t)]
+    const place = limb.at(first, fold)
     root(t, start, turned)
-    path.push({ at: place.applyQuaternion(turned).add(start), time: now + t })
+    path.push({ at: place.applyQuaternion(turned).add(start).add(sits(going, t, first, fold, wrist)), time: now + t })
   }
   return { sent: told, path, tip }
 }

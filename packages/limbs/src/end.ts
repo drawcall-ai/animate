@@ -4,6 +4,7 @@ import type { Grip, Pose } from './fingers'
 import { type Goal, MOST, timed } from './goal'
 import { SLACK, sway } from './limb'
 import { JOINTS, NONE, type Plan, Planner, drawn } from './planner'
+import { tick } from './size'
 import { type Reaching, type Target, moves } from './track'
 import { EXACT, type Story, type Xyz, due, waits } from './world'
 
@@ -220,7 +221,7 @@ export class End extends Planner {
     const seconds = Math.max(going.when - now, dt)
     const aimed = this.solve(going, seconds)
     if (aimed.stuck) this.near(aimed)
-    const back = drawn(aimed, going.swing, this.limb)
+    const back = drawn(aimed, going.swing, this.limb, tick(this.size))
     // it goes no harder than its joints can be pushed, and lags if it must
     const takes = (joint: Goal, to: State, most: number) =>
       joint.takes(to, most) <= MOST ? most : Math.max(most, quickest(joint, to, MOST * joint.strength, joint.range))
@@ -228,7 +229,7 @@ export class End extends Planner {
       const [part, drawn, turn] = [this.limb[joint], back[joint], aimed[joint]]
       if (!part || !drawn || !turn) return []
       // with longer than a joint swings for, it draws back first to where it swings from
-      const draws = seconds > drawn.swing
+      const draws = seconds > drawn.swing + EXACT
       const to = draws ? drawn : turn
       return [{ part, to, seconds: takes(part, to, draws ? seconds - drawn.swing : seconds) }]
     })
