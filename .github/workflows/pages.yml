@@ -35,6 +35,12 @@ jobs:
           key: rigs-${{ hashFiles('pnpm-lock.yaml', 'examples/*/skeleton.ts', 'examples/*/public/models/**') }}
           restore-keys: rigs-
       - run: pnpm pages
+      # the proof videos of the pull requests, played at /animate/proof/
+      - uses: actions/checkout@v4
+        with:
+          ref: proof
+          path: dist/proof
+      - run: rm -rf dist/proof/.git && sh pages/proof.sh dist/proof
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
