@@ -1,8 +1,8 @@
-import type { Held, Side, Story } from '@drawcall/animate'
+import type { Side, Story } from '@drawcall/animate'
 import { flat, type Grip, grip, Hand } from '@drawcall/hand'
 import type { PhysicsWorld } from '@drawcall/physics'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
-import { Character } from '../character'
+import { Character, lying } from '../character'
 import type { Game, Input } from '../play'
 import { BOX, Box, boards, boxes, room, SHELF, shelved, slot } from './store'
 
@@ -10,16 +10,17 @@ import { BOX, Box, boards, boxes, room, SHELF, shelved, slot } from './store'
 const SPEED = { walk: 1.4, run: 3.5, step: 0.8 }
 /** how fast his hands move a held box from place to place, and how long they take at least (m/s, s) */
 const LIFT = { speed: 0.6, least: 0.5 }
-/** how near a box is for him to take it, and how far its near side is from where he stands to (m) */
-const NEAR = { box: 1.2, standoff: 0.22 }
+/**
+ * how near a box is for him to take it, how far its near side is from where he stands to, and how far from where a
+ * hand would have it the box may be for the hand to take it, easing into it (m)
+ */
+const NEAR = { box: 1.2, standoff: 0.22, hand: 0.1 }
 /**
  * how far from the shelf's front he stands to reach onto a board, and to have a box before him clear of the shelf (m)
  */
 const AT_SHELF = { near: 0.32, clear: 0.8 }
 /** how far above a board a box is moved in over it (m) */
 const CLEARANCE = 0.08
-/** how long a hand short of a box at its moment may reach on for it (s) */
-const REACH = 1
 /** how long he steps up to a place at most (s) */
 const LONGEST = 3
 /** how far a box is raised off the floor before it comes up to him (m) */
@@ -33,7 +34,6 @@ const FLAT = ['palm', 'index', 'middle', 'ring', 'little'] as const
 /** how far below ahead the fingers on a box's sides point, as one carries a box before one (rad) */
 const FINGERS = 0.5
 const UP = new Vector3(0, 1, 0)
-const Z = new Vector3(0, 0, 1)
 const SHELFWARD = { x: 0, z: 1 }
 
 const yaw = (way: { x: number; z: number }) => Math.atan2(way.x, way.z)
@@ -57,15 +57,19 @@ function pointed(held: Grip, hand: Hand, way: Vector3): Grip {
 
 /**
  * The warehouse worker: he walks where he is led, takes up a box near him by its sides and carries it before him, puts
- * it on the lowest free board when he is at the shelf or else down on the floor, and takes one down off the shelf.
+ * it on the lowest free board when he is at the shelf or else down on the floor, and takes one down off the shelf. The
+ * box he carries is bound to his right hand, which the story sends, and his left hand follows it.
  */
 export class Worker implements Game {
   readonly character: Character
   private readonly hands: Record<Side, Hand>
   private readonly boxes: Box[]
   private readonly tops: number[]
-  /** the box in his hands, it as he holds it, and which way its side under his left hand faces in its own frame */
-  private held?: { box: Box; thing: Held; left: Vector3 }
+  /**
+   * the box in his hands, the grip of each hand on it, which way its side under his left hand faces in its own frame,
+   * and how the right hand lies on it there
+   */
+  private held?: { box: Box; grips: Record<Side, Grip>; left: Vector3; right: ReturnType<typeof lying> }
   /** where he is to step to before his hands go, and the way he faces while they do */
   private spot?: Vector3
   private way?: { x: number; z: number }
@@ -116,10 +120,15 @@ export class Worker implements Game {
     return off.multiplyScalar(4).clampLength(0, SPEED.step)
   }
 
-  /** how a held box is to be turned, he facing a way: its side facing `left` in its frame to his left, upright */
-  private square(left: Vector3, facing: { x: number; z: number } = this.body.facing) {
+  /**
+   * how the right hand is turned for the held box to be square to him, he facing a way: its side facing `left` in its
+   * frame to his left, upright, the palm on its right side and the fingers along it as the grip has them
+   */
+  private square(facing: { x: number; z: number } = this.body.facing) {
+    if (!this.held) throw new Error('he squares a box he does not hold')
+    const { left, right } = this.held
     const turned = new Quaternion().setFromAxisAngle(UP, yaw(facing) + Math.PI / 2 - yaw(left))
-    return { pointing: Z.clone().applyQuaternion(turned), up: UP }
+    return { palm: right.palm.clone().applyQuaternion(turned), pointing: right.pointing.clone().applyQuaternion(turned) }
   }
 
   /**
@@ -165,12 +174,12 @@ export class Worker implements Game {
   /** his hands move the held box through places in the scene in turn, at a pace of its own: whether it got to the last */
   private *move(path: Vector3[]): Story<boolean> {
     if (!this.held) return false
-    const { thing, left, box } = this.held
+    const { grips, box } = this.held
     let [from, there] = [box.place, false]
     for (const place of path) {
       const seconds = Math.max(LIFT.least, place.distanceTo(from) / LIFT.speed)
       from = place
-      there = yield* thing.to(place, { ...this.square(left), seconds })
+      there = yield* this.body.hand.right.to(place, { with: grips.right, ...this.square(), seconds })
     }
     return there
   }
@@ -178,7 +187,8 @@ export class Worker implements Game {
   /** the held box rides before him as he goes, so high or low before his belly */
   private ride(high?: number) {
     if (!this.held) return
-    this.held.thing.to(this.before(high), { on: this.body, ...this.square(this.held.left, SHELFWARD) })
+    const { grips } = this.held
+    this.body.hand.right.to(this.before(high), { on: this.body, with: grips.right, ...this.square(SHELFWARD) })
   }
 
   /** he steps with the held box before him, so high */
@@ -202,23 +212,24 @@ export class Worker implements Game {
     // (his feet together, to come down to the floor)
     yield* this.body.stand()
     box.take()
-    const thing = this.body.hold(box.mesh)
-    this.held = { box, thing, left }
     // both palms go flat onto its sides, the left onto the side facing `left` in its frame, the fingers pointing ahead
     // and down
     const ahead = left.clone().cross(UP).applyAxisAngle(left, FINGERS)
     const on = (side: Side, out: Vector3) => {
       const statement = { at: out.clone().multiplyScalar(BOX.side / 2).add(PALMS), from: out, using: FLAT, start: flat }
-      return this.body.hand[side].to(pointed(grip(this.hands[side], box.mesh, statement), this.hands[side], ahead))
+      return pointed(grip(this.hands[side], box.mesh, statement), this.hands[side], ahead)
     }
-    const reached = on('left', left)
-    const held = (yield* on('right', left.clone().negate())) && (yield* reached)
-    // (a hand short of it at its moment reaches on for it as he stays down: with one still short after that, he leaves
-    // it where it lies)
-    const { hand, time } = this.body
-    const both = () => hand.left.there && hand.right.there
-    while (!held && !both() && this.body.time < time + REACH) yield
-    if (!both()) return this.letGo()
+    const grips = { left: on('left', left), right: on('right', left.clone().negate()) }
+    this.held = { box, grips, left, right: lying(this.hands.right, grips.right) }
+    const reached = this.body.hand.left.to(grips.left)
+    yield* this.body.hand.right.to(grips.right)
+    yield* reached
+    // (a hand short of it at its moment takes it if it is near enough, the box easing into it: with one further off,
+    // he leaves it where it lies)
+    if (!this.near('left', grips.left) || !this.near('right', grips.right)) return this.letGo()
+    const { hand } = this.body
+    // the right hand has it, and the left follows it
+    hand.right.take(grips.right)
     this.doing = 'lifting'
     // (off a board it is drawn out toward him, off the floor raised a little)
     const carried = this.carried()
@@ -257,12 +268,23 @@ export class Worker implements Game {
     this.letGo()
   }
 
-  /** the box is let go where it is, and his hands are his own again */
+  /** the box is let go where it is, moving as it was, and his hands are his own again */
   private letGo() {
-    this.held?.thing.free()
-    this.held?.box.release()
+    const { hand, bound } = this.body
+    const velocity = bound.length ? hand.right.letGo() : new Vector3()
+    for (const side of ['left', 'right'] as const) {
+      hand[side].free()
+      hand[side].shape()
+    }
+    this.held?.box.release(velocity)
     this.held = undefined
     this.doing = 'walking'
+  }
+
+  /** whether a hand is near enough where it would have a box by its grip for it to take the box */
+  private near(side: Side, held: Grip) {
+    const seat = this.hands[side].bone.localToWorld(new Vector3().copy(held.position))
+    return seat.distanceTo(held.target.getWorldPosition(new Vector3())) < NEAR.hand
   }
 
   /** which side of a box, in its own frame, is most to his left as he faces a way */

@@ -308,10 +308,14 @@ export class Reach extends Track {
 
   /** how far the hand is now from how it is to be turned for a target on the thing as that is drawn (rad) */
   protected turnedOff(plan: Target) {
+    return this.turn().angleTo(this.turned(plan, 0, true).turned)
+  }
+
+  /** how the hand is turned now from hanging straight down, in the frame of the body */
+  protected turn() {
     const { first, second, wrist } = this.limb
-    const { turned: to } = this.turned(plan, 0, true)
     this.root(0, start, turned)
-    return bent(fore(turned, first.value, second.value.x, forearm), wrist?.value ?? REST, bend).angleTo(to)
+    return bent(fore(turned, first.value, second.value.x, forearm), wrist?.value ?? REST, new Quaternion())
   }
 
   /**

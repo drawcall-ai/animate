@@ -153,6 +153,16 @@ function seat(hand: Hand, held: Grip, thing = held.target) {
   world.decompose(thing.position, thing.quaternion, thing.scale)
 }
 
+/**
+ * which way a hand's palm faces and its fingers point on a thing it holds by a grip, in the thing's frame: what turns
+ * the hand for the thing to be turned so, once it is bound to the hand
+ */
+export function lying(hand: Hand, held: Grip) {
+  const back = held.quaternion.clone().invert()
+  const fingers = new Vector3().crossVectors(hand.thumbward, hand.normal).multiplyScalar(hand.side === 'right' ? -1 : 1)
+  return { palm: hand.normal.clone().applyQuaternion(back), pointing: fingers.applyQuaternion(back) }
+}
+
 /** a hand has a thing from the start: it is put where the grip seats it in the hand as the hand is now, and the hand takes it */
 export function inHand(body: Body, hand: Hand, held: Grip) {
   seat(hand, held)

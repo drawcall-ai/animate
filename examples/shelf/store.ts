@@ -74,9 +74,9 @@ export class Box {
     return this.mesh.getWorldPosition(new Vector3())
   }
 
-  /** it is let go where it is: a body of its own in the world, at rest */
-  release() {
-    const solid = new RigidBody({ mass: BOX.mass })
+  /** it is let go where it is, moving so: a body of its own in the world */
+  release(velocity = new Vector3()) {
+    const solid = new RigidBody({ mass: BOX.mass, velocity: { linear: velocity.toArray() } })
     this.mesh.updateWorldMatrix(true, false)
     this.mesh.matrixWorld.decompose(solid.position, solid.quaternion, solid.scale)
     solid.add(this.mesh)
