@@ -31,7 +31,8 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
 - `Carrier` and `Stoop`: **the one interface the planner sees of the rest of the body** (where a limb will start
   from, where a foot the body steps with will be and whether it is spared, getting down, winding up, taking and putting
   a foot). limbs declares it; locomotion implements it. The planner never sees `Mover` or `Ahead`.
-- `Gives`: the held-thing solver (see blurred boundaries).
+- `Bindings`: the things bound to the hands, which go with them (see below).
+- `Gives`: the old held-thing solver, going away (see blurred boundaries).
 - the types `animate` re-exports to authors: `Finger`, `Grip`, `Part`, `Pose`, `Side`, `Size`, `Story`, `Touch`, `Xyz`.
 
 **locomotion → animate**
@@ -39,7 +40,7 @@ Each package's `src/index.ts` exports only what the layer above imports. Add to 
   `Going` (the movement intention: walk, run, go, face, look, knock, jump, stand) with `Ground`, `Run`, `Walk`, `flat`,
   `Reactions`, `Stance`, `Stoops`, `held`.
 
-**animate → authors** (unchanged by the split): `Body`, `Held`, `Foot`, `Hand`, and the types above. `Foot` and
+**animate → authors**: `Body` (with `bound`), `Held` (going away), `Foot`, `Hand` (with `take` and `letGo`), and the types above. `Foot` and
 `Hand` are declared in `animate/src/ends.ts`, where a place `on` him can be typed as the `Body`.
 `Body.intent()` tells what he means to do as plain data (`Intent`: each end's `Aim` from `Planner.aim()` in limbs,
 the hips and footfalls `foresee`n by locomotion on a copy of `Mover`, and where each held thing is meant to be),
@@ -50,16 +51,30 @@ draws only that.
 
 `world`, `size`, `curve`, `goal` → `bone`, `bones`, `shape`, `fingers`, `limb`, `joints` → `track` (where a target
 is) → `reach` (how the limb turns to it) → `planner` (when it sets off, how it swings) → `end` (carrying the plan out).
-`give` sits beside them and is used by `track` and `end`.
+`binding` sits above them: it reads where the posed bones put the hands, writes the bound things there after every
+pose, and knows an `End` only by its `side`, `name`, `follows` (the things it is sent onto) and `free`. The planner
+knows nothing of it: a hand sent `with: grip` is counted from the grip, and one sent onto a thing follows it, as
+before. `give` (going away) sits beside the planner and is used by `track` and `end`.
 
 ## Blurred boundaries still to fix
 
-1. **Held things run through the planner.** `give.ts` (`Give`, `Gives`) lives in limbs, and `End` (`holding`,
-   `placed`, `keeps`, `leads`, `nearest`, `wants`, `turning`, `posed`, `carry`, `letGo`, `takes`, `take`, and the
-   `gives`/`carries` branches of `on`, `send`, `arrive`, `advance`), `Track` (`Target.gives/carries/pose`, the `gives`
-   branch of `where`, `carrying`, `gripped`, `Rigged.held`) and `Planner.scan` all know it. Fix: directed bindings
-   (the next task) as their own module above the planner; then delete `give.ts` and every member listed here. A hand
-   following a thing needs nothing new: `End` already keeps to a place `on` an `Object3D`.
+1. **Held things still run through the planner, for `body.hold`.** Bindings (`limbs/src/binding.ts`, `hand.take`,
+   `hand.letGo`) replace it; basketball and the shelf use them. Once no example uses `body.hold` (bowling, javelin,
+   tennis, fencing, gladiator, patrol, the rifleman and the shooter still do, through `holds` in
+   `examples/character.ts`), delete:
+   - limbs: `give.ts` whole, and `Gives` from `index.ts`;
+   - `End`: `holding`, `placed`, `keeps`, `leads`, `nearest`, `wants`, `turning`, `posed`, `carry`, `letGo`, `takes`,
+     `take`, and the `gives`/`carries` branches of `on`, `send` (the held-there check and the take), `arrive` (the
+     `gives` there and the `plan.gives` stoop rule), `advance` (`kept`, `bend`, the `gives` aim) and `leave`;
+   - `Track`: `Target.gives/carries/pose`, `Rigged.held`, the `gives` branch of `where` and of `target`, `carrying`
+     with `Carrying` and its helpers `basis`, `shortest`, `rolled`; `Planner.scan`'s `target.gives` branch;
+   - animate: `Body.hold`, `Held`, `POCKET`, `gives` and `rigged.held` in `body.ts`; `gives.begin/correct/write` in
+     `clock.ts`; the `holding` loop in `intent.ts`;
+   - examples: `holds` in `character.ts` (use `inHand`), and the `body.hold` tests in `hold.test.ts`.
+   One thing `Gives` does that bindings do not yet: `body.look(place, { over, on })` slides a rifle along the line
+   from the eye (`gives.correct` feeding `reactions.sights`), and a resting stock sits in the shoulder's pocket. The
+   rifle's conversion needs those as a statement of their own (a hand sent so the sight is on the line, or a
+   `Carrier` request), not a solver.
 2. **The step loop reaches into locomotion's workings.** `animate/src/clock.ts` and `body.ts` build `Mover`, `Ahead`,
    `Reactions`, `Stance` and `Going` one by one and step them field by field (`mover.look`, `mover.local`,
    `mover.course`, `mover.height`, `mover.advance`, `mover.fault`, `ahead.at`, `ahead.wind.start`, `stance.pose`,
