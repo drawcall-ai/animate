@@ -12,7 +12,7 @@ import { BOX, PALM, SHELF, boxAt, clear, fall, shelved } from '../shelf/box'
 import { shelve } from '../shelf/shelve'
 
 /** a scene played by today's `Body` or by the plan core's `Figure`: what it shows, and a step of it */
-export type Played = { scene: Object3D; update(delta: number): void; focus(): number; say(): string }
+export type Played = { scene: Object3D; update(delta: number): void; focus(): number; say(): string; told?(): ReturnType<Figure['intent']> }
 /** the rig a scene is played on, and whether by the plan core */
 let mannequin: () => Object3D
 let next = true
@@ -58,6 +58,7 @@ function shot(): Played {
   }
   const fig = new Figure(man)
   ;(globalThis as any).fig = fig
+  const told = () => fig.intent()
   const { arm, trunk, shoulder, leg, stand } = fig.size
   const thing = fig.bind(ball.mesh)
   fig.hold('right', ball.mesh, seat)
@@ -89,6 +90,7 @@ function shot(): Played {
       path(fig.hand.right.value)
     },
     focus: () => fig.gait.hips.value.z,
+    told,
     say: () => `next: ${fig.playing ? 'playing' : 'over'}  ${thing.outside ? 'ball flying' : 'ball held'}`,
   }
 }
@@ -122,6 +124,7 @@ function shelf(): Played {
   }
   const fig = new Figure(man)
   ;(globalThis as any).fig = fig
+  const told = () => fig.intent()
   const thing = fig.bind(box.mesh)
   fig.play(
     (function* (): Story {
@@ -154,6 +157,7 @@ function shelf(): Played {
       most = Math.max(most, tilt())
     },
     focus: () => fig.gait.hips.value.z,
+    told,
     say: () => `next: box tilt ${tilt().toFixed(0)}° (most ${most.toFixed(0)}°)`,
   }
 }
@@ -184,6 +188,7 @@ function kick(): Played {
   }
   const fig = new Figure(man)
   ;(globalThis as any).fig = fig
+  const told = () => fig.intent()
   fig.play(
     (function* (): Story {
       const plants = fig.gait.run({ at: { x: 0.12, z: ball.position.z - 0.35 }, plant: 'left', speed: 3.6, arrive: 2.5 })
@@ -204,6 +209,7 @@ function kick(): Played {
       path(fig.gait.feet.right.value)
     },
     focus: () => fig.gait.hips.value.z,
+    told,
     say: () => `next: ball ${ball.velocity.length().toFixed(1)} m/s`,
   }
 }
@@ -247,6 +253,7 @@ function led(): Played {
   }
   const fig = new Figure(man)
   ;(globalThis as any).fig = fig
+  const told = () => fig.intent()
   return {
     scene,
     update(delta) {
@@ -256,6 +263,7 @@ function led(): Played {
       path(fig.gait.hips.value.clone().setY(0.02))
     },
     focus: () => fig.gait.hips.value.z,
+    told,
     say: () => `next: led ${t.toFixed(1)} s`,
   }
 }
@@ -265,7 +273,7 @@ function cancel(): Played {
   const man = mannequin()
   const scene = new Group().add(man)
   const path = trail(scene)
-  const [throwAt, instead, changes] = [new Vector3(-0.25, 1.9, 0.5), new Vector3(0.35, 0.8, 0.45), 0.85]
+  const [throwAt, instead, changes] = [new Vector3(-0.25, 1.9, 0.5), new Vector3(0.3, 1.15, 0.45), 1.0]
   const velocity = new Vector3(0, 3, 9)
   if (!next) {
     const body = new Body(man)
@@ -273,6 +281,8 @@ function cancel(): Played {
       (function* (): Story {
         void body.hand.right.by(1.2, throwAt, { velocity })
         yield* body.until(changes)
+        // (today nothing cancels a send: letting the hand go and sending it anew is the nearest)
+        body.hand.right.free()
         yield* body.hand.right.to(instead, { seconds: 0.5 })
       })(),
     )
@@ -288,6 +298,7 @@ function cancel(): Played {
   }
   const fig = new Figure(man)
   ;(globalThis as any).fig = fig
+  const told = () => fig.intent()
   const hand = fig.hand.right
   fig.play(
     (function* (): Story {
@@ -304,6 +315,7 @@ function cancel(): Played {
       path(hand.value)
     },
     focus: () => 0,
+    told,
     say: () => 'next',
   }
 }

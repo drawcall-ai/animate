@@ -6,6 +6,7 @@
   "dependencies": {
     "@drawcall/animate": "workspace:*",
     "@drawcall/hand": "workspace:*",
+    "@drawcall/debug": "workspace:*",
     "@drawcall/pose": "workspace:*",
     "@drawcall/physics": "0.20.0",
     "@drawcall/physics-rapier": "0.20.0",

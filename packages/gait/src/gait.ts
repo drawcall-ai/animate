@@ -171,6 +171,13 @@ export class Gait {
     if (this.plant) rate = this.timed(rate, swing)
     const was = this.phase
     this.phase = (this.phase + rate * dt) % 1
+    // he stops once he is still and both feet are down where they belong, as a step would begin
+    const down = SIDES.every((side) => !this.feet[side].busy)
+    const turnedOver = Math.floor(was * 2) !== Math.floor(this.phase * 2)
+    if (speed < 0.1 && !this.plant && down && turnedOver && !SIDES.some((side) => this.astray(side, facing))) {
+      this.stepping = false
+      return
+    }
     for (const side of SIDES) {
       const foot = this.feet[side]
       const starts = side === 'left' ? 0 : 0.5
@@ -193,11 +200,20 @@ export class Gait {
       }
       foot.by({ at: lands, place, turn: yaw(facing), by: 'gait' })
     }
-    // he stops once he is still and both feet are down where they belong, between strides
-    const down = SIDES.every((side) => !this.feet[side].busy)
-    const turnedOver = Math.floor(was * 2) !== Math.floor(this.phase * 2)
-    if (speed < 0.1 && !this.plant && down && turnedOver && !SIDES.some((side) => this.astray(side, facing))) this.stepping = false
     if (this.plant && now > this.plant.at) this.stepping = false
+  }
+
+  /**
+   * What the gait means to do, for whoever looks: the lead it goes by, how far through its stride it is, where each
+   * foot stands or is to come down next and in how long, and the hips' way over the next second
+   */
+  intent() {
+    const feet = SIDES.map((side) => {
+      const foot = this.feet[side]
+      const lands = foot.intent().frames.filter((frame) => frame.by === 'gait').at(-1)
+      return { side, stands: foot.value.clone(), lands: lands?.place, in: lands?.in }
+    })
+    return { lead: this.lead.clone(), phase: this.phase, stepping: this.stepping, plant: this.plant?.spot.clone(), feet, hips: this.hips.intent().path }
   }
 
   /** a foot lies too far from where it belongs, or is turned too far from the way he faces */

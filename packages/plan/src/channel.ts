@@ -54,6 +54,8 @@ export class Channel implements Mover {
   short = { slow: 0, late: 0 }
   private parent?: { on: Channel; place: Vector3; turn: Quaternion }
   private now = 0
+  /** frames cancelled outright, and when: for whoever looks */
+  private dropped: (Frame & { gone: number })[] = []
   private last?: Planned
 
   constructor(
@@ -76,6 +78,7 @@ export class Channel implements Mover {
   cancel(by?: string) {
     const head = this.frames[0]
     const kept = this.frames.filter((one) => by !== undefined && one.by !== by)
+    if (by === undefined) this.dropped.push(...this.frames.map((frame) => ({ ...frame, gone: this.now })))
     this.frames.splice(0, this.frames.length, ...kept)
     this.replan(this.frames[0] === head ? undefined : this.frames[0])
     if (this.last && (by === undefined || this.last.by === by)) this.last = undefined
@@ -284,6 +287,35 @@ export class Channel implements Mover {
 
   /** what it was last told it was, moved from outside */
   private readonly watched = new Vector3()
+
+  /**
+   * What it means to do, for whoever looks: the frames to come (where each has it, how fast, by when, by whom), the
+   * way its plan goes over the next `seconds`, those cancelled in the last second, and what it is bound to
+   */
+  intent(seconds = 1, marks = 30) {
+    const path = Array.from({ length: marks + 1 }, (_, k) => {
+      const at = new Vector3()
+      this.state(this.now + (k * seconds) / marks, at, new Vector3())
+      return at
+    })
+    const there = (frame: Frame) => {
+      const at = new Vector3()
+      const when = (frame as Planned).met?.at ?? frame.at ?? this.now
+      if (frame.on) this.resolve(frame, when, this.moving.set(0, 0, 0))
+      return frame.on ? at.copy(this.to.value) : at.copy(frame.place ?? this.value)
+    }
+    this.dropped = this.dropped.filter(({ gone }) => this.now - gone < 1)
+    const told = (frame: Frame) => ({ place: there(frame), velocity: new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 }), in: ((frame as Planned).met?.at ?? frame.at ?? this.now) - this.now, by: frame.by })
+    return {
+      name: this.name,
+      now: this.value.clone(),
+      frames: this.frames.map(told),
+      path,
+      dropped: this.dropped.map((frame) => ({ ...told(frame), ago: this.now - frame.gone })),
+      bound: this.parent?.on.name,
+      short: this.short,
+    }
+  }
 
   /** puts it somewhere at once, at rest, with no frames */
   set(place: Xyz, turn?: Quaternion) {

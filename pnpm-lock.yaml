@@ -394,6 +394,9 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../../packages/animate
+      '@drawcall/debug':
+        specifier: workspace:*
+        version: link:../../packages/debug
       '@drawcall/hand':
         specifier: workspace:*
         version: link:../../packages/hand
@@ -587,6 +590,12 @@ importers:
       '@drawcall/animate':
         specifier: workspace:*
         version: link:../animate
+      '@drawcall/gait':
+        specifier: workspace:*
+        version: link:../gait
+      '@drawcall/plan':
+        specifier: workspace:*
+        version: link:../plan
       three:
         specifier: ^0.187.0
         version: 0.187.0

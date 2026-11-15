@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@drawcall/animate": "workspace:*",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "@drawcall/plan": "workspace:*",
+    "@drawcall/gait": "workspace:*"
   },
   "files": [
     "src"

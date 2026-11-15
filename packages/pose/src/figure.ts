@@ -126,6 +126,23 @@ export class Figure {
     return found
   }
 
+  /**
+   * What he means to do, for whoever looks: every channel's intent, the gait's, and what only the whole body knows: how
+   * far each hand the story has is from where its plan has it, and which joints are at the end of their range
+   */
+  intent() {
+    const things = [...this.things.values()].map(({ channel }) => channel).filter((channel) => !channel.outside)
+    const channels = [this.gait.hips, ...SIDES.map((side) => this.gait.feet[side]), ...SIDES.map((side) => this.hand[side]), ...things]
+    const gaps = SIDES.filter((side) => this.owned(side)).map((side) => ({ side, planned: this.hand[side].value.clone(), posed: this.bones.wrist[side].clone() }))
+    const stopped = parts(this.joints).filter((part) =>
+      (['x', 'y', 'z'] as const).some((axis) => {
+        const [least, most] = part.range[axis] ?? [-Infinity, Infinity]
+        return most > least && (part.value[axis] <= least + 1e-3 || part.value[axis] >= most - 1e-3)
+      }),
+    )
+    return { channels: channels.map((channel) => channel.intent()), gait: this.gait.intent(), gaps, stopped: stopped.map((part) => part.name) }
+  }
+
   /** has a story played beside whatever is playing */
   play(story: Story<unknown>) {
     this.stories.push(story)
