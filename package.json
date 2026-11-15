@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "pnpm -F @drawcall/animate -F @drawcall/hand test",
-    "check": "tsc --noEmit -p packages/limbs && tsc --noEmit -p packages/locomotion && tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p packages/debug && tsc --noEmit -p examples",
+    "test": "pnpm -F @drawcall/animate -F @drawcall/hand -F @drawcall/plan test",
+    "check": "tsc --noEmit -p packages/plan && tsc --noEmit -p packages/limbs && tsc --noEmit -p packages/locomotion && tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p packages/debug && tsc --noEmit -p examples",
     "pages": "sh pages/build.sh"
   },
   "devDependencies": {
