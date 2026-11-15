@@ -1,6 +1,6 @@
 import { Hand } from '@drawcall/hand'
 import { Light, Vector3 } from 'three'
-import { Character, holds } from '../character'
+import { Character, inHand } from '../character'
 import type { Game, Input, Start } from '../play'
 import { model } from '../play'
 import { rig } from './skeleton'
@@ -28,7 +28,7 @@ export const start: Start = async (scene, world) => {
   const character = new Character(guide, world)
   const { body } = character
   scene.add(guide, lamp)
-  const held = holds(body, hand, gripped(hand, lamp))
+  const held = inHand(body, hand, gripped(hand, lamp))
   let searching = false
   let yaw = 0
 
