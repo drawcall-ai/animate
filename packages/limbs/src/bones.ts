@@ -251,6 +251,11 @@ export class Bones {
     return place.clone().applyQuaternion(this.trunk[this.trunk.length - 1].turned).add(this.arms[side][0].place)
   }
 
+  /** where the joint of a hip is, as he was posed last, in the frame of the body */
+  hip(side: Side) {
+    return this.legs[side][0].place
+  }
+
   /** where an eye is, as he was posed last, in the frame of the body */
   eye(side: Side) {
     return this.eyed(side).applyQuaternion(this.head.turned).add(this.head.place)

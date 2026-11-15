@@ -389,6 +389,37 @@ importers:
         specifier: ^8.3.8
         version: 8.3.8
 
+  examples/plan:
+    dependencies:
+      '@drawcall/animate':
+        specifier: workspace:*
+        version: link:../../packages/animate
+      '@drawcall/hand':
+        specifier: workspace:*
+        version: link:../../packages/hand
+      '@drawcall/physics':
+        specifier: 0.20.0
+        version: 0.20.0(three@0.187.0)
+      '@drawcall/physics-rapier':
+        specifier: 0.20.0
+        version: 0.20.0(@drawcall/physics@0.20.0(three@0.187.0))(three@0.187.0)
+      '@drawcall/pose':
+        specifier: workspace:*
+        version: link:../../packages/pose
+      '@drawcall/rig':
+        specifier: ^0.7.0
+        version: 0.7.0(three@0.187.0)(vitecache@0.5.1(vite@8.3.8))
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+      vitecache:
+        specifier: ^0.5.1
+        version: 0.5.1(vite@8.3.8)
+    devDependencies:
+      vite:
+        specifier: ^8.3.8
+        version: 8.3.8
+
   examples/rifleman:
     dependencies:
       '@drawcall/animate':
@@ -564,6 +595,15 @@ importers:
         specifier: ^0.187.0
         version: 0.187.0
 
+  packages/gait:
+    dependencies:
+      '@drawcall/plan':
+        specifier: workspace:*
+        version: link:../plan
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+
   packages/hand:
     devDependencies:
       '@types/three':
@@ -596,6 +636,27 @@ importers:
         version: 0.187.0
     devDependencies:
       '@types/three':
+        specifier: ^0.187.0
+        version: 0.187.0
+
+  packages/plan:
+    dependencies:
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+
+  packages/pose:
+    dependencies:
+      '@drawcall/gait':
+        specifier: workspace:*
+        version: link:../gait
+      '@drawcall/limbs':
+        specifier: workspace:*
+        version: link:../limbs
+      '@drawcall/plan':
+        specifier: workspace:*
+        version: link:../plan
+      three:
         specifier: ^0.187.0
         version: 0.187.0
 

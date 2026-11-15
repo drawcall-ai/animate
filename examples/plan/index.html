@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:," />
+    <title>Plan core</title>
+  </head>
+  <body>
+    <h1>Plan core</h1>
+    <canvas id="stage"></canvas>
+    <div class="bar">
+      <button id="again" type="button">Again</button>
+      <label
+        >Speed
+        <select id="speed">
+          <option value="1">1×</option>
+          <option value="0.5">½×</option>
+          <option value="0.25" selected>¼×</option>
+          <option value="0.1">⅒×</option>
+        </select>
+      </label>
+    </div>
+    <pre id="readout"></pre>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
