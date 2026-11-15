@@ -1,9 +1,9 @@
 import { type Object3D, Vector3 } from 'three'
 import { Ahead, carrier, flat, Going, type Ground, Mover, Reactions, type Run, Stance, Stoops, type Walk } from '@drawcall/locomotion'
-import { type Band, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
+import { type Band, Bindings, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
 import { Clock, type Workings } from './clock'
 import { type Intent, intent } from './intent'
-import type { Foot, Hand, On } from './ends'
+import { type Foot, type Hand, hand as handOf, type On } from './ends'
 
 /**
  * where the pocket of a shoulder is that a stock rests in, from its joint: so far above it (of his trunk) and in
@@ -59,6 +59,7 @@ export class Body {
   readonly hand: Record<Side, Hand>
   private readonly hands: Record<Side, End>
   private readonly gives: Gives
+  private readonly bindings: Bindings
   /** what he is made of, for telling what he means to do */
   private readonly workings: Workings
 
@@ -92,8 +93,10 @@ export class Body {
       (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], carried, size, rigged('hand', side)),
     )
     const ends = { foot, hand }
+    const bindings = (this.bindings = new Bindings(bones, turning.arms))
     this.foot = foot
-    this.hand = this.hands = hand
+    this.hands = hand
+    this.hand = both((side) => handOf(hand[side], bindings, this))
     const stance = both((side) => new Stance(size, side, turning.legs[side], foot[side], mover.foot[side]))
     const at = { value: new Vector3(), velocity: new Vector3() }
     const going = (this.going = new Going(this, size, mover, ahead, turning, ends, reactions, at))
@@ -105,7 +108,7 @@ export class Body {
     for (const part of parts(turning)) part.free()
     const stood = both(() => new Vector3())
     for (const side of SIDES) foot[side].anchor = stood[side].copy(mover.foot[side].at)
-    const all = { size, bones, mover, joints: turning, ahead, reactions, gives, going, ends, stance, stood, hips: at }
+    const all = { size, bones, mover, joints: turning, ahead, reactions, gives, bindings, going, ends, stance, stood, hips: at }
     this.clock = new Clock((this.workings = all))
     rigs.set(rig, this)
     this.clock.pose(0)
@@ -133,6 +136,11 @@ export class Body {
         if (!side) this.gives.drop(thing)
       },
     }
+  }
+
+  /** what is bound to his hands: each thing, the sides of the hands it goes with, and whether it turns with the hand */
+  get bound() {
+    return this.bindings.bound
   }
 
   /** the place on the ground where a foot stands under its hip, he over a place, facing as he does: where a story puts one down */

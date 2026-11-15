@@ -32,6 +32,11 @@ export class End extends Planner {
     return this.plan?.there === true
   }
 
+  /** the things it follows: those it is on, or is sent to be on */
+  get follows() {
+    return this.sent.flatMap(({ on }) => (on instanceof Object3D ? [on] : []))
+  }
+
   /** what it holds, by which grip, and the plan that had it take hold: where it is on the thing */
   holding?: { give: Give; grip: Grip; target: Plan }
 

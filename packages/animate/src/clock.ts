@@ -1,6 +1,6 @@
 import type { Vector3 } from 'three'
 import { type Ahead, type Going, held, type Mover, type Reactions, type Stance } from '@drawcall/locomotion'
-import { type Bones, both, type End, type Gives, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick, UP } from '@drawcall/limbs'
+import { type Bindings, type Bones, both, type End, type Gives, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick, UP } from '@drawcall/limbs'
 
 /** what a step moves: the workings of a body, as it is made of them */
 export type Workings = {
@@ -11,6 +11,7 @@ export type Workings = {
   ahead: Ahead
   reactions: Reactions
   gives: Gives
+  bindings: Bindings
   going: Going
   ends: Record<'foot' | 'hand', Record<Side, End>>
   stance: Record<Side, Stance>
@@ -58,6 +59,7 @@ export class Clock {
         SIDES.map((side) => this.body.ends.hand[side]),
         this.owed,
       )
+      this.body.bindings.write(this.time + this.owed)
     }
   }
 
@@ -128,7 +130,7 @@ export class Clock {
   }
 
   pose(delta: number) {
-    const { mover, joints, bones, ends, hips, stance } = this.body
+    const { mover, joints, bones, ends, hips, stance, bindings } = this.body
     // (a foot to stay where the hips have gone further from than its leg reaches is let free, for him to step after them)
     for (const side of SIDES) if (stance[side].pose(mover, delta)) ends.foot[side].free()
     mover.scene(mover.value, undefined, hips.value)
@@ -140,12 +142,15 @@ export class Clock {
     ])
     bones.pose(this.posed(), joints, NUDGE)
     for (const { end, at } of places) end.velocity.copy(at)
+    bindings.measure(this.time + delta + NUDGE)
     for (const side of SIDES) {
       const { first: thigh, second: shin } = joints.legs[side]
       this.bent[side] = stance[side].foot(thigh.value.x, shin.value.x, mover.falls, delta)
     }
     this.draw(0)
     for (const { end, at } of places) end.velocity.sub(end.value.copy(at)).divideScalar(NUDGE)
+    // (what his hands have goes with them)
+    bindings.write(this.time + delta)
   }
 
   /** the hips as the bones are turned from them */

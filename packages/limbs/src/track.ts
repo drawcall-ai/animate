@@ -95,7 +95,7 @@ export class Track {
    * its `carrier`, carries
    */
   constructor(
-    protected readonly name: string,
+    readonly name: string,
     protected readonly kind: 'foot' | 'hand',
     readonly side: Side,
     protected readonly limb: Limb,
