@@ -1,6 +1,6 @@
 import { type Object3D, Quaternion, Vector3 } from 'three'
 import type { Ahead } from './ahead'
-import { type End, EXACT, type Joints, type Side, SIDES, type Size, type Story, UP, waits, type Xyz } from '@drawcall/limbs'
+import { clamp, type End, EXACT, GRAVITY, type Joints, type Side, SIDES, type Size, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
 import { HIGH, PUSH, RIDE, RUN, SLOW, STILL, THERE, TOGETHER, WALK } from './gait'
 import { held } from './heights'
 import type { Mover } from './mover'
@@ -14,6 +14,8 @@ export type Run = { speed: number; at: Ground; plant?: Side; push?: number; arri
 export type Walk = { speed?: number; plant?: Side }
 /** how far ahead he is looked at for a moment to come, in his beats */
 const LONG = 400
+/** over how long the turning of the way he is led, and his being led faster or slower, are told (in his beats) */
+const TOLD = 0.25
 const spot = new Vector3()
 
 /** the clock he goes by: the seconds it has gone on for, and a story over at a moment on it */
@@ -31,8 +33,15 @@ export class Going {
   over?: { on: Object3D; at: Vector3 }
   /** where the world has the hips at the moment the next update is for, until it is made */
   private placed?: Vector3
-  /** how he was last led to go along the ground, and when: the change of it is how he is urged on */
+  /** how he was last led to go along the ground, and when: the change of it is how he is urged on, and how fast the way he is led turns (rad/s) */
   private told?: { velocity: Vector3; time: number }
+  private turns = 0
+  private faster = 0
+  /** the way he was led on since the last update, which is for the moment that update is for */
+  private lead?: Course
+  /** the way he was last to face, and when, the change of which is how fast it turns; and whether that was told since the last update */
+  private faced?: { face: number; time: number }
+  private aimed = false
 
   constructor(
     private readonly body: Clock,
@@ -63,6 +72,19 @@ export class Going {
 
   /** an update is to be made for a moment: where the world has the hips is where they are by then */
   places(time: number) {
+    const { mover } = this
+    const { course } = mover
+    const early = time - this.body.time
+    // told anew in every update, how he is led and the way he is to face go on changing as they change, from now as
+    // has them so by then; told once, they hold
+    if (course.heading !== undefined && course === this.lead) {
+      course.heading = wrap(course.heading - course.turns * early)
+      course.speed = Math.max(0, course.speed - course.faster * early)
+    } else if (course.heading !== undefined) course.turns = course.faster = 0
+    if (this.aimed && mover.face !== undefined) mover.face = wrap(mover.face - mover.swings * early)
+    else mover.swings = 0
+    this.lead = undefined
+    this.aimed = false
     if (!this.placed) return
     this.mover.at(this.placed, time)
     this.placed = undefined
@@ -163,6 +185,16 @@ export class Going {
       const gone = this.body.time - was.time
       const urged = now.clone().sub(was.velocity).divideScalar(gone).clampLength(0, PUSH.along)
       this.reactions.urged.lerp(urged, Math.min(1, gone / this.size.beat))
+      // (the way he is led turns only as he goes, not as he comes to a stand and sets off another way)
+      const moved = Math.min(now.length(), was.velocity.length()) > SLOW * pace
+      // (no faster than the ground turns him at the speed he is led, a foot held twice as hard as he weighs at the
+      // most: a way he is led that jumps round is no turn)
+      const most = (2 * GRAVITY) / Math.max(speed, SLOW * pace)
+      const turned = moved ? clamp(wrap(Math.atan2(now.x, now.z) - Math.atan2(was.velocity.x, was.velocity.z)) / gone, -most, most) : 0
+      const faster = (now.length() - was.velocity.length()) / gone
+      const share = Math.min(1, gone / (TOLD * this.size.beat))
+      this.turns += (turned - this.turns) * share
+      this.faster += (faster - this.faster) * share
     }
     this.told = { velocity: now, time: this.body.time }
     const { course, led } = mover
@@ -172,18 +204,29 @@ export class Going {
       else mover.send(this.stopping(), true)
     } else {
       const heading = Math.atan2(velocity.x, velocity.z)
-      if (led && course.heading === heading && Math.abs(course.speed) === speed) return
+      const { turns, faster } = this
+      const same = course.heading === heading && course.turns === turns && course.faster === faster
+      if (led && same && Math.abs(course.speed) === speed) return
       const push = speed > WALK.most * pace ? RUN.push : WALK.push
-      mover.send({ heading, y: mover.height, speed, push, arrive: speed }, true)
+      this.lead = { heading, turns, faster, y: mover.height, speed, push, arrive: speed }
+      mover.send(this.lead, true)
     }
     this.ahead.stale()
   }
 
   face(way?: { x: number; z: number }): Story<boolean> {
     if (way && !(Math.hypot(way.x, way.z) > 0)) throw new Error('he is to face a way that leads nowhere')
+    const { mover } = this
     const face = way && Math.atan2(way.x, way.z)
-    if (face !== this.mover.face) this.ahead.stale()
-    this.mover.face = face
+    if (face !== mover.face) this.ahead.stale()
+    // (how fast it turns, as it is told over one update after another)
+    const was = this.faced
+    const gone = was ? this.body.time - was.time : 0
+    if (face === undefined || !was || gone > this.size.beat) mover.swings = 0
+    else if (gone > 0) mover.swings += (wrap(face - was.face) / gone - mover.swings) * Math.min(1, gone / (TOLD * this.size.beat))
+    this.faced = face === undefined ? undefined : { face, time: this.body.time }
+    this.aimed = face !== undefined
+    mover.face = face
     return waits(
       () => true,
       () => this.mover.faced,
@@ -265,7 +308,8 @@ export class Going {
       // (an arm that is swinging out from what its hand was let go from is the body's when it has)
       for (const part of [joints.arms[side].first, joints.arms[side].second]) if (!part.loose) part.free()
     }
-    mover.face = this.looked = this.over = this.told = undefined
+    mover.face = this.looked = this.over = this.told = this.faced = undefined
+    this.turns = this.faster = mover.swings = 0
     this.reactions.urged.set(0, 0, 0)
     mover.height = this.size.stand
     return this.send(this.stopping(), true)

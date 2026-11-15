@@ -43,12 +43,40 @@ function measure(name: string) {
   let frames = 0
   let leanIn = 0
   let moving = 0
+  // the hips as foreseen at earlier moments, to set against where they are by then: a foresight every so many frames
+  const foreseen: { time: number; hips: { at: Vector3; time: number }[] }[] = []
+  const missed = { [0.25]: [] as number[], [0.5]: [] as number[] }
+  // each foot's footfall as it is aimed in flight, from lift-off to landing: how far the aim moves
+  const aims = Object.fromEntries(SIDES.map((side) => [side, [] as { at: Vector3; time: number; lands: number }[]]))
+  const wander: number[] = []
+  const late: number[] = []
+  const flats: Vector3[] = []
   while (drive.time < drive.drill.seconds) {
     drive.update(FRAME)
     rig.updateMatrixWorld(true)
     frames++
     const hips = at('hips')
     heights.push(hips.y)
+    flats.push(hips.clone().setY(0))
+    const seen = body.intent().hips
+    if (frames % 6 === 0) foreseen.push({ time: body.time, hips: seen.hips.map(({ at, time }) => ({ at: at.clone(), time })) })
+    for (const [ahead, list] of Object.entries(missed)) {
+      const then = foreseen.find(({ time }) => Math.abs(time + Number(ahead) - body.time) < FRAME / 2)
+      const mark = then?.hips.find(({ time }) => Math.abs(time - body.time) < FRAME / 2)
+      if (mark) list.push(Math.hypot(mark.at.x - body.hips.value.x, mark.at.z - body.hips.value.z))
+    }
+    for (const side of SIDES) {
+      const aim = seen.footfalls.find((fall) => fall.side === side && fall.swings)
+      const track = aims[side]
+      if (aim) track.push({ at: aim.at.clone(), time: body.time, lands: aim.time })
+      if (aim || !track.length) continue
+      // (landed: how far the aim moved from lift-off, and over the last fifth of a second)
+      const last = track[track.length - 1]
+      wander.push(Math.hypot(last.at.x - track[0].at.x, last.at.z - track[0].at.z))
+      const before = track.find(({ time }) => time >= last.time - 0.2)
+      if (before && last.time - track[0].time > 0.25) late.push(Math.hypot(last.at.x - before.at.x, last.at.z - before.at.z))
+      track.length = 0
+    }
     heads.push(at('head'))
     const across = at('leftUpperLeg').sub(at('rightUpperLeg')).setY(0).normalize()
     const pelvis = Math.atan2(-across.z, across.x)
@@ -101,6 +129,7 @@ function measure(name: string) {
   const second = (values: number[]) => values.slice(2).map((v, k) => v - 2 * values[k + 1] + values[k])
   const jitter = second(heights).map((d) => Math.abs(d) / FRAME ** 2)
   const headAcc = heads.slice(2).map((p, k) => p.clone().sub(heads[k + 1].clone().multiplyScalar(2)).add(heads[k]).length() / FRAME ** 2)
+  const along = second(flats.map((p) => p.x)).map((dx, k) => Math.hypot(dx, second(flats.map((p) => p.z))[k]) / FRAME ** 2)
   const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b)
   const pct = (xs: number[], p: number) => sorted(xs)[Math.floor(p * (xs.length - 1))] ?? 0
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
@@ -118,6 +147,15 @@ function measure(name: string) {
     headAccMax: Math.max(...headAcc),
     yawLag: (lag / Math.max(1, lagged) * 180) / Math.PI,
     lean: moving ? leanIn / moving : 0,
+    flatAcc95: pct(along, 0.95),
+    miss25: mean(missed[0.25]),
+    miss50: mean(missed[0.5]),
+    miss50Max: Math.max(0, ...missed[0.5]),
+    miss50Mid: pct(missed[0.5], 0.5),
+    wander: mean(wander),
+    wanderMax: Math.max(0, ...wander),
+    wanderMid: pct(wander, 0.5),
+    lateMax: Math.max(0, ...late),
   }
 }
 
@@ -125,10 +163,10 @@ test('the drills of examples/gait, as a viewer would measure them: the feet stay
   const rows = Object.keys(DRILLS).map(measure)
   const f = (x: number, d = 2) => x.toFixed(d).padStart(7)
   console.log(
-    'drill        slideMax slideMean steps/s  stride crossed   knee° hipAcc95 hipAccMax headAcc95 headAccMax yawLag°  lean°\n' +
+    'drill        slideMax slideMean steps/s  stride crossed   knee° hipAcc95 hipAccMax headAcc95 headAccMax yawLag°  lean° flatAcc95 miss25 miss50 miss50Max miss50Mid wander wanderMax wanderMid lateMax\n' +
       rows
         .map((r) =>
-          [r.drill.padEnd(12), f(r.slideMax, 3), f(r.slideMean, 3), f(r.steps), f(r.stride), f(r.crossed), f(r.knee, 0), f(r.hipAcc95, 1), f(r.hipAccMax, 1), f(r.headAcc95, 1), f(r.headAccMax, 1), f(r.yawLag, 0), f(r.lean, 0)].join(' '),
+          [r.drill.padEnd(12), f(r.slideMax, 3), f(r.slideMean, 3), f(r.steps), f(r.stride), f(r.crossed), f(r.knee, 0), f(r.hipAcc95, 1), f(r.hipAccMax, 1), f(r.headAcc95, 1), f(r.headAccMax, 1), f(r.yawLag, 0), f(r.lean, 0), f(r.flatAcc95, 1), f(r.miss25, 3), f(r.miss50, 3), f(r.miss50Max, 3), f(r.miss50Mid, 3), f(r.wander, 3), f(r.wanderMax, 3), f(r.wanderMid, 3), f(r.lateMax, 3)].join(' '),
         )
         .join('\n'),
   )
@@ -145,6 +183,9 @@ test('the drills of examples/gait, as a viewer would measure them: the feet stay
     expect(r.headAcc95, r.drill).toBeLessThan(30)
     expect(r.steps, r.drill).toBeGreaterThan(2.5)
     expect(r.steps, r.drill).toBeLessThan(3.5)
+    // and as he goes round he is where he was foreseen to be half a second before, and a foot lands where it was aimed
+    expect(r.miss50Mid, r.drill).toBeLessThan(0.08)
+    expect(r.wanderMid, r.drill).toBeLessThan(0.15)
   }
 }, 120000)
 

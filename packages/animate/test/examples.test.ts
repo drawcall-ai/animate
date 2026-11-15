@@ -2,7 +2,7 @@ import { buildWorld } from '@drawcall/physics-rapier'
 import { grip, Hand, type Statement } from '@drawcall/hand'
 import { Mesh, type Object3D, Scene, SphereGeometry, Vector3 } from 'three'
 import { expect, test } from 'vitest'
-import { bowl } from '../../../examples/bowling/bowl'
+import { bowl, carry } from '../../../examples/bowling/bowl'
 import * as lane from '../../../examples/bowling/lane'
 import * as court from '../../../examples/basketball/court'
 import { RADIUS } from '../../../examples/basketball/ball'
@@ -61,9 +61,18 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
   },
   bowling(rig) {
     const ball = lane.sphere()
-    const { body, held } = holding(rig, ball, lane.GRIP)
-    const bowled = lane.ball()
-    body.play(bowl(body, bowled, ball, held))
+    new Scene().add(rig, ball)
+    const hand = new Hand(rig, 'right')
+    const seat = grip(hand, ball, lane.GRIP)
+    const body = new Body(rig)
+    inHand(body, hand, seat)
+    let bowled = lane.ball()
+    body.play(
+      (function* () {
+        yield* carry(body, seat)
+        yield* bowl(body, seat, (velocity) => (bowled = { position: ball.getWorldPosition(new Vector3()), velocity }))
+      })(),
+    )
     return { body, world: (dt) => bowled.velocity && lane.roll(bowled, dt) }
   },
   basketball(rig) {
@@ -72,9 +81,9 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
     const hand = new Hand(rig, 'right')
     const seat = grip(hand, ball, SEAT)
     const body = new Body(rig)
-    const held = inHand(body, hand, seat, { turning: false })
+    inHand(body, hand, seat)
     let thrown = court.ball()
-    body.play(jumpShot(body, held, (velocity) => (thrown = { position: ball.getWorldPosition(new Vector3()), velocity })))
+    body.play(jumpShot(body, seat, (velocity) => (thrown = { position: ball.getWorldPosition(new Vector3()), velocity })))
     return { body, world: (dt) => thrown.velocity && court.fly(thrown, dt) }
   },
   volleyball(rig) {

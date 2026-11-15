@@ -1,26 +1,25 @@
-import type { Held, Story } from '@drawcall/animate'
-import { grip, Hand } from '@drawcall/hand'
-import type { Object3D } from 'three'
-import { Vector3 } from 'three'
+import type { Story } from '@drawcall/animate'
+import { type Grip, grip, Hand } from '@drawcall/hand'
+import { type Object3D, Vector3 } from 'three'
 import { Character } from '../character'
 import type { Game, Input } from '../play'
 import type { Thing } from '../thing'
 import { balls, done, home, Pins } from './alley'
-import { bowl } from './bowl'
-import { type Ball, ball, GRIP, LINE, RADIUS } from './lane'
+import { bowl, carry, upright } from './bowl'
+import { GRIP, LINE, RADIUS } from './lane'
 
 /** how fast he walks and runs (m/s) */
 const SPEED = { walk: 1.4, run: 3.5 }
-/** where he carries a ball, up from his hips and ahead of them (of how high his hips stand) */
-const CARRY = { up: 0.3, ahead: 0.4 }
-/** how long a ball he has taken takes to come from where it rested to where he carries it (s) */
-const LIFT = 0.5
+/** how high above where it rested he lifts a ball off the return, and how long that takes (m, s) */
+const LIFT = { up: 0.15, seconds: 0.5 }
 /** how long the pins have to settle once the ball is done before it comes back on the return (s) */
 const SETTLE = 2
-/** the right hand under the ball, the delivery's grip, and the left on its left side: the index does not reach round a ball so big */
-const USING = ['palm', 'middle', 'ring', 'little'] as const
-const UNDER = { ...GRIP, using: USING }
-const SIDE = { at: new Vector3(RADIUS, 0, 0), from: new Vector3(1, 0, 0), using: USING }
+/** a hand on each side of a ball, turned to face him, as he takes it off the return: the index does not reach round a ball so big */
+const using = ['palm', 'middle', 'ring', 'little'] as const
+const SIDE = {
+  left: { at: new Vector3(RADIUS, 0, 0), from: new Vector3(1, 0, 0), using },
+  right: { at: new Vector3(-RADIUS, 0, 0), from: new Vector3(-1, 0, 0), using },
+}
 
 /**
  * The bowler: he walks about, takes a ball off the return, carries it in both hands, and bowls it down the lane. Taking
@@ -32,8 +31,8 @@ export class Bowler implements Game {
   private readonly hands: { left: Hand; right: Hand }
   private readonly balls: Thing[]
   private readonly pins = new Pins()
-  /** the ball in his hands, as he holds it, and how it leaves the hand once he bowls it */
-  private held?: { k: number; ball: Held; flight?: Ball }
+  /** which ball is in his hands, and how his right hand has it */
+  private held?: { k: number; seat: Grip }
   /** the ball let go, and how long until it comes back on the return */
   private rolled?: { k: number; left?: number }
   /** which ball of the frame is next */
@@ -54,12 +53,7 @@ export class Bowler implements Game {
     if (input.act) this.act()
     const speed = input.run ? SPEED.run : SPEED.walk
     this.character.update(delta, { x: input.move.x * speed, z: input.move.z * speed })
-    const { held } = this
-    if (held?.flight?.velocity) {
-      this.balls[held.k].release(held.flight.velocity)
-      this.rolled = { k: held.k }
-      this.held = undefined
-    }
+    if (this.held) upright(this.held.seat.target, this.body)
     this.collect(delta)
   }
 
@@ -70,8 +64,13 @@ export class Bowler implements Game {
     if (held) {
       // (the approach needs a few strides)
       if (character.feet.position.z > LINE - 2.5) return
-      held.flight = ball()
-      return character.act(bowl(this.body, held.flight, this.balls[held.k].mesh, held.ball))
+      return character.act(
+        bowl(this.body, held.seat, (velocity) => {
+          this.balls[held.k].release(velocity)
+          this.rolled = { k: held.k }
+          this.held = undefined
+        }),
+      )
     }
     const at = character.feet.position
     const k = this.balls.findIndex(
@@ -80,21 +79,29 @@ export class Bowler implements Game {
     if (k >= 0) character.act(this.take(k))
   }
 
-  /** he turns to the ball where it rests, both hands go to it, and lift it to where he carries it, ahead of his hips */
+  /**
+   * he turns to the ball where it rests, a hand goes to each side of it and they lift it off the return, then his right
+   * hand goes under it and has it, and he carries it before him
+   */
   private *take(k: number): Story {
     const { body, hands } = this
     const { mesh } = this.balls[k]
     const toward = mesh.position.clone().sub(this.character.feet.position).setY(0)
-    mesh.rotation.set(0, Math.atan2(toward.x, toward.z), 0)
-    yield* body.face(toward)
-    const ball = body.hold(mesh)
-    this.held = { k, ball }
-    const right = body.hand.right.to(grip(hands.right, mesh, UNDER))
-    const left = body.hand.left.to(grip(hands.left, mesh, SIDE))
-    yield* right
-    yield* left
-    const { stand, trunk, shoulder } = body.size
-    yield* ball.to({ x: 0, y: CARRY.up * stand - trunk, z: CARRY.ahead * stand }, { on: body, seconds: LIFT })
+    body.face(toward)
+    mesh.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(toward.x, toward.z))
+    const { left, right } = body.hand
+    const sides = { left: grip(hands.left, mesh, SIDE.left), right: grip(hands.right, mesh, SIDE.right) }
+    const reached = left.to(sides.left)
+    yield* right.to(sides.right)
+    yield* reached
+    // (the left hand has it while the right goes round under it)
+    left.take(sides.left)
+    this.held = { k, seat: grip(hands.right, mesh, GRIP) }
+    yield* left.to(mesh.position.clone().setY(mesh.position.y + LIFT.up), { with: sides.left, seconds: LIFT.seconds })
+    yield* right.to(this.held.seat)
+    left.letGo()
+    right.take(this.held.seat)
+    yield* carry(body, this.held.seat)
     body.face()
   }
 

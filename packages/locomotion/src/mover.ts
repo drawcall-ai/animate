@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import type { Footing, Step } from './pelvis'
 import { CADENCE, CLEAR, RIDE, SINK, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
 import { toRest } from './pelvis'
-import { both, clamp, damped, ease, EXACT, GRAVITY, ground, HEEL, other, raised, type Side, SIDES, SIGN, SLACK, SOLE, TRAIL } from '@drawcall/limbs'
+import { both, clamp, damped, ease, EXACT, GRAVITY, ground, HEEL, other, raised, type Side, SIDES, SIGN, SLACK, SOLE, TRAIL, wrap } from '@drawcall/limbs'
 import { type Placed, Steps, type Stride } from './steps'
 import { Way } from './way'
 
@@ -27,8 +27,6 @@ const TUCK = 0.25
 const APART = 0.341
 /** how many times a beat a foot off the ground comes round to point the way he faces */
 const POINTS = 9
-/** led, over how long his speeding up is told (in his beats) */
-const URGES = 0.3
 /** led, how near how high the legs reach the hips ride before they give to it (in lengths of his leg) */
 const SOFT = 0.03
 /** led, how long the hips take to come to how high his steps have them (in his beats) */
@@ -49,8 +47,6 @@ export class Mover extends Way {
   private trod = -Infinity
   /** how the feet step led, going his own way */
   private steps = new Steps(this.size)
-  /** led, how fast he has been speeding up along the way he goes, lately (m/s²) */
-  private urges = 0
 
   /** whether a leg reaches its foot where it stands from where the hips are: flat on the ground, or its heel up as far as brings the ankle, which turns about the ball of the foot, nearest the hip */
   reaches(side: Side, hips: Vector3) {
@@ -166,6 +162,8 @@ export class Mover extends Way {
   advance(dt: number) {
     this.carried(dt)
     this.time += dt
+    // (the way he is to face turns on as it turns, until he is told it anew)
+    if (this.face !== undefined) this.face = wrap(this.face + this.swings * dt)
     this.idles(dt)
     // (led, with his feet his own, he steps by the clock of his strides: else as he goes where he is sent)
     if (this.led && !this.placed && !this.jumps) {
@@ -196,10 +194,10 @@ export class Mover extends Way {
    * his strides, and the hips go as fast as he is led, as high as his feet let them, rising and falling with each step.
    */
   private stride(dt: number) {
-    const { value, velocity, foot, size } = this
-    const was = velocity.z
+    const { value, velocity, foot, size, course } = this
     this.follow(dt)
-    this.urges += ((velocity.z - was) / dt - this.urges) * Math.min(1, dt / (URGES * size.beat))
+    // (speeding up as he is led to, along the way he goes, forwards or back)
+    const faster = Math.sign(velocity.z) * (course.faster ?? 0)
     // the steps are told in the scene, where the feet stand still however the way he is going turns
     const feet = both((side): Placed => {
       const { at, toes, down } = foot[side]
@@ -208,7 +206,7 @@ export class Mover extends Way {
     })
     const { heading, curves, facing, spins, aims } = this
     const at = this.scene(new Vector3(0, 0, value.z))
-    const stride = this.steps.advance({ at, speed: velocity.z, faster: this.urges, heading, curves, facing, spins, aims }, feet, dt)
+    const stride = this.steps.advance({ at, speed: velocity.z, faster, heading, curves, facing, spins, aims }, feet, dt)
     for (const side of SIDES) {
       const [footing, placed] = [foot[side], feet[side]]
       this.local(placed.at, side, footing.at)

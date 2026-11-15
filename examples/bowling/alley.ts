@@ -6,11 +6,10 @@ import {
   Mesh,
   MeshStandardMaterial,
   type Object3D,
-  SphereGeometry,
   Vector3,
 } from 'three'
 import { Thing } from '../thing'
-import { LANE, LINE, RADIUS, release } from './lane'
+import { LANE, LINE, RADIUS, release, sphere } from './lane'
 
 /** how heavy a ball and a pin are (kg), and how high and thick a pin is at its belly (m) */
 const MASS = { ball: 6.5, pin: 1.5 }
@@ -58,7 +57,7 @@ export function alley() {
 /** the balls, each resting on the return: his while he holds one, the world's once he lets it go */
 export const balls = (scene: Object3D) =>
   COLORS.map((color, k) => {
-    const mesh = new Mesh(new SphereGeometry(RADIUS, 24, 16), paint(color))
+    const mesh = sphere(color)
     mesh.position.copy(home(k))
     scene.add(mesh)
     return new Thing(mesh, scene, { mass: MASS.ball, material: OIL }, [new SphereCollider({ radius: RADIUS })])

@@ -1,5 +1,5 @@
 import type { Statement } from '@drawcall/hand'
-import { Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, Vector3 } from 'three'
+import { Color, Float32BufferAttribute, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three'
 
 /** `velocity` is none while it is in the hand */
 export type Ball = { position: Vector3; velocity: Vector3 | null }
@@ -18,19 +18,29 @@ const GRAVITY = 9.81
 /** how much of its speed a rolling ball loses in a second */
 const DRAG = 0.04
 
-export const sphere = () => new Mesh(new SphereGeometry(RADIUS), new MeshStandardMaterial({ color: 0x3060c0 }))
+/** where a ball's three finger holes are, in its frame, and how wide one is (rad): they show how it turns */
+const HOLES = [new Vector3(-1, 0.3, 0), new Vector3(-1, 0.65, 0.35), new Vector3(-1, 0.65, -0.35)].map((v) => v.normalize())
+const HOLE = 0.16
+
+/** a ball of a colour, its finger holes dark */
+export function sphere(color = 0x3060c0) {
+  const geometry = new SphereGeometry(RADIUS, 48, 32)
+  const [normal, paint, dark] = [geometry.getAttribute('normal'), new Color(color), new Color(0x101018)]
+  const colors: number[] = []
+  const at = new Vector3()
+  for (let k = 0; k < normal.count; k++) {
+    at.fromBufferAttribute(normal, k)
+    const hole = HOLES.some((h) => at.angleTo(h) < HOLE)
+    colors.push(...(hole ? dark : paint).toArray())
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3))
+  return new Mesh(geometry, new MeshStandardMaterial({ vertexColors: true }))
+}
 
 export const ball = (): Ball => ({ position: new Vector3(), velocity: null })
 
 /** where the middle of the ball is as the hand lets it go `ahead` of the origin (m), in the line of a right arm: a hand above the boards */
 export const release = (ahead: number) => new Vector3(-0.2, RADIUS + 0.09, ahead)
-
-/** it leaves the hand that holds it, moving so */
-export function letGo(b: Ball, held: Object3D, velocity: Vector3) {
-  held.updateWorldMatrix(true, false)
-  held.getWorldPosition(b.position)
-  b.velocity = velocity.clone()
-}
 
 /** let go, it drops onto the boards and rolls on down the lane, to its end */
 export function roll(b: Ball, dt: number) {

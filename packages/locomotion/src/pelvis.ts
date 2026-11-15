@@ -75,10 +75,15 @@ type On = { z?: never; x?: never }
 /**
  * where the hips are to go, told along the way he is going: to a place `z` along it and `x` to the side of it, to which
  * that way turns; or on past where they were to arrive; or led, to be going a `heading` in the scene (rad about y, from
- * +z toward +x), to no place
+ * +z toward +x), to no place, the way he is led turning so fast (rad/s) and how fast he is led speeding up (m/s²), which
+ * dies away as he goes on
  */
 export type Course = Going &
-  ({ z: number; x: number; heading?: never } | (On & { heading?: never }) | (On & { heading: number }))
+  (
+    | { z: number; x: number; heading?: never; turns?: never; faster?: never }
+    | (On & { heading?: never; turns?: never; faster?: never })
+    | (On & { heading: number; turns: number; faster: number })
+  )
 /** to rest at a place along the way he is going, the hips so high: braked as hard as a leg pushes */
 export const toRest = (y: number, z: number, speed: number) => ({ x: 0, push: PUSH.along, arrive: 0, z, y, speed })
 
@@ -386,7 +391,7 @@ export class Pelvis {
     const { z = way * Infinity, x = 0 } = this.course
     const course: Course =
       this.squats && !led
-        ? { ...this.course, heading: undefined, x, z: way * Math.min(z * way, foot.left.at.z * way), arrive: 0 }
+        ? { ...this.course, heading: undefined, turns: undefined, faster: undefined, x, z: way * Math.min(z * way, foot.left.at.z * way), arrive: 0 }
         : this.course
     // wound up where he is to come to rest between his feet, his weight goes onto the one behind, and onto the one ahead as he swings through: as hard as his legs push
     const stands = SIDES.filter((side) => foot[side].down).map((side) => foot[side].at.z)
@@ -399,7 +404,7 @@ export class Pelvis {
     const { y, push, arrive } = course
     if (far < 0 && arrive > 0) this.course = { y, push, arrive, speed: Math.sign(course.speed) * arrive }
     else if (far < 0 && velocity.z * way > fastest)
-      this.course = { ...course, heading: undefined, x, z: value.z + lands(size, velocity.z) }
+      this.course = { ...course, heading: undefined, turns: undefined, faster: undefined, x, z: value.z + lands(size, velocity.z) }
     // (braked half the time, a foot being down only so much of it: so they are as slow as they are to arrive a stride in the air early)
     const brakes = Math.max(0, Math.abs(far) - (course.arrive && FLIGHT * beat * velocity.z * way))
     // as fast as they are to go, and no faster than lets them slow to how they are to arrive, the last of the way ever slower

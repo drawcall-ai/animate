@@ -23,8 +23,8 @@ const DUTY = { least: 0.2, walk: 0.55, most: 0.65 }
  */
 const LIFT = { least: 0.08, faster: 0.17, through: 0.6, early: 0.15 }
 
-/** a foot swinging through the air: where it comes down, in the scene, and how much of the way there it has come along the ground */
-type Swing = { to: Vector3; on: number }
+/** a foot swinging through the air: where it left the ground and where it comes down, in the scene, and how much of the way there it has come along the ground */
+type Swing = { from: Vector3; to: Vector3; on: number }
 /**
  * a foot as the steps move it: where it is in the scene, which way it points there (rad), whether it is down, whether
  * a story has it, which the steps leave be and he stands on the other meanwhile, and whether its leg reaches it from
@@ -64,7 +64,7 @@ export class Steps {
     copy.resting = this.resting
     for (const side of SIDES) {
       const swing = this.swings[side]
-      copy.swings[side] = swing && { to: swing.to.clone(), on: swing.on }
+      copy.swings[side] = swing && { from: swing.from.clone(), to: swing.to.clone(), on: swing.on }
     }
     return copy
   }
@@ -138,12 +138,11 @@ export class Steps {
     for (const side of SIDES) {
       const foot = feet[side]
       if (foot.held) continue
-      const through = (phase: number) => (((phase - start(side)) % 1) + 1) % 1
-      const [before, now] = [through(was), through(this.phase)]
+      const [before, now] = [through(side, was), through(side, this.phase)]
       // its share begins: it leaves the ground if it is to go anywhere and the other is not the story's
       if (now < before) this.swings[side] = undefined
       if (now < before && !held && (moving || strays[side] > (TOGETHER * leg) / 2)) {
-        this.swings[side] = { to: foot.at.clone(), on: 0 }
+        this.swings[side] = { from: foot.at.clone(), to: foot.at.clone(), on: 0 }
         foot.down = false
       }
       foot.to = foot.remains = undefined
@@ -156,15 +155,19 @@ export class Steps {
         this.swings[side] = undefined
         continue
       }
-      const other = feet[side === 'left' ? 'right' : 'left'].at
+      const partner = side === 'left' ? 'right' : 'left'
+      const other = feet[partner]
       const lands = (swing - now) * stride
-      const { to, toes } = footfall(size, going, side, lands, duty * stride, other)
+      // (the footfall before this one: the other's, as it comes down first, or as it stood)
+      const prior = this.swings[partner]
+      const last = prior && through(partner, this.phase) > now ? prior.to : (prior?.from ?? other.at)
+      const { to, toes } = footfall(size, going, side, lands, duty * stride, last)
       flying.to.copy(to)
       ;[foot.to, foot.remains] = [flying.to, lands]
       foot.toes += wrap(toes - foot.toes) * Math.min(1, dt / Math.max(dt, lands))
       this.swung(foot.at, flying, share, going.speed)
       // (and on its way it swings round the other leg, not through it)
-      clear(size, foot.at, side, other, going.facing, going.speed, Math.sin(Math.PI * share))
+      clear(size, foot.at, side, other.at, going.facing, going.speed, Math.sin(Math.PI * share))
     }
     if (!moving && !this.swings.left && !this.swings.right && away < TOGETHER * leg) this.resting = true
     const middle = swing + duty * over(size, going.speed)
@@ -191,5 +194,6 @@ export class Steps {
   }
 }
 
-/** where in the turn of the clock the share of a foot begins */
+/** where in the turn of the clock the share of a foot begins, and how far through its share it is at a turn of it */
 const start = (side: Side) => (side === 'left' ? 0 : 0.5)
+const through = (side: Side, phase: number) => (((phase - start(side)) % 1) + 1) % 1

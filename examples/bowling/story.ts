@@ -1,11 +1,11 @@
 import { Body } from '@drawcall/animate'
 import { grip, Hand } from '@drawcall/hand'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
-import { holds } from '../character'
+import { inHand } from '../character'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
-import { bowl } from './bowl'
-import { type Ball, GRIP, LANE, LINE, ball, roll, sphere } from './lane'
+import { bowl, carry, upright } from './bowl'
+import { type Ball, GRIP, LANE, LINE, RADIUS, ball, roll, sphere } from './lane'
 
 const ballMesh = sphere()
 // the boards beyond the foul line, a little proud of the floor, and the line itself
@@ -15,6 +15,7 @@ const line = new Mesh(new BoxGeometry(LANE.width, 0.012, 0.03), new MeshStandard
 line.position.set(-0.2, 0, LINE)
 let body: Body
 let bowled: Ball
+/** how fast the ball left the hand (m/s) */
 let left: number | undefined
 
 run({
@@ -23,20 +24,30 @@ run({
     const scene = new Group().add(man, boards, line, ballMesh)
     scene.updateMatrixWorld(true)
     const hand = new Hand(man, 'right')
-    const gripped = grip(hand, ballMesh, GRIP)
+    const seat = grip(hand, ballMesh, GRIP)
     body = new Body(man)
+    inHand(body, hand, seat)
     bowled = ball()
     left = undefined
-    body.play(bowl(body, bowled, ballMesh, holds(body, hand, gripped)))
+    body.play(
+      (function* () {
+        yield* carry(body, seat)
+        yield* bowl(body, seat, (velocity) => {
+          bowled = { position: ballMesh.position.clone(), velocity }
+          left = velocity.length()
+        })
+      })(),
+    )
     return scene
   },
   update(delta) {
     body.update(delta)
-    if (!bowled.velocity) return
-    left ??= bowled.velocity.length()
-    // let go, it rolls on its own
+    if (!bowled.velocity) return upright(ballMesh, body)
+    // let go, it rolls on its own, turning as it rolls
+    const from = bowled.position.z
     roll(bowled, delta)
     ballMesh.position.copy(bowled.position)
+    if (bowled.position.y <= RADIUS) ballMesh.rotateX((bowled.position.z - from) / RADIUS)
   },
   focus: () => body.hips.value.z,
   readout() {

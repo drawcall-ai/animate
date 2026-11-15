@@ -1,7 +1,8 @@
 import type { Body, Side, Story } from '@drawcall/animate'
 import { point } from '@drawcall/hand'
 import { Vector3 } from 'three'
-import { inHand, lying } from '../character'
+import { holds } from '../character'
+import { RIFLE } from './rifle'
 import type { Soldier } from './soldier'
 
 /** a panel on a wall with a button on it: where the face of the button is, which way it faces out of the wall, and whether it is pressed */
@@ -11,7 +12,7 @@ export const TRAVEL = 0.008
 const PRESSED = 0.3
 /**
  * a throw: how fast the grenade leaves the hand (in his paces), how far above the aim (rad), and how long after it is
- * in the hand it leaves it, time for the trunk to wind up (s); where the grenade is cocked, the elbow bent by his ear,
+ * in the hand it leaves it, time for the trunk to wind up (s); where the hand is cocked, its elbow bent by his ear,
  * and where it lets go, out beside and above his shoulder and a little ahead of it, the arm out to the side so that
  * the hand swings forward across it, which is far faster than it stretches, and on down into his view (of his arm,
  * from the shoulder: to his left, up, ahead)
@@ -39,7 +40,6 @@ export function* reload(soldier: Soldier): Story {
   const { body, held, magazine, spent } = soldier
   const hand = body.hand.left
   soldier.mode = 'reload'
-  soldier.gun.off(hand)
   yield* hand.to(held.magazine)
   yield* soldier.slide(true)
 
@@ -47,12 +47,12 @@ export function* reload(soldier: Soldier): Story {
   magazine.matrixWorld.decompose(spent.position, spent.quaternion, spent.scale)
   soldier.drop(spent, hand.velocity)
   magazine.visible = soldier.loaded = false
+  body.hold(soldier.rifle, { rests: RIFLE.butt }).free('left')
   yield* hand.to(chest(body, 'left', 0.5, -0.3), { on: body })
-  // (the fresh one is in his hand as it comes out of the pouch, and goes with it into the well, upright in it)
   soldier.shown.attach(magazine)
-  const fresh = inHand(body, soldier.hands.left, held.magazine)
+  const fresh = holds(body, soldier.hands.left, held.magazine)
   magazine.visible = true
-  yield* fresh.to({ x: 0, y: 0, z: 0 }, { on: soldier.well, ...lying(soldier.hands.left, held.magazine) })
+  yield* fresh.to({ x: 0, y: 0, z: 0 }, { on: soldier.well, pointing: { x: 0, y: 0, z: 1 }, up: { x: 0, y: 1, z: 0 } })
   soldier.seat()
   yield* soldier.slide(false)
 }
@@ -66,11 +66,11 @@ export function* grenade(soldier: Soldier): Story {
   const hand = body.hand.right
   // the rifle hangs in his left hand meanwhile, pointing a little down ahead of him, low in his view
   soldier.mode = 'slung'
-  soldier.gun.off(hand)
+  body.hold(soldier.rifle).free('right')
   // (from the pouch on the flank of his vest, out past his shoulder, where his elbow clears his trunk however it is turned)
   yield* hand.to(chest(body, 'right', 0.55, -0.6), { on: body })
   soldier.shown.add(soldier.grenade)
-  const grenade = inHand(body, soldier.hands.right, soldier.held.grenade, { turning: false })
+  const grenade = holds(body, soldier.hands.right, soldier.held.grenade)
 
   const { yaw, pitch } = soldier.aimed
   const up = pitch + THROW.above
@@ -78,9 +78,10 @@ export function* grenade(soldier: Soldier): Story {
   const { arm, pace } = body.size
   const [cocked, release] = [THROW.cocked.clone().multiplyScalar(arm), THROW.release.clone().multiplyScalar(arm)]
   const velocity = way.multiplyScalar(THROW.speed * pace)
-  void grenade.to(cocked, { on: body })
-  yield* grenade.by(body.time + THROW.wind, release, { on: body, velocity })
-  soldier.drop(soldier.grenade, grenade.free())
+  hand.to(cocked, { on: body })
+  yield* hand.by(body.time + THROW.wind, release, { on: body, velocity })
+  grenade.free()
+  soldier.drop(soldier.grenade, hand.velocity)
   // (it swings on across him, and comes back to the rifle)
   yield* body.until(body.time + 0.4)
 }
@@ -91,7 +92,6 @@ export function* press(soldier: Soldier, panel: Panel): Story {
   const hand = body.hand.left
   soldier.mode = 'low'
   soldier.rooted = true
-  soldier.gun.off(hand)
   hand.shape(point)
   const pushed = panel.button.clone().addScaledVector(panel.out, -TRAVEL)
   yield* hand.to(pushed, { with: 'index' })

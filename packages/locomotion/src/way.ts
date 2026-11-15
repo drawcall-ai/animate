@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { KEEPS, PUSH, SETTLE, SIDLE, SLOW, THERE, TOGETHER, WALK, stride } from './gait'
+import { KEEPS, PUSH, RUN, SETTLE, SIDLE, SLOW, SPEEDS, THERE, TOGETHER, WALK, stride } from './gait'
 import { type Footing, Pelvis, socket } from './pelvis'
 import { clamp, damped, EXACT, type Side, SIDES, SIGN, UP, wrap } from '@drawcall/limbs'
 
@@ -47,8 +47,9 @@ export class Way extends Pelvis {
   curves = 0
   aims = 0
   yields = 0
-  /** the way a story has him face in the scene, if it does (rad about y, from +z toward +x) */
+  /** the way a story has him face in the scene, if it does (rad about y, from +z toward +x), and how fast that turns (rad/s) */
   face?: number
+  swings = 0
   /** where the world has the hips on the ground at a moment, until they have been carried there */
   world?: { place: Vector3; time: number }
   /** where he looks, if he does, from his shoulders in the scene: about y from +z toward +x, and up (rad) */
@@ -234,19 +235,26 @@ export class Way extends Pelvis {
   protected follow(dt: number) {
     const { course, velocity } = this
     const { beat, pace } = this.size
+    const { look } = this
     const going = course.heading === undefined ? 0 : Math.abs(course.speed)
     const still = going < SLOW * pace
-    const { look } = this
     const away = look && this.face === undefined && still ? Math.abs(wrap(look.yaw - this.facing)) : 0
     if (this.toward !== undefined || away > LEADS.head) this.toward = away < SPIN.there ? undefined : look?.yaw
     const fast = going > WALK.most * pace
-    const want = (fast ? undefined : this.face) ?? (course.heading ?? this.toward ?? this.face ?? this.facing)
+    const asked = fast ? undefined : this.face
+    const faces = asked !== undefined
+    const want = asked ?? course.heading ?? this.toward ?? this.face ?? this.facing
     // the way he is going, along which he goes forwards or backwards as he faces
     let turned = 0
     if (course.heading !== undefined) {
+      // (the way he is led goes on turning as it turns, and he on speeding up as he does, until he is led anew)
+      course.heading = wrap(course.heading + course.turns * dt)
+      course.speed = clamp(course.speed + course.faster * dt, 0, RUN.most * pace)
+      course.faster *= Math.exp(-dt / (SPEEDS * beat))
       const backs = Math.cos(wrap(want - course.heading)) < -SPIN.there && !fast
       if (backs !== this.way < 0 && Math.abs(velocity.z) > 0) this.reverse()
-      const heading = course.heading + (backs ? Math.PI : 0)
+      // (as far ahead of it as it turns in the time he takes to come round, so as not to lag it as it turns)
+      const heading = course.heading + course.turns * FOLLOW.way * beat + (backs ? Math.PI : 0)
       turned = wrap(heading - this.heading) * Math.min(1, dt / (FOLLOW.way * beat))
       velocity.z = (backs ? -1 : 1) * going
     } else {
@@ -257,11 +265,11 @@ export class Way extends Pelvis {
     this.curves += (turned / dt - this.curves) * Math.min(1, dt / (FOLLOW.way * beat))
     // (no further from the way he goes than he can face at his speed)
     const widest = this.widest(going)
-    const faces = clamp(wrap(want - this.heading - turned), -widest, widest)
-    const off = wrap(faces + this.heading + turned - this.facing)
+    const toward = clamp(wrap(want - this.heading - turned), -widest, widest)
+    const off = wrap(toward + this.heading + turned - this.facing)
     const pull = (2 * Math.PI) / (FOLLOW.pelvis * beat)
-    // (going round a curve, as fast round as the way he goes turns, and coming up to where he is to face besides)
-    const along = this.curves * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
+    // (as fast round as the way he is to face turns, or going round a curve the way he goes, and coming up to it besides)
+    const along = (faces ? this.swings : this.curves) * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
     this.spins = along + damped(this.spins - along, off, pull, dt)
     // (no further round from a foot on the ground than a hip turns over it: his feet step round for him to come on)
     let round = this.spins * dt

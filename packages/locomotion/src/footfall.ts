@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
-import { span, wide } from './gait'
-import { clamp, GRAVITY, type Side, SIGN, type Size, wrap } from '@drawcall/limbs'
+import { runs, SPEEDS, span, wide } from './gait'
+import { clamp, GRAVITY, type Side, SIGN, type Size, UP, wrap } from '@drawcall/limbs'
 import { twist } from './way'
 
 /** the hips as the steps need them: where in the scene, going how fast along the way they go and turning so (m, m/s, rad, rad/s), and facing so and turning so */
@@ -17,8 +17,6 @@ export type Going = {
   aims: number
 }
 
-/** how long he is taken to go on speeding up or slowing as he does (in his beats) */
-const SPEEDS = 1.5
 /** how far round past where he turns to a foot comes down, for him to come on round over it (rad) */
 const LEAD = 0.5
 /** how far into a turn he leans at the most, as the tangent of the angle: his feet out from under his hips */
@@ -35,8 +33,9 @@ export const left = (angle: number, to = new Vector3()) => to.set(Math.cos(angle
 /** where the hips will be in so long, going on as they go, speeding up or slowing as they do, and turning as they turn */
 export function ahead(size: Size, going: Going, seconds: number, to = new Vector3()) {
   const { at, heading, curves } = going
-  // (for so long at the most, and not round to going back)
-  const mean = going.speed + (going.faster * Math.min(seconds, SPEEDS * size.beat)) / 2
+  // (as fast on average as speeding up that dies away has him, and not round to going back)
+  const lasts = SPEEDS * size.beat
+  const mean = going.speed + going.faster * lasts * (1 - (lasts / seconds) * (1 - Math.exp(-seconds / lasts)))
   const speed = mean * going.speed < 0 ? 0 : mean
   if (Math.abs(curves * seconds) < 1e-4) return flat(heading, to).multiplyScalar(speed * seconds).add(at)
   const [turned, r] = [heading + curves * seconds, speed / curves]
@@ -66,10 +65,21 @@ export function clear(size: Size, foot: Vector3, side: Side, other: Vector3, fac
 }
 
 /**
- * Where a foot comes down that does so in so long and stays on the ground for so long after, the other foot standing
- * where it does: where the hips will be at the middle of its time on the ground, out to its side as he will face then,
- * and a little out of a turn, for him to lean into it; never across the other foot, and where its leg reaches as it
- * comes down. Tells that place in the scene and which way the foot points there.
+ * where a place on the ground is as the way he goes will have turned so much further: turned with it about where it
+ * turns round, so that a footfall that came down before is to the side of his way as it was then
+ */
+function onward(going: Going, place: Vector3, turned: number) {
+  const { at, heading, curves, speed } = going
+  if (Math.abs(turned) < 1e-6) return place.clone()
+  const centre = left(heading).multiplyScalar(speed / curves).add(at)
+  return place.clone().sub(centre).applyAxisAngle(UP, turned).add(centre)
+}
+
+/**
+ * Where a foot comes down that does so in so long and stays on the ground for so long after, the other foot's footfall
+ * where it is: where the hips will be at the middle of its time on the ground, out to its side as he will face then,
+ * and a little out of a turn, for him to lean into it; never across the other footfall, as it lies from his way, and
+ * where its leg reaches as it comes down. Tells that place in the scene and which way the foot points there.
  */
 export function footfall(size: Size, going: Going, side: Side, lands: number, stays: number, other: Vector3) {
   const middle = lands + stays * over(size, going.speed)
@@ -82,7 +92,9 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
   to.add(out)
   const pulled = (going.speed * going.curves) / GRAVITY
   to.addScaledVector(left(going.heading + going.curves * middle), -clamp(pulled, -LEAN, LEAN) * size.stand)
-  clear(size, to, side, other, hips, going.speed)
+  // (at a run the two are on the ground one after the other, half a stride apart, as his way turns between them)
+  const apart = (runs(size, going.speed) * going.curves * (lands + stays)) / 2
+  clear(size, to, side, onward(going, other, apart), hips, going.speed)
   const under = ahead(size, going, lands).add(out)
   const off = to.clone().sub(under).setY(0)
   const reach = span(size, going.speed).ahead + REACH * size.leg

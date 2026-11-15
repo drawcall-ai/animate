@@ -8,6 +8,8 @@ export const WALK = { speed: 0.476, most: 0.851, push: 2 }
 export const RUN = { most: 3.4, push: 5 }
 /** how high a foot is lifted in a step, and how much higher for every pace he goes (in lengths of his leg): the heel kicks up behind him, as far as a knee folds */
 export const CLEAR = { least: 0.045, faster: 0.134 }
+/** how long his being led faster or slower goes on as it is, as it dies away (in his beats) */
+export const SPEEDS = 0.75
 /** how fast the hips go at the most while he counts as standing (in his paces) */
 export const SLOW = 0.1
 /** how slow the hips are when they are at rest (in his paces), and how near where they were to come to rest (in lengths of his leg) */
