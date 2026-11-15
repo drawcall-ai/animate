@@ -1,5 +1,6 @@
 import { Gait } from '@drawcall/gait'
 import { Bones, joints, parts, tick } from '@drawcall/limbs'
+import type { Story } from '@drawcall/animate'
 import type { Object3D } from 'three'
 import { Stride } from './stride'
 
@@ -9,6 +10,7 @@ export class Walker {
   readonly size: Bones['size']
   private readonly stride: Stride
   private owed = 0
+  private readonly stories: Story<unknown>[] = []
 
   constructor(rig: Object3D) {
     const bones = new Bones(rig)
@@ -38,10 +40,44 @@ export class Walker {
     this.gait.face(way)
   }
 
+  /** the scripted words, as the body has them */
+  run(run: Parameters<Gait['run']>[0]) {
+    this.gait.run(run)
+  }
+
+  walk(to: { x: number; z: number }, way?: Parameters<Gait['walk']>[1]) {
+    this.gait.walk(to, way)
+  }
+
+  jump(top: { x: number; y: number; z: number }) {
+    this.gait.jump(top)
+  }
+
+  when(place: { x: number; z: number }) {
+    return this.gait.when(place)
+  }
+
+  highest() {
+    return this.gait.highest()
+  }
+
+  stand() {
+    this.gait.stand()
+  }
+
+  play(story: Story<unknown>) {
+    this.stories.push(story)
+  }
+
+  *until(when: number): Story {
+    while (this.time < when - 1e-9) yield
+  }
+
   update(delta: number) {
     const dt = tick(this.size)
     for (this.owed += delta; this.owed >= dt; this.owed -= dt) {
       const { gait } = this
+      for (let k = 0; k < this.stories.length; k++) if (this.stories[k].next().done) this.stories.splice(k--, 1)
       const now = gait.time + dt
       gait.advance(now)
       gait.hips.advance(now)

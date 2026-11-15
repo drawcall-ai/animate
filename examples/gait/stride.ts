@@ -21,7 +21,10 @@ const LEVEL = new Vector3(-0.6, -1, -1)
 /** how far ahead of the pelvis the trunk turns at the most to face as he is to, and the head (rad) */
 const LEADS = { trunk: 0.8, head: 1.2 }
 /** how an arm swings against the legs: of how far the thighs are apart, at rest, more for every pace, at the most; how far the elbow folds for every pace squared, at the most, and how much less for every rad it swings back */
-const ARMS = { least: 0.5, faster: 0.44, most: 1.5, folds: 1.3, folded: 1.5, opens: 0.3 }
+const ARMS = { least: 0.5, faster: 0.44, most: 1.5, folds: 1.3, folded: 1.5, opens: 0.3, thrown: 1.2 }
+/** how hard the arms take the legs to push him up, at the least and at the most (times his weight), and how fast the hips rise with them as far up as that throws them (in paces) */
+const LIFT = { least: -1, most: 1.2 }
+const FLUNG = 0.68
 
 const yawOf = (turn: { x: number; y: number; z: number; w: number }) => {
   const way = new Vector3(0, 0, 1).applyQuaternion(turn as never)
@@ -67,6 +70,8 @@ export class Stride {
   private readonly ankle = { left: new Vector3(), right: new Vector3() }
   private readonly eased = { left: new Vector3(), right: new Vector3() }
   private posed?: Parameters<Bones['pose']>[0]
+  /** how hard the legs push him up, as the arms have taken it up (times his weight) */
+  private lift = 0
 
   constructor(
     private readonly bones: Bones,
@@ -177,10 +182,14 @@ export class Stride {
     want.copy(trunk.value).multiply(LEVEL)
     head.react(want.setY(want.y + clamp(going.aims, -LEADS.head, LEADS.head)), dt)
     const folded = Math.min(ARMS.folded, ARMS.folds * fast * fast)
+    // the arms are thrown the way the legs push the hips: forward and up as he pushes off, up while he rises through the air, down as he falls
+    const lift = flying ? hips.velocity.y / (FLUNG * size.pace) : pushed.y / GRAVITY
+    this.lift += (clamp(lift, LIFT.least, LIFT.most) - this.lift) * (1 - Math.exp(-2 * Math.PI * joints.arms.left.first.rate * dt))
+    const thrown = -ARMS.thrown * Math.max(0, this.lift)
     for (const side of SIDES) {
       const { first: arm, second: forearm, hand } = joints.arms[side]
       const [forth, rear] = RANGE.arm.x
-      arm.react(want.set(clamp(Math.max(-Math.PI / 2, SIGN[side] * swung) - trunk.value.x, forth, rear), 0, 0), dt)
+      arm.react(want.set(clamp(Math.max(-Math.PI / 2, SIGN[side] * swung + thrown) - trunk.value.x, forth, rear), 0, 0), dt)
       const closes = Math.min(folded * (1 - ARMS.opens * arm.value.x), Math.PI + 2 * (arm.value.x + trunk.value.x))
       forearm.react(want.set(-Math.max(0, closes), 0, 0), dt)
       joints.arms[side].off(arm.value, forearm.value.x)

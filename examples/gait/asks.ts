@@ -1,7 +1,10 @@
 import { Body, type Story } from '@drawcall/animate'
+import { drawGait, drawPlan, Pen, shown } from '@drawcall/debug'
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
+import { RUNS, type Runner } from './runs'
+import { Walker } from './walker'
 
 /**
  * Plain motions asked of a body in a few words each, to see that he does them: `?ask=` one of the names below. A jump
@@ -66,9 +69,13 @@ const ASKS: Record<string, (body: Body, scene: Group) => Story> = {
 }
 
 const asked = new URLSearchParams(location.search).get('ask') ?? 'side'
-const ask = ASKS[asked]
-if (!ask) throw new Error(`there is no ask ${asked}: ${Object.keys(ASKS).join(', ')}`)
-let body: Body
+const ask = ASKS[asked] ?? RUNS[asked]
+if (!ask) throw new Error(`there is no ask ${asked}: ${[...Object.keys(ASKS), ...Object.keys(RUNS)].join(', ')}`)
+/** `?gait=frames` has the frame gait do it in place of the body's own */
+const frames = new URLSearchParams(location.search).get('gait') === 'frames'
+let body: Body | Walker
+const pen = new Pen()
+const layers = shown(location.search)
 const name = document.getElementById('name')
 if (name) name.textContent = asked
 
@@ -76,11 +83,20 @@ run({
   begin() {
     const man = mannequin()
     const scene = new Group().add(man)
-    body = new Body(man)
-    body.play(ask(body, scene))
+    body = frames ? new Walker(man) : new Body(man)
+    scene.add(pen)
+    body.play((ask as (body: Runner, scene: Group) => Story)(body, scene))
     return scene
   },
-  update: (delta) => body.update(delta),
+  update: (delta) => {
+    body.update(delta)
+    // (the frame gait draws its own layers: `?debug=gait,plan`)
+    if (!(body instanceof Walker)) return
+    pen.begin()
+    if (layers.has('gait')) drawGait(pen, body.gait.intent())
+    if (layers.has('plan')) drawPlan(pen, [body.gait.hips, body.gait.feet.left, body.gait.feet.right].map((channel) => channel.intent()))
+    pen.show()
+  },
   focus: () => body.hips.value.z,
   readout: () => `${asked}  t ${body.time.toFixed(2)} s  hips ${body.hips.value.toArray().map((v) => v.toFixed(2)).join(' ')}`,
 })
