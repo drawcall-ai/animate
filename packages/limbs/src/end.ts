@@ -290,6 +290,23 @@ export class End extends Planner {
   }
 
   /**
+   * On a thing it follows, once its moment has come, its joints are put at once where they have it on the thing as the
+   * thing is now, as far as they turn: a hand that follows a thing is derived from it, not planned behind it
+   */
+  pin() {
+    const { plan } = this
+    if (!plan || !(plan.on instanceof Object3D) || moves(plan) || !due(this.clock, plan.when)) return
+    this.see(plan.on)
+    const aimed = this.solve(plan, 0)
+    for (const joint of JOINTS) {
+      const [part, turn] = [this.limb[joint], aimed[joint]]
+      if (!part || !turn) continue
+      part.value.copy(turn.value)
+      part.velocity.copy(turn.velocity)
+    }
+  }
+
+  /**
    * At its moment it is as near where it was sent as it came, and what arrived moving is let go, to swing out: and a
    * foot that stays somewhere in the air, as he comes down, for the ground. One to stay on a thing is there once it is
    * on it. A thing moves only between updates: the first step of one is told it is, a `frame`, and what the end is on

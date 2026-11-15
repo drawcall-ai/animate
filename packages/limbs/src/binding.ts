@@ -182,6 +182,14 @@ export class Bindings {
     }
   }
 
+  /** after a step, every hand that follows a thing is put where it has it on the thing as it is: derived, not planned */
+  pin() {
+    for (const bound of this.all.values()) {
+      const followers = bound.outside ? bound.bonds : bound.bonds.slice(1)
+      for (const { hand } of followers) if (hand.follows.some((on) => within(on, bound.thing))) hand.pin()
+    }
+  }
+
   /** notes where each thing is a nudge on, at the moment `now`, as the bones are posed now: for how it moves */
   measure(now: number) {
     for (const bound of this.all.values()) {

@@ -135,6 +135,7 @@ export class Clock {
     reactions.sights = gives.correct(hands, delta, { place: looked, over: going.over }) ?? (looked && going.over && sighting(this.body.bones, looked, going.over))
     for (const end of all) kept(end, () => end.advance(this.time, delta))
     for (const part of parts(joints)) part.advance(delta)
+    this.body.bindings.pin()
     reactions.react(delta)
     this.pose(delta)
     gives.write(hands, delta)

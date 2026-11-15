@@ -23,7 +23,7 @@ const turned = (part: Object3D, against: Quaternion, was: Quaternion) =>
 const against = (part: Object3D, frame: Quaternion) =>
   frame.clone().invert().multiply(part.getWorldQuaternion(new Quaternion()))
 
-test('hands on a rifle the game moves stay on it as he stands, and follow it as he walks and turns, as near as the arms can', () => {
+test('hands on a rifle the game moves are on it as he stands, and follow it as he walks and turns, as near as the arms reach', () => {
   const { scene, body, gun, pose, off } = rifleman()
   let [standing, going, turning] = [0, 0, 0]
   for (let t = 0; t < 10; t += FRAME) {
@@ -40,11 +40,11 @@ test('hands on a rifle the game moves stay on it as he stands, and follow it as 
     if (t > 2.5 && t < 6) going = Math.max(going, off())
     if (t > 6) turning = Math.max(turning, off())
   }
-  // (as near its grip as the wrist turns: about a centimetre off, and still)
-  expect(standing).toBeLessThan(0.02)
-  // (they trail it as he walks, and more as he turns sharply: the limb planner's lag behind a moving thing)
-  expect(going).toBeLessThan(0.05)
-  expect(turning).toBeLessThan(0.13)
+  expect(standing).toBeLessThan(0.002)
+  // (between the steps of his clock they are drawn going on as they went; turning sharply, the rifle along the way he
+  // is to face leads his trunk, and the arms come as near as they reach)
+  expect(going).toBeLessThan(0.03)
+  expect(turning).toBeLessThan(0.12)
 })
 
 test('both hands stay on one bar as it moves', () => {
@@ -264,7 +264,7 @@ function rifleman() {
 }
 
 test.each([1, 2])(
-  'a rifle the game sweeps half round him and back at %i turns a second, faster than his arms follow, is where the game sets it, no error, and the hands are on it again soon after',
+  'a rifle the game sweeps half round him and back at %i turns a second is where the game sets it, no error, and the hands stay on it: they follow it, derived from where it is',
   (rate) => {
     const { scene, body, gun, bound, pose, off } = rifleman()
     for (let t = 0; t < 1.5; t += FRAME) {
@@ -280,7 +280,7 @@ test.each([1, 2])(
       expect(gun.position.distanceTo(set.position)).toBe(0)
       lag = Math.max(lag, off())
     }
-    expect(lag).toBeGreaterThan(0.05)
+    expect(lag).toBeLessThan(0.03)
     expect(off()).toBeLessThan(0.02)
     expect(bound.there).toBe(true)
   },
