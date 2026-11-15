@@ -1,6 +1,6 @@
 import type { Object3D, Vector3 } from 'three'
 import type { Locomotion } from '@drawcall/locomotion'
-import { type Bindings, type Bones, both, type End, type Gives, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick } from '@drawcall/limbs'
+import { type Bindings, type Bones, both, type End, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick } from '@drawcall/limbs'
 
 /**
  * how the head is to be turned against the trunk to look at a place, in the scene, over a point `at` on a thing, in its
@@ -23,7 +23,6 @@ export type Workings = {
   bones: Bones
   locomotion: Locomotion
   joints: Joints
-  gives: Gives
   bindings: Bindings
   ends: Record<'foot' | 'hand', Record<Side, End>>
 }
@@ -64,20 +63,14 @@ export class Clock {
     // he is drawn as he is at the moment the update is for, between his steps, and so is what his hands hold
     if (this.owed > 0) {
       this.draw(this.owed)
-      this.body.gives.write(
-        SIDES.map((side) => this.body.ends.hand[side]),
-        this.owed,
-      )
       this.body.bindings.write(this.time + this.owed)
     }
   }
 
   private advance(delta: number, frame: boolean) {
-    const { locomotion, joints, ends, gives } = this.body
+    const { locomotion, joints, ends } = this.body
     const { going } = locomotion
     const all = SIDES.flatMap((side) => [ends.foot[side], ends.hand[side]])
-    const hands = SIDES.map((side) => ends.hand[side])
-    if (frame) gives.begin(this.span)
     // what was to arrive by now has, before the stories go on from it
     // (one sent to a thing that has left his scene is let free, and that is told once the step is done)
     const kept = (end: End, act: () => void) => {
@@ -107,13 +100,12 @@ export class Clock {
     if (fault) this.faults.push(fault)
     if (wind) this.stories.push(wind)
     // (looking over a thing, his head comes down to the line it has his eye on)
-    const sights = gives.correct(hands, delta, { place: looked, over: going.over }) ?? (looked && going.over && sighting(this.body.bones, looked, going.over))
+    const sights = looked && going.over && sighting(this.body.bones, looked, going.over)
     for (const end of all) kept(end, () => end.advance(this.time, delta))
     for (const part of parts(joints)) part.advance(delta)
     this.body.bindings.pin()
     locomotion.react(delta, sights)
     this.pose(delta)
-    gives.write(hands, delta)
     this.time += delta
     const faults = this.faults.splice(0)
     const said = faults.map((fault) => (fault instanceof Error ? fault.message : String(fault)))

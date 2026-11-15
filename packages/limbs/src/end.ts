@@ -1,11 +1,10 @@
-import { Object3D, Quaternion, Vector3 } from 'three'
+import { Object3D, Vector3 } from 'three'
 import { type State, between, keeps as within, quickest } from './curve'
 import type { Grip, Pose } from './fingers'
-import { type Give, TAKES, holds } from './give'
 import { type Goal, MOST, timed } from './goal'
 import { SLACK, sway } from './limb'
 import { JOINTS, NONE, type Plan, Planner, drawn } from './planner'
-import { type Carrying, type Reaching, type Target, moves } from './track'
+import { type Reaching, type Target, moves } from './track'
 import { EXACT, type Story, type Xyz, due, waits } from './world'
 
 /**
@@ -27,7 +26,7 @@ export class End extends Planner {
   readonly velocity = new Vector3()
   /** where the ground holds it, if it does */
   anchor?: Vector3
-  /** whether it is where it was last sent and stays there, as near as an end counts as there: and holds what gives way to it */
+  /** whether it is where it was last sent and stays there, as near as an end counts as there */
   get there() {
     return this.plan?.there === true
   }
@@ -43,71 +42,6 @@ export class End extends Planner {
     return this.sent.flatMap(({ on }) => (on instanceof Object3D ? [on] : []))
   }
 
-  /** what it holds, by which grip, and the plan that had it take hold: where it is on the thing */
-  holding?: { give: Give; grip: Grip; target: Plan }
-
-  /** where what it holds, or is on its way to hold, sits in it: see `framed` */
-  get placed() {
-    const grip = this.holding?.grip ?? (this.plan?.gives && this.plan.grip)
-    return grip && { ...this.framed(grip), part: grip.target }
-  }
-
-  /**
-   * what it keeps to its grip on, as that is to be: what it is sent to hold, once it is there, or what it carries to a
-   * place to stay there with another hand on it (a hand alone on a thing has it as the hand is)
-   */
-  get keeps() {
-    const { plan, holding } = this
-    if (plan?.gives) return plan.there ? plan.gives : undefined
-    const carries = plan?.carries
-    return plan && carries?.shared && carries === holding?.give && !moves(plan) ? carries : undefined
-  }
-
-  /** whether it takes what it holds along wherever it goes: alone on it, let free, sent elsewhere, or swinging it */
-  get leads() {
-    return this.holding !== undefined && this.keeps !== this.holding.give
-  }
-
-  /** where it can be `seconds` from now on what it keeps to its grip on: see `closest` */
-  nearest(seconds: number) {
-    const grip = this.plan?.gives ? this.plan : this.holding?.target
-    if (!grip) throw new Error(`the ${this.name} is asked how near it comes to what it holds, and holds nothing`)
-    return this.closest(grip, seconds)
-  }
-
-  /**
-   * how what it carries to a place to stay there is to go `seconds` from now, if it does: from how it was against him
-   * as it set off to its pose, in the frame of the body, a share of the way by the time from then to its moment
-   */
-  wants(seconds: number) {
-    const { plan } = this
-    if (!plan?.carries || !plan.pose || !plan.from) return undefined
-    const { at, turn } = this.posed(plan, seconds)
-    const share = (this.clock + seconds - plan.leaves) / Math.max(plan.when - plan.leaves, EXACT)
-    return { from: plan.from, at, turn, share }
-  }
-
-  /**
-   * how the wrist bends `seconds` from now for what the hand leads to be turned as it is to be: as it is carried, or
-   * as it is against him
-   */
-  private turning(seconds: number) {
-    const give = this.holding?.give
-    if (!give) return undefined
-    const wants = this.wants(seconds)
-    const turn = new Quaternion()
-    if (wants) give.along(wants, seconds).decompose(new Vector3(), turn, new Vector3())
-    else turn.copy(give.turned())
-    return this.bend(turn.multiply(give.hung(this).invert()), seconds)
-  }
-
-  /** where a plan has what it carries be `seconds` from now, and how that is turned, in the frame of the body */
-  private posed(plan: Plan, seconds: number) {
-    const turn = new Quaternion()
-    const at = this.where({ ...plan, place: plan.pose?.at ?? plan.place }, seconds, turn).clone()
-    return { at, turn: turn.multiply(plan.pose?.turn ?? new Quaternion()) }
-  }
-
   /**
    * Sends the end to a place: one `on` him is counted from where its limb starts, the shoulder or the hip, and goes
    * with it. The velocity it arrives with is how it moves in the scene then, wherever the place is counted
@@ -115,9 +49,7 @@ export class End extends Planner {
    * it is there the first moment it can be, having taken its time, with a short wind-up. Asked to arrive faster than it
    * can, it arrives as fast as it can. The story it returns is over at that moment, or once a foot stands where it was
    * sent to step, and gives whether it was there then: false if it came short, or was sent elsewhere before. A hand
-   * can instead be sent by a grip to hold a thing where it is, closing its fingers on it as the grip has them by then:
-   * what he holds gives way to it once it holds it. Sent by another grip, it lets go of what it held as it sets off;
-   * sent to a place, it takes what it holds along.
+   * can instead be sent by a grip to a thing, closing its fingers on it as the grip has them by then, and stays on it.
    */
   to(place: Xyz | Grip, { seconds, ...arriving }: Reaching & { seconds?: number } = {}): Story<boolean> {
     timed(this.name, seconds)
@@ -147,32 +79,6 @@ export class End extends Planner {
     return this.send(this.target(place, arriving), Math.max(when - this.clock, this.after), false)
   }
 
-  /** Has the hand carry what it holds, or is on its way to hold, to a place, as `to` or `by`: the place and the ways the thing's. */
-  carry(give: Give, place: Xyz, { seconds, by, ...how }: Carrying & { seconds?: number; by?: number }) {
-    const grip = this.holding?.give === give ? this.holding.grip : this.sent.find((plan) => plan.gives === give)?.grip
-    if (!grip) throw new Error(`the ${this.name} is to carry something it does not hold`)
-    const target = this.carrying(give, grip, place, how)
-    if (by === undefined) {
-      timed(this.name, seconds)
-      return this.send(target, seconds, true)
-    }
-    if (Number.isNaN(by)) throw new Error(`the ${this.name} is to carry something by a moment that is no number`)
-    return this.send(target, Math.max(by - this.clock, this.after), false)
-  }
-
-  /** it lets go of what it holds, or is on its way to hold, and is the body's again, the fingers relaxing */
-  letGo() {
-    this.holding = undefined
-    this.free()
-    this.limb.wrist?.release(sway(this.limb))
-    if (this.limb.hand?.fingers) void this.shape()
-  }
-
-  /** whether it holds a thing, or is on its way to hold it, by a grip */
-  takes(give: Give) {
-    return this.holding?.give === give || this.sent.some((plan) => plan.gives === give)
-  }
-
   /**
    * Has the fingers of a hand take a pose, or with none relax, and hold it until they are given another, whatever
    * else the hand does: in the time fingers take, or `by` a moment, setting off as late as they can for that. The story
@@ -183,8 +89,7 @@ export class End extends Planner {
   }
 
   /**
-   * Lets the end go: it is no longer on its way anywhere or kept at a place, and its limb is the body's again. A hand
-   * keeps what it holds, carried as the body has the arm.
+   * Lets the end go: it is no longer on its way anywhere or kept at a place, and its limb is the body's again.
    */
   free() {
     for (const { stoop } of this.waiting.splice(0)) if (stoop) this.carrier.rise(stoop, this.clock)
@@ -242,18 +147,6 @@ export class End extends Planner {
     // comes as near as it does)
     const plan = found ?? { ...target, when: after + sway(this.limb) / 2, leaves: after, swing: 0, near: NONE }
     if (!found) this.claim(plan)
-    // (sent again to hold what gives way to it where it holds it already, it holds it on)
-    const held = this.plan
-    if (
-      held?.there &&
-      held.gives &&
-      plan.gives === held.gives &&
-      plan.on === held.on &&
-      plan.place.distanceTo(held.place) < EXACT
-    )
-      plan.there = true
-    // (sent by a grip to what it is on already, it holds it at once)
-    if (plan.gives && this.on(plan, true)) this.take(plan)
     stoops.forEach((stoop, k) => this.carrier.rise(stoop, Math.min(untils[k], plan.leaves)))
     this.waiting.push(plan)
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
@@ -262,25 +155,9 @@ export class End extends Planner {
     return this.carried(plan)
   }
 
-  /**
-   * whether it is where a plan has it, as near as an end counts as there: on what gives way to it as that is drawn, as
-   * near as holds it or, come to its moment, as near as its fingers reach, turned as near as the wrist turns it
-   */
-  private on(plan: Plan, drawn: boolean, due = false) {
-    const off = this.tipped(plan, 0, this.value.clone()).distanceTo(this.where(plan, 0, undefined, drawn))
-    if (plan.gives) return due ? off <= TAKES * this.size.leg : holds(this.size, off, this.turnedOff(plan))
-    // (what it carries is there as the hands have it, turned as it is to be)
-    if (!plan.carries) return off <= SLACK.place * this.size.leg
-    if (this.holding?.give !== plan.carries) return false
-    const { at, turn } = this.posed(plan, 0)
-    const { far, turned } = plan.carries.off(at, turn)
-    return holds(this.size, far, turned, SLACK.place)
-  }
-
-  /** it takes hold of what a plan sends it by a grip to hold, if it does not hold that so already */
-  private take(plan: Plan) {
-    if (plan.gives && plan.grip && this.holding?.grip !== plan.grip)
-      this.holding = { give: plan.gives, grip: plan.grip, target: plan }
+  /** whether it is where a plan has it, as near as an end counts as there */
+  private on(plan: Plan) {
+    return this.tipped(plan, 0, this.value.clone()).distanceTo(this.where(plan, 0)) <= SLACK.place * this.size.leg
   }
 
   /** a story over at a plan's moment, or once it is sent elsewhere: whether it was there then */
@@ -320,15 +197,10 @@ export class End extends Planner {
     }
     const { plan } = this
     if (!plan || !due(this.clock, plan.when)) return
-    // it is there while it is as near where it is to be as an end counts as there: and a hand takes hold of what gives
-    // way to it once it is on it as it is drawn, where the hands that hold it have it, and keeps it
-    if (plan.gives) plan.there ||= this.on(plan, true, true)
-    else plan.there = this.on(plan, false)
-    if (plan.there) this.take(plan)
-    // (what he got down for it he stays down for while it is there, and no longer: going away from it, he comes up;
-    // reaching for what he is to take hold of he stays down until he holds it, and it comes up with him)
-    const done = plan.gives ? plan.there : !plan.there
-    if (done && plan.stoop && plan.stoop.until > this.clock) this.carrier.rise(plan.stoop, this.clock)
+    // it is there while it is as near where it is to be as an end counts as there
+    plan.there = this.on(plan)
+    // (what he got down for it he stays down for while it is there, and no longer: going away from it, he comes up)
+    if (!plan.there && plan.stoop && plan.stoop.until > this.clock) this.carrier.rise(plan.stoop, this.clock)
     const lands = this.kind === 'foot' && this.carrier.landing
     if (!moves(plan) && !(this.waiting.length === 0 && lands)) return
     this.release()
@@ -344,21 +216,10 @@ export class End extends Planner {
     const next = this.waiting[0]
     if (next && due(now, next.leaves)) this.leave(next, next.when - now)
     const going = this.plan
-    // (what it leads it turns with the wrist as the arm goes, as that is to be, unless the hand is to be turned some
-    // way of its own: only what the wrist cannot turn tips it)
-    const own = !going?.carries && (going?.palm || going?.pointing)
-    const bend = this.leads && !going?.gives && !own ? this.turning(dt) : undefined
-    if (!going) return void (bend && this.limb.wrist?.to(bend, { velocity: new Vector3() }))
+    if (!going) return
     const seconds = Math.max(going.when - now, dt)
-    // (what it carries to a place to stay there it keeps its grip on, as the thing is to be)
-    const kept = this.keeps && !going.gives ? this.holding?.target : undefined
-    const aimed = this.solve(kept ?? going, kept ? dt : seconds)
-    // (what gives way to it it never lets go of: the limb is turned to it the way nearest how it is turned, and aimed at
-    // it at rest, as it is told where it is but not how it moves)
-    if (kept || going.gives) {
-      aimed.first.value.copy(this.within(this.limb.first, aimed.first.value, true))
-      for (const joint of JOINTS) aimed[joint]?.velocity.set(0, 0, 0)
-    } else if (aimed.stuck) this.near(aimed)
+    const aimed = this.solve(going, seconds)
+    if (aimed.stuck) this.near(aimed)
     const back = drawn(aimed, going.swing, this.limb)
     // it goes no harder than its joints can be pushed, and lags if it must
     const takes = (joint: Goal, to: State, most: number) =>
@@ -366,11 +227,6 @@ export class End extends Planner {
     const ways = JOINTS.flatMap((joint) => {
       const [part, drawn, turn] = [this.limb[joint], back[joint], aimed[joint]]
       if (!part || !drawn || !turn) return []
-      if (kept) return [{ part, to: turn, seconds: takes(part, turn, dt) }]
-      if (bend && part === this.limb.wrist) {
-        const to = { value: bend, velocity: new Vector3() }
-        return [{ part, to, seconds: takes(part, to, dt) }]
-      }
       // with longer than a joint swings for, it draws back first to where it swings from
       const draws = seconds > drawn.swing
       const to = draws ? drawn : turn
@@ -398,9 +254,6 @@ export class End extends Planner {
     this.waiting.shift()
     this.plan = plan
     this.anchor = undefined
-    // (sent by another grip, it lets go of what it held; carrying it, it turns it on from how it is)
-    if (plan.grip && plan.grip !== this.holding?.grip) this.holding = undefined
-    if (plan.carries) plan.from = plan.carries.against()
     if (this.kind === 'foot') this.put()
   }
 }

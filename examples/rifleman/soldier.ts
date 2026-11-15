@@ -249,7 +249,7 @@ export class Soldier {
   }
 
   private *grenade(): Story {
-    const { body, held, hands, ball } = this
+    const { body, hands, ball } = this
     const { right } = body.hand
     // the rifle rests in his left shoulder in his left hand, the right takes the grenade from his belt and throws it
     // overarm the way he aims

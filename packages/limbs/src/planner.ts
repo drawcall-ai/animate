@@ -246,12 +246,6 @@ export class Planner extends Reach {
         this.drop(found)
         break
       }
-      // (what gives way to the hands is carried on with him: what does not have them there now does no later, but for
-      // his getting down for what is out of reach)
-      if (found && target.gives && !stoops) {
-        const short = found.rank === RANK.reach && found.by > MARGIN * this.size.leg
-        return short ? this.scan(target, true, soonest) : undefined
-      }
       if (found && (!best || nearer(found, best.near, MARGIN * this.size.leg))) best = { near: found, wait }
       before = wait
       step = Math.min(2 * step, down / 4)

@@ -1,4 +1,4 @@
-export { Body, type Held } from './body'
+export { Body } from './body'
 export type { Foot, Hand, Sending, Thing } from './ends'
 export type { Intent, Meant } from './intent'
 export type { Footfall, Foreseen } from '@drawcall/locomotion'

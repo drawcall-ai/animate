@@ -2,7 +2,6 @@ import { Matrix4, Object3D, Quaternion, Vector3 } from 'three'
 import type { Carrier } from './carrier'
 import { DOWN, FINGERS, type Grip, type Touch } from './fingers'
 import { REST } from './goal'
-import type { Give } from './give'
 import type { Limb } from './limb'
 import type { Side, Size } from './size'
 import { EXACT, UP, type Xyz } from './world'
@@ -11,9 +10,8 @@ import { EXACT, UP, type Xyz } from './world'
  * where an end is sent, and how it is to move there: a place `on` him is counted from where its limb starts, as he
  * faces, and one on a thing in its frame. A hand may be turned for its `palm` to face and its fingers to be `pointing`
  * a way, and be sent to be there `with` a part of it other than the wrist: a fingertip, the palm, the knuckles or a
- * point of what it carries, from the wrist in the frame of the hand as it hangs. A
- * hand may be sent by a `grip` to hold what it is on, which `gives` way to it if he holds that; or to have what he
- * holds, which it `carries`, at a `pose`: its origin at a place and turned so, counted as the place is
+ * point of what it carries, from the wrist in the frame of the hand as it hangs. A hand may be sent by a `grip` to
+ * hold what it is on
  */
 export type Target = {
   place: Vector3
@@ -23,14 +21,11 @@ export type Target = {
   pointing?: Vector3
   with?: Touch | Vector3
   grip?: Grip
-  gives?: Give
-  carries?: Give
-  pose?: { at: Vector3; turn: Quaternion }
 }
 /**
  * what a body's places are told against: what takes the scene to the frame they are told in, the rig, and the bone the
- * limb starts at; the body, which a place is on that is on him; how the bone at the limb's end is turned as the limb
- * hangs straight down, and how large it is; and the thing he holds that a part is, or is part of, if he holds one
+ * limb starts at; the body, which a place is on that is on him; and how the bone at the limb's end is turned as the
+ * limb hangs straight down, and how large it is
  */
 export type Rigged = {
   frame: Matrix4
@@ -39,7 +34,6 @@ export type Rigged = {
   body: object
   hangs: Quaternion
   large: number
-  held(part: Object3D): Give | undefined
 }
 /** how long a thing is watched for how it moves, at the least (in his beats): updates tell how it moves no finer */
 const WATCH = 0.09
@@ -53,7 +47,6 @@ const now = new Vector3()
 const matrix = new Matrix4()
 const scaled = new Vector3()
 const ONE = new Vector3(1, 1, 1)
-const FORWARD = new Vector3(0, 0, 1)
 
 /**
  * how an end is to arrive: moving so, in the scene, and at a place counted `on` him, from where its limb starts and as
@@ -66,12 +59,6 @@ export type Arriving = { velocity?: Xyz; on?: object }
  * then what is `pointing`, its z
  */
 export type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch | Grip }
-/**
- * how a thing he holds is to arrive: as a hand does, its z `pointing` a way and its y `up`, or the `palm` of the hand
- * that carries it facing a way, counted as its place is
- */
-export type Carrying = Arriving & { pointing?: Xyz; up?: Xyz; palm?: Xyz }
-
 /** how a thing was seen at a moment: from where the limb starts, and in the scene */
 type Pose = { at: Vector3; turned: Quaternion }
 type Look = Pose & { large: Vector3; time: number; scene: Pose }
@@ -114,16 +101,10 @@ export class Track {
   /**
    * where a target is `seconds` from now, and how what is said of it is turned, `ways`: a place on him goes with the
    * way he faces, and one on a thing is where the thing is, moving on as it was seen to until now: in the scene, or
-   * from where the limb starts if it moved less so, as what he carries does, and for an end that stays on it on until then. What gives way to the hands may be told where it is
-   * `drawn` instead
+   * from where the limb starts if it moved less so, as what he carries does, and for an end that stays on it on until then
    */
-  protected where(target: Target & { there?: boolean }, seconds: number, ways = framed, drawn = false) {
+  protected where(target: Target & { there?: boolean }, seconds: number, ways = framed) {
     const { place, on } = target
-    if (on instanceof Object3D && target.gives?.held) {
-      // (what gives way to the hands is where they are sent to have it, carried on with him: or where it is drawn)
-      ;(drawn ? target.gives.drawn(on, matrix) : target.gives.at(on, seconds, matrix)).decompose(now, ways, scaled)
-      return there.copy(place).applyMatrix4(matrix)
-    }
     if (on instanceof Object3D) {
       const { at, turned: held, large, time, was, scene } = this.seen?.thing === on ? this.seen : this.see(on)
       // (on as it went from how it was seen before to how it is: for as long again as that took, as far again)
@@ -224,44 +205,9 @@ export class Track {
     if (grip && velocity.lengthSq() > 0) {
       throw new Error(`the ${this.name} is to take hold of something moving past it: send what he holds instead`)
     }
-    const gives = grip && this.rig.held(grip.target)
     // (with a grip, `pointing` is the way what sits in the hand points its z, and the palm is turned about that)
     const turned = typeof touch === 'object' && points ? this.pointed(touch, points, faces) : { palm: faces, pointing: points }
-    return { place, velocity, on, ...turned, with: part, grip, gives }
-  }
-
-  /**
-   * where a hand is sent to have a thing it holds by a `grip`, for the thing to be at a place: its origin there, turned
-   * from how it is to be now the short way for its z to be `pointing` a way, its y `up`, or the palm of the hand
-   * facing a way, rolled about the one of those said for the palm to face as near that; with its z and y both said,
-   * turned so. The place and the ways are counted alike, and its velocity
-   * is the thing's
-   */
-  protected carrying(give: Give, grip: Grip, place: Xyz, { pointing, up, palm, ...arriving }: Carrying): Target {
-    const hand = this.limb.hand
-    if (!hand) throw new Error(`the ${this.name} is to carry something, and is no hand`)
-    const target = this.target(place, arriving)
-    const { at, turned } = this.framed(grip)
-    // (how it is turned now, counted as the place is)
-    this.where(target, 0, framed)
-    const now = framed.clone().invert().multiply(give.turned())
-    const ways = [pointing, up, palm].map((way) => way && new Vector3().copy(way).normalize())
-    if (!ways.every((way) => !way || way.toArray().every(Number.isFinite))) {
-      throw new Error(`the ${this.name} is to carry something turned a way that no numbers say`)
-    }
-    const [z, y, faces] = ways
-    const sits = turned.clone().invert()
-    const mine = hand.palm.clone().applyQuaternion(sits)
-    const along = (z && y && basis(y, z)) || shortest(now, z ? FORWARD : y ? UP : mine, z ?? y ?? faces)
-    // (said how the palm faces as well as one way of it, it is rolled about that way for the palm to face as near so)
-    const about = z && y ? undefined : (z ?? y)
-    const turn = faces && about ? rolled(along, about, mine, faces) : along
-    // (the hand turned as has it so, there with the thing's origin)
-    const held = turn.clone().multiply(sits)
-    // (said only how the palm faces, the hand is turned no further than that)
-    const palmed = hand.palm.clone().applyQuaternion(held)
-    const ends = faces && !z && !y ? { palm: palmed } : { palm: palmed, pointing: DOWN.clone().applyQuaternion(held) }
-    return { ...target, ...ends, with: at, carries: give, pose: { at: target.place.clone(), turn } }
+    return { place, velocity, on, ...turned, with: part, grip }
   }
 
   /**
@@ -306,24 +252,4 @@ export class Track {
       pointing: DOWN.clone().applyQuaternion(back),
     }
   }
-}
-
-/** how a thing is turned for its y to be `up`, as near as is square to its z `pointing` that way: or none, if they lie along each other */
-function basis(up: Vector3, pointing: Vector3) {
-  const y = up.clone().addScaledVector(pointing, -pointing.dot(up))
-  if (y.lengthSq() < EXACT) return undefined
-  y.normalize()
-  return new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3().crossVectors(y, pointing), y, pointing))
-}
-
-/** a turn so, turned on the short way for what lies along a way in it to lie along another way: or as it is, with none */
-const shortest = (turn: Quaternion, mine: Vector3, way?: Vector3) =>
-  way ? new Quaternion().setFromUnitVectors(mine.clone().applyQuaternion(turn).normalize(), way).multiply(turn) : turn.clone()
-
-/** a turn so, turned on about a way as far as has what lies along another way in it come nearest a third */
-function rolled(turn: Quaternion, about: Vector3, mine: Vector3, way: Vector3) {
-  const flat = (v: Vector3) => v.clone().addScaledVector(about, -v.dot(about))
-  const [from, to] = [flat(mine.clone().applyQuaternion(turn)), flat(way)]
-  const angle = Math.atan2(about.dot(new Vector3().crossVectors(from, to)), from.dot(to))
-  return new Quaternion().setFromAxisAngle(about, angle).multiply(turn)
 }

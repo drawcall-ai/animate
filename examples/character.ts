@@ -171,14 +171,3 @@ export function inHand(body: Body, hand: Hand, held: Grip, how: { turning?: bool
   thing.on(body.hand[hand.side], held, how)
   return thing
 }
-
-/**
- * A body holds a thing in a hand from the start through `body.hold` (going away, for `inHand`): it is put where the
- * grip has its part in the hand as the hand is now, and the hand takes hold of it there. Tells the thing as he holds it.
- */
-export function holds(body: Body, hand: Hand, held: Grip, thing = held.target) {
-  seat(hand, held, thing)
-  const holding = body.hold(thing)
-  body.hand[hand.side].to(held)
-  return holding
-}

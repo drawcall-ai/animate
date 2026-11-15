@@ -1,26 +1,15 @@
 import { Object3D, Quaternion, Vector3 } from 'three'
 import { flat, type Ground, Locomotion, type Run, type Walk } from '@drawcall/locomotion'
-import { type Band, Bindings, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
+import { type Band, Bindings, Bones, both, due, End, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
 import { Clock, type Workings } from './clock'
 import { type Intent, intent } from './intent'
-import { type Binder, type Foot, type Hand, hand as handOf, type On, stay, type Thing, thing } from './ends'
+import { type Binder, type Foot, type Hand, hand as handOf, stay, type Thing, thing } from './ends'
 
 /**
  * where the pocket of a shoulder is that a stock rests in, from its joint: so far above it (of his trunk) and in
  * toward his middle (of how far out a shoulder is), on his front
  */
 const POCKET = { up: 0.1, inward: 0.25 }
-
-/**
- * A thing he holds, which the hands that hold it move: sent to a place, it is there, turned as said, as near as the
- * right hand can have it if that holds it, else the left, the other on it going with it; `free` has the hand on a side let go of it, or
- * with none every hand, and he holds it no more.
- */
-export type Held = {
-  to(place: Xyz, how?: Carrying & On & { seconds?: number }): Story<boolean>
-  by(when: number, place: Xyz, how?: Carrying & On): Story<boolean>
-  free(side?: Side): void
-}
 
 /** the body made for each rig */
 const rigs = new WeakMap<Object3D, Body>()
@@ -57,7 +46,6 @@ export class Body {
   readonly foot: Record<Side, Foot>
   readonly hand: Record<Side, Hand>
   private readonly hands: Record<Side, End>
-  private readonly gives: Gives
   private readonly bindings: Bindings
   private readonly binder: Binder
   /** what he is made of, for telling what he means to do */
@@ -70,19 +58,12 @@ export class Body {
     const turning = joints(bones)
     const locomotion = (this.locomotion = new Locomotion(this, bones, turning))
     const carried = locomotion.carrier
-    const { trunk, shoulder: wide } = size
-    const pocket = (side: Side) => {
-      const [up, inward] = [POCKET.up * trunk, POCKET.inward * wide]
-      return new Vector3(-SIGN[side] * inward, up, this.front(side, up, inward))
-    }
-    const gives = (this.gives = new Gives(bones, carried, both(pocket)))
     const rigged = (end: 'foot' | 'hand', side: Side) => ({
       frame: bones.frame,
       rig,
       limb: bones.starts[end][side],
       body: this,
       ...bones.lies(end, side),
-      held: (part: Object3D) => gives.held(part),
     })
     const foot = both(
       (side) => new End(`${side} foot`, 'foot', side, turning.legs[side], carried, size, rigged('foot', side)),
@@ -117,34 +98,10 @@ export class Body {
     this.forearm = both((side) => turning.arms[side].second)
     for (const part of parts(turning)) part.free()
     for (const side of SIDES) foot[side].anchor = locomotion.stands(side)
-    const all = { size, bones, locomotion, joints: turning, gives, bindings, ends: { foot, hand } }
+    const all = { size, bones, locomotion, joints: turning, bindings, ends: { foot, hand } }
     this.clock = new Clock((this.workings = all))
     rigs.set(rig, this)
     this.clock.pose(0)
-  }
-
-  /**
-   * He holds a thing from now on: a hand sent to it by a grip takes hold of it where it is, and the hands that hold it
-   * move it, written in its parent's frame, as near where it is set or sent as they can have it, out of him; held by
-   * none, it is the scene's. With a point of it, in its frame, that `rests`, that point rests in the pocket of the
-   * shoulder of the hand that holds it nearest it, while no hand carries it.
-   */
-  hold(thing: Object3D, { rests }: { rests?: Xyz } = {}): Held {
-    if (rests && !Number.isFinite(rests.x + rests.y + rests.z)) throw new Error('a point rests that no numbers say')
-    const give = this.gives.hold(thing, rests && new Vector3().copy(rests))
-    // (the right hand carries it if it holds it, or is on its way to: else the left; with neither, it stays)
-    const lead = (place: Xyz, how: Carrying & { seconds?: number; by?: number }) => {
-      const hand = [this.hands.right, this.hands.left].find((hand) => hand.takes(give))
-      return hand ? hand.carry(give, place, how) : (function* (): Story<boolean> { return false })()
-    }
-    return {
-      to: (place, how = {}) => lead(place, how),
-      by: (when, place, how = {}) => lead(place, { ...how, by: when }),
-      free: (side) => {
-        for (const each of side ? [side] : SIDES) if (this.hands[each].takes(give)) this.hands[each].letGo()
-        if (!side) this.gives.drop(thing)
-      },
-    }
   }
 
   /**

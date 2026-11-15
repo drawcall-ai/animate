@@ -44,10 +44,6 @@ export function intent({ bones, ends, locomotion, size, bindings }: Workings, ti
   const led = seen.led && seen.led.clone().applyAxisAngle(UP, yaw)
   const ways = { facing: seen.facing + yaw, face: seen.face + yaw, heading: seen.heading + yaw, led }
   const things = new Map<Object3D, { at: Matrix4; time: number }>()
-  for (const hand of Object.values(ends.hand)) {
-    const give = hand.holding?.give
-    if (give && !things.has(give.thing)) things.set(give.thing, { at: give.at(give.thing, 0, new Matrix4()).premultiply(scene), time })
-  }
   const hand = both((side) => meant('hand', side))
   for (const { thing, hands, outside } of bindings.bound) {
     const leads = hand[hands[0]]

@@ -20,10 +20,6 @@ const TIPS = { tries: 20, moved: 1e-6 }
  * what moving the elbow from where it is costs against a wrist turned short (rad a metre)
  */
 const SWIVEL = { most: 1.2, fine: 0.1, tries: 12, moved: 0.1 }
-/** how far short of its stretch the nearest place a hand can be at is looked for, in shares of its limb */
-const SHORT = 0.015
-/** how many times over a hand is moved to where its wrist turns it as it is to be */
-const MOVES = 3
 /** a full turn (rad) */
 export const FULL = 2 * Math.PI
 /** what a wrist bends about to carry the fingers: to the side and back and forth, not the forearm's twist */
@@ -257,70 +253,11 @@ export class Reach extends Track {
   }
 
   /**
-   * Where the end is to be for a target `seconds` from now, in the frame of the body, and the nearest place to that where
-   * the limb can have it: short of its stretch, its joints well within how far they turn and the limb clear of the
-   * trunk, so that it is turned so however finely it is a little off. And what turns the hand from how it is to be
-   * turned to the nearest its wrist can turn it there
-   */
-  protected closest(plan: Target, seconds: number) {
-    const { limb } = this
-    const { first, second, wrist } = limb
-    const want = this.where(plan, seconds, framed).clone()
-    // (short of its stretch, so that it is turned so however finely it is a little off)
-    this.root(seconds, start, turned)
-    const near = want
-      .clone()
-      .sub(start)
-      .clampLength(0, (1 - SHORT) * limb.length)
-      .add(start)
-    let posed = this.turns(plan, near, seconds, framed)
-    // a hand its wrist cannot turn as it is to be there is had so nearby: on the forearm it is turned so from as far as
-    // the wrist bends, that forearm hanging from where the upper arm reaches
-    for (let k = 0; k < MOVES && wrist && posed.wrist; k++) {
-      const bends = this.within(wrist, posed.wrist, true)
-      if (bends.distanceTo(posed.wrist) < EXACT) break
-      const hand = bent(posed.forearm, posed.wrist, bend).multiply(bent(new Quaternion(), bends, forearm).invert())
-      const along = DOWN.clone().applyQuaternion(hand)
-      const elbow = near.addScaledVector(along, -limb.lower).sub(start).setLength(limb.upper).add(start)
-      near.copy(elbow).addScaledVector(along, limb.lower)
-      posed = this.turns(plan, near, seconds, framed)
-    }
-    const [turn, fold] = [
-      this.within(first, posed.first, true),
-      this.within(second, new Vector3(posed.fold, 0, 0), true).x,
-    ]
-    const can = limb.at(limb.off(turn, fold), fold)
-    const was = bent(posed.forearm, posed.wrist ?? REST, new Quaternion()).invert()
-    const hand = bent(posed.forearm, wrist && posed.wrist ? this.within(wrist, posed.wrist, true) : REST, bend)
-    return { want, can: can.applyQuaternion(turned).add(start), turn: was.premultiply(hand) }
-  }
-
-  /** how the wrist bends, as far as it does, for the hand to be turned so from hanging `seconds` from now, the arm turning on as it is */
-  protected bend(hand: Quaternion, seconds: number) {
-    const { first, second, wrist } = this.limb
-    const on = ({ value, velocity }: State) => new Vector3().copy(value).addScaledVector(velocity, seconds)
-    const trunk = new Quaternion()
-    this.root(seconds, new Vector3(), trunk)
-    const arm = fore(trunk, on(first), on(second).x, new Quaternion())
-    const to = new Vector3().setFromEuler(new Euler().setFromQuaternion(arm.invert().multiply(hand), 'YXZ'))
-    return wrist ? this.within(wrist, to, true) : to
-  }
-
-  /** how far the hand is now from how it is to be turned for a target on the thing as that is drawn (rad) */
-  protected turnedOff(plan: Target) {
-    const { first, second, wrist } = this.limb
-    const { turned: to } = this.turned(plan, 0, true)
-    this.root(0, start, turned)
-    return bent(fore(turned, first.value, second.value.x, forearm), wrist?.value ?? REST, bend).angleTo(to)
-  }
-
-  /**
    * where the wrist is to be for a target `seconds` from now and how the hand is to be turned there from hanging
-   * straight down, in the frame of the body: as its palm is to face and its fingers to point, on what gives way to it
-   * as that is `drawn` if that is said
+   * straight down, in the frame of the body: as its palm is to face and its fingers to point
    */
-  protected turned(plan: Target, seconds: number, drawn = false) {
-    const at = this.where(plan, seconds, framed, drawn).clone()
+  protected turned(plan: Target, seconds: number) {
+    const at = this.where(plan, seconds, framed).clone()
     const hand = this.limb.hand
     const palm = plan.palm?.clone().applyQuaternion(framed)
     const pointing = plan.pointing?.clone().applyQuaternion(framed)

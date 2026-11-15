@@ -13,10 +13,6 @@ export type Hand = Readonly<
   Pick<End, 'value' | 'velocity' | 'there' | 'shape' | 'free'> & {
     to(place: Xyz | Grip, how?: Reaching & On & { seconds?: number }): Story<boolean>
     by(when: number, place: Xyz | Grip, how?: Reaching & On): Story<boolean>
-    /** going away: `body.bind(grip.target).on(hand, grip)` */
-    take(grip: Grip, how?: { turning?: boolean }): void
-    /** going away: `thing.free()` or `thing.off(hand)` */
-    letGo(): Vector3
   }
 >
 /** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, if it does, and to send it somewhere, have it somewhere by a moment, or give it back to the body. */
@@ -80,8 +76,7 @@ function* nothing(): Story<boolean> {
 }
 
 /** the hand a story has of an end */
-export function hand(end: End, binder: Binder): Hand {
-  const { bindings, clock } = binder
+export function hand(end: End, { bindings }: Binder): Hand {
   // (a hand sent onto a thing follows it, which it may not if it leads the thing)
   const onto = (place: Xyz | Grip, on?: object) => {
     const thing = 'target' in place ? place.target : on
@@ -103,20 +98,6 @@ export function hand(end: End, binder: Binder): Hand {
     },
     shape: (pose, how) => end.shape(pose, how),
     free: () => end.free(),
-    take(grip, { turning = true } = {}) {
-      bindings.bind(grip.target, false, clock.time)
-      bindings.on(grip.target, end, grip, turning, clock.time)
-      void end.shape(grip.pose)
-    },
-    letGo() {
-      const bound = bindings.bound.find(({ hands }) => hands.includes(end.side))
-      if (!bound) throw new Error(`the ${end.name} lets go, and nothing is bound to it`)
-      if (bound.hands.length > 1) {
-        bindings.off(bound.thing, end, clock.time)
-        return bindings.velocity(bound.thing)
-      }
-      return bindings.free(bound.thing)
-    },
   }
 }
 
