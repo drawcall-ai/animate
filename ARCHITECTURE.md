@@ -62,8 +62,7 @@ its own turn or turning as sent). Every other hand on it is sent onto its grip a
 from outside is never written; every hand on it follows it. `binding` knows an `End` only by its `side`, `name`,
 `follows`, `there`, `last`, `to`, `pin` (a follower set each step where it has it on the thing: derived, not planned)
 and `free`; the planner knows nothing of it. A bound thing that turns by a point keeps its turn against the way he
-faces. Looking `over` a point on a thing turns the head onto the line from that point (`bones.sighting`); a rifle the
-game moves sits at `Body.pocket(side)`, a point on his shoulder that goes with his chest.
+faces.
 
 ## Blurred boundaries still to fix
 

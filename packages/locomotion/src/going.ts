@@ -1,4 +1,4 @@
-import { type Object3D, Quaternion, Vector3 } from 'three'
+import { Quaternion, Vector3 } from 'three'
 import type { Ahead } from './ahead'
 import { clamp, EXACT, GRAVITY, type Joints, type Side, SIDES, type Size, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
 import { HIGH, PUSH, RIDE, RUN, SLOW, STILL, THERE, TOGETHER, WALK } from './gait'
@@ -26,11 +26,10 @@ type Clock = { readonly time: number; until(when: number): Story }
  * of the same names, given to the hips as a way to go and checked as it is given.
  */
 export class Going {
-  /** the place he looks at, if he does, and the point of a thing he looks over at it */
+  /** the place he looks at, if he does */
   looked?: Vector3
   /** where he looked at the end of the last update: he looks from there to where he is to look as the update goes on */
   private before?: Vector3
-  over?: { on: Object3D; at: Vector3 }
   /** where the world has the hips at the moment the next update is for, until it is made */
   private placed?: Vector3
   /** how he was last led to go along the ground, and when: the change of it is how he is urged on, and how fast the way he is led turns (rad/s) */
@@ -233,11 +232,10 @@ export class Going {
     )
   }
 
-  look(place?: Xyz, { over, on }: { over?: Xyz; on?: Object3D } = {}) {
+  look(place?: Xyz) {
     if (place && !Number.isFinite(place.x + place.y + place.z))
       throw new Error('he is to look at a place no numbers say')
     this.looked = place && new Vector3().copy(place)
-    this.over = over && on && { on, at: new Vector3().copy(over) }
     this.ahead.stale()
   }
 
@@ -307,7 +305,7 @@ export class Going {
       // (an arm that is swinging out from what its hand was let go from is the body's when it has)
       for (const part of [joints.arms[side].first, joints.arms[side].second]) if (!part.loose) part.free()
     }
-    mover.face = this.looked = this.over = this.told = this.faced = undefined
+    mover.face = this.looked = this.told = this.faced = undefined
     this.turns = this.faster = mover.swings = 0
     this.reactions.urged.set(0, 0, 0)
     mover.height = this.size.stand

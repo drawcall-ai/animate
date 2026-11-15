@@ -2,7 +2,7 @@ import { Hand } from '@drawcall/hand'
 import { Group, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
-import { ARM, fore, pistol, rifle } from '../../../examples/shooter/rifle'
+import { ARM, fore, pistol, pocket, rifle } from '../../../examples/shooter/rifle'
 import { Body } from '../src'
 
 const FRAME = 1 / 60
@@ -243,7 +243,7 @@ function rifleman() {
   /** the rifle as the game has it, its butt in his shoulder's pocket, along an aim (rad) */
   const pose = (aim: number) => {
     gun.quaternion.setFromAxisAngle(UP, aim)
-    gun.position.copy(body.pocket('right'))
+    gun.position.copy(pocket(body, 'right'))
     gun.updateMatrixWorld(true)
     return { position: gun.position.clone(), quaternion: gun.quaternion.clone() }
   }

@@ -2,6 +2,7 @@ import { Body, type Side, type Story, type Thing, type Xyz } from '@drawcall/ani
 import { type Grip, grip, Hand, point, type Statement } from '@drawcall/hand'
 import { BoxGeometry, Euler, Group, Mesh, MeshStandardMaterial, Object3D, SphereGeometry, Vector3 } from 'three'
 import { inHand, lying } from '../character'
+import { pocket } from '../shooter/rifle'
 
 /** what leads him: how far he is asked to go forward and to his left, how he turns his aim (left positive), how far up he aims (rad), and what he is asked to do */
 export type Input = {
@@ -147,7 +148,7 @@ export class Soldier {
     const { down, side } = CARRY[this.carry]
     const pitch = down - (this.carry === 'shoulder' ? this.pitch : 0)
     this.rifle.quaternion.setFromEuler(new Euler(pitch, this.aim, 0, 'YXZ'))
-    this.rifle.position.copy(this.object.worldToLocal(this.body.pocket(side)))
+    this.rifle.position.copy(this.object.worldToLocal(pocket(this.body, side)))
     const { from: was, to: out, since: moved } = this.slid
     const slid = was + (out - was) * ease(Math.min(1, (this.body.time - moved) / SLIDE))
     this.well.position.fromArray(MAG.in).addScaledVector(PULLED, slid)

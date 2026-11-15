@@ -1,3 +1,4 @@
+import type { Body, Side } from '@drawcall/animate'
 import { grip, type Hand, point, type Statement } from '@drawcall/hand'
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, type Object3D, Vector3 } from 'three'
 
@@ -6,6 +7,18 @@ import { BoxGeometry, Group, Mesh, MeshStandardMaterial, type Object3D, Vector3 
  * larger, as are the places it is carried at, so that his hands reach it as this arm does
  */
 export const ARM = 0.61
+/**
+ * where the pocket of a shoulder is that the butt rests in, from its joint: so far above it (of his trunk) and in
+ * toward his middle (of how far out a shoulder is), on his front
+ */
+const POCKET = { up: 0.1, inward: 0.25 }
+
+/** where the pocket of a shoulder is, as he was posed last, in the scene: it goes with his chest */
+export function pocket(body: Body, side: Side) {
+  const [up, inward] = [POCKET.up * body.size.trunk, POCKET.inward * body.size.shoulder]
+  return body.shoulder(side, { x: (side === 'right' ? 1 : -1) * inward, y: up, z: body.front(side, up, inward) })
+}
+
 /**
  * Where the parts of the rifle are, counted from the butt of its stock: z toward the muzzle, y up, x to his left (m).
  * `grip` is the top and the foot of the pistol grip's back, where the palm meets it, and `trigger` the trigger's back.

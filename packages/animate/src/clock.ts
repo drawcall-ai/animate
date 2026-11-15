@@ -1,21 +1,5 @@
-import type { Object3D, Vector3 } from 'three'
 import type { Locomotion } from '@drawcall/locomotion'
 import { type Bindings, type Bones, both, type End, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick } from '@drawcall/limbs'
-
-/**
- * how the head is to be turned against the trunk to look at a place, in the scene, over a point `at` on a thing, in its
- * frame: with the eye nearer the line from that point to the place on it
- */
-function sighting(bones: Bones, place: Vector3, { on, at }: { on: Object3D; at: Vector3 }) {
-  on.updateWorldMatrix(true, false)
-  const through = at.clone().applyMatrix4(on.matrixWorld).applyMatrix4(bones.frame)
-  const way = place.clone().applyMatrix4(bones.frame).sub(through).normalize()
-  const off = (side: Side) => {
-    const from = bones.eye(side).sub(through)
-    return from.addScaledVector(way, -from.dot(way)).length()
-  }
-  return bones.sighting(off('right') <= off('left') ? 'right' : 'left', through, way)
-}
 
 /** what a step moves: the workings of a body, as it is made of them */
 export type Workings = {
@@ -99,12 +83,10 @@ export class Clock {
     const { fault, wind } = locomotion.step(delta, ends.foot, looked)
     if (fault) this.faults.push(fault)
     if (wind) this.stories.push(wind)
-    // (looking over a thing, his head comes down to the line it has his eye on)
-    const sights = looked && going.over && sighting(this.body.bones, looked, going.over)
     for (const end of all) kept(end, () => end.advance(this.time, delta))
     for (const part of parts(joints)) part.advance(delta)
     this.body.bindings.pin()
-    locomotion.react(delta, sights)
+    locomotion.react(delta)
     this.pose(delta)
     this.time += delta
     const faults = this.faults.splice(0)

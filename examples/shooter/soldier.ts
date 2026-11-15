@@ -4,7 +4,7 @@ import { type PhysicsWorld, RigidBody } from '@drawcall/physics'
 import { Euler, Group, Mesh, MeshStandardMaterial, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three'
 import { grenade, reload, press, type Panel } from './actions'
 import { Capsule } from '../capsule'
-import { ARM, fore, HOLD, magazine, pistol, RIFLE, rifle } from './rifle'
+import { ARM, fore, HOLD, magazine, pistol, pocket, RIFLE, rifle } from './rifle'
 
 /** what the player asks of him in a frame: `move` is across (to his right) and along the way he aims, `yaw` and `pitch` the aim (rad: about y from +z toward +x, and up) */
 export type Input = {
@@ -279,7 +279,7 @@ export class Soldier {
     const going = far > 0 || Math.hypot(x, z) > 0
     const low = capsule.crouched && capsule.grounded ? (going ? LOW.going : LOW.still) : 1
     const runs = Math.hypot(x, z) > SPEED.low
-    // he looks along the aim, his head turned from the way he faces: down the sights over the rear sight
+    // he looks along the aim, his head turned from the way he faces: down the sights, the rifle comes up to his eye
     const sights = Boolean(input.sights) && !this.mode && !runs
     const { yaw, pitch } = input
     if (yaw !== this.aimed.yaw || pitch !== this.aimed.pitch || sights !== this.aimed.sights)
@@ -305,10 +305,9 @@ export class Soldier {
   }
 
   /** he looks a way: at a place so far off along it that where he is makes no odds */
-  private look({ yaw, pitch, sights }: Soldier['aimed']) {
+  private look({ yaw, pitch }: Soldier['aimed']) {
     const way = new Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch))
-    const far = way.multiplyScalar(FAR).add(this.body.hips.value)
-    this.body.look(far, sights ? { over: RIFLE.sight, on: this.rifle } : {})
+    this.body.look(way.multiplyScalar(FAR).add(this.body.hips.value))
   }
 
   /** a shot kicks his shoulder back along the rifle */
@@ -323,13 +322,21 @@ export class Soldier {
 
   /**
    * the rifle is in the pocket of his right shoulder, pointing as an action carries it, or low going faster than a
-   * walk, and along the aim else; and the trigger finger lies along the frame, and is on the trigger for a shot
+   * walk, and along the aim else, raised down the sights for the rear sight to be on the line from his right eye along
+   * the aim; and the trigger finger lies along the frame, and is on the trigger for a shot
    */
   private carry(input: Input, runs: boolean) {
     const { yaw, pitch, aimed } = CARRY[this.mode ?? (runs ? 'low' : 'ready')]
     const faces = Math.atan2(this.body.facing.x, this.body.facing.z)
     this.rifle.quaternion.copy(turned((aimed ? input.yaw : faces) + yaw, (aimed ? input.pitch : 0) + pitch))
-    this.rifle.position.copy(this.shown.worldToLocal(this.body.pocket('right')))
+    const butt = pocket(this.body, 'right')
+    if (this.aimed.sights && !this.mode && !runs) {
+      const ahead = new Vector3(0, 0, 1).applyQuaternion(this.rifle.quaternion)
+      const sight = RIFLE.sight.clone().multiplyScalar(this.scale).applyQuaternion(this.rifle.quaternion).add(butt)
+      const eye = this.body.eye('right')
+      butt.add(eye.addScaledVector(ahead, sight.clone().sub(eye).dot(ahead)).sub(sight))
+    }
+    this.rifle.position.copy(this.shown.worldToLocal(butt))
     const trigger = Boolean(input.fire) && !runs && !this.doing
     if (trigger !== this.trigger && !this.doing) this.gun.on(this.body.hand.right, (this.trigger = trigger) ? this.held.trigger : this.held.grip)
   }

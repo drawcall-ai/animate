@@ -256,24 +256,6 @@ export class Bones {
     return this.eyed(side).applyQuaternion(this.head.turned).add(this.head.place)
   }
 
-  /**
-   * how the head is to be turned against the trunk, as he was posed last, to look a `way` with an eye on the line
-   * along it `through` a place: turned to look that way, level across, and then the least that brings the eye onto the
-   * line, or nearest it
-   */
-  sighting(side: Side, through: Vector3, way: Vector3) {
-    const looks = new Quaternion().setFromEuler(new Euler(-Math.asin(way.y), Math.atan2(way.x, way.z), 0, 'YXZ'))
-    const eye = this.eyed(side).applyQuaternion(looks)
-    // (the point of the line as far from the joint of the head as the eye is, on the eye's side of the nearest)
-    const square = through.clone().sub(this.head.place)
-    square.addScaledVector(way, -square.dot(way))
-    const reach = Math.sqrt(Math.max(0, eye.lengthSq() - square.lengthSq()))
-    const onto = square.clone().addScaledVector(way, eye.clone().sub(square).dot(way) >= 0 ? reach : -reach)
-    const head = new Quaternion().setFromUnitVectors(eye.normalize(), onto.normalize()).multiply(looks)
-    head.premultiply(spun.copy(this.trunk[this.trunk.length - 1].turned).invert())
-    return new Vector3().setFromEuler(new Euler().setFromQuaternion(head))
-  }
-
   /** the bands of the trunk as a shoulder has them, upright */
   beside(side: Side): Beside[] {
     const shoulder = this.arms[side][0].rest

@@ -88,9 +88,8 @@ export class Locomotion {
     return { fault: said === undefined ? undefined : new Error(said), wind: ahead.wind.start() }
   }
 
-  /** the free parts come round to what the rest of him has them do: the head to a line it is to have the eye on, if there is one */
-  react(dt: number, sights?: Vector3) {
-    this.reactions.sights = sights
+  /** the free parts come round to what the rest of him has them do */
+  react(dt: number) {
     this.reactions.react(dt)
   }
 

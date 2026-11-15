@@ -70,8 +70,6 @@ export const bent = (upright: number, bend: number) =>
 export class Reactions {
   /** how hard the legs push him up, as the arms have taken it up: in times his weight */
   private lift = 0
-  /** how the head is to be turned against the trunk to have his eye on a line he looks along, if it is */
-  sights?: Vector3
   /** how fast he is led faster along the ground, in the scene (m/s²): the trunk leans into it */
   readonly urged = new Vector3()
 
@@ -118,7 +116,7 @@ export class Reactions {
     // (and the head looks up or down there whatever the trunk does)
     if (look) want.x = -look.pitch - trunk.value.x
     const lead = look ? wrap(look.yaw - facing) : aims
-    head.react(this.sights ?? want.setY(want.y + clamp(lead, -LEADS.head, LEADS.head)), delta)
+    head.react(want.setY(want.y + clamp(lead, -LEADS.head, LEADS.head)), delta)
     const folded = Math.min(ARMS.folded, ARMS.folds * fast * fast)
     // the arms are thrown the way the legs push the hips: back as he sinks, forward and up as he pushes off, and in
     // the air they stay up while he rises and come down as he falls

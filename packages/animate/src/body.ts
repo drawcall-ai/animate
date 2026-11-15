@@ -5,12 +5,6 @@ import { Clock, type Workings } from './clock'
 import { type Intent, intent } from './intent'
 import { type Binder, type Foot, type Hand, hand as handOf, stay, type Thing, thing } from './ends'
 
-/**
- * where the pocket of a shoulder is that a stock rests in, from its joint: so far above it (of his trunk) and in
- * toward his middle (of how far out a shoulder is), on his front
- */
-const POCKET = { up: 0.1, inward: 0.25 }
-
 /** the body made for each rig */
 const rigs = new WeakMap<Object3D, Body>()
 
@@ -159,14 +153,12 @@ export class Body {
   }
 
   /**
-   * where the pocket of a shoulder is, as he was posed last, in the scene: where the butt of a stock rests, so far above
-   * the joint and in toward his middle, on his front, going with his chest
+   * where a place counted from the joint of a shoulder is, as he was posed last, in the scene: along the axes of his
+   * chest, which it goes with, as he faces at rest (+x his left, +y up, +z ahead), so that `front` tells how far ahead
+   * his skin is there
    */
-  pocket(side: Side) {
-    const { trunk, shoulder: wide } = this.size
-    const [up, inward] = [POCKET.up * trunk, POCKET.inward * wide]
-    const at = new Vector3(-SIGN[side] * inward, up, this.front(side, up, inward))
-    return this.bones.shouldered(side, at).applyMatrix4(this.bones.frame.clone().invert())
+  shoulder(side: Side, place: Xyz = { x: 0, y: 0, z: 0 }) {
+    return this.bones.shouldered(side, new Vector3().copy(place)).applyMatrix4(this.bones.frame.clone().invert())
   }
 
   /** which way he faces along the ground, in the scene: what `face` turns him to */
@@ -256,12 +248,10 @@ export class Body {
    * He looks at a place until told otherwise, a way being a place far off along it: the head first and furthest, the
    * trunk round and up or down as far as it leads the pelvis, so aiming what hangs from it, its own leans going on.
    * Standing, he turns to face what the head does not reach, unless he is to `face` a way: then the trunk keeps to that
-   * and only the head turns from it; going, he goes his way. Looking `over` a point `on` a thing his hands hold, as a
-   * rifle's sight, which rests in his shoulder, he has it on the line from his eye there, the head coming down to it:
-   * the eye on the side of that shoulder.
+   * and only the head turns from it; going, he goes his way.
    */
-  look(place?: Xyz, how: { over?: Xyz; on?: Object3D } = {}) {
-    return this.locomotion.going.look(place, how)
+  look(place?: Xyz) {
+    return this.locomotion.going.look(place)
   }
 
   /**
