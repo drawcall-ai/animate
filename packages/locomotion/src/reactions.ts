@@ -1,12 +1,9 @@
 import { Vector3 } from 'three'
 import type { Ahead } from './ahead'
 import { behind } from './gait'
-import { REST } from './goal'
-import { type Joints, RANGE } from './joints'
+import { clamp, GRAVITY, type Joints, RANGE, REST, SIDES, SIGN, UP, wrap } from '@drawcall/limbs'
 import type { Mover } from './mover'
-import { SIDES, SIGN } from './size'
 import { LEADS } from './way'
-import { GRAVITY, UP, clamp, wrap } from './world'
 
 /**
  * How much of the way the hips are pushed along the trunk leans, how much of the way a leg in the air is swung out it

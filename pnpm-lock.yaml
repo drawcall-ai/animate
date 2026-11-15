@@ -528,6 +528,12 @@ importers:
 
   packages/animate:
     dependencies:
+      '@drawcall/limbs':
+        specifier: workspace:*
+        version: link:../limbs
+      '@drawcall/locomotion':
+        specifier: workspace:*
+        version: link:../locomotion
       three:
         specifier: ^0.187.0
         version: 0.187.0
@@ -553,6 +559,29 @@ importers:
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(vite@8.3.8)
+
+  packages/limbs:
+    dependencies:
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.187.0
+        version: 0.187.0
+
+  packages/locomotion:
+    dependencies:
+      '@drawcall/limbs':
+        specifier: workspace:*
+        version: link:../limbs
+      three:
+        specifier: ^0.187.0
+        version: 0.187.0
+    devDependencies:
+      '@types/three':
+        specifier: ^0.187.0
+        version: 0.187.0
 
 packages:
 

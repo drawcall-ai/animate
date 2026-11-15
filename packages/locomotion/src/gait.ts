@@ -1,5 +1,4 @@
-import { ANKLE } from './joints'
-import { HEEL, type Size, raised } from './size'
+import { ANKLE, HEEL, raised, type Size } from '@drawcall/limbs'
 
 /** how hard a leg on the ground pushes the hips: along it, over half his weight, and up, twice it (m/s²) */
 export const PUSH = { along: 6, up: 20 }

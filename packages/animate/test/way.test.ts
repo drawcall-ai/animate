@@ -2,8 +2,7 @@ import { type Object3D, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import { Body, type Story } from '../src'
-import { SIDES, SOLE, type Side, tick } from '../src/size'
-import { wrap } from '../src/world'
+import { SIDES, SOLE, type Side, tick, wrap } from '@drawcall/limbs'
 
 const at = (rig: Object3D, name: string, from = new Vector3()) => {
   const bone = rig.getObjectByName(name)

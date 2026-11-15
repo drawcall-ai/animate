@@ -1,20 +1,8 @@
 import { type Object3D, Vector3 } from 'three'
-import { Ahead } from './ahead'
-import { Bones } from './bones'
+import { Ahead, carrier, flat, Going, type Ground, Mover, Reactions, type Run, Stance, Stoops, type Walk } from '@drawcall/locomotion'
+import { type Band, Bones, both, type Carrying, due, End, Gives, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
 import { Clock } from './clock'
-import { End, type Foot, type Hand } from './end'
-import { Gives } from './give'
-import type { Part } from './goal'
-import { type Ground, Going, type Run, type Walk, flat } from './going'
-import { joints, parts } from './joints'
-import { Mover } from './mover'
-import { Reactions } from './reactions'
-import type { Band } from './shape'
-import { SIDES, SIGN, type Side, type Size, both } from './size'
-import { Stance } from './stance'
-import { Stoops } from './stoops'
-import type { Carrying } from './track'
-import { type Story, type Xyz, UP, due } from './world'
+import type { Foot, Hand, On } from './ends'
 
 /**
  * where the pocket of a shoulder is that a stock rests in, from its joint: so far above it (of his trunk) and in
@@ -28,8 +16,8 @@ const POCKET = { up: 0.1, inward: 0.25 }
  * with none every hand, and he holds it no more.
  */
 export type Held = {
-  to(place: Xyz, how?: Carrying & { seconds?: number }): Story<boolean>
-  by(when: number, place: Xyz, how?: Carrying): Story<boolean>
+  to(place: Xyz, how?: Carrying & On & { seconds?: number }): Story<boolean>
+  by(when: number, place: Xyz, how?: Carrying & On): Story<boolean>
   free(side?: Side): void
 }
 
@@ -76,12 +64,13 @@ export class Body {
     const mover = (this.mover = new Mover(size, new Stoops(size, turning.trunk)))
     const ahead = new Ahead(this, mover, turning, bones)
     const reactions = new Reactions(mover, turning, ahead)
+    const carried = carrier(mover, ahead)
     const { trunk, shoulder: wide } = size
     const pocket = (side: Side) => {
       const [up, inward] = [POCKET.up * trunk, POCKET.inward * wide]
       return new Vector3(-SIGN[side] * inward, up, this.front(side, up, inward))
     }
-    const gives = (this.gives = new Gives(bones, ahead, both(pocket)))
+    const gives = (this.gives = new Gives(bones, carried, both(pocket)))
     const rigged = (end: 'foot' | 'hand', side: Side) => ({
       frame: bones.frame,
       rig,
@@ -91,10 +80,10 @@ export class Body {
       held: (part: Object3D) => gives.held(part),
     })
     const foot = both(
-      (side) => new End(`${side} foot`, 'foot', side, turning.legs[side], mover, ahead, size, rigged('foot', side)),
+      (side) => new End(`${side} foot`, 'foot', side, turning.legs[side], carried, size, rigged('foot', side)),
     )
     const hand = both(
-      (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], mover, ahead, size, rigged('hand', side)),
+      (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], carried, size, rigged('hand', side)),
     )
     const ends = { foot, hand }
     this.foot = foot

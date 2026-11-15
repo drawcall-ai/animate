@@ -1,16 +1,6 @@
 import type { Vector3 } from 'three'
-import type { Ahead } from './ahead'
-import type { Bones } from './bones'
-import type { End } from './end'
-import type { Gives } from './give'
-import type { Going } from './going'
-import { held } from './heights'
-import { type Joints, parts } from './joints'
-import type { Mover } from './mover'
-import type { Reactions } from './reactions'
-import { SIDES, type Side, type Size, both, tick } from './size'
-import type { Stance } from './stance'
-import { NUDGE, type Story, UP } from './world'
+import { type Ahead, type Going, held, type Mover, type Reactions, type Stance } from '@drawcall/locomotion'
+import { type Bones, both, type End, type Gives, type Joints, NUDGE, parts, type Side, SIDES, type Size, type Story, tick, UP } from '@drawcall/limbs'
 
 /** what a step moves: the workings of a body, as it is made of them */
 export type Workings = {

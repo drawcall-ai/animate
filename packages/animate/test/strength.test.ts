@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { Body } from '../src'
-import { tick } from '../src/size'
+import { tick } from '@drawcall/limbs'
 import { person } from '../../../examples/person'
 
 const step = (body: Body, seconds: number) => {

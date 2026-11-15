@@ -2,12 +2,9 @@ import { Vector3 } from 'three'
 import type { Footing, Step } from './pelvis'
 import { CADENCE, CLEAR, RIDE, SINK, STILL, sidle, STRIDE, TOGETHER, WALK, behind, lands, lunge, overhang, stride } from './gait'
 import { toRest } from './pelvis'
-import { TRAIL } from './joints'
-import { SLACK } from './limb'
-import { HEEL, SIDES, SIGN, SOLE, type Side, both, ground, other, raised } from './size'
+import { both, clamp, damped, ease, EXACT, GRAVITY, ground, HEEL, other, raised, type Side, SIDES, SIGN, SLACK, SOLE, TRAIL } from '@drawcall/limbs'
 import { type Placed, Steps, type Stride } from './steps'
 import { Way } from './way'
-import { EXACT, GRAVITY, clamp, damped, ease } from './world'
 
 /** how long a foot is in the air for a step at the least and at the most (in his beats) */
 const AIR = { least: 0.5, most: 1.67 }

@@ -1,6 +1,6 @@
 import { Line3, Matrix4, Mesh, type Object3D, Quaternion, Vector3 } from 'three'
-import type { Ahead } from './ahead'
 import type { Bones } from './bones'
+import type { Carrier } from './carrier'
 import type { Grip } from './fingers'
 import type { Side, Size } from './size'
 import { EXACT, clamp } from './world'
@@ -466,21 +466,21 @@ export class Gives {
 
   constructor(
     private readonly bones: Bones,
-    private readonly ahead: Ahead,
+    private readonly carrier: Carrier,
     private readonly pockets: Record<Side, Vector3>,
   ) {}
 
   /** he holds a thing from now on, a point of it, in its frame, resting in a shoulder if that is said */
   hold(thing: Object3D, rests?: Vector3) {
-    const { ahead } = this
+    const { carrier } = this
     const found =
       this.all.get(thing) ??
       new Give(
         thing,
         this.bones,
         (seconds, to) =>
-          to.makeRotationY(ahead.facing(seconds)).setPosition(ahead.hips(seconds, new Vector3(), new Vector3())),
-        () => ahead.now,
+          to.makeRotationY(carrier.facing(seconds)).setPosition(carrier.hips(seconds, new Vector3(), new Vector3())),
+        () => carrier.now,
       )
     found.rests = rests
     this.all.set(thing, found)
@@ -518,7 +518,7 @@ export class Gives {
       .sort((one, other) => one.far - other.far)
     if (!rests || !hand) return undefined
     const { side } = hand.hand
-    const pocket = this.ahead.shoulder(side, seconds, new Vector3(), turn).add(this.pockets[side].clone().applyQuaternion(turn))
+    const pocket = this.carrier.shoulder(side, seconds, new Vector3(), turn).add(this.pockets[side].clone().applyQuaternion(turn))
     return { at: rests, pocket, side }
   }
 

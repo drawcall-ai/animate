@@ -5,16 +5,8 @@ import { type Give, TAKES, holds } from './give'
 import { type Goal, MOST, timed } from './goal'
 import { SLACK, sway } from './limb'
 import { JOINTS, NONE, type Plan, Planner, drawn } from './planner'
-import { type Arriving, type Carrying, type Reaching, type Target, moves } from './track'
+import { type Carrying, type Reaching, type Target, moves } from './track'
 import { EXACT, type Story, type Xyz, due, waits } from './world'
-
-/** What a story has of a hand: where its wrist is and how it moves, whether it is where it was sent, and to send it somewhere, have it somewhere by a moment, pose its fingers, or give it back to the body. */
-export type Hand = Readonly<Pick<End, 'value' | 'velocity' | 'there' | 'to' | 'by' | 'shape' | 'free'>>
-/** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, if it does, and to send it somewhere, have it somewhere by a moment, or give it back to the body. */
-export type Foot = Readonly<Pick<End, 'value' | 'velocity' | 'anchor' | 'free'>> & {
-  to(place: Xyz, arriving?: Arriving & { seconds?: number }): Story<boolean>
-  by(when: number, place: Xyz, arriving?: Arriving): Story<boolean>
-}
 
 /**
  * The far end of a limb: a foot or a hand. Sending it somewhere is one thing, however it is said: a place, in the
@@ -120,14 +112,14 @@ export class End extends Planner {
     timed(this.name, seconds)
     const target = this.target(place, arriving)
     const lands =
-      this.kind === 'foot' && !target.on && target.place.y <= this.mover.origin.y + this.size.ankle + EXACT && !moves(target)
+      this.kind === 'foot' && !target.on && target.place.y <= this.carrier.ground + this.size.ankle + EXACT && !moves(target)
     if (!lands) return this.send(target, seconds, true)
     if (seconds !== undefined) {
       throw new Error(`the ${this.name} is sent to step somewhere in ${seconds} s, and a step takes the time it takes`)
     }
     this.free()
     const put = this.put(target.place)
-    const foot = this.mover.foot[this.side]
+    const foot = this.carrier.foot(this.side)
     return waits(
       () => foot.put === put,
       () => foot.down && put !== undefined && foot.at.distanceTo(put) < EXACT,
@@ -184,9 +176,9 @@ export class End extends Planner {
    * keeps what it holds, carried as the body has the arm.
    */
   free() {
-    for (const { stoop } of this.waiting.splice(0)) if (stoop) this.ahead.rise(stoop, this.clock)
+    for (const { stoop } of this.waiting.splice(0)) if (stoop) this.carrier.rise(stoop, this.clock)
     // with no fast arrival left to set off for, the rest of the body has none to swing into
-    if (this.kind === 'hand') this.ahead.wind.off(this.side)
+    if (this.kind === 'hand') this.carrier.wind.off(this.side)
     // what the story does not have is the body's already
     if (this.held) this.release()
     this.claim()
@@ -195,10 +187,9 @@ export class End extends Planner {
 
   /** has the body step with the foot to a place on the ground and stand over it there: or with none, keep it there no longer. Tells where it is to stand so, if it is */
   private put(place?: Vector3) {
-    const { mover, side } = this
-    mover.put(side, place)
-    this.ahead.stale()
-    return mover.foot[side].put
+    const put = this.carrier.put(this.side, place)
+    this.carrier.stale()
+    return put
   }
 
   /**
@@ -208,7 +199,7 @@ export class End extends Planner {
    */
   private release() {
     const { plan } = this
-    if (plan?.stoop) this.ahead.rise(plan.stoop, this.clock)
+    if (plan?.stoop) this.carrier.rise(plan.stoop, this.clock)
     this.plan = undefined
     // (its joints swing on as they were turning, and come round to how the body wants them)
     for (const joint of JOINTS) this.limb[joint]?.release(sway(this.limb))
@@ -222,7 +213,7 @@ export class End extends Planner {
     // what he is down for where it was sent before he will be down for only until it sets off: as soon as it can, as far as is known yet
     const stoops = this.sent.flatMap((plan) => plan.stoop ?? [])
     const untils = stoops.map(({ until }) => until)
-    for (const stoop of stoops) this.ahead.rise(stoop, Math.min(stoop.until, this.clock + this.after))
+    for (const stoop of stoops) this.carrier.rise(stoop, Math.min(stoop.until, this.clock + this.after))
     const wait = direct && seconds !== undefined ? this.after + seconds : seconds
     const fit = () => (wait === undefined ? undefined : this.fit(target, wait, { given: true, direct }))
     const given = fit()
@@ -252,7 +243,7 @@ export class End extends Planner {
       plan.there = true
     // (sent by a grip to what it is on already, it holds it at once)
     if (plan.gives && this.on(plan, true)) this.take(plan)
-    stoops.forEach((stoop, k) => this.ahead.rise(stoop, Math.min(untils[k], plan.leaves)))
+    stoops.forEach((stoop, k) => this.carrier.rise(stoop, Math.min(untils[k], plan.leaves)))
     this.waiting.push(plan)
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     const fingers = this.limb.hand?.fingers
@@ -309,8 +300,8 @@ export class End extends Planner {
     // (what he got down for it he stays down for while it is there, and no longer: going away from it, he comes up;
     // reaching for what he is to take hold of he stays down until he holds it, and it comes up with him)
     const done = plan.gives ? plan.there : !plan.there
-    if (done && plan.stoop && plan.stoop.until > this.clock) this.ahead.rise(plan.stoop, this.clock)
-    const lands = this.kind === 'foot' && this.mover.falls && this.mover.velocity.y <= 0
+    if (done && plan.stoop && plan.stoop.until > this.clock) this.carrier.rise(plan.stoop, this.clock)
+    const lands = this.kind === 'foot' && this.carrier.landing
     if (!moves(plan) && !(this.waiting.length === 0 && lands)) return
     this.release()
     this.claim()

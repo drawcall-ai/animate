@@ -1,8 +1,7 @@
 import type { Vector3 } from 'three'
 import { STILL, TOGETHER, bob, dip, runs, span, wide } from './gait'
 import { type Going, clear, flat, footfall, left, over } from './footfall'
-import { SIDES, SIGN, SOLE, type Side, type Size, both } from './size'
-import { clamp, ease, wrap } from './world'
+import { both, clamp, ease, type Side, SIDES, SIGN, type Size, SOLE, wrap } from '@drawcall/limbs'
 
 /**
  * how many steps a beat he takes: standing to turn or shift at the least, at the most, and going, so many and so many

@@ -3,7 +3,7 @@ import { ballAt, fly } from '../../../examples/football/pitch'
 import { shot } from '../../../examples/football/shot'
 import { Body } from '../src'
 import { person } from '../../../examples/person'
-import { SIDES, tick } from '../src/size'
+import { SIDES, tick } from '@drawcall/limbs'
 
 const degrees = (angle: number) => (angle * 180) / Math.PI
 

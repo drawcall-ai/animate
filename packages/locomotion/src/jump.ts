@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { PUSH, SETTLE, lands } from './gait'
 import { type Pelvis, toRest } from './pelvis'
-import { GRAVITY, clamp } from './world'
+import { clamp, GRAVITY } from '@drawcall/limbs'
 
 /**
  * For a jump he lets himself drop, going on as he is going, until the legs, pushing up as hard as they push, have him

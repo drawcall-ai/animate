@@ -17,10 +17,9 @@ import {
   sidle,
 } from './gait'
 import { drop, fly, push } from './jump'
-import { HEEL, SIDES, SIGN, SOLE, type Side, type Size, both, ground, raised } from './size'
+import { both, clamp, damped, due, ease, GRAVITY, ground, HEEL, raised, type Side, SIDES, SIGN, type Size, SOLE } from '@drawcall/limbs'
 import type { Stoops } from './stoops'
 import { type Wind, pelvis, weight, wound } from './wind'
-import { GRAVITY, clamp, damped, due, ease } from './world'
 
 /** how many times a beat the hips come up again from where they were let down for a hand or a foot */
 const RISE = 1.2

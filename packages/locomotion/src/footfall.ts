@@ -1,8 +1,7 @@
 import { Vector3 } from 'three'
 import { span, wide } from './gait'
-import { SIGN, type Side, type Size } from './size'
+import { clamp, GRAVITY, type Side, SIGN, type Size, wrap } from '@drawcall/limbs'
 import { twist } from './way'
-import { GRAVITY, clamp, wrap } from './world'
 
 /** the hips as the steps need them: where in the scene, going how fast along the way they go and turning so (m, m/s, rad, rad/s), and facing so and turning so */
 export type Going = {

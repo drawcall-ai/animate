@@ -5,7 +5,7 @@ import { bowl } from '../../../examples/bowling/bowl'
 import { ball as ballAt, GRIP, sphere } from '../../../examples/bowling/lane'
 import { holds } from '../../../examples/character'
 import { Body } from '../src'
-import { tick } from '../src/size'
+import { tick } from '@drawcall/limbs'
 import { person } from '../../../examples/person'
 
 test('the delivery: the ball leaves as written, the body does the rest, and he ends standing', () => {

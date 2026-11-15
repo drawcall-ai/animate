@@ -34,7 +34,7 @@ import { FOREHAND, racket } from '../../../examples/tennis/racket'
 import * as vb from '../../../examples/volleyball/ball'
 import { spike } from '../../../examples/volleyball/spike'
 import { Body } from '../src'
-import { SIDES, tick } from '../src/size'
+import { SIDES, tick } from '@drawcall/limbs'
 
 /** a body that holds a thing in his right hand from the start, gripped as stated: and the thing as he holds it */
 function holding(rig: Object3D, thing: Object3D, statement: Statement) {

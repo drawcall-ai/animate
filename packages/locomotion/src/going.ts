@@ -1,15 +1,11 @@
 import { type Object3D, Quaternion, Vector3 } from 'three'
 import type { Ahead } from './ahead'
-import type { Body } from './body'
-import type { End } from './end'
+import { type End, EXACT, type Joints, type Side, SIDES, type Size, type Story, UP, waits, type Xyz } from '@drawcall/limbs'
 import { HIGH, PUSH, RIDE, RUN, SLOW, STILL, THERE, TOGETHER, WALK } from './gait'
 import { held } from './heights'
-import type { Joints } from './joints'
 import type { Mover } from './mover'
 import { type Course, toRest } from './pelvis'
 import type { Reactions } from './reactions'
-import { SIDES, type Side, type Size } from './size'
-import { EXACT, type Story, type Xyz, UP, waits } from './world'
 
 /** a place on the ground: or told as a number, so far along z on x = 0 */
 export type Ground = number | { x: number; z: number }
@@ -19,6 +15,9 @@ export type Walk = { speed?: number; plant?: Side }
 /** how far ahead he is looked at for a moment to come, in his beats */
 const LONG = 400
 const spot = new Vector3()
+
+/** the clock he goes by: the seconds it has gone on for, and a story over at a moment on it */
+type Clock = { readonly time: number; until(when: number): Story }
 
 /**
  * Where he goes, which way he faces and where he looks: what a story or a game says of that, as the body's statements
@@ -36,7 +35,7 @@ export class Going {
   private told?: { velocity: Vector3; time: number }
 
   constructor(
-    private readonly body: Body,
+    private readonly body: Clock,
     private readonly size: Size,
     private readonly mover: Mover,
     private readonly ahead: Ahead,

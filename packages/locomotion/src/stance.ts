@@ -1,11 +1,7 @@
 import { Vector3 } from 'three'
-import type { End } from './end'
+import { clamp, type End, HEEL, type Limb, raised, RANGE, type Side, type Size, SLACK, SOLE, UP } from '@drawcall/limbs'
 import { type Footing } from './pelvis'
-import { RANGE } from './joints'
-import { type Limb, SLACK } from './limb'
 import type { Way } from './way'
-import { HEEL, SOLE, type Side, type Size, raised } from './size'
-import { clamp, UP } from './world'
 
 /** how fast a heel comes down again, and comes up (rad a beat) */
 const ROLL = { down: 1.8, up: 9 }

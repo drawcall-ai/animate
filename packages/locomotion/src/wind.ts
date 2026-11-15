@@ -1,12 +1,7 @@
 import { Vector3 } from 'three'
 import type { Ahead } from './ahead'
-import { AXES, type State, cubic } from './curve'
-import type { Goal } from './goal'
-import { type Joints, RANGE } from './joints'
-import { sway } from './limb'
+import { AXES, clamp, cubic, due, type Goal, type Joints, NUDGE, RANGE, type Side, SIGN, type State, type Story, sway, tick, UP } from '@drawcall/limbs'
 import type { Mover } from './mover'
-import { SIGN, type Side, tick } from './size'
-import { NUDGE, type Story, UP, clamp, due } from './world'
 
 /**
  * winding up for an end that is to arrive fast: how much of the way from between his feet to the foot behind his

@@ -4,7 +4,7 @@ import { EASY, type Goal, MOST, REST } from './goal'
 import { type Limb, sway } from './limb'
 import { type Aimed, FULL, Reach, type Turn } from './reach'
 import { tick } from './size'
-import { type Stoop, lower } from './stoops'
+import type { Stoop } from './carrier'
 import { type Target, moves } from './track'
 import { EXACT, NUDGE, clamp, steps } from './world'
 
@@ -132,17 +132,17 @@ export class Planner extends Reach {
     if (this.kind !== 'foot') return
     // (it sets off after the step of time it is told to at)
     const until = last && moves(last) ? last.when : Infinity
-    this.mover.foot[this.side].taken = from === undefined ? undefined : { from: from + tick(this.size), until }
-    this.ahead.stale()
+    this.carrier.take(this.side, from === undefined ? undefined : { from: from + tick(this.size), until })
+    this.carrier.stale()
   }
 
   /** how the body that steps with the end will have the joints turned and turning `seconds` from now: if it is the body's to step with */
   protected strides(seconds: number): Turning | undefined {
-    const { ahead, side } = this
+    const { carrier, side } = this
     if (this.kind !== 'foot' || this.held) return undefined
-    const place = ahead.stepped(side, seconds, new Vector3())
+    const place = carrier.stepped(side, seconds, new Vector3())
     const dt = tick(this.size)
-    const velocity = ahead
+    const velocity = carrier
       .stepped(side, seconds + dt, new Vector3())
       .sub(place)
       .divideScalar(dt)
@@ -214,7 +214,7 @@ export class Planner extends Reach {
    */
   protected scan(target: Target, stoops: boolean, soonest = this.after): Plan | undefined {
     const fine = LOOK.fine * tick(this.size)
-    const down = (stoops ? this.ahead.down : 0) + LOOK.stride * this.size.beat
+    const down = (stoops ? this.carrier.down : 0) + LOOK.stride * this.size.beat
     const exact = (wait: number) => {
       const found = this.fit(target, wait, { stoops })
       if (!missed(found) && !found.near) return found
@@ -259,8 +259,8 @@ export class Planner extends Reach {
   /** a plan it does not carry out after all: what the body was to do for it, it does not */
   protected drop(plan: Plan | Miss | undefined) {
     if (!plan || missed(plan)) return
-    if (plan.stoop) this.ahead.rise(plan.stoop, -Infinity)
-    if (this.kind === 'hand') this.ahead.wind.off(this.side)
+    if (plan.stoop) this.carrier.rise(plan.stoop, -Infinity)
+    if (this.kind === 'hand') this.carrier.wind.off(this.side)
     this.claim()
   }
 
@@ -276,7 +276,7 @@ export class Planner extends Reach {
     asked: number,
     { given = false, direct = false, stoops = given }: { given?: boolean; direct?: boolean; stoops?: boolean },
   ): Plan | Miss {
-    const { ahead, limb, after, kind, side } = this
+    const { carrier, limb, after, kind, side } = this
     const [margin, dt] = [MARGIN * this.size.leg, tick(this.size)]
     // (a moment is a step of his time: the first at or after what is asked)
     const wait = steps(asked, dt) * dt
@@ -284,7 +284,7 @@ export class Planner extends Reach {
     const fast = moves(target)
     // the rest of the body winds up for a fast arrival: which changes where he is going
     const wind = (leaves: number) =>
-      fast && kind === 'hand' && ahead.wind.up(side, leaves, when, this.where(target, wait), target.velocity)
+      fast && kind === 'hand' && carrier.wind.up(side, leaves, when, this.where(target, wait), target.velocity)
     let aimed = this.solve(target, wait)
     let stoop: Stoop | undefined
     // (what arrives moving at the first moment it can is short of its stretch: he gets down for that too)
@@ -296,13 +296,13 @@ export class Planner extends Reach {
       // comes nearer)
       let [short, reach] = [this.solve(target, wait).short, limb.length + near]
       const down = (reach: number) => {
-        if (stoop) ahead.rise(stoop, -Infinity)
-        stoop = lower(kind, side, this.mover, ahead, [when, fast ? when : Infinity], this.where(target, wait), reach)
+        if (stoop) carrier.rise(stoop, -Infinity)
+        stoop = carrier.stoop(kind, side, [when, fast ? when : Infinity], this.where(target, wait), reach)
         return this.solve(target, wait).short
       }
       if (short > near) short = down(reach)
       if (short > near && down(reach - short + near) > short) down(reach)
-      if (kind === 'hand') ahead.wind.off(side)
+      if (kind === 'hand') carrier.wind.off(side)
       aimed = this.solve(target, wait)
     }
     const none = (miss: Miss['miss']): Miss => {
@@ -312,7 +312,7 @@ export class Planner extends Reach {
     // it sets off in time to turn at its ease, from how it will be then, for no longer than keeps its joints within how far they turn: twice round is near enough. Within a look of as soon as it can, it sets off then: and no sooner than the body spares it, a foot it stands on
     let [easy, leaves] = [0, after]
     const spared = (from: number) => {
-      if (kind === 'foot' && !this.held) while (from < wait && !ahead.spare(side, from, wait)) from += dt
+      if (kind === 'foot' && !this.held) while (from < wait && !carrier.spare(side, from, wait)) from += dt
       return from
     }
     const sets = (swing: number, most: number) => {

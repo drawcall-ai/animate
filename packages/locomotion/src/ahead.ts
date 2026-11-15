@@ -1,16 +1,11 @@
 import { Euler, Quaternion, Vector3 } from 'three'
-import type { Goal } from './goal'
+import { type Bones, type Goal, HEEL, type Joints, LAGS, other, type Side, type Stoop, tick, UP, wrap } from '@drawcall/limbs'
 import { CADENCE, WALK } from './gait'
 import { socket } from './pelvis'
-import { type Joints, LAGS } from './joints'
-import type { Bones } from './bones'
 import { bent, leans } from './reactions'
-import { HEEL, type Side, other, tick } from './size'
 import { stood } from './stance'
-import type { Stoop } from './stoops'
 import type { Mover } from './mover'
 import { Winder } from './wind'
-import { wrap, UP } from './world'
 
 const velocity = new Vector3()
 const lean = new Vector3()

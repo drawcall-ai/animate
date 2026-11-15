@@ -1,11 +1,9 @@
 import { Matrix4, Object3D, Quaternion, Vector3 } from 'three'
-import type { Ahead } from './ahead'
-import type { Body } from './body'
+import type { Carrier } from './carrier'
 import { DOWN, FINGERS, type Grip, type Touch } from './fingers'
 import { REST } from './goal'
 import type { Give } from './give'
 import type { Limb } from './limb'
-import type { Mover } from './mover'
 import type { Side, Size } from './size'
 import { EXACT, UP, type Xyz } from './world'
 
@@ -61,7 +59,7 @@ const FORWARD = new Vector3(0, 0, 1)
  * how an end is to arrive: moving so, in the scene, and at a place counted `on` him, from where its limb starts and as
  * he faces, or on a thing, in its frame as it moves; or in the scene
  */
-export type Arriving = { velocity?: Xyz; on?: Object3D | Body }
+export type Arriving = { velocity?: Xyz; on?: object }
 /**
  * and a hand: turned for its `palm` to face and for the fingers to be `pointing` a way, counted as its place is; the
  * place being that of what it is there `with`, if not its wrist: a part of it, or what sits in it by a grip
@@ -93,24 +91,23 @@ export class Track {
 
   /**
    * `name` is what it is called when it cannot do what is asked of it: the foot or the hand of a side, at the end of
-   * a `limb`, on a body of a `size` whose places are told against its `rig`, which the `mover` carries and is looked
-   * ahead along by `ahead`
+   * a `limb`, on a body of a `size` whose places are told against its `rig`, which the rest of the body,
+   * its `carrier`, carries
    */
   constructor(
     protected readonly name: string,
     protected readonly kind: 'foot' | 'hand',
     readonly side: Side,
     protected readonly limb: Limb,
-    protected readonly mover: Mover,
-    protected readonly ahead: Ahead,
+    protected readonly carrier: Carrier,
     protected readonly size: Size,
     protected readonly rig: Rigged,
   ) {}
 
   /** where the limb starts `seconds` from now, its hip or its shoulder, and how that is turned */
   protected root(seconds: number, at: Vector3, turned: Quaternion) {
-    const { ahead, side } = this
-    return this.kind === 'foot' ? ahead.hip(side, seconds, at, turned) : ahead.shoulder(side, seconds, at, turned)
+    const { carrier, side } = this
+    return this.kind === 'foot' ? carrier.hip(side, seconds, at, turned) : carrier.shoulder(side, seconds, at, turned)
   }
 
   /**
@@ -129,7 +126,7 @@ export class Track {
     if (on instanceof Object3D) {
       const { at, turned: held, large, time, was, scene } = this.seen?.thing === on ? this.seen : this.see(on)
       // (on as it went from how it was seen before to how it is: for as long again as that took, as far again)
-      const gone = this.ahead.now - time + (target.there ? seconds : 0)
+      const gone = this.carrier.now - time + (target.there ? seconds : 0)
       const again = was.time < time ? 1 + gone / (time - was.time) : 1
       if (was.scene.at.distanceTo(scene.at) <= was.at.distanceTo(at)) {
         now.lerpVectors(was.scene.at, scene.at, again)
@@ -150,7 +147,7 @@ export class Track {
       ways.identity()
       return there.copy(place)
     }
-    ways.setFromAxisAngle(UP, this.ahead.facing(seconds))
+    ways.setFromAxisAngle(UP, this.carrier.facing(seconds))
     return this.root(seconds, there, turned).add(carried.copy(place).applyQuaternion(ways))
   }
 
@@ -165,7 +162,7 @@ export class Track {
     thing.updateWorldMatrix(true, false)
     this.root(0, start, turned)
     const scene = { at: new Vector3(), turned: new Quaternion() }
-    const look = { at: new Vector3(), turned: new Quaternion(), large: new Vector3(), time: this.ahead.now, scene }
+    const look = { at: new Vector3(), turned: new Quaternion(), large: new Vector3(), time: this.carrier.now, scene }
     matrix.multiplyMatrices(this.rig.frame, thing.matrixWorld).decompose(scene.at, scene.turned, scaled)
     matrix.compose(start, turned, ONE).invert().multiply(this.rig.frame).multiply(thing.matrixWorld)
     matrix.decompose(look.at, look.turned, look.large)

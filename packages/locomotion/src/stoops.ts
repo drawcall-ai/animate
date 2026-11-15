@@ -1,14 +1,8 @@
 import { Quaternion, Vector3 } from 'three'
 import type { Ahead } from './ahead'
 import { SETTLE, SINK, behind, lowest, lunge, squat } from './gait'
-import { EASY, type Goal } from './goal'
-import { RANGE } from './joints'
+import { clamp, due, EASY, EXACT, type Goal, RANGE, type Side, type Size, SOLE, type Stoop, tick, UP } from '@drawcall/limbs'
 import type { Mover } from './mover'
-import { SOLE, type Side, type Size, tick } from './size'
-import { EXACT, UP, clamp, due } from './world'
-
-/** how far he gets down for a hand or a foot to reach: the hips let down (m) and the trunk bent (rad), each from the moment that has it there in time, and until another */
-export type Stoop = { low: number; bend: number; sinks: number; bends: number; until: number }
 
 /** What he gets down for, and so how far down he is to be at a moment. */
 export class Stoops {

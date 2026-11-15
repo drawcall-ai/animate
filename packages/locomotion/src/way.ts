@@ -1,8 +1,7 @@
 import { Vector3 } from 'three'
 import { KEEPS, PUSH, SETTLE, SIDLE, SLOW, THERE, TOGETHER, WALK, stride } from './gait'
 import { type Footing, Pelvis, socket } from './pelvis'
-import { SIDES, SIGN, type Side } from './size'
-import { EXACT, clamp, damped, wrap, UP } from './world'
+import { clamp, damped, EXACT, type Side, SIDES, SIGN, UP, wrap } from '@drawcall/limbs'
 
 /** how fast he turns round (rad a beat), and how near the way he is to face counts as facing it (rad) */
 export const SPIN = { rate: 0.7, there: 0.02 }

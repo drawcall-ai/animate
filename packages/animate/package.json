@@ -13,6 +13,8 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
+    "@drawcall/limbs": "workspace:*",
+    "@drawcall/locomotion": "workspace:*",
     "three": "^0.187.0"
   },
   "files": [

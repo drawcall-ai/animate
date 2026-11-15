@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { Body, type Story } from '../src'
 import { person } from '../../../examples/person'
-import { SIDES, type Side, tick } from '../src/size'
+import { SIDES, type Side, tick } from '@drawcall/limbs'
 
 /** plays a story to its end and tells the longest both feet were off the ground (s) and how high the hips got (m) */
 function play(story: (body: Body) => Story) {
