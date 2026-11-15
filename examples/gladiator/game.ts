@@ -3,6 +3,7 @@ import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, Vecto
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { Start } from '../play'
 import { model } from '../play'
+import { served } from '../served'
 import { Gladiator } from './gladiator'
 import { rig } from './skeleton'
 
@@ -42,8 +43,8 @@ export const start: Start = async (scene, world) => {
   scene.add(arena())
   const [body, gladius, scutum] = await Promise.all([
     model(rig()),
-    load('/models/gladius.glb'),
-    load('/models/scutum.glb'),
+    load(served('/models/gladius.glb')),
+    load(served('/models/scutum.glb')),
   ])
   return new Gladiator(body, world, scene, { gladius, scutum })
 }

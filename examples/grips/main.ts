@@ -18,12 +18,21 @@ const KEYS = THINGS.map((_, i) => String(i + 1))
 
 let shown = 0
 let swap = () => {}
-addEventListener('keydown', (event) => {
-  const at = KEYS.indexOf(event.key)
-  if (at < 0) return
+const show = (at: number) => {
   shown = at
   swap()
+}
+addEventListener('keydown', (event) => {
+  const at = KEYS.indexOf(event.key)
+  if (at >= 0) show(at)
 })
+for (const [at, held] of THINGS.entries()) {
+  const button = document.createElement('button')
+  button.type = 'button'
+  button.textContent = `${KEYS[at]} ${held.name}`
+  button.addEventListener('click', () => show(at))
+  document.querySelector('.bar')?.append(button)
+}
 
 run({
   begin() {

@@ -13,6 +13,7 @@ import {
   WebGLRenderer,
 } from 'three'
 import type { Character } from './character'
+import { type Button, buttons, controls, drag, Stick, touching } from './touch'
 
 /**
  * what the player asks of a frame: `move` along the ground in the scene, at most 1 long, whether to run, whether the
@@ -20,14 +21,15 @@ import type { Character } from './character'
  */
 export type Input = { move: { x: number; z: number }; run: boolean; act: boolean; held: ReadonlySet<string> }
 /**
- * a game: its led character, a frame of it, a line or two on how it goes, and where what he plays with is, if a camera
- * is to keep that in view with him
+ * a game: its led character, a frame of it, a line or two on how it goes, where what he plays with is, if a camera is
+ * to keep that in view with him, and the keys it reads held beyond those the play page reads, for buttons to press
  */
 export type Game = {
   character: Character
   update(delta: number, input: Input): void
   readout(): string
   focus?(): Vector3 | undefined
+  buttons?: readonly Button[]
 }
 /** makes a game in a scene the physics world simulates */
 export type Start = (scene: Scene, world: PhysicsWorld) => Promise<Game>
@@ -38,16 +40,19 @@ const TURN = { keys: 1.8, drag: 0.005 }
 const BEHIND = { back: 3.6, up: 0.9, at: 1.3 }
 /** the longest frame a game is stepped by (s): a slower frame is played slower */
 const LONGEST = 0.05
+/** the most pixels drawn to a CSS pixel, which keeps a phone's frame rate */
+const SHARPEST = 2
 
 /**
  * The keys as a game reads them: WASD moves him along the ground the way the camera looks, Shift runs, Space acts,
  * the arrows turn the camera round him, and every key held is told to the game. Pressed and let go by the page, or by
- * a script.
+ * a script; a thumb stick, if there is one, moves him as far as it is pushed, and runs at its rim.
  */
 export class Keys {
   readonly held = new Set<string>()
   /** which way the camera looks along the ground (rad about y, from +z toward +x) */
   yaw = 0
+  stick?: Stick
   private acted = false
 
   press(code: string) {
@@ -63,14 +68,16 @@ export class Keys {
   read(delta: number): Input {
     const on = (code: string) => Number(this.held.has(code))
     this.yaw += (on('ArrowLeft') - on('ArrowRight')) * TURN.keys * delta
-    const [ahead, right] = [on('KeyW') - on('KeyS'), on('KeyD') - on('KeyA')]
-    const far = Math.hypot(ahead, right) || 1
+    const { x = 0, y = 0 } = this.stick ?? {}
+    const [ahead, right] = [on('KeyW') - on('KeyS') + y, on('KeyD') - on('KeyA') + x]
+    const far = Math.max(1, Math.hypot(ahead, right))
     // (looking along +z his right is -x)
     const [sin, cos] = [Math.sin(this.yaw), Math.cos(this.yaw)]
     const move = { x: (ahead * sin - right * cos) / far, z: (ahead * cos + right * sin) / far }
     const act = this.acted
     this.acted = false
-    return { move, run: Boolean(on('ShiftLeft') || on('ShiftRight')), act, held: this.held }
+    const run = Boolean(on('ShiftLeft') || on('ShiftRight') || this.stick?.rim)
+    return { move, run, act, held: this.held }
   }
 }
 
@@ -136,7 +143,10 @@ function element<T extends Element>(id: string, kind: new () => T): T {
   return found
 }
 
-/** Plays a game on the page: its #stage canvas, the keys, the camera behind him, and the #readout under it. */
+/**
+ * Plays a game on the page: its #stage canvas, the keys, the camera behind him, and the #readout under it; played by
+ * fingers, a stick, a button for Space and one for each key the game reads held, and a drag turns the camera.
+ */
 export async function play(start: Start) {
   const canvas = element('stage', HTMLCanvasElement)
   const readout = element('readout', HTMLPreElement)
@@ -156,9 +166,13 @@ export async function play(start: Start) {
     if (event.code === 'Space' || event.code.startsWith('Arrow')) event.preventDefault()
   })
   addEventListener('keyup', (event) => keys.release(event.code))
-  canvas.addEventListener('pointermove', (event) => {
-    if (event.buttons) keys.yaw -= event.movementX * TURN.drag
-  })
+  drag(canvas, (x) => (keys.yaw -= x * TURN.drag))
+  if (touching) {
+    const layer = controls()
+    keys.stick = new Stick(layer)
+    const release = (code: string) => keys.release(code)
+    buttons(layer, [{ code: 'Space', label: 'act' }, ...(game.buttons ?? [])], (code) => keys.press(code), release)
+  }
   let last: number | undefined
   renderer.setAnimationLoop((now) => {
     const delta = last === undefined ? 0 : Math.min(LONGEST, (now - last) / 1000)
@@ -168,7 +182,7 @@ export async function play(start: Start) {
     const [wide, high] = [canvas.clientWidth, canvas.clientHeight]
     camera.aspect = wide / high
     camera.updateProjectionMatrix()
-    renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.setPixelRatio(Math.min(SHARPEST, devicePixelRatio))
     renderer.setSize(wide, high, false)
     renderer.render(scene, camera)
     const { errors } = game.character

@@ -34,6 +34,10 @@ export const start: Start = async (scene, world) => {
 
   return {
     character,
+    buttons: [
+      { code: 'ArrowRight', label: '▶' },
+      { code: 'ArrowLeft', label: '◀' },
+    ],
     update(delta: number, input: Input) {
       const { held: keys } = input
       yaw += (Number(keys.has('ArrowLeft')) - Number(keys.has('ArrowRight'))) * TURN * delta

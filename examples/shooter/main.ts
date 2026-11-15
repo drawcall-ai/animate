@@ -4,17 +4,34 @@ import {
   DirectionalLight,
   GridHelper,
   HemisphereLight,
+  MathUtils,
   PerspectiveCamera,
   Scene,
   Vector3,
   WebGLRenderer,
 } from 'three'
+import '../play.css'
+import { type Button, buttons, controls, drag, Stick, touching } from '../touch'
 import { level } from './level'
 import { rig } from './skeleton'
 import { Soldier } from './soldier'
 
-/** how far the aim turns for the mouse and for an arrow key held (rad a pixel, rad/s), and how far up and down it goes (rad) */
-const TURN = { mouse: 0.0025, keys: 1.8, most: 0.7 }
+/**
+ * how far the aim turns for the mouse, for a finger's drag and for an arrow key held (rad a pixel, rad a pixel, rad/s),
+ * and how far up and down it goes (rad)
+ */
+const TURN = { mouse: 0.0025, drag: 0.005, keys: 1.8, most: 0.7 }
+/** the buttons a finger plays him by,: the sights and crouching held from a tap to the next */
+const BUTTONS: Button[] = [
+  { code: 'KeyK', label: 'fire' },
+  { code: 'KeyF', label: 'sights', toggle: true },
+  { code: 'Space', label: 'jump' },
+  { code: 'KeyR', label: 'reload' },
+  { code: 'KeyG', label: 'grenade' },
+  { code: 'KeyC', label: 'crouch', toggle: true },
+  { code: 'KeyV', label: 'view' },
+  { code: 'KeyE', label: 'press' },
+]
 /** where the camera is behind him, from his hips standing as he aims: to his right, up and behind (m), and nearer down the sights */
 const BEHIND = { right: 0.55, up: 0.65, back: 2.6, sights: 1.5 }
 /** how far off he is looked at, orbiting him (m) */
@@ -63,31 +80,46 @@ const aim = { yaw: 0, pitch: 0 }
 let view: 'behind' | 'eye' = 'behind'
 let orbit: { yaw: number; pitch: number } | undefined
 const pressed = (...codes: string[]) => Number(codes.some((code) => held.has(code)))
+/** a key goes down, by the keyboard or a button */
+function press(code: string) {
+  held.add(code)
+  if (code === 'KeyR') soldier.reload()
+  if (code === 'KeyG') soldier.throw()
+  if (code === 'Space' || code === 'KeyJ') soldier.jump()
+  if (code === 'KeyE' && world.near(soldier.body.hips.value, soldier.body.size.arm)) soldier.press(world.panel)
+  // a blow from in front of him
+  if (code === 'KeyH') soldier.hit({ x: -Math.sin(aim.yaw), z: -Math.cos(aim.yaw) })
+  if (code === 'KeyV') view = view === 'behind' ? 'eye' : 'behind'
+  if (code === 'KeyO') orbit = orbit ? undefined : { yaw: aim.yaw + Math.PI, pitch: 0.2 }
+}
+const release = (code: string) => held.delete(code)
+/** the aim, or the orbit, turned by the mouse or a finger moved so far (px) */
+function turn(x: number, y: number, by: number) {
+  // (his right is at -x as he faces +z: the aim, or the orbit, turns that way for the mouse going right)
+  const turned = orbit ?? aim
+  turned.yaw -= x * by
+  turned.pitch = Math.min(TURN.most, Math.max(-TURN.most, turned.pitch - y * by))
+}
 addEventListener('keydown', (event) => {
   if (event.repeat) return
-  held.add(event.code)
-  if (event.code === 'KeyR') soldier.reload()
-  if (event.code === 'KeyG') soldier.throw()
-  if (event.code === 'Space' || event.code === 'KeyJ') soldier.jump()
-  if (event.code === 'KeyE' && world.near(soldier.body.hips.value, soldier.body.size.arm)) soldier.press(world.panel)
-  // a blow from in front of him
-  if (event.code === 'KeyH') soldier.hit({ x: -Math.sin(aim.yaw), z: -Math.cos(aim.yaw) })
-  if (event.code === 'KeyV') view = view === 'behind' ? 'eye' : 'behind'
-  if (event.code === 'KeyO') orbit = orbit ? undefined : { yaw: aim.yaw + Math.PI, pitch: 0.2 }
+  press(event.code)
   if (event.code === 'Space' || event.code.startsWith('Arrow')) event.preventDefault()
 })
-addEventListener('keyup', (event) => held.delete(event.code))
-canvas.addEventListener('click', () => canvas.requestPointerLock())
+addEventListener('keyup', (event) => release(event.code))
 canvas.addEventListener('contextmenu', (event) => event.preventDefault())
 addEventListener('mousedown', (event) => held.add(`Mouse${event.button}`))
 addEventListener('mouseup', (event) => held.delete(`Mouse${event.button}`))
 addEventListener('mousemove', (event) => {
-  if (document.pointerLockElement !== canvas) return
-  // (his right is at -x as he faces +z: the aim, or the orbit, turns that way for the mouse going right)
-  const turned = orbit ?? aim
-  turned.yaw -= event.movementX * TURN.mouse
-  turned.pitch = Math.min(TURN.most, Math.max(-TURN.most, turned.pitch - event.movementY * TURN.mouse))
+  if (document.pointerLockElement === canvas) turn(event.movementX, event.movementY, TURN.mouse)
 })
+// played by fingers, a stick moves him, a drag aims, and buttons stand for the keys; else a click takes the mouse
+let stick: Stick | undefined
+if (touching) {
+  const layer = controls()
+  stick = new Stick(layer)
+  drag(canvas, (x, y) => turn(x, y, TURN.drag))
+  buttons(layer, BUTTONS, press, release)
+} else canvas.addEventListener('click', () => canvas.requestPointerLock())
 
 /** the way an aim points, in the scene */
 const along = ({ yaw, pitch }: { yaw: number; pitch: number }) =>
@@ -103,10 +135,13 @@ renderer.setAnimationLoop((now) => {
   aim.pitch = Math.min(TURN.most, Math.max(-TURN.most, aim.pitch))
   const sights = Boolean(pressed('KeyF', 'Mouse2'))
   soldier.update(delta, {
-    move: { x: pressed('KeyD') - pressed('KeyA'), z: pressed('KeyW') - pressed('KeyS') },
+    move: {
+      x: pressed('KeyD') - pressed('KeyA') + (stick?.x ?? 0),
+      z: pressed('KeyW') - pressed('KeyS') + (stick?.y ?? 0),
+    },
     yaw: aim.yaw,
     pitch: aim.pitch,
-    sprint: Boolean(pressed('ShiftLeft', 'ShiftRight')),
+    sprint: Boolean(pressed('ShiftLeft', 'ShiftRight') || stick?.rim),
     crouch: held.has('KeyC'),
     sights,
     fire: Boolean(pressed('KeyK', 'Mouse0')),
@@ -147,8 +182,12 @@ renderer.setAnimationLoop((now) => {
   }
   const [wide, high] = [canvas.clientWidth, canvas.clientHeight]
   camera.aspect = wide / high
+  // (a screen taller than wide, a phone upright, sees as far across as a square one: else he is out of the picture)
+  const across = Math.tan(MathUtils.degToRad(camera.fov / 2))
+  if (camera.aspect < 1) camera.fov = 2 * MathUtils.radToDeg(Math.atan(across / camera.aspect))
   camera.updateProjectionMatrix()
-  renderer.setPixelRatio(window.devicePixelRatio)
+  // (at most 2 pixels drawn to a CSS pixel, which keeps a phone's frame rate)
+  renderer.setPixelRatio(Math.min(2, devicePixelRatio))
   renderer.setSize(wide, high, false)
   renderer.render(scene, camera)
   const { x, z } = soldier.capsule.velocity

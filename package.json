@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "test": "pnpm -F @drawcall/animate -F @drawcall/hand test",
-    "check": "tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p examples"
+    "check": "tsc --noEmit -p packages/animate && tsc --noEmit -p packages/hand && tsc --noEmit -p examples",
+    "pages": "sh pages/build.sh"
   },
   "devDependencies": {
     "@drawcall/animate": "workspace:*",
