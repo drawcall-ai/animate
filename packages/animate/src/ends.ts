@@ -152,8 +152,8 @@ export class End {
     // (a hand told no moment is there once the whole of him can have it there: asked of him first, so that he gets down for it, and then looked for as he will be)
     if (this.kind === 'hand' && when?.by === undefined && when?.seconds === undefined) frame.at = this.moment(this.reached(frame, after))
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
-    if (this.kind === 'foot' && !frame.velocity) frame.leaves = frame.at - sway(this.limb) / 2
-    frame.leaves ??= this.leaves(frame)
+    const swung = this.leaves(frame)
+    frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     if ('target' in place) this.close(place.pose, frame.at - this.body.time())
     return this.write(frame)

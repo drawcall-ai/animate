@@ -140,8 +140,9 @@ export class Character {
    */
   update(delta: number, asked: { x: number; z: number }, way?: { x: number; z: number }) {
     const { body, feet } = this
-    // (asked to go another way than when it began, the player takes him back from an action at once)
-    if (this.acting && this.led.distanceTo(new Vector3(asked.x, 0, asked.z)) > TURNED) this.cancel()
+    // (asked to go another way than when it began, the player takes him back from an action at once: letting go of the keys is no such ask)
+    const now = new Vector3(asked.x, 0, asked.z)
+    if (this.acting && now.length() > TURNED && this.led.distanceTo(now) > TURNED) this.cancel()
     if (this.acting) {
       this.tried(() => body.update(delta))
       const { value, velocity } = body.hips
