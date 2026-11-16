@@ -74,3 +74,24 @@ test.each(Object.keys(TIMES) as (keyof typeof TIMES)[])(
   },
   30000,
 )
+
+test('he stands side-on to the rifle as he aims, both hands on it, and fires from the hip and down the sights', async () => {
+  const [scene, world] = [new Scene(), level()]
+  const physics = await buildWorld({ scene })
+  const soldier = new Soldier(person(), physics)
+  let hip = 0
+  for (let t = 0; t < 4; t += 1 / 60) {
+    const sights = t > 2.5
+    soldier.update(1 / 60, { move: { x: 0, z: 0 }, yaw: 0, pitch: 0, fire: t > 1, sights })
+    physics.update(1 / 60)
+    world.update()
+    if (!sights) hip = soldier.shots
+  }
+  // (his shoulders square to the way he faces, not to the aim his head turns to)
+  const across = soldier.body.shoulder('left').sub(soldier.body.shoulder('right'))
+  const facing = soldier.body.facing
+  expect(Math.abs(across.normalize().dot(facing))).toBeLessThan(0.15)
+  expect(soldier.gun.there).toBe(true)
+  expect(hip).toBeGreaterThan(5)
+  expect(soldier.shots - hip).toBeGreaterThan(5)
+}, 30000)

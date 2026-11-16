@@ -85,7 +85,8 @@ export class Free {
       this.toward = there ? undefined : looks.yaw
       gait.face(there ? undefined : { x: Math.sin(looks.yaw), z: Math.cos(looks.yaw) })
     }
-    const toward = looks ? clamp(looks.yaw - facing, -LEADS.trunk, LEADS.trunk) : clamp(going.aims, -LEADS.trunk, LEADS.trunk)
+    // (but told to face a way, the trunk keeps to it and the head alone turns from it)
+    const toward = clamp(looks && (gait.lead.face === undefined || this.toward !== undefined) ? looks.yaw - facing : going.aims, -LEADS.trunk, LEADS.trunk)
     const want = new Vector3(along + (looks ? -0.5 * looks.pitch : 0), pelvis.turn + free * (size.shoulder / size.arm) * swung + toward + this.legs.posture.turn(now), -tilt)
     trunk.react(want, dt)
     want.copy(trunk.value).multiply(LEVEL)
