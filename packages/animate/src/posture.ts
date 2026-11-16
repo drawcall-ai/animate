@@ -27,6 +27,12 @@ const UPPER = 0.6
 /** how fast the hips let down (in his paces a second), and how long they take over the last of the way (in his beats): as locomotion lets them down */
 const HIPS = { sink: 0.34, settle: 0.835 }
 
+/** how far through something is, eased in and out */
+const smooth = (s: number) => {
+  const t = Math.max(0, Math.min(1, s))
+  return t * t * (3 - 2 * t)
+}
+
 type Asked = { turn: number; bend: number; sink: number; shift: number }
 
 /**
@@ -113,18 +119,22 @@ export class Asks implements Posture {
       const [hand, there] = [new Vector3(), new Vector3()]
       channel.state(time, hand, new Vector3())
       // (a hand on a thing is where that is sent)
-      const next = (channel.bound ?? channel).frames[0]?.at
-      // (for a frame still to come, at its moment; one met already is done with)
+      const frame = (channel.bound ?? channel).frames[0]
+      const next = frame?.at
+      // (for a frame still to come, at its moment; one met already moving is done with, one met at rest is held there)
       const passed = next !== undefined && next < time - 1e-6 * this.size.beat
+      const swung = passed && frame.velocity !== undefined && new Vector3().copy(frame.velocity).lengthSq() > 0
       const due = next !== undefined && !passed ? next : time
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
       // (nor for a place on him, or on a thing carried with him, which goes down with him)
       const held = (channel.bound ?? channel).goal?.on
-      const lowered = !passed && held !== end.root && !(held instanceof Watched && held.carried) ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }
+      const lowered = !swung && held !== end.root && !(held instanceof Watched && held.carried) ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }
       // (from as long before as getting down that far takes him)
       const { sinks, bends } = this.leads(lowered)
-      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: due - time <= bends ? lowered.bend : 0, sink: due - time <= sinks ? lowered.sink : 0 }
+      // (easing in over as long before as each takes)
+      const eased = (lead: number) => (lead > 0 ? smooth(1 - (due - time) / lead) : 1)
+      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: lowered.bend * eased(bends), sink: lowered.sink * eased(sinks) }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
       all.turn += going ? one.turn : 0
