@@ -9,6 +9,8 @@ export interface Hinge {
   axis: Vector3
   min: number
   max: number
+  /** Limits that depend on the pose: given the bone's own hinge angles, the [min, max] this hinge has now. They are read once per solve, at the pose it starts from. */
+  range?: (own: number[]) => [number, number]
 }
 
 /** Declare a bone's joint: its hinges in order, optionally the angles of its neutral pose, its mass (kg) and centre of mass. */
@@ -43,7 +45,7 @@ interface Jointed {
 export class Body {
   /** The pose: three slides of the root, then one angle per hinge. The only state the solver reads and writes. */
   q: number[] = []
-  /** The neutral pose the skeleton was built in. Not a goal by itself: postures come with the goals (see poseGoal). */
+  /** The neutral pose the skeleton was built in. Not a goal by itself: postures come with the goals (see posture). */
   neutral: number[] = []
   min: number[] = []
   max: number[] = []
@@ -121,6 +123,14 @@ export class Body {
       angles[name].forEach((v, i) => (q[j.first + i] = v))
     }
     return q
+  }
+
+  /** Reads the limits that depend on the pose (`Hinge.range`) at the pose the body is in. The solver does this once, before it starts. */
+  limits() {
+    for (const j of this.joints) {
+      const own = j.hinges.map((_, i) => this.q[j.first + i])
+      j.hinges.forEach((h, i) => h.range && ([this.min[j.first + i], this.max[j.first + i]] = h.range(own)))
+    }
   }
 
   /** Forward kinematics: writes the pose into the bones, updates world matrices, joint axes and the centre of mass. */

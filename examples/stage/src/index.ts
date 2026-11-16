@@ -35,7 +35,7 @@ export function stage(frame: (dt: number) => void) {
   resize()
   let last = performance.now()
   renderer.setAnimationLoop(now => {
-    frame(Math.min(0.05, (now - last) / 1000))
+    frame(Math.min(0.05, Math.max(0, (now - last) / 1000)))
     last = now
     orbit.update()
     renderer.render(scene, camera)

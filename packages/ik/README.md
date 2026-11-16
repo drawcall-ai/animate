@@ -3,30 +3,31 @@
 Goal-driven whole-body inverse kinematics on three.js bones. Each frame you hand the solver a list of goals and it computes one pose that meets the hard goals exactly (as far as reachable) and the soft goals as well as possible. Goals have no time in them and the solver keeps nothing between frames: whoever plans rebuilds the list every frame.
 
 ```ts
-import { createHumanoid, hard, mark, posture, soft, solve, Target, upright } from "@drawcall/ik";
-import { Object3D, Vector3 } from "three";
+import { balance, createHumanoid, upright } from "@drawcall/humanoid" // any Body will do: this one is a humanoid
+import { hard, mark, posture, solve, Target } from "@drawcall/ik"
+import { Object3D, Vector3 } from "three"
 
-const body = createHumanoid(); // three.js Bones; body.root goes into your scene
-scene.add(body.root);
+const body = createHumanoid() // three.js Bones; body.root goes into your scene
+scene.add(body.root)
 
-const racket = new Object3D();
-body.attach(racket, mark(body.get("handR"), "hold", new Vector3(0, -0.08, 0)));
-const sweet = mark(racket, "sweet", new Vector3(0, 0.5, 0)); // a point on the racket
-const ball = new Target(); // a point in the world, moved by the planner
+const racket = new Object3D()
+body.attach(racket, mark(body.get("handR"), "hold", new Vector3(0, -0.08, 0)))
+const sweet = mark(racket, "sweet", new Vector3(0, 0.5, 0)) // a point on the racket
+const ball = new Target() // a point in the world, moved by the planner
 
 function frame(dt: number) {
-  ball.set({ position: whereTheBallIs, velocity: howTheRacketShouldMove });
+  ball.set({ position: whereTheBallIs, velocity: howTheRacketShouldMove })
   const result = solve(
     body,
     [
       hard(body.get("soleL"), leftFootTarget),
       hard(body.get("soleR"), rightFootTarget),
       hard(sweet, ball), // the sweet spot is at the ball, moving as asked
-      soft(body.centre, overTheFeet, 2), // balance is an ordinary soft goal
+      balance(body, 2), // balance is an ordinary soft goal: soft(body.centre, a point over the feet)
       posture(body, upright(body)), // so is the rest pose
     ],
     dt,
-  );
+  )
   // result.goals[2] = { missedBy, reachable }: how far the sweet spot is from the ball, and whether it got there
 }
 ```
@@ -53,7 +54,7 @@ There is no time, no activation window and no ownership inside a goal. A goal th
 
 Newton's method on one objective, `F(q) = 1e6 * f_hard(q) + f_soft(q)` with `f = 1/2 * sum(w * |target - point(q)|^2)`, iterated to convergence inside the frame, followed by two Gauss-Newton steps on `f_hard` alone that project the pose exactly onto the hard goals. Joints are sequences of hinges, so Jacobians and second derivatives are closed-form cross products.
 
-Damped least squares with null-space projection was tried first. For reachable hard goals the two give the same step. For unreachable ones the first-order method fails: the goal leaves a residual, directions that look free to first order (bending a fully stretched arm) are actually stiff, the null space hands them to the soft goals, and the pose 2-cycles. The Hessian here therefore includes the geometric term `sum(r_i * Hessian(e_i))`, where for hard goals `r` is the force the goal carries (as in SQP). Convergence is quadratic, about 5 iterations and 1.5 to 2 ms per frame for the 48-DOF humanoid. Joint limits are an active set.
+Damped least squares with null-space projection was tried first. For reachable hard goals the two give the same step. For unreachable ones the first-order method fails: the goal leaves a residual, directions that look free to first order (bending a fully stretched arm) are actually stiff, the null space hands them to the soft goals, and the pose 2-cycles. The Hessian here therefore includes the geometric term `sum(r_i * Hessian(e_i))`, where for hard goals `r` is the force the goal carries (as in SQP). Convergence is quadratic, about 5 iterations and 1.5 to 2 ms per frame for the 48-DOF body of `@drawcall/humanoid`. Joint limits are an active set.
 
 ## Test numbers (`pnpm test`, 60 fps)
 
@@ -69,7 +70,7 @@ Damped least squares with null-space projection was tried first. For reachable h
 | velocity-only hand goal | velocity error 4e-14 m/s |
 | same goals reached from the past and from the future | max joint difference 2e-15 rad |
 
-The soldier, tennis and match examples have their own tests.
+The tests run on the body of `@drawcall/humanoid`. The soldier, tennis, match and controller examples have their own tests.
 
 ## Known limits
 
@@ -81,5 +82,5 @@ The soldier, tennis and match examples have their own tests.
 - **One point, one set of things carried.** A point that is hard in position and soft in rotation needs two targets and two goals.
 - **Velocity** is a backward difference against the pose before the solve, `p = p(before) + v * dt`: it needs `dt`, and is linear only. On a target that also carries a position the two rows say the same thing when the planner is consistent, and fight when it is not.
 - **`missedBy` of a posture** is its largest joint deviation, which says little.
-- **The humanoid is an approximation**, not anatomy: 48 DOF, two spine joints, no scapula, fingers or toes, ranges from typical values, Euler hinges with independent box limits (the shoulder loses a degree of freedom with the arm straight out sideways). `createHumanoid({ girth })` only narrows two limits as a stand-in for self-collision.
-- **Balance** is the centre of mass over the mean of the support points: static, no support polygon, no dynamics.
+- **Joints are Euler hinges with box limits**, independent unless a hinge gives a `range` (its limits as a function of the bone's own angles, read once per solve at the pose it starts from, so they lag a fast move by a frame): a ball joint loses a degree of freedom where two of its hinges line up (a shoulder with the arm straight out sideways), and there is no self-collision.
+- **A joint on a limit where the limb is straight can stay there** (a knee locked straight under a pelvis that should come down): keep such limits off the straight pose, as `@drawcall/humanoid` does for the knee.

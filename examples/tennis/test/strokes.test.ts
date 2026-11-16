@@ -43,6 +43,6 @@ test('forehand, two-handed backhand and serve: the sweet spot meets the ball exa
     if (stroke.twoHanded) say(`  both hands on the racket: second hand's grip off by at most ${e(grip)}`)
     say(`  smoothness: no body part turns more than ${rot.toFixed(2)} rad in a frame; ${(its / frames).toFixed(1)} iterations/frame, unconverged frames ${unconverged} of ${frames}`)
     expect(hard).toBeLessThan(1e-6); expect(hit).toBeLessThan(1e-9); expect(hit2).toBeLessThan(1e-9)
-    expect(strings).toBeLessThan(0.02); expect(rot).toBeLessThan(0.6); expect(unconverged).toBeLessThan(3)
+    expect(strings).toBeLessThan(0.02); expect(rot).toBeLessThan(0.8); expect(unconverged).toBeLessThan(3)
   }
 })

@@ -9,7 +9,8 @@
 //         the head turning to the contact point
 // The hitting arm is listed in no pose: the racket decides it.
 
-import { type Body, type Goal, type Pose, bump, createHumanoid, ease, hard, keyed, mark, posture, soft, Target } from '@drawcall/ik'
+import { createHumanoid } from '@drawcall/humanoid'
+import { type Body, type Goal, type Pose, bump, ease, hard, keyed, mark, posture, soft, Target } from '@drawcall/ik'
 import { Group, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 
 type V3 = [number, number, number]
