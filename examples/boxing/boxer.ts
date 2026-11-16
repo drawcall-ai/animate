@@ -113,7 +113,10 @@ export class Boxer implements Game {
     }
     const speed = input.run ? SPEED.quick : SPEED.guard
     const way = this.toward()
-    character.update(delta, { x: input.move.x * speed, z: input.move.z * speed }, { x: way.x, z: way.z })
+    // (an arm's length from the bag's side, where his punches land, he goes no nearer it: what he is asked toward it is dropped)
+    const asked = new Vector3(input.move.x * speed, 0, input.move.z * speed)
+    if (this.bag.position.clone().sub(character.feet.position).setY(0).length() < character.body.size.arm + BAG.radius) asked.addScaledVector(way, -Math.max(0, asked.dot(way)))
+    character.update(delta, asked, { x: way.x, z: way.z })
   }
 
   /** at rest he stands in his stance: the lead foot steps ahead toward the bag */

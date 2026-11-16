@@ -3,6 +3,7 @@ import { Scene } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import type { Game, Input } from '../../../examples/play'
+import { Boxer } from '../../../examples/boxing/boxer'
 import { Worker } from '../../../examples/shelf/worker'
 
 const FRAME = 1 / 60
@@ -33,4 +34,16 @@ test('shelf: Space by a box on the floor takes it up in both hands, he carries i
   // (carrying it, he walks upright)
   expect(lowest / worker.character.body.size.stand).toBeGreaterThan(0.85)
   expect(worker.readout()).toMatch(/shelf\s+1 of 3/)
+}, 30000)
+
+test('boxing: walking at the bag he stops an arm\'s length from it, and the punches Space throws there land and swing it', async () => {
+  const scene = new Scene()
+  const world = await buildWorld({ scene })
+  const boxer = new Boxer(person(), scene)
+  let nearest = Infinity
+  play(boxer, world, 5, [[0.2, 2, 0, 1]], [2.5, 3, 3.5, 4], () => {
+    nearest = Math.min(nearest, Number(/([\d.]+) m away/.exec(boxer.readout())?.[1]))
+  })
+  expect(nearest).toBeGreaterThan(0.3)
+  expect(Number(/landed\s+(\d+)/.exec(boxer.readout())?.[1])).toBeGreaterThanOrEqual(3)
 }, 30000)
