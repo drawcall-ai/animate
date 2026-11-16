@@ -316,6 +316,11 @@ export class Gait {
   /** a foot a story has, from outside the gait, is where it is now; with none, it is the gait's again and steps home */
   hold(side: Side, place?: { x: number; y: number; z: number }) {
     const foot = this.feet[side]
+    // (given back in the air, the rest of its jump is planned from where it was given back)
+    if (!place && foot.outside && this.jumping) {
+      foot.cancel('jump')
+      for (const frame of this.jumping.feet[side]) if ((frame.at ?? 0) > this.time) foot.by(frame)
+    }
     foot.outside = place !== undefined
     if (place) foot.value.copy(place)
   }

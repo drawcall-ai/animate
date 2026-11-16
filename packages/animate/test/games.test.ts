@@ -8,6 +8,8 @@ import { person } from '../../../examples/person'
 import type { Game, Input } from '../../../examples/play'
 import { Boxer } from '../../../examples/boxing/boxer'
 import { Gladiator } from '../../../examples/gladiator/gladiator'
+import { Hurdler } from '../../../examples/hurdles/hurdler'
+import { HEIGHT, stand, track } from '../../../examples/hurdles/track'
 import { Worker } from '../../../examples/shelf/worker'
 import { NET } from '../../../examples/volleyball/ball'
 import { court } from '../../../examples/volleyball/court'
@@ -109,4 +111,23 @@ test('volleyball: a spike lands short of the net, on his own side of it, and the
   })
   expect(spiker.readout()).toContain('spiked')
   expect(furthest).toBeLessThan(NET.z - 0.1)
+}, 30000)
+
+test('hurdles: run at the hurdles pressing Space, he clears them in a hurdling stride: over the bar the lead foot reaches out ahead of him', async () => {
+  const scene = new Scene()
+  const world = await buildWorld({ scene })
+  const hurdles = track(3).map((hurdle) => ({ hurdle, solid: stand(hurdle) }))
+  scene.add(...hurdles.map(({ solid }) => solid))
+  const hurdler = new Hurdler(person(), hurdles)
+  let reach = 0
+  // (Space every tenth of a second: it is taken once he is near enough a hurdle and not already over one)
+  for (let t = 0; t < 9; t += FRAME) {
+    hurdler.update(FRAME, { move: { x: 0, z: 1 }, run: true, act: Math.round(t / FRAME) % 6 === 0, held: new Set() })
+    world.update(FRAME)
+    const { body } = hurdler.character
+    // (the lead foot ahead of the hips, the way he runs, while it is above a hurdle's height)
+    if (body.foot.right.value.y > HEIGHT) reach = Math.max(reach, body.foot.right.value.z - body.hips.value.z)
+  }
+  expect(hurdler.readout()).toContain('cleared 3')
+  expect(reach).toBeGreaterThan(0.5 * hurdler.character.body.size.leg)
 }, 30000)

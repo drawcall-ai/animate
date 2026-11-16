@@ -14,8 +14,9 @@ const READY = { far: 8, near: 3 }
 /** how far before a hurdle he takes off, and how far over its bar the hips are at the top (m) */
 const OFF = 2
 const HIPS = 0.5
-/** how far over the bar the ankle of the lead foot goes (m) */
-const CLEAR = 0.25
+/** where the lead foot is from the hips halfway up, the knee driven up, and at the top, reaching out ahead over the bar, the leg nearly straight (of his leg) */
+const KNEE = { x: -0.1, y: -0.3, z: 0.5 }
+const LEAD = { x: -0.1, y: -0.3, z: 0.85 }
 /** where the trail foot is from its hip at the top: folded up, out to the side (of his leg) */
 const TUCK = { x: 0.4, y: -0.1, z: -0.33 }
 /** how hard a foot that clips a bar hits it (N s) */
@@ -69,11 +70,12 @@ export class Hurdler implements Game {
   private *hurdle({ z, height }: Hurdle): Story {
     const { body, feet, speed } = this.character
     const { x } = feet.position
-    const { hip, leg } = body.size
+    const { leg } = body.size
     body.run({ speed, at: { x, z: z - OFF }, plant: 'left' })
     const landing = body.jump({ x, y: height + HIPS, z })
     const velocity = { x: 0, y: 0, z: speed }
-    body.foot.right.to({ x: x - hip, y: height + CLEAR, z }, { velocity })
+    void body.foot.right.by(((body.gait.jumping?.leaves ?? body.time) + body.highest()) / 2, { x: KNEE.x * leg, y: KNEE.y * leg, z: KNEE.z * leg }, { on: body })
+    body.foot.right.by(body.highest(), { x: LEAD.x * leg, y: LEAD.y * leg, z: LEAD.z * leg }, { on: body, velocity })
     body.foot.left.by(body.highest(), { x: TUCK.x * leg, y: TUCK.y * leg, z: TUCK.z * leg }, { on: body, velocity })
     yield* landing
   }
