@@ -347,8 +347,7 @@ test('a fingertip sent somewhere is there at its moment, moving as stated, howev
         expect(tip().distanceTo(place)).toBeLessThan(0.002)
         const over = tip().sub(was).divideScalar(tick(body.size))
         // (it speeds up into the moment: how it moves at it is half a step on from how it moved over the last)
-        // (the tip is put at its place exactly; how fast it goes there is how fast the arm brings it)
-        expect(over.lerp(last, -0.5).distanceTo(velocity)).toBeLessThan(1)
+        expect(over.lerp(last, -0.5).distanceTo(velocity)).toBeLessThan(0.1)
       })(),
     )
   }

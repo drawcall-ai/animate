@@ -1,28 +1,45 @@
-import { Hand } from '@drawcall/hand'
-import { Group, Matrix4, Vector3 } from 'three'
+import { grip, Hand } from '@drawcall/hand'
+import { Mesh, Scene, SphereGeometry, Vector3 } from 'three'
 import { test } from 'vitest'
+import { RADIUS } from '../../../examples/basketball/ball'
+import { SEAT, jumpShot } from '../../../examples/basketball/shot'
+import { bowl, carry, SIDE } from '../../../examples/bowling/bowl'
+import { GRIP, sphere } from '../../../examples/bowling/lane'
+import { inHand } from '../../../examples/character'
 import { person } from '../../../examples/person'
-import { ARM, fore, pistol, pocket, rifle } from '../../../examples/shooter/rifle'
 import { Body } from '../src'
-test('probe', () => {
-  const scene = new Group(); const rig = person(); scene.add(rig); const body = new Body(rig)
-  const hands = { right: new Hand(rig, 'right'), left: new Hand(rig, 'left') }
-  const gun = rifle(); const handle = gun.getObjectByName('fore')!
-  const held = { right: pistol(hands.right, gun).held, left: fore(hands.left, handle) }
-  gun.scale.setScalar(body.size.arm / ARM); scene.add(gun)
-  const pose = (aim: number) => { gun.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), aim); gun.position.copy(pocket(body, 'right')); gun.updateMatrixWorld(true) }
-  pose(0)
-  const bound = body.bind(gun, { outside: true })
-  for (const side of ['right', 'left'] as const) bound.on(body.hand[side], held[side])
-  const W = (body as any).workings
-  for (let t = 0; t < 6; t += 1 / 60) {
-    if (t > 2) body.go({ x: 0, z: 1.4 })
-    pose(Math.atan2(body.facing.x, body.facing.z) + 0.05 * Math.sin(3 * t))
-    body.update(1 / 60); scene.updateMatrixWorld(true)
-    if (t > 2.5) for (const side of ['right', 'left'] as const) {
-      const { target, position, quaternion } = held[side]
-      const wrist = new Vector3().setFromMatrixPosition(target.matrixWorld.clone().multiply(new Matrix4().compose(position, quaternion, new Vector3(1, 1, 1)).invert()))
-      const tp = wrist.distanceTo(rig.getObjectByName(side + 'Hand')!.getWorldPosition(new Vector3())); if (tp > 0.02) console.log(t.toFixed(2), side, 'posed-off', tp.toFixed(3), 'truth-plan', wrist.distanceTo(W.ends.hand[side].channel.value).toFixed(3), 'gap', W.ends.hand[side].gap.toFixed(3), 'fold', W.joints.arms[side].second.value.x.toFixed(2))
+test('shot', () => {
+  const rig = person(); const ball = new Mesh(new SphereGeometry(RADIUS)); new Scene().add(rig, ball)
+  const hand = new Hand(rig, 'right'); const body = new Body(rig); const held = inHand(body, hand, grip(hand, ball, SEAT)); const w = (body as any).workings
+  let left = false
+  body.play(jumpShot(body, held, () => (left = true)))
+  let first: { t0: number; path: Vector3[] } | undefined
+  let [worstDrift, worstGap, worstPlanVsBall] = [0, 0, 0]
+  while (body.playing && !left) {
+    body.update(1 / 60)
+    const th = [...w.things.values()][0].channel
+    const plan = th.intent()
+    if (!first && plan.frames.some((f: any) => f.velocity.length() > 1)) first = { t0: body.time, path: plan.path.map((p: Vector3) => p.clone()) }
+    if (first) {
+      const k = Math.round((body.time - first.t0) * 30)
+      if (k < first.path.length) {
+        worstDrift = Math.max(worstDrift, first.path[k].distanceTo(th.value))
+        worstPlanVsBall = Math.max(worstPlanVsBall, th.value.distanceTo(ball.position))
+      }
     }
+    worstGap = Math.max(worstGap, w.ends.hand.right.gap)
   }
+  console.log('SHOT first-plan vs current plan', worstDrift.toFixed(3), 'current plan vs ball', worstPlanVsBall.toFixed(3), 'hand gap', worstGap.toFixed(3))
+})
+test('bowl', () => {
+  const rig = person(); const mesh = sphere(); new Scene().add(rig, mesh)
+  const hands = { left: new Hand(rig, 'left'), right: new Hand(rig, 'right') }
+  const body = new Body(rig); const w = (body as any).workings
+  const held = inHand(body, hands.right, grip(hands.right, mesh, GRIP))
+  let freed = false
+  body.play((function* () { yield* carry(body, held, grip(hands.left, mesh, SIDE.left)); yield* bowl(body, held, () => (freed = true)) })())
+  let [plan, pose, gap] = [0, 0, 0]
+  for (let n = 0; n < 1000 && !freed; n++) { body.update(1 / 120); plan = Math.min(plan, w.ends.hand.right.channel.value.z - body.hips.value.z); pose = Math.min(pose, body.hand.right.value.z - body.hips.value.z); gap = Math.max(gap, w.ends.hand.right.gap) }
+  const th = [...w.things.values()][0]
+  console.log('BOWL plan behind hips', plan.toFixed(3), 'pose behind hips', pose.toFixed(3), 'gap', gap.toFixed(3))
 })

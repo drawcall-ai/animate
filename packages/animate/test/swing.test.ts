@@ -39,8 +39,7 @@ test('a jump shot goes the way its plan has it: the ball in the hand never more 
     const planned = first && along(first.path, body.time)
     if (planned) worst = Math.max(worst, planned.distanceTo(ball.getWorldPosition(new Vector3())))
   }
-  // (the first plan is made before the jump is under way: the body it is counted on comes nearer it as he goes)
-  expect(worst).toBeLessThan(0.35)
+  expect(worst).toBeLessThan(0.05)
   expect(left?.length()).toBeCloseTo(first?.speed ?? NaN, 0)
 })
 
