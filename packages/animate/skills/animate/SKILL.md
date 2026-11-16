@@ -1,62 +1,75 @@
 ---
 name: animate
-description: Write natural human motion for `@drawcall/animate`'s `Body` — walking, running, jumping, kicks, throws, reaches, holding and using things, a character led by a game. Use when authoring or fixing a story or a frame loop, or when one comes short or looks unnatural; not for changing the library itself.
+description: Write natural human motion with `@drawcall/animate`'s `Body` — walking, running, jumping, kicks, throws, reaches, holding and letting go of things, and a character a game leads and interrupts. Use when writing or fixing a story or a game's frame loop, or when a motion comes out short or unnatural; not for changing the library itself.
 ---
 
 # Writing a motion
 
-A story states only what must hold: where a foot, a hand or the hips are, when, and how they are moving there. The strides, the balance, the wind-up, the follow-through, the arms, the lean and the turn of the body are the body's, and it does them better than a story can spell them out. So a natural motion comes from writing less: find the one or two facts that define the action, state them, and leave everything else out.
-
-## Finding the facts
-
-Most actions are a way of getting somewhere and one moment that matters: the foot meets the ball, the hand lets go, the hips are at the top of a jump. Write how the body gets there as a walk or a run, and the moment as where the foot or hand is and how fast it is moving there.
+A story states only what must hold: where a hand, a foot, a thing or the hips are, by when, and how fast they move
+there. Everything between — strides, balance, wind-up, follow-through, the free arm, the lean — is the body's. Write
+the one or two facts that define the action and leave the rest out; adding in-between places makes it worse.
 
 ```ts
-function* action(body: Body): Story {
-  body.run({ speed: 4, at: 6, plant: 'left', arrive: 2.5 }) // takes effect at once, and the story goes on
-  yield* body.foot.right.to(place, { velocity }) // is there, moving so, at the first moment the run brings it within reach
-  yield* body.stand()
+function* shot(body: Body, ball: Thing): Story {
+  body.run({ speed: 4, at: 6, plant: 'left', arrive: 2.5 }) // takes effect now; not waited for
+  yield* body.foot.right.to(place, { velocity })            // there, moving so, at the first moment the run allows
+  yield* body.stand()                                       // nothing is undone when a story ends
 }
 ```
 
-A statement takes effect at once and holds until another replaces it; `yield*` waits for it. So the body is sent on its way without `yield*`, and the story waits for the moment it is about: a walk or a run waited for is over, and what was to happen as he arrives comes too late. A limb is planned when it is sent, on where the body is going by then, and what it cannot do it does as nearly as it can: `yield*` on it gives whether it was there. Nothing is taken back when a story ends: one that is to leave him standing ends with `yield* body.stand()`.
+## Frames
 
-A `velocity` is what makes a limb draw back first and swing on after: it is for a strike, a throw, a kick, and not for letting go of something or putting it down. Writing the wind-up and the follow-through as places of their own gives a stiff motion in pieces. The body swings an arm the story says nothing about, so what both hands do, both are told.
+Every hand, foot and bound thing is a channel: each statement writes one frame — a place, a moment, a velocity, a
+turn — and the channel goes there from whatever state it is in, on the smoothest way it is strong enough for.
 
-## Choosing between the ways to say it
+- **When:** nothing said is the first moment the body lets it be there; `by(moment, …)` a moment you name
+  (`body.when(place)` for when the hips come by a place, `body.highest()` for the top of the jump he is making);
+  `{ seconds }` a pace you set. Frames for one end are met in order.
+- **Where:** a place in the scene; `on: body` for a pose of his own (goes with him); `on: mesh` for something that
+  moves (the end follows it until sent elsewhere).
+- **How fast:** `velocity` is for a strike, a throw, a kick: it makes the limb draw back as far as its joints and
+  strength need and swing through after. Never for putting something down.
+- **Turned:** `palm` and `pointing` for a hand; `with: 'index' | 'palm'` plans that part instead of the wrist.
+- **What it cannot do** it does as nearly as it can — out of reach, too fast, too soon — and the frame is marked
+  short (`yield*` gives `false`). Change the ask, not the steps.
 
-- **Where a place is counted from.** Something that is where it is, a ball or a rung, is a place in the scene as it stands. A pose of his own, a hand by the ear or a release beside the shoulder, is `on: body`: counted from the hip or the shoulder, going with him and turning as he turns. Something that moves is `on: thing`, a three.js object: a hand sent there stays on it as it moves until it is sent elsewhere or let `free`: it follows the thing (see below). The `velocity` is always how the hand or foot is moving in the scene, so a ball let go leaves exactly so.
-- **When it can, or by a moment.** With nothing said a hand or a foot is there at the first moment the body lets it be, with a short wind-up: a jab, a push, a flick. `by` a moment well ahead gives it the full one, drawn back as far as its joints turn, which is what a hard throw or a full swing needs; the moment is usually the body's: `body.when(place)` tells when the hips come by, or come to rest where a walk ends, and `body.highest()` the top of the jump he is making. `seconds` is for a pace the story sets itself.
-- **Going somewhere.** A walk or a run goes to a place on the ground, `{ x, z }`, or a number along z, and he faces the way he goes, turning round for what is more than a stride behind him. `body.face(way)` has him face another way as he walks, which is how he backs off or sidesteps, and `body.face()` gives it back; at a run he faces the way he goes. A walk is over when he has come to rest; a run is over as he comes by, so a run at a walk's speed is how a story passes a corner without stopping.
-- **Which foot, where.** A run's `plant` and `at`, or a walk's `plant`, end it on a chosen foot, the strides coming out even onto it; a run's `arrive` has him brake onto it. That is how he arrives for a kick, a throw, a delivery or a jump off one leg.
-- **A jump.** `body.jump(place)` is where the hips are at its top, a trunk and an arm under a hand stretched up, ahead, beside or behind him; a top higher or further than his legs push him he jumps as near as they do. A top lower than he stands is a hop or a keeper's dive: he comes down on his feet there, as low as it is, and stays that low until sent on; he never lands on his side. Stated straight after the run or walk, without waiting, he takes off from the foot that ends on; standing or led, he drops at once and pushes off. `body.highest()` asked straight after it is the moment of the top, for a hand or a lead foot sent `by` it. In the air his feet can be sent, and are his again when he lands; a run stated there takes over at the landing.
-- **A stance.** A foot sent to rest at `body.ground(side, place)` is a step: it comes down there, the other stays where it stands, and he stands between his feet, as high as his legs allow and turned side-on as far as they are apart, with nothing said about the hips. A stance is one foot placed, a lunge the front foot placed far ahead, a recovery the same foot placed back: one foot at a time, each waited for, and what a hand does in the step stated after the foot and before waiting for it. Led, he keeps his stance and steps it along the way he is led, the foot ahead that way first and the other after it, never crossing, so an advance or a retreat is only `go`. A foot sent to rest `on` a thing, `foot.to({ x, y: ankle, z }, { on: rung })`, the place its ankle, stands on it as on the ground, and he stands on the lowest foot down: a box stepped up onto, a stair, a ladder climbed by sending the feet and the hands to its rungs in turn, each waited for. A step given `seconds` takes them. The next walk, run or `stand()` takes the feet back.
-- **The hand itself.** The animation moves the hand; how the fingers are held comes from the `hand` skill (`@drawcall/hand`), as a pose or a grip on a mesh. Which way the `palm` faces and the fingers are `pointing` is said with the place, as directions counted the way the place is; `with: 'palm' | 'index'` makes the place and the velocity that part of the hand's, the palm for hitting, pushing and lying flat on something, a fingertip for a button; With a `velocity` they hold at the moment only, and the wrist whips through like the rest of the arm. `hand.shape(pose)` is what the fingers do: `flat`, `fist`, `point` from `@drawcall/hand`; it holds until another is stated, through `free()` and `stand()`, `hand.shape()` lets them relax, and `{ by: moment }` has them so at a moment, which is how a thing is let go: `shape(flat, { by: release })`.
-- **A thing in his hands.** A thing is bound to him, `const ball = body.bind(mesh)`, and hands go on it by grips from the `hand` skill, read from the rig at rest before the `Body` is made: `ball.on(body.hand.right, grip)`. It has one owner at a time. Moved by the body, the first hand on it leads it and the story sends the thing, never that hand, in the words a hand is sent in: `ball.to(place, { on, seconds })`, `ball.by(release, place, { velocity })`, `pointing` its z a way, `palm` how the leading hand's palm faces. The body plans it as the end of that arm, so the wind-up, trunk and follow-through come with it, and every other hand on it follows its grip as near as the arm reaches, never moving it: a box or a bar in both hands is led by one and followed by the other. Bound `turning` (the default) it turns with the leading hand, a racket, a sword, a box; bound `{ turning: false }` its middle rides where the grip seats it and it keeps its own turn, a ball, or turns only as it is sent to point. Moved from outside, `body.bind(mesh, { outside: true })`, the game or physics sets where it is every frame, a rifle along the aim, a lever, a rung, and every hand on it follows. It is taken from where it is and eases in, so the hand goes to it first, `hand.to(grip)`; `thing.off(hand)` takes one hand off, and `thing.free()` gives it up where it is and tells how fast it was moving, for physics to take on. A hand sent onto a thing it leads is an error at the statement; sent with nothing leading it, a thing goes nowhere.
-- **One thing after another for the same hand or foot.** Sends are carried out in order, each holding until the next has to set off: a pose to carry until the moment and the moment itself are two statements, the first without `yield*`. A hand sent on straight after a strike swings out of it into the next place, so a punch and the way back to the guard need no time given. One that stays somewhere stays, reaching after it as he goes away, until it is sent elsewhere or let `free()`: let go what he is done with.
+## Cancel
+
+`hand.cancel()`, `foot.cancel()`, `thing.cancel()` and `body.cancel()` drop what was asked and go on from the state
+it is in: moving, it swings on; a new frame written straight after takes over smoothly. `body.stand()` cancels and
+comes to rest.
+
+## Things: bind, hold, let go
+
+`const ball = body.bind(mesh)` makes a thing his; `ball.on(body.hand.right, grip)` puts a hand on it by a grip from
+`@drawcall/hand` (read from the rig at rest). With a hand on it, send **the thing**, never that hand: `ball.to(…)`,
+`ball.by(release, place, { velocity })` — the body plans it as the end of the leading arm; a second hand follows its
+grip. `ball.off(hand)` takes a hand off; `ball.free()` lets it go and returns its velocity for physics. Sending a hand
+that is on a thing is an error. Before any hand is on it, a bound thing is still the world's.
+
+`body.bind(mesh, { outside: true })`: the game or physics sets it every frame (a rifle along the aim, a lever) and the
+hands follow it, never moving it. A thing the game carries with him is followed with his hips.
+
+## Ownership
+
+Each channel has one owner at a time: the story that wrote its frame, the thing it is bound to, the outside, or the
+body (free). The gait owns the hips and the feet unless a story puts a foot (`foot.to(ground place)` is a step) or a
+walk, run or jump is stated.
 
 ## Led by a game
 
-Where he goes has one owner at a time, the game or the body. The game owns it where the player is to steer him exactly and at once. The body owns it for an action whose legs are timed to it, a run-up, an approach, a takeoff, a plant or a lunge: that is a story written exactly as above, played with `body.play`, during which the game says nothing of where he goes and moves its own character after `body.hips.value`; once it is over the game leads him on from where he stands, with no jump. An action led by hand, steering him to where he is to be and holding his hips down, comes out far worse than the same action told as a run and a planted foot.
-
-Led, the game says where he is and how he goes, and the body only how he does it: which foot steps where, how he faces and leans. Each frame, before `body.update(delta)`, it states how he is going, `body.go(velocity)`, and where the world has him by the end of that update, `body.hips.at(place)`, with `y` how high the ground under him is: a game that moves its character in fixed steps moves it once for the frame's delta first, so both are said for the moment the frame is drawn at. If not the way he goes, it states which way he faces, `body.face(way)`: his legs go the way he goes and his trunk and head turn the way he faces, his feet stepping forward, sideways or backing as that has them, never crossed; faster than he walks he faces the way he goes, and takes up the way he is to face again as he slows; with no way stated he faces the way he goes, turning round when he is led back the way he came. Standing in a stance the place the world gives is where he stands between his feet, as near it as they let him. `body.hips.to({ y })` is how high he keeps his hips as he goes, and `body.facing` reads the way he faces. A jump is the body's to time: the game states it with `body.jump(top)` as it begins, he drops and pushes off, and the game's character leaves the ground when the body does, at `body.highest()` less the time the rise takes; until then it stays on the ground, and in the air it is led as on it. `body.look(place)` turns his head there: while he is to face a way his trunk keeps to it, so a rifleman faces side-on and looks along his aim. `body.eye(side)` is where an eye is, for a first-person camera, and `body.shoulder(side, place)` a place that goes with his chest at a shoulder, for what rests there. He leans into how fast his led speed changes and goes the way he is led at once, his facing coming round after it, so `go` changes as a push changes it, every frame, not in jumps. A blow or a recoil is `body.knock(velocity, at)`: he takes it and recovers by himself. A place against his chest is counted from `body.front`, how far his own trunk reaches ahead of the shoulder, so it fits a thick vest as well as a thin body. Hands, kicks and jumps are stated as in a story, once, when they begin; stories for them are played alongside with `body.play`. Nothing he is led to do is an error: statements made every frame as he moves and turns are kept as nearly as he can.
-
-## What makes it natural
-
-A limb swings its end across itself far faster than it can stretch it. A fast arrival wants the limb about square to the way it is to move: a foot kicks forward from under the hip, a hand throws forward from above and behind the shoulder, and bowls or swings forward from below it. Asked to arrive fast along its own length or at full stretch, it comes slow or as a jab.
-
-Speed comes from the whole chain. A hand sent `by` a moment a second or so ahead gets all of it: the trunk turns away first and the pelvis leads it through, and on feet apart his weight goes onto the rear foot and through onto the front one. So a swing across the body is a foot placed ahead and one hand `by` its moment, arriving with the arm nearly stretched. A run-up is a large part of a hard throw, and standing still makes the same ask harder.
-
-The body knows its own trunk, and an arm sent through it stays outside it, as near as it can; it knows nothing else that is in the way: a place for the hands wants a forearm's length clear of the head, and a way round an edge is a place of its own.
-
-How long his legs and arms are (`arm` from shoulder to wrist) and how high he stands is `body.size`, measured from his rig: places and heights in a story that is to fit any body are counted from it. For a hand sent lower than it reaches he bends and comes down, in time for the moment and no sooner: a low place needs no squat written for it. Going along or on feet put apart he comes down as far as a lunge; to the floor only standing with his feet together.
-
-## When it cannot
-
-Nothing he is asked to do is an error. What he cannot do exactly he does as nearly, as fast and as soon as he can, and keeps a hold he cannot keep as nearly as he can: a place out of reach as near as the limb stretches and the body gets down, a hand turned as far as the wrist turns it, an arrival faster than he can as fast as he can, a moment too soon as soon after as he can, the hips held higher or lower than his legs let him as high or as low as they do. A waited send gives false when it came short; a story that looks wrong is nearly always one whose ask is wrong: a place out of reach, too short a run. Change that fact; adding steps to help the body along makes the motion worse. What arrives moving swings on as every joint was turning and comes back by itself, so `stand()` straight after the moment does not cut the follow-through short.
-
-An error is a statement that makes no sense: numbers that are none, a way that leads nowhere, a thing that is not in his scene by the next update, fingers on a rig without them. It is thrown at the statement, or, from `body.update`, once after the step, as is whatever a story played alongside throws.
+Each frame, before `body.update(delta)`: `body.go(velocity)`, `body.hips.at(place)` where the world has him,
+`body.face(way)` if not the way he goes, `body.look(place)`. An action whose legs are timed — run-up, plant, lunge,
+jump — is a story played with `body.play`; on fresh input (a new direction, a new action) the game calls
+`body.cancel()` and leads him from there. Delay from key to motion should be one frame.
 
 ## Seeing it
 
-Run the story headless: `body.update(seconds)` in small steps while `body.playing`, reading each part's `value` and `velocity`. How a hand or a foot was moving at its moment is read in the story, straight after the `yield*` that waited for it: a step later it has moved on.
+`?debug=plan,gait,hand,body` on any example page (bare `?debug` for all, I key to toggle): `plan` shows each channel's
+way and frames, `gait` the lead, stride and footfalls, `hand` the grips, `body` how far each limb came from its plan
+(red = short). Headless: step `body.update(dt)` while `body.playing` and read `value`/`velocity`; `body.intent()`
+gives the same data.
+
+## Sizes
+
+Count places from `body.size` (`arm`, `leg`, `stand`, `shoulder`…) so a story fits any rig.

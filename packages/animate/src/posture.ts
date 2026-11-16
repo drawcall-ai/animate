@@ -19,8 +19,10 @@ const LOW = 0.4
 const REACH = 0.97
 /** how far ahead of a hand the hips and the trunk move for it (in his beats): the hips first, as the parts nearer the middle lead; and how far ahead what he gets down for is looked at */
 const LEAD = { hips: 1, trunk: 0.5, down: 1 }
-/** what bending costs against getting down, for a hand above the knees and below them: a low one is reached with the legs */
-const COST = { high: { bend: 0.6, sink: 0.5 }, low: { bend: 0.9, sink: 0.25 } }
+/** what bending costs against getting down for a hand below the knees: a low one is reached with the legs */
+const COST = { low: { bend: 0.9, sink: 0.25 } }
+/** how much of his weight is above the hips: what bending lowers, where getting down lowers all of it */
+const UPPER = 0.6
 
 /** how fast the hips let down (in his paces a second), and how long they take over the last of the way (in his beats): as locomotion lets them down */
 const HIPS = { sink: 0.34, settle: 0.835 }
@@ -42,13 +44,14 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size) {
   const most = (1 - DOWN.low) * stand
   // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
   if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
-  const cost = hand.y < -0.5 * leg ? COST.low : COST.high
+  // (above the knees, what it costs is how far his weight comes down: all of it getting down, what is above the hips bending)
+  const low = hand.y < -0.5 * leg
   let best = { bend: 0, sink: 0, cost: Infinity }
   for (let bend = 0; bend <= DOWN.bend + 1e-6; bend += DOWN.bend / 12) {
     for (let sink = 0; sink <= most + 1e-6; sink += most / 12) {
       const at = new Vector3(shoulder.x, shoulder.y * Math.cos(bend) - sink, shoulder.z + shoulder.y * Math.sin(bend))
       const short = Math.max(0, at.distanceTo(hand) - REACH * arm)
-      const costs = 100 * short + cost.bend * bend + cost.sink * (sink / leg)
+      const costs = 100 * short + (low ? COST.low.bend * bend + COST.low.sink * (sink / leg) : (sink + UPPER * shoulder.y * (1 - Math.cos(bend))) / leg)
       if (costs < best.cost) best = { bend, sink, cost: costs }
     }
   }
@@ -128,6 +131,12 @@ export class Asks implements Posture {
     const { at, facing, ground } = this.hips()
     const on = place.clone().sub(at.clone().setY(ground + this.size.stand)).applyAxisAngle(new Vector3(0, 1, 0), -facing)
     return this.takes(down(on, this.shoulders[side], this.size))
+  }
+
+  /** how long he takes to be up again from how far he is let down and bent now (s) */
+  rising(bend: number, low: number) {
+    const most = { bend: DOWN.bend, sink: (1 - DOWN.low) * this.size.stand }
+    return Math.max(0, bend / most.bend, low / most.sink) * this.takes(most)
   }
 
   /** the moment it is now, on his clock */

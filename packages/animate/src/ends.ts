@@ -60,6 +60,8 @@ export type Body = {
   changed(): void
   /** how long before a hand is at a place he takes to get down for it, if he must (s) */
   lowering(side: Side, place: Vector3): number
+  /** how long he takes to be up again from how far down and bent he is now (s) */
+  rising(): number
 }
 
 /**
@@ -162,7 +164,11 @@ export class End {
     const after = Math.max(this.body.time(), ...channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
     frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
     // (a hand told no moment, for a place he gets down for, is there no sooner than he is down)
-    if (this.kind === 'hand' && channel === this.channel && when?.by === undefined && when?.seconds === undefined) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
+    if (when?.by === undefined && when?.seconds === undefined && this.kind === 'hand') {
+      if (channel === this.channel) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
+      // (and one on him, no sooner than he is up again: it is counted from him standing)
+      if (frame.on === this.root) frame.at = Math.max(frame.at, this.moment(after + this.body.rising()))
+    }
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
     const swung = this.leaves(frame, channel.value)
     frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
