@@ -15,7 +15,7 @@ const DOWN = { bend: 1.1, sink: 0.62 }
 /** how far below the shoulder a hand is, in lengths of his arm, before he gets down for it */
 const LOW = 0.4
 /** how much of an arm a hand reaches without stretching */
-const REACH = 0.92
+const REACH = 0.97
 /** how far ahead of a hand the hips and the trunk move for it (in his beats): the hips first, as the parts nearer the middle lead; and how long getting down takes */
 const LEAD = { hips: 1, trunk: 0.5, down: 1 }
 /** what bending costs against getting down, for a hand above the knees and below them: a low one is reached with the legs */

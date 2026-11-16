@@ -1,10 +1,12 @@
-import { bends, DOWN, type Limb, RANGE, UP } from '@drawcall/limbs'
+import { bends, bent, DOWN, type Limb, RANGE, UP } from '@drawcall/limbs'
 import { Euler, Quaternion, Vector3 } from 'three'
 
 /** how far either way from the swing it had an elbow is looked at to swing out, and how finely (rad); and what moving it costs against a wrist turned past its range */
-const SWIVEL = { most: 0.6, fine: 0.1, moved: 0.3 }
+const SWIVEL = { most: 1.2, fine: 0.1, moved: 0.3 }
 const euler = new Euler()
 const FULL = 2 * Math.PI
+/** how far past where it shuts an elbow still folds, pressed (rad) */
+const PAST = 0.07
 const turned = new Quaternion()
 
 /** a joint turned as near so as it turns */
@@ -41,20 +43,35 @@ const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly 
  * hand as near so as it turns, so it never jumps between two ways of reaching the same place. Every joint as near as
  * it turns.
  */
-export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist: Vector3, turn: Quaternion, swivel: number) {
+export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist: Vector3, turn: Quaternion, swivel: number, part?: Vector3) {
   const hand = arm.hand!
+  // (sent with a part of the hand, that part is put where the plan has it, however the wrist turns the hand: a few tries)
+  if (part) {
+    const tip = part.clone().applyQuaternion(turn).add(wrist)
+    let at = wrist.clone()
+    for (let k = 0; k < 6; k++) {
+      const posed = reachArm(arm, shoulder, trunk, at, turn, swivel)
+      const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(posed.first))).multiply(new Quaternion().setFromEuler(euler.set(posed.fold, 0, 0)))
+      const lies = bent(forearm, posed.wrist, new Quaternion())
+      at = tip.clone().sub(part.clone().applyQuaternion(lies))
+    }
+    return reachArm(arm, shoulder, trunk, at, turn, swivel)
+  }
   const to = wrist.clone().sub(shoulder).applyQuaternion(trunk.clone().invert())
   const palm = hand.palm.clone().applyQuaternion(turn)
   const pointing = DOWN.clone().applyQuaternion(turn)
   const pose = (swung: number) => {
     const { first, fold } = arm.reach(to, swung)
-    const upper = within(read(first, arm.first.value), RANGE.arm)
-    const elbow = Math.min(0, Math.max(RANGE.forearm.x[0], fold))
+    const asked = read(first, arm.first.value)
+    // (what a joint cannot turn to costs: the hand comes short by it)
+    const stopped = beyond(asked, RANGE.arm) + Math.max(0, RANGE.forearm.x[0] - PAST - fold, fold)
+    const upper = within(asked, RANGE.arm)
+    const elbow = Math.min(0, Math.max(RANGE.forearm.x[0] - PAST, fold))
     const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(upper))).multiply(new Quaternion().setFromEuler(euler.set(elbow, 0, 0)))
     const wrist = bends(forearm, hand.palm, palm, pointing)
     // (a hand that cannot be turned so at all is turned as it hangs)
     const bent = wrist && [wrist.x, wrist.y, wrist.z].every(Number.isFinite) ? wrist : new Vector3()
-    const cost = beyond(bent, RANGE.wrist) + (arm.inside(upper, elbow) ? 10 : 0) + SWIVEL.moved * Math.abs(swung - swivel)
+    const cost = 10 * stopped + beyond(bent, RANGE.wrist) + (arm.inside(upper, elbow) ? 10 : 0) + SWIVEL.moved * Math.abs(swung - swivel)
     return { first: upper, fold: elbow, wrist: within(bent, RANGE.wrist), swivel: swung, cost }
   }
   let best = pose(swivel)

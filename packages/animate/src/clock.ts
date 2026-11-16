@@ -87,7 +87,7 @@ export class Clock {
         this.faults.push(new Error(`the ${end.name} is to be on a thing that is not in the scene he is in`))
       }
     }
-    for (const thing of things.values()) if (thing.outside) thing.follow(this.time, now, frame)
+    for (const thing of things.values()) if (thing.outside) thing.follow(this.span.to, now, frame)
     // (what a story throws is thrown once the step is done, and the story is over)
     for (let k = 0; k < this.stories.length; k++) {
       let done = true
@@ -106,7 +106,10 @@ export class Clock {
     // the things go first, then the hips and the feet, then the ends, those on a thing with it
     for (const thing of things.values()) thing.channel.advance(now)
     locomotion.step(delta, this.body.ends.foot, looked)
-    for (const end of this.all) end.channel.advance(now)
+    for (const end of this.all) {
+      if (end.kind === 'hand') end.retip()
+      end.channel.advance(now)
+    }
     // a hand or a foot swung on and come to rest is the body's again, and so is a foot held in the air as he lands
     const lands = locomotion.carrier.landing
     for (const end of this.all) {
@@ -134,7 +137,7 @@ export class Clock {
       const hand = ends.hand[side]
       if (hand.held) {
         const arm = joints.arms[side]
-        const reached = reachArm(arm, bones.shouldered(side, new Vector3()), trunk, hand.channel.value, hand.channel.turn, this.swivel[side])
+        const reached = reachArm(arm, bones.shouldered(side, new Vector3()), trunk, hand.channel.value, hand.channel.turn, this.swivel[side], hand.offset())
         this.swivel[side] = reached.swivel
         arm.first.follow(reached.first, delta)
         arm.second.follow(new Vector3(reached.fold, 0, 0), delta)

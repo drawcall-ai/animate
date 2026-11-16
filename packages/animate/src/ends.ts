@@ -13,6 +13,10 @@ const END = { hand: { strength: 15, draw: 0.5 }, foot: { strength: 25, draw: 0.6
 const LOOK = { far: 10, fine: 0.1 }
 /** how many times as long as the limb sways a fast arrival by a moment given well ahead swings for, drawn back first */
 const SWING = 1.4
+/** how far a fast arrival draws back is `velocity × swing × 4/27` */
+const DRAW = 27 / 4
+/** how far a limb draws its end back before a fast arrival at the most: in along itself, in lengths of it, and round its first joint, in radians */
+const DRAWS = { in: 0.5, round: 1.2 }
 /** how much of its length a limb reaches at its ease */
 const EASE = 0.97
 
@@ -160,14 +164,32 @@ export class End {
    * off for half that; and one at rest as late as it can at its ease
    */
   leaves(frame: Frame, given: boolean) {
-    const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
-    if (!moving && this.kind === 'hand') return undefined
-    return (frame.at ?? 0) - sway(this.limb) * (given && this.kind === 'hand' ? SWING : 0.5)
+    const velocity = new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 })
+    const at = frame.at ?? 0
+    if (velocity.lengthSq() === 0 && this.kind === 'hand') return undefined
+    let swing = sway(this.limb) * (given && this.kind === 'hand' ? SWING : 0.5)
+    // (a hand swings round its shoulder as far as it likes, but draws in along its arm only so far: it sets off no
+    // sooner than draws it back so far either way, `velocity × swing × 4/27`)
+    const [root, moving, place, into] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion()]
+    this.root.state(at, root, moving)
+    if (frame.on) frame.on.state(at, place, new Vector3(), into)
+    place.add(new Vector3().copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(into))
+    const out = place.sub(root)
+    const far = Math.max(out.length(), 1e-6)
+    velocity.sub(moving)
+    const along = Math.abs(velocity.dot(out)) / far
+    const round = Math.sqrt(Math.max(0, velocity.lengthSq() - along * along))
+    const { length } = this.limb
+    if (along > 0) swing = Math.min(swing, (DRAW * DRAWS.in * length) / along)
+    if (round > 0) swing = Math.min(swing, (DRAW * DRAWS.round * far) / round)
+    return at - swing
   }
 
   /** writes a frame the story has sent: it is the story's from when it sets off; tells whether it was there at its moment */
   write(frame: Frame): Story<boolean> {
     const written = this.channel.by(frame)
+    const tip = this.tips.get(frame)
+    if (tip) this.tips.set(written, tip)
     const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
     if (this.kind === 'foot') this.body.carrier.take(this.side, { from: frame.leaves ?? this.body.time(), until: moving ? (frame.at ?? Infinity) : Infinity })
     this.body.carrier.stale()
@@ -214,6 +236,27 @@ export class End {
     return this.channel.met(frame) && this.gap <= SLACK.place * this.body.size.leg
   }
 
+  /** the part of the hand it was last sent with, if not its wrist: the arm puts that part where the wrist's plan has it */
+  part?: Touch
+
+  /** where the part it was sent with is from the wrist now, in the frame of the hand: none, sent with the wrist */
+  offset() {
+    return this.part ? this.fingers().tip(this.part, 0) : undefined
+  }
+
+  /** the frames it was sent with a fingertip, the palm or the knuckles: that part, where it is to be and how the hand is turned */
+  private readonly tips = new WeakMap<Frame, { part: Touch; at: Vector3; turn: Quaternion }>()
+
+  /** the wrist of every frame sent with a part of the hand is where that part will be at the frame's moment, the fingers as they will be then */
+  retip() {
+    for (const frame of this.channel.frames) {
+      const tip = this.tips.get(frame)
+      if (!tip || !frame.place) continue
+      const offset = this.fingers().tip(tip.part, Math.max(0, (frame.at ?? 0) - this.body.time()))
+      ;(frame.place as Vector3).copy(tip.at).sub(offset.applyQuaternion(tip.turn))
+    }
+  }
+
   /** the things it was sent onto, until it is cancelled */
   readonly on = new Set<Object3D>()
 
@@ -231,6 +274,9 @@ export class End {
     const hand = this.limb.hand
     if ('target' in place) {
       if (!hand) throw new Error(`the ${this.name} is sent to hold something, and is no hand`)
+      if (palm || pointing || part) {
+        throw new Error(`the ${this.name} is sent to hold something by a grip, which says where it is and how it is turned: leave out \`palm\`, \`pointing\` and \`with\``)
+      }
       const held = this.seats(place)
       return { on: this.onto(place.target), place: held.place, turn: held.turn, by: 'story' }
     }
@@ -248,13 +294,17 @@ export class End {
     const into = new Quaternion()
     if (mover) mover.state(this.body.time(), new Vector3(), new Vector3(), into)
     const now = into.clone().invert().multiply(this.channel.turn)
-    // (told only how the palm is to face, the fingers point on along the arm, as from its shoulder to the place)
-    const along = ways[0] && !ways[1] ? this.along(there, mover, into) : undefined
+    // (told nothing of how it is turned, or only how the palm faces, the fingers point on along the arm, as from its shoulder to the place)
+    const along = !ways[1] ? this.along(there, mover, into) : undefined
     const turn = hand ? turnOf(ways[0], ways[1] ?? along, hand.palm, now) : undefined
     // (sent with a part of the hand, or what sits in it by a grip, the wrist is where that has it there)
     const offset = part && hand ? (typeof part === 'string' ? this.fingers().tip(part, 0) : this.sits(part).at) : undefined
+    const at = there.clone()
     if (offset) there.sub(offset.applyQuaternion(turn ?? now))
     const frame: Frame = { on: mover, place: there, turn, velocity, by: 'story' }
+    // (sent with a fingertip, the wrist is put anew each step for where that finger will be at the moment)
+    if (typeof part === 'string') this.tips.set(frame, { part, at, turn: (turn ?? now).clone() })
+    this.part = typeof part === 'string' ? part : undefined
     const speed = velocity ? new Vector3().copy(velocity) : undefined
     if (speed && speed.lengthSq() > 0) {
       // a fast end swings round where its limb starts, and a hand's wrist whips on with it: the fingers led into the way it goes
@@ -292,9 +342,9 @@ export class End {
     return at
   }
 
-  private fingers() {
+  private fingers(asked = 'are asked for') {
     const fingers = this.limb.hand?.fingers
-    if (!fingers) throw new Error(`the fingers of the ${this.name} are asked for, and its rig has no finger bones`)
+    if (!fingers) throw new Error(`the fingers of the ${this.name} ${asked}, and its rig has no finger bones`)
     return fingers
   }
 
@@ -346,6 +396,7 @@ export class End {
   /** cancels what it was sent to: it goes on from the state it is in, a hand swinging on and then the body's */
   cancel() {
     this.on.clear()
+    this.part = undefined
     // (one the story does not have yet is only told to set off for nothing)
     if (this.held) this.channel.cancel()
     else this.channel.set(this.channel.value, this.channel.turn)
@@ -359,6 +410,6 @@ export class End {
   }
 
   shape(pose?: Pose, { by }: { by?: number } = {}): Story<boolean> {
-    return this.fingers().shape(pose, by === undefined ? undefined : by - this.body.time())
+    return this.fingers('are to take a pose').shape(pose, by === undefined ? undefined : by - this.body.time())
   }
 }
