@@ -65,7 +65,19 @@ export class Channel implements Mover {
   /** how fast it turns, about the scene's axes (rad/s) */
   readonly spin = new Vector3()
   readonly frames: Planned[] = []
-  outside = false
+  private moved = false
+  /** whether it is moved from outside, only watched: given back, what it was to do is planned anew from how it was moved */
+  get outside() {
+    return this.moved
+  }
+
+  set outside(to: boolean) {
+    if (this.moved && !to) {
+      for (const frame of this.frames) frame.met = undefined
+      this.last = undefined
+    }
+    this.moved = to
+  }
   /** what it swings round, as a hand round its shoulder, if anything, and how far round an `axis` it goes from a place `out` from there (rad) */
   pivot?: { about: Mover; room(out: Vector3, axis: Vector3): number }
   /** asked for a frame once it has none left and has come to rest: what owns it then */

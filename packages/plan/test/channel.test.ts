@@ -154,3 +154,20 @@ test('it leaves no sooner than it is told to, holding as it was until then', () 
   run([foot], 0.69, 1)
   expect(foot.value.distanceTo(new Vector3(0, 0.1, 1))).toBeLessThan(0.02)
 })
+
+test('given back from outside, it goes on from where it was moved to, never back to a frame it held before', () => {
+  const foot = new Channel('foot', 200, 0.3)
+  foot.set({ x: 0, y: 0.1, z: 0 })
+  foot.by({ at: 0.2, place: { x: 0, y: 0.1, z: 0 } })
+  run([foot], 0, 0.3)
+  foot.outside = true
+  let t = 0.3
+  for (; t < 0.8; t += DT) {
+    foot.value.set(0, 0.1 + (t - 0.3), 2 * (t - 0.3))
+    foot.advance(t)
+  }
+  const was = foot.value.clone()
+  foot.outside = false
+  run([foot], t, t + DT)
+  expect(foot.value.distanceTo(was)).toBeLessThan(0.05)
+})
