@@ -179,7 +179,7 @@ test('a thing moved from outside has every hand on it follow it, and is never mo
   expect(moved.velocity.length()).toBeGreaterThan(0)
 })
 
-test('a hand goes onto one thing at a time, and a thing with no hand on it goes nowhere when sent', () => {
+test('a hand is not sent onto a thing it leads, goes onto one thing at a time, and a thing with no hand on it goes nowhere when sent', () => {
   const [one, two] = [ball(), ball()]
   two.position.x = 0.3
   const { body, hands } = setup(one, two)
@@ -187,6 +187,8 @@ test('a hand goes onto one thing at a time, and a thing with no hand on it goes 
   const seat = grip(hands.right, one, SEAT)
   const held = body.bind(one)
   held.on(right, seat)
+  expect(() => right.to(seat)).toThrow(/leads/)
+  expect(() => right.to({ x: 0, y: 0, z: 0 }, { on: one })).toThrow(/leads/)
   // (going on another thing, it comes off the first)
   body.bind(two).on(right, grip(hands.right, two, SEAT))
   expect(body.bound.map(({ thing }) => thing)).toEqual([two])

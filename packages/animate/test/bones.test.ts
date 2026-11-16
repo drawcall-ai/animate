@@ -54,7 +54,7 @@ test('the bones of a rig are where the body has its feet and hands, whatever hol
     }
   }
   // and is plainly not at rest
-  expect(() => new Body(rig)).toThrow(/rig at rest/)
+  expect(() => new Body(rig)).toThrow(/rig at rest.*a leg is not straight down/)
 })
 
 test('a rig scaled itself is a body as large as it is drawn, where the rig is', () => {
