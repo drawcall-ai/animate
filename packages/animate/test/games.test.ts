@@ -40,10 +40,13 @@ test('boxing: walking at the bag he stops an arm\'s length from it, and the punc
   const scene = new Scene()
   const world = await buildWorld({ scene })
   const boxer = new Boxer(person(), scene)
-  let nearest = Infinity
+  let [nearest, throwing] = [Infinity, 0]
   play(boxer, world, 5, [[0.2, 2, 0, 1]], [2.5, 3, 3.5, 4], () => {
     nearest = Math.min(nearest, Number(/([\d.]+) m away/.exec(boxer.readout())?.[1]))
+    if (/boxer\s+(jab|cross|hook)/.test(boxer.readout())) throwing += FRAME
   })
+  // (each punch thrown at once)
+  expect(throwing / 4).toBeLessThan(0.35)
   expect(nearest).toBeGreaterThan(0.3)
   expect(Number(/landed\s+(\d+)/.exec(boxer.readout())?.[1])).toBeGreaterThanOrEqual(3)
 }, 30000)

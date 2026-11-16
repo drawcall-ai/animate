@@ -431,7 +431,7 @@ export class End {
     const strikes = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
     const strength = this.channel.strength * (strikes ? EASE : SWAY)
     const soonest = Math.max(after, now + Math.max(0.5 * body.size.beat, Math.sqrt((6 * place(now).distanceTo(this.value)) / strength)))
-    let best = { t: soonest, far: Infinity }
+    const tried: { t: number; far: number }[] = []
     for (let t = soonest; t < now + LOOK.far * body.size.beat; t += LOOK.fine * body.size.beat) {
       this.root.state(t, root, unused)
       // (a hand's along the ground: how low it is he gets down for; a foot's from its hip)
@@ -439,9 +439,11 @@ export class End {
       const far = (this.kind === 'hand' ? Math.hypot(off.x, off.z) : off.length()) - REACH * limb.length
       const spared = this.kind === 'hand' || body.gait.spares(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
       if (far <= 0 && spared) return t
-      if (far < best.far) best = { t, far }
+      tried.push({ t, far })
     }
-    return best.t
+    // (out of reach all along, the moment it is nearest: for a hand, the first it is about as near as it comes)
+    const nearest = Math.min(...tried.map(({ far }) => far)) + (this.kind === 'hand' ? NEAR * limb.length : 0)
+    return tried.find(({ far }) => far <= nearest)?.t ?? soonest
   }
 
   /** cancels what it was sent to: it goes on from the state it is in, a hand swinging on and then the body's */
