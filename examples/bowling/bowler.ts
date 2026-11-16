@@ -88,10 +88,9 @@ export class Bowler implements Game {
     const reached = left.to(sides.left)
     yield* right.to(sides.right)
     yield* reached
-    const point = { turning: false }
     const ball = body.bind(mesh, { outside: true })
-    ball.on(right, sides.right, point)
-    ball.on(left, sides.left, point)
+    ball.on(right, sides.right)
+    ball.on(left, sides.left)
     // the body has it, the right hand leading, and lifts it
     ball.outside = false
     this.held = { k, ball }
@@ -101,7 +100,7 @@ export class Bowler implements Game {
     const under = grip(hands.right, mesh, GRIP)
     ball.off(right)
     yield* right.to(under)
-    ball.on(right, under, point)
+    ball.on(right, under)
     ball.off(left)
     yield* carry(body, ball, sides.left)
     body.face()

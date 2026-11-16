@@ -1,8 +1,9 @@
-import { Box3, Color, Group, Matrix4, Mesh, type Object3D, Vector3 } from 'three'
-import { Body, type Intent as Told, type Meant, type Side } from '@drawcall/animate'
+import { Color, Group, type Object3D, Vector3 } from 'three'
+import { Body, type Intent as Told, type Side } from '@drawcall/animate'
 import { Labels } from './labels'
 import { Memory } from './memory'
 import { Pen } from './pen'
+import { drawPlan } from './plan'
 
 /** the colour of each part */
 export const HUES = {
@@ -17,8 +18,6 @@ export const HUES = {
 const GAP = { red: 0.25, told: 0.03 }
 /** how large the marks are (m) */
 const MARK = { goal: 0.035, fall: 0.07, arrow: 0.6 }
-/** a way an end arrives moving is drawn as far as it goes in so long (s) */
-const ARRIVES = 0.04
 /** the way he is led is drawn as far as he goes in so long (s) */
 const LED = 0.5
 
@@ -32,20 +31,17 @@ const short = (name: string) => name.replace(/^left/, 'L').replace(/^right/, 'R'
 const middle = (from: Vector3, to: Vector3) => from.clone().lerp(to, 0.5)
 
 /**
- * What the bodies in a scene mean to do, drawn over it each frame as the scene is drawn, beside what they do: where
- * each hand and foot a story has is to be and when (a diamond, the seconds until), the way its joints are driven
- * there, where the plan as first made has it now (a line to it from where it is, warming with the gap), and what came
- * of each moment (a miss shown for a while); the footfalls foreseen (rings, a square for one put by a story, fainter
- * while not yet aimed) and how far each came down from where it was aimed as the foot left the ground; the hips' way, where they are sent, the top of a jump asked
- * for and the one he comes to, which way he faces, is coming round to face, and is led; and a box where each thing
- * he holds is meant to be. Add it to the scene, not to anything that moves: given a body, it shows that one, given a
- * scene or a part of it, every body made for a rig in it.
+ * What the bodies in a scene mean to do, drawn over it each frame as the scene is drawn, beside what they do: the
+ * plan layer of every hand, foot and thing a story has (its way ahead and its frames), a line warming with the gap
+ * from where a plan has a limb to where the limb could put it; the footfalls foreseen (rings, a square for one put by
+ * a story, fainter while not yet aimed); the hips' way, where they are sent, the top of a jump asked for and the one he
+ * comes to, which way he faces, is coming round to face, and is led. Add it to the scene, not to anything that moves:
+ * given a body, it shows that one, given a scene or a part of it, every body made for a rig in it.
  */
 export class Intent extends Group {
   private readonly pen = new Pen()
   private readonly labels = new Labels()
   private readonly memories = new WeakMap<Body, Memory>()
-  private readonly boxes = new WeakMap<Object3D, Box3>()
   /** the moment each body was last drawn at, so that it is drawn once a moment however often the scene is */
   private readonly drawn = new WeakMap<Body, number>()
 
@@ -75,15 +71,11 @@ export class Intent extends Group {
   }
 
   private body(told: Told, memory: Memory) {
-    for (const side of ['left', 'right'] as const) {
-      this.end(told, told.hand[side], `${side} hand`, memory)
-      const foot = told.foot[side]
-      if (foot.held) this.end(told, foot, `${side} foot`, memory)
-      else this.steps(told, side, memory)
-    }
+    // what each hand, foot and thing the story has is to do, as its channel plans it
+    drawPlan(this.pen, told.channels)
+    for (const { name, planned, posed } of told.gaps) if (planned.distanceTo(posed) >= GAP.told) this.gap(planned, posed, `${short(name)} `)
+    for (const side of ['left', 'right'] as const) this.steps(told, side)
     this.hips(told, memory)
-    for (const { thing, at, time } of told.things) this.thing(thing, at, time - told.time)
-    for (const { name, meant, was } of memory.misses) this.gap(meant, was, `${name} missed `)
   }
 
   /** a line between where something was meant to be and where it is, warming with the gap, and how wide it is if that tells */
@@ -94,51 +86,18 @@ export class Intent extends Group {
     if (far >= GAP.told) this.labels.say(middle(meant, is), said + cm(far), color)
   }
 
-  private end({ time }: Told, end: Meant, name: 'left hand' | 'right hand' | 'left foot' | 'right foot', memory: Memory) {
-    const color = hue(name)
-    const { pen, labels } = this
-    // (what it is sent with, a fingertip or what sits in the hand, as far from the wrist as it is now)
-    const offset = memory.tip(name, end.tip, end.sent.length > 0)
-    const tip = end.at.clone().add(offset)
-    pen.dot(tip, color)
-    const path = end.path
-    pen.through(
-      path.map(({ at }) => at),
-      color,
-    )
-    end.sent.forEach((sent, k) => {
-      const due = sent.time - time
-      pen.diamond(sent.at, MARK.goal, sent.there === false ? warm(GAP.red) : color)
-      if (sent.velocity.lengthSq() > 0) pen.line(sent.at, sent.at.clone().addScaledVector(sent.velocity, ARRIVES), color)
-      const far = sent.short?.by === 'reach' ? sent.short.far : undefined
-      // (out of reach by no number: no plan was found, and it goes after it as near as it comes)
-      const reach = far === undefined ? '' : Number.isFinite(far) ? ` short ${cm(far)}` : ' no plan'
-      const short = reach || (sent.short ? ` ${sent.short.by}` : '')
-      if (due > 0 && k < 2) labels.say(sent.at, soon(due) + short, color)
-    })
-    const [first] = end.sent
-    const planned = first && memory.planned(name, first.time, path, time)
-    if (planned) this.gap(planned, tip, `${short(name)} `)
-    memory.due(short(name), time, tip, first)
-  }
-
-  /** the footfalls foreseen for a foot the body steps with, and the way to the next */
-  private steps({ time, foot, hips }: Told, side: Side, memory: Memory) {
-    const name = side === 'left' ? 'left foot' : 'right foot'
-    const color = hue(name)
-    const falls = hips.footfalls.filter((fall) => fall.side === side)
-    const at = foot[side].at
-    this.pen.dot(at, color)
-    falls.forEach((fall, k) => {
-      // (one foreseen later, not yet aimed, is drawn fainter)
-      const shade = fall.swings ? color : color.clone().multiplyScalar(0.55)
-      if (fall.put) this.pen.square(fall.at, MARK.fall, shade)
-      else this.pen.ring(fall.at, MARK.fall, shade)
-      if (k === 0) this.labels.say(fall.at, soon(fall.time - time), color)
-    })
-    const [next] = falls
-    if (next && next.time - time < 1) this.pen.line(at, next.at, color)
-    memory.due(`${side === 'left' ? 'L' : 'R'} step`, time, at, next?.swings ? next : undefined)
+  /** the footfalls foreseen for a foot the body steps with */
+  private steps({ time, hips }: Told, side: Side) {
+    const color = hue(side === 'left' ? 'left foot' : 'right foot')
+    hips.footfalls
+      .filter((fall) => fall.side === side)
+      .forEach((fall, k) => {
+        // (one foreseen later, not yet aimed, is drawn fainter)
+        const shade = fall.swings ? color : color.clone().multiplyScalar(0.55)
+        if (fall.put) this.pen.square(fall.at, MARK.fall, shade)
+        else this.pen.ring(fall.at, MARK.fall, shade)
+        if (k === 0) this.labels.say(fall.at, soon(fall.time - time), color)
+      })
   }
 
   private hips(told: Told, memory: Memory) {
@@ -156,7 +115,7 @@ export class Intent extends Group {
     const foreseen = memory.foreseen(hips.hips, time)
     if (foreseen) this.gap(foreseen, hips.at, 'hips off foresight ')
     // the ways he faces and is led, on the ground under him
-    const ground = Math.min(told.foot.left.at.y, told.foot.right.at.y) - 0.05
+    const ground = Math.min(hips.at.y, ...hips.footfalls.map(({ at }) => at.y)) - 0.05
     const under = hips.at.clone().setY(ground)
     const way = (angle: number) => new Vector3(Math.sin(angle), 0, Math.cos(angle))
     pen.arrow(under, way(hips.facing), MARK.arrow, color)
@@ -185,20 +144,6 @@ export class Intent extends Group {
       if (asked) this.gap(asked, comes.at, 'top ')
     }
   }
-
-  /** a box where a thing is meant to be: and how far that is from where it is, or meant to be later, in how long */
-  private thing(thing: Object3D, meant: Matrix4, due: number) {
-    const box = this.boxes.get(thing) ?? bounds(thing)
-    this.boxes.set(thing, box)
-    const color = hue('thing')
-    this.pen.box(box, meant, color)
-    thing.updateWorldMatrix(true, false)
-    const centre = box.getCenter(new Vector3())
-    const [there, is] = [centre.clone().applyMatrix4(meant), centre.clone().applyMatrix4(thing.matrixWorld)]
-    const name = thing.name || 'thing'
-    if (due > 0) this.labels.say(there, `${name} ${soon(due)}`, color)
-    else this.gap(there, is, `${name} `)
-  }
 }
 
 /** the bodies a body, or a scene or a part of it, has: one, or every one made for a rig in it */
@@ -210,18 +155,4 @@ export function bodies(shows: Body | Object3D) {
     if (body) found.push(body)
   })
   return found
-}
-
-/** the box of the meshes a thing is made of, in its own frame */
-function bounds(thing: Object3D) {
-  thing.updateWorldMatrix(true, true)
-  const into = new Matrix4().copy(thing.matrixWorld).invert()
-  const box = new Box3()
-  thing.traverse((part) => {
-    if (!(part instanceof Mesh)) return
-    part.geometry.computeBoundingBox()
-    const own = part.geometry.boundingBox
-    if (own) box.union(own.clone().applyMatrix4(new Matrix4().multiplyMatrices(into, part.matrixWorld)))
-  })
-  return box.isEmpty() ? new Box3(new Vector3(-0.05, -0.05, -0.05), new Vector3(0.05, 0.05, 0.05)) : box
 }

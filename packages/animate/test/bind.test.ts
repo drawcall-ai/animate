@@ -31,7 +31,7 @@ const ball = () => {
 }
 const SEAT: Statement = { at: new Vector3(0, -0.12, 0), from: new Vector3(0, -1, 0) }
 
-test('a ball bound by a point is sent, not the hand: it eases in from where it was, keeps its own turn, and leaves as fast as it was sent', () => {
+test('a ball in the hand is sent, not the hand: it does not jump where it is taken, keeps its own turn, and leaves as fast as it was sent', () => {
   const mesh = ball()
   const { body, hands } = setup(mesh)
   const seat = grip(hands.right, mesh, SEAT)
@@ -47,12 +47,12 @@ test('a ball bound by a point is sent, not the hand: it eases in from where it w
     (function* () {
       yield* right.to(seat)
       const held = body.bind(mesh)
-      held.on(right, seat, { turning: false })
+      held.on(right, seat)
       const own = mesh.quaternion.clone()
       // (where it was taken, it does not jump)
       jump = 0
       yield* body.until(body.time + 0.5)
-      expect(body.bound).toMatchObject([{ thing: mesh, hands: ['right'], turning: false, outside: false }])
+      expect(body.bound).toMatchObject([{ thing: mesh, hands: ['right'], outside: false }])
       yield* held.by(body.time + 1, release, { velocity: flying })
       turned = mesh.quaternion.angleTo(own)
       velocity = held.free()
@@ -95,7 +95,7 @@ test('a bar in both hands is sent to point a way: the right hand leads it there 
       carried.on(right, grips.right)
       carried.on(left, grips.left)
       yield* body.until(body.time + 0.5)
-      expect(body.bound).toMatchObject([{ thing: bar, hands: ['right', 'left'], turning: true, outside: false }])
+      expect(body.bound).toMatchObject([{ thing: bar, hands: ['right', 'left'], outside: false }])
       // its right end raised: it points down to his left
       const way = new Vector3(1, -0.5, 0).normalize()
       yield* carried.to({ x: 0, y: 1.1, z: 0.4 }, { pointing: { x: -way.x, y: -way.y, z: 0 }, seconds: 1.2 })
@@ -172,14 +172,14 @@ test('a thing moved from outside has every hand on it follow it, and is never mo
     body.update(FRAME)
     rod.updateMatrix()
     expect(rod.matrix.equals(set)).toBe(true)
-    if (t > 1.5) worst = Math.max(worst, ...SIDES.map((side) => body.hand[side].there ? 0 : 1))
+    if (t > 1.5) worst = Math.max(worst, ...SIDES.map((side) => (body.hand[side].there ? 0 : 1)))
   }
   expect(moved.there).toBe(true)
   expect(worst).toBe(0)
   expect(moved.velocity.length()).toBeGreaterThan(0)
 })
 
-test('a hand is not sent onto a thing it leads, and a thing with no hand on it goes nowhere when sent', () => {
+test('a hand goes onto one thing at a time, and a thing with no hand on it goes nowhere when sent', () => {
   const [one, two] = [ball(), ball()]
   two.position.x = 0.3
   const { body, hands } = setup(one, two)
@@ -187,8 +187,6 @@ test('a hand is not sent onto a thing it leads, and a thing with no hand on it g
   const seat = grip(hands.right, one, SEAT)
   const held = body.bind(one)
   held.on(right, seat)
-  expect(() => right.to(seat)).toThrow(/leads/)
-  expect(() => right.to({ x: 0, y: 0, z: 0 }, { on: one })).toThrow(/leads/)
   // (going on another thing, it comes off the first)
   body.bind(two).on(right, grip(hands.right, two, SEAT))
   expect(body.bound.map(({ thing }) => thing)).toEqual([two])
@@ -208,7 +206,7 @@ test('a ball bound by a point keeps its turn as he faces: he turns, and it turns
     (function* () {
       yield* body.hand.right.to(seat)
       const held = body.bind(mesh)
-      held.on(body.hand.right, seat, { turning: false })
+      held.on(body.hand.right, seat)
       yield* held.to({ x: 0.1, y: -0.35, z: 0.4 }, { on: body, seconds: 1 })
       was = against()
       yield* body.face({ x: 1, z: 0 })
@@ -248,7 +246,7 @@ test('one thing is handed from outside to the body and back, its leading hand co
       const at = place(box)
       yield* body.until(body.time + 1)
       drift = place(box).distanceTo(at)
-      expect(body.bound).toMatchObject([{ thing: box, hands: ['left'], turning: true, outside: false }])
+      expect(body.bound).toMatchObject([{ thing: box, hands: ['left'], outside: false }])
       // he is let stand: the hand stays on it, and it stays where it is on him
       const before = place(box)
       yield* body.stand()

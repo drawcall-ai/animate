@@ -22,7 +22,7 @@ run({
     const hand = new Hand(man, 'right')
     const seat = grip(hand, thrown.mesh, SEAT)
     body = new Body(man)
-    const held = inHand(body, hand, seat, { turning: false })
+    const held = inHand(body, hand, seat)
     flight = ball()
     body.play(
       jumpShot(body, held, (velocity) => {

@@ -1,5 +1,6 @@
 import { Vector3 } from 'three'
-import { clamp, type End, HEEL, type Limb, raised, RANGE, type Side, type Size, SLACK, SOLE, UP } from '@drawcall/limbs'
+import type { Foothold } from './carrier'
+import { clamp, HEEL, type Limb, raised, RANGE, type Side, type Size, SLACK, SOLE, UP } from '@drawcall/limbs'
 import { type Footing } from './pelvis'
 import type { Way } from './way'
 
@@ -68,7 +69,7 @@ export class Stance {
    * is: on the ground, or the body's own in a step. It faces as its foot points, and all of it is told as it faces.
    * Tells whether its foot is where the story put it and the hips have gone further from it than its leg reaches
    */
-  pose(hips: Way, end: End, delta: number) {
+  pose(hips: Way, end: Foothold, delta: number) {
     const { size, leg, footing, side } = this
     const round = -hips.heading - footing.toes
     hips.hip(side, hip).applyAxisAngle(UP, round)
@@ -103,7 +104,7 @@ export class Stance {
    * it in a stride it hangs square to its shin, and where he `falls` toe down for the ground: no further than the
    * ground under it lets its toe or its heel, and as far as an ankle bends.
    */
-  foot(end: End, thigh: number, shin: number, falls: boolean, delta: number) {
+  foot(end: Foothold, thigh: number, shin: number, falls: boolean, delta: number) {
     const { ankle, leg, beat } = this.size
     const high = Math.max(0, end.value.y - ankle)
     const [toe, heel] = [tipped(ankle, high, SOLE.ball * leg), tipped(ankle, high, SOLE.behind * leg)]

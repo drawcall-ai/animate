@@ -105,7 +105,7 @@ export class Reactions {
     const [ahead, aside] = [urged.z, urged.x].map((by) => LEAN.pushed * Math.atan2(by, GRAVITY))
     want.set(
       this.ahead.leans(delta) + (looked?.x ?? 0) + ahead,
-      turn + free * (size.shoulder / size.arm) * swung + (toward ?? clamp(aims, -LEADS.trunk, LEADS.trunk)),
+      turn + free * (size.shoulder / size.arm) * swung + (toward ?? clamp(aims, -LEADS.trunk, LEADS.trunk)) + this.mover.posture.turn(this.mover.time),
       -LEAN.listed * (list + this.mover.banks) - tilts(this.mover) - aside,
     )
     const loose = trunk.loose

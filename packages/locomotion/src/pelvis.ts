@@ -18,8 +18,12 @@ import {
 } from './gait'
 import { drop, fly, push } from './jump'
 import { both, clamp, damped, due, ease, GRAVITY, ground, HEEL, raised, type Side, SIDES, SIGN, type Size, SOLE } from '@drawcall/limbs'
-import type { Stoops } from './stoops'
-import { type Wind, pelvis, weight, wound } from './wind'
+/**
+ * What the rest of him asks of the hips and the trunk at a moment, from what his hands are to do: how far the hips
+ * are let down and his weight is shifted ahead between his feet (m), and how far the trunk bends forward and turns
+ * (rad). The body that owns the hands tells it; looked ahead at, it is read at the moment looked at.
+ */
+export type Posture = { low(time: number): number; bend(time: number): number; turn(time: number): number; shift(time: number): number }
 
 /** how many times a beat the hips come up again from where they were let down for a hand or a foot */
 const RISE = 1.2
@@ -30,6 +34,8 @@ const FLIGHT = 1
  * and standing between feet the story has put down; how far it turns at the most (rad), how far it lists under a
  * hanging leg for every m/s² the ground pushes him up (rad), and how many times a beat it comes round
  */
+/** how much of the trunk's turn for what the hands do the pelvis makes */
+const WOUND = 0.5
 const TURN = { stride: 0.1, stance: 1, most: 0.8, list: 0.09 / GRAVITY, rate: 0.9 }
 /**
  * standing at his ease, which he takes a while to come to (in his beats) and leaves at once, his weight drifts from foot
@@ -134,8 +140,6 @@ export class Pelvis {
   turning = 0
   list = 0
   listing = 0
-  /** what he winds up for, an end that is to arrive fast */
-  wind?: Wind
   /** how far the hips are let down now for what he gets down for, on their way down or up again (m) */
   low = 0
   /** how far he stands at his ease, with nothing asked of him but to stand where he is: from 0 to 1 */
@@ -154,7 +158,7 @@ export class Pelvis {
 
   constructor(
     readonly size: Size,
-    readonly stoops: Stoops,
+    readonly posture: Posture,
   ) {
     this.value.y = this.height = size.stand
     this.course = toRest(size.stand, 0, WALK.speed * size.pace)
@@ -246,9 +250,9 @@ export class Pelvis {
     return there && !this.aloft && velocity.length() < STILL * pace
   }
 
-  /** how he is wound up now, on the ground: 1 drawn back, -1 swinging through, 0 with nothing to wind up for or a jump to make */
+  /** whether what his hands are to do turns him now */
   protected get wound() {
-    return wound(this.wind, this.time, this.jumps)
+    return !this.jumps && Math.abs(this.posture.turn(this.time)) > 0.05
   }
 
   protected get together() {
@@ -288,7 +292,7 @@ export class Pelvis {
   /** whether he stands lower than he is to go along: he comes up before he sets off, once what he is down for now is over */
   protected get squats() {
     const { leg, pace } = this.size
-    const walks = this.course.y - this.stoops.low(this.time) - RIDE * leg
+    const walks = this.course.y - this.posture.low(this.time) - RIDE * leg
     return this.together && Math.abs(this.velocity.z) < SHIFTS * pace && this.value.y < walks
   }
 
@@ -298,7 +302,7 @@ export class Pelvis {
     const { leg, beat, pace } = this.size
     const near = halt !== undefined && Math.hypot(course.x ?? 0, halt - this.back - value.z) < THERE * leg
     const still = near && Math.abs(velocity.z) < SHIFTS * pace && foot.left.down && foot.right.down
-    const free = still && !this.placed && !this.jumps && this.wound === 0
+    const free = still && !this.placed && !this.jumps && !this.wound
     this.idle = free ? Math.min(1, this.idle + dt / (IDLE * beat)) : 0
     // and he breathes, deeper and faster for a while after a run
     const runs = Math.abs(velocity.z) > WALK.most * pace ? 1 : 0
@@ -326,7 +330,7 @@ export class Pelvis {
 
   /** he is down in time for what he gets down for, and comes up again after */
   protected lower(dt: number) {
-    const stoop = this.stoops.low(this.time)
+    const stoop = this.posture.low(this.time)
     this.low = stoop > this.low ? stoop : stoop + (this.low - stoop) * Math.exp((-RISE * dt) / this.size.beat)
   }
 
@@ -353,7 +357,7 @@ export class Pelvis {
     const { beat, pace } = this.size
     const stride = TURN.stride * Math.max(1, Math.abs(this.velocity.z) / (WALK.most * pace))
     const feet = (this.course === this.stance ? TURN.stance : stride) * (right - left)
-    const want = clamp(pelvis(this.wind, this.wound, feet), -TURN.most, TURN.most)
+    const want = clamp(feet + (this.jumps ? 0 : WOUND * this.posture.turn(this.time)), -TURN.most, TURN.most)
     const pull = (2 * Math.PI * TURN.rate) / beat
     this.turning = damped(this.turning, want - this.turn, pull, dt)
     this.turn += this.turning * dt
@@ -390,10 +394,12 @@ export class Pelvis {
       this.squats && !led
         ? { ...this.course, heading: undefined, turns: undefined, faster: undefined, x, z: way * Math.min(z * way, foot.left.at.z * way), arrive: 0 }
         : this.course
-    // wound up where he is to come to rest between his feet, his weight goes onto the one behind, and onto the one ahead as he swings through: as hard as his legs push
+    // where he is to come to rest between his feet, his weight goes after what his hands are to do, as far as his feet go
     const stands = SIDES.filter((side) => foot[side].down).map((side) => foot[side].at.z)
     const [rear, front] = [Math.min(...stands), Math.max(...stands)]
-    const shift = weight(this.wind, this.wound, this.halt, rear, front)
+    const { halt } = this
+    const leans = this.jumps ? 0 : this.posture.shift(this.time)
+    const shift = halt !== undefined && halt >= rear && halt <= front && Math.abs(leans) > 1e-3 ? halt - clamp((rear + front) / 2 + leans, rear, front) : undefined
     const along = (course.z ?? Infinity) - this.back - (shift ?? 0) - value.z
     // (round to a place that is off the way he is going he goes on, as far as it is off)
     const far = course.z === undefined ? Infinity : this.veers ? Math.hypot(x, along) : along * way

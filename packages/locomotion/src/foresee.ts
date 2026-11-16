@@ -1,11 +1,13 @@
 import { Vector3 } from 'three'
-import { type Mark, type Side, SIDES, tick } from '@drawcall/limbs'
+import { type Side, SIDES, tick } from '@drawcall/limbs'
 import type { Mover } from './mover'
 
 /**
  * where a foot the body steps with is to come down and when, whether the story put it there, and whether it `swings`
  * there now, aimed by the steps, or is foreseen to step there later
  */
+/** a place in the scene, and the moment he is to be there */
+export type Mark = { at: Vector3; time: number }
 export type Footfall = Mark & { side: Side; put: boolean; swings: boolean }
 
 /**

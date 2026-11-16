@@ -1,14 +1,14 @@
 import { Vector3 } from 'three'
-import { type Bones, both, type Carrier, type End, type Joints, type Side, SIDES, type Story, UP } from '@drawcall/limbs'
+import { type Bones, both, type Joints, type Side, SIDES, type Story, UP } from '@drawcall/limbs'
 import { Ahead } from './ahead'
-import { carrier } from './carrier'
+import { type Carrier, carrier, type Foothold } from './carrier'
 import { foresee } from './foresee'
 import { Going } from './going'
 import { held } from './heights'
 import { Mover } from './mover'
+import type { Posture } from './pelvis'
 import { Reactions } from './reactions'
 import { Stance } from './stance'
-import { Stoops } from './stoops'
 
 /** the clock he goes by: the seconds it has gone on for, and a story over at a moment on it */
 type Clock = { readonly time: number; until(when: number): Story }
@@ -27,6 +27,8 @@ export class Locomotion {
   private readonly ahead: Ahead
   private readonly reactions: Reactions
   private readonly stance: Record<Side, Stance>
+  /** what his hands ask of the hips and the trunk at a moment: told by the body that owns them, upright until it does */
+  readonly posture: Posture = { low: () => 0, bend: () => 0, turn: () => 0, shift: () => 0 }
   /** where the ground holds each foot of his own, while it does */
   private readonly stood = both(() => new Vector3())
 
@@ -36,7 +38,7 @@ export class Locomotion {
     private readonly joints: Joints,
   ) {
     const { size } = bones
-    const mover = (this.mover = new Mover(size, new Stoops(size, joints.trunk)))
+    const mover = (this.mover = new Mover(size, this.posture))
     const ahead = (this.ahead = new Ahead(clock, mover, joints, bones))
     this.reactions = new Reactions(mover, joints, ahead)
     this.carrier = carrier(mover, ahead)
@@ -67,9 +69,9 @@ export class Locomotion {
   /**
    * A step of time for the hips and the feet: where a foot the story has is, is told to the ground, he looks where he
    * is to, and he goes as he is to go; a foot of his own the ground holds is anchored there. Fallen, he lands on feet
-   * the story has no longer. Tells a wind-up for a fast hand that is to begin now, as a story for the body to play.
+   * the story has no longer.
    */
-  step(dt: number, feet: Record<Side, End>, looked?: Vector3) {
+  step(dt: number, feet: Record<Side, Foothold>, looked?: Vector3) {
     const { mover, ahead } = this
     mover.look = looked && this.going.sight(looked)
     for (const side of SIDES) if (feet[side].held) mover.local(feet[side].value, side, mover.foot[side].at)
@@ -83,7 +85,6 @@ export class Locomotion {
     if (mover.fell) for (const side of SIDES) feet[side].free()
     mover.fell = false
     for (const side of SIDES) if (!feet[side].held) feet[side].anchor = this.stands(side)
-    return { wind: ahead.wind.start() }
   }
 
   /** the free parts come round to what the rest of him has them do */
@@ -92,7 +93,7 @@ export class Locomotion {
   }
 
   /** the legs reach for the feet from where the hips are, and the hips are told in the scene: a foot to stay where the hips have gone further from than its leg reaches is let free, for him to step after them */
-  pose(delta: number, feet: Record<Side, End>) {
+  pose(delta: number, feet: Record<Side, Foothold>) {
     const { mover, hips } = this
     for (const side of SIDES) if (this.stance[side].pose(mover, feet[side], delta)) feet[side].free()
     mover.scene(mover.value, undefined, hips.value)
@@ -100,7 +101,7 @@ export class Locomotion {
   }
 
   /** how far a foot is bent toe down against its shin, as its leg is turned now (rad) */
-  tread(side: Side, foot: End, delta: number) {
+  tread(side: Side, foot: Foothold, delta: number) {
     const { first: thigh, second: shin } = this.joints.legs[side]
     return this.stance[side].foot(foot, thigh.value.x, shin.value.x, this.mover.falls, delta)
   }

@@ -1,157 +1,364 @@
-import type { Arriving, Bindings, End, Grip, Reaching, Side, Story, Xyz } from '@drawcall/limbs'
-import { Object3D, Quaternion, Vector3 } from 'three'
-import type { Body } from './body'
+import { DOWN, EXACT, type Grip, type Limb, type Pose, type Side, type Size, SLACK, type Story, sway, tick, type Touch, waits, type Xyz } from '@drawcall/limbs'
+import type { Carrier } from '@drawcall/locomotion'
+import { Channel, type Frame, type Mover } from '@drawcall/plan'
+import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
+import type { OnHim } from './movers'
+
+/**
+ * how strong a hand and a foot are, how hard they can be pushed along at the most (in his paces a beat), and how far
+ * each draws back before a fast arrival at the most (in lengths of its limb)
+ */
+const END = { hand: { strength: 15, draw: 0.5 }, foot: { strength: 25, draw: 0.6 } }
+/** how far ahead the first moment a limb can reach something is looked for, and how finely (in his beats) */
+const LOOK = { far: 10, fine: 0.1 }
+/** how many times as long as the limb sways a fast arrival by a moment given well ahead swings for, drawn back first */
+const SWING = 1.4
+/** how much of its length a limb reaches at its ease */
+const EASE = 0.97
 
 /** a place counted `on` him, from where the limb starts and as he faces, or on a thing, in its frame as it moves */
-export type On = { on?: Object3D | Body }
+export type On = { on?: Object3D | object }
+/** how an end is to arrive: moving so, in the scene, at a place counted `on` him or a thing */
+export type Arriving = On & { velocity?: Xyz }
+/**
+ * and a hand: turned for its `palm` to face and its fingers to be `pointing` a way, counted as its place is; the place
+ * being that of what it is there `with`, if not its wrist: a part of it, or what sits in it by a grip
+ */
+export type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch | Grip }
+
+/** What a story has of a hand: where its wrist is and how it moves, whether it is where it was sent, and to send it, have it somewhere by a moment, shape its fingers, cancel what it was sent to, or give it back to the body. */
+export type Hand = Readonly<{
+  value: Vector3
+  velocity: Vector3
+  there: boolean
+  to(place: Xyz | Grip, how?: Reaching & { seconds?: number }): Story<boolean>
+  by(when: number, place: Xyz | Grip, how?: Reaching): Story<boolean>
+  shape(pose?: Pose, how?: { by?: number }): Story<boolean>
+  cancel(): void
+  free(): void
+}>
+/** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, and to send it, have it somewhere by a moment, cancel what it was sent to, or give it back to the body. */
+export type Foot = Readonly<{
+  value: Vector3
+  velocity: Vector3
+  anchor?: Vector3
+  to(place: Xyz, how?: Arriving & { seconds?: number }): Story<boolean>
+  by(when: number, place: Xyz, how?: Arriving): Story<boolean>
+  cancel(): void
+  free(): void
+}>
+
+/** what an end needs of the body: its size, clock and carrier, the body that a place `on` him names, and what a thing is as a frame moves on */
+export type Body = {
+  size: Size
+  carrier: Carrier
+  him: object
+  time(): number
+  mover(thing: Object3D): Mover
+  /** the frame the body's places are told in: what takes the scene to it */
+  frame: Matrix4
+  /** a frame was written or cancelled: what the hands ask of the rest of him may have changed */
+  changed(): void
+}
 
 /**
- * What a story has of a hand: where its wrist is and how it moves, whether it is where it was sent, and to send it
- * somewhere, have it somewhere by a moment, pose its fingers, or give it back to the body.
+ * how a hand is turned, from hanging straight down, for its palm to face and its fingers to point as said: what is
+ * not said, it keeps from how it is turned `now`; the palm is kept, and the fingers point as near as is square to it
  */
-export type Hand = Readonly<
-  Pick<End, 'value' | 'velocity' | 'there' | 'shape' | 'free'> & {
-    to(place: Xyz | Grip, how?: Reaching & On & { seconds?: number }): Story<boolean>
-    by(when: number, place: Xyz | Grip, how?: Reaching & On): Story<boolean>
+function turnOf(palm: Vector3 | undefined, pointing: Vector3 | undefined, rest: Vector3, now: Quaternion) {
+  const faces = palm?.clone().normalize() ?? rest.clone().applyQuaternion(now)
+  const points = (pointing?.clone() ?? DOWN.clone().applyQuaternion(now)).addScaledVector(faces, -(pointing ?? DOWN.clone().applyQuaternion(now)).dot(faces))
+  if (!palm && !pointing) return undefined
+  // (with the fingers along the way the palm is to face, they point the nearest way square to it)
+  if (points.lengthSq() < EXACT) {
+    if (pointing && palm) throw new Error('a hand is turned to point the way its palm faces')
+    points.copy(Math.abs(faces.y) < 0.9 ? DOWN : new Vector3(0, 0, 1)).addScaledVector(faces, -faces.dot(Math.abs(faces.y) < 0.9 ? DOWN : new Vector3(0, 0, 1)))
   }
->
-/** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, if it does, and to send it somewhere, have it somewhere by a moment, or give it back to the body. */
-export type Foot = Readonly<Pick<End, 'value' | 'velocity' | 'anchor' | 'free'>> & {
-  to(place: Xyz, arriving?: Arriving & On & { seconds?: number }): Story<boolean>
-  by(when: number, place: Xyz, arriving?: Arriving & On): Story<boolean>
-}
-/**
- * how a thing is sent: as a hand is, its place and velocity its origin's, `pointing` the way its z goes, and `palm` the
- * way the palm of the hand leading it faces, all counted as its place is
- */
-export type Sending = Arriving & On & { pointing?: Xyz; palm?: Xyz }
-
-/**
- * What a story or a game has of a thing bound to him: hands go `on` it by grips and come `off` it, the next on it
- * leading it from where it is; it is sent somewhere, or to be somewhere by a moment, as a hand is, and the hands come
- * with it; whether it is moved from `outside`, which hands it over to the game or back to the body at the moment it is
- * set; whether every hand on it is where it is to be; how fast it moves; and `free` lets it go, telling how fast it
- * was moving.
- */
-export type Thing = Readonly<{
-  on(hand: Hand, grip: Grip, how?: { turning?: boolean }): void
-  off(hand: Hand): void
-  to(place: Xyz, how?: Sending & { seconds?: number }): Story<boolean>
-  by(when: number, place: Xyz, how?: Sending): Story<boolean>
-  readonly there: boolean
-  readonly velocity: Vector3
-  free(): Vector3
-}> & { outside: boolean }
-
-/** what the facades of the hands and things need of the body: its ends behind its hands, its bindings and clock, and the turn of a frame places are counted in */
-export type Binder = {
-  bindings: Bindings
-  clock: { time: number }
-  end(hand: Hand): End
-  /** what turns a way counted as a place `on` him, on a thing or in the scene into the frame of the body */
-  ways(on?: Object3D | Body): Quaternion
-  /** the body, which a place is on that is on him */
-  body: Body
-  /** where a place in the scene is on him: from the shoulder on a side, as he faces */
-  onHim(side: Side, place: Vector3): Vector3
+  points.normalize()
+  const basis = (a: Vector3, b: Vector3) => new Matrix4().makeBasis(a, b, a.clone().cross(b))
+  return new Quaternion().setFromRotationMatrix(basis(faces, points).multiply(basis(rest, DOWN).invert()))
 }
 
 /**
- * the hand leading a thing the body moves has it stay where it is, on him: turned as it is if it turns with the hand,
- * pointing on as it does
+ * The far end of a limb, a hand or a foot, as a channel the story writes frames to. A statement is one frame: a place,
+ * on him, on a thing or in the scene, a velocity and a turn to arrive with, and a moment, given or the first one the
+ * body lets it be there at its ease. Frames are met in order, each from the state it is in; one met moving swings on
+ * and comes round to where the body has it; one met at rest is held there, as near as the limb reaches, until it is
+ * sent elsewhere, cancelled or let `free`.
  */
-export function stay(object: Object3D, binder: Binder) {
-  const lead = binder.bindings.lead(object)
-  if (!lead) return
-  object.updateWorldMatrix(true, false)
-  const place = binder.onHim(lead.hand.side, object.getWorldPosition(new Vector3()))
-  const facing = binder.ways(binder.body).invert().multiply(binder.ways()).multiply(object.getWorldQuaternion(new Quaternion()))
-  const pointing = lead.turning ? new Vector3(0, 0, 1).applyQuaternion(facing) : undefined
-  void lead.hand.to(place, { on: binder.body, with: lead.grip, pointing })
-}
+export class End {
+  readonly channel: Channel
+  /** where the posed end was from where its channel had it, after the last step (m) */
+  gap = 0
+  anchor?: Vector3
 
-/** a story over at once that came to nothing */
-function* nothing(): Story<boolean> {
-  return false
-}
-
-/** the hand a story has of an end */
-export function hand(end: End, { bindings }: Binder): Hand {
-  // (a hand sent onto a thing follows it, which it may not if it leads the thing)
-  const onto = (place: Xyz | Grip, on?: object) => {
-    const thing = 'target' in place ? place.target : on
-    if (thing instanceof Object3D) bindings.follow(end, thing)
+  constructor(
+    readonly kind: 'hand' | 'foot',
+    readonly side: Side,
+    readonly limb: Limb,
+    readonly root: OnHim,
+    private readonly body: Body,
+    /** how the bone at the end lies as the limb hangs straight down, and how large it is */
+    private readonly lies: { hangs: Quaternion; large: number },
+    /** the bone the limb starts at, which all of it hangs from */
+    private readonly start: Object3D,
+  ) {
+    const { strength, draw } = END[kind]
+    const { pace, beat } = body.size
+    this.channel = new Channel(`${side} ${kind}`, (strength * pace) / beat, draw * limb.length)
   }
-  return {
-    value: end.value,
-    velocity: end.velocity,
-    get there() {
-      return end.there
-    },
-    to(place, how = {}) {
-      onto(place, how.on)
-      return end.to(place, how)
-    },
-    by(when, place, how = {}) {
-      onto(place, how.on)
-      return end.by(when, place, how)
-    },
-    shape: (pose, how) => end.shape(pose, how),
-    free: () => end.free(),
-  }
-}
 
-/** the thing a story or a game has of something bound to him, moved by the body or from `outside` */
-export function thing(object: Object3D, outside: boolean, binder: Binder): Thing {
-  const { bindings, clock } = binder
-  bindings.bind(object, outside, clock.time)
-  let moved = outside
-  /** sends the hand leading it, with its grip, for the thing to be there: turning it by the hand, or on its own */
-  const send = (go: (end: End, how: Reaching) => Story<boolean>, { pointing, palm, ...how }: Sending) => {
-    const lead = bindings.lead(object)
-    if (!lead) return nothing()
-    const { hand: end, grip, turning } = lead
-    if (turning) return go(end, { ...how, pointing, palm, with: grip })
-    const story = go(end, { ...how, palm, with: grip })
-    const last = end.last
-    if (pointing && last) {
-      const way = new Vector3().copy(pointing).applyQuaternion(binder.ways(how.on)).normalize()
-      const now = bindings.turned(object)
-      const to = new Quaternion().setFromUnitVectors(new Vector3(0, 0, 1).applyQuaternion(now), way).multiply(now)
-      bindings.turn(object, to, last.leaves, last.when)
+  get name() {
+    return this.channel.name
+  }
+
+  get value() {
+    return this.channel.value
+  }
+
+  get velocity() {
+    return this.channel.velocity
+  }
+
+  /** whether the story has it now: on its way somewhere, held somewhere, or on a thing */
+  get held() {
+    const { channel } = this
+    const off = channel.setsOff
+    // (swung on and come to rest, it is the body's)
+    if (channel.owner === 'on' && !channel.busy) return false
+    // (as of the step being made, which ends a step of his time after his clock)
+    return channel.holding || (channel.busy && (off === undefined || off <= this.body.time() + tick(this.body.size) + EXACT))
+  }
+
+  /** whether it is where it was last sent, as near as an end counts as there */
+  get there() {
+    const { channel } = this
+    const bound = channel.busy && !channel.frames.length
+    return (channel.holding || bound) && this.gap <= SLACK.place * this.body.size.leg
+  }
+
+  /** sends the end somewhere: in `seconds`, by a moment, or at the first moment the body lets it be there */
+  send(place: Xyz | Grip, how: Reaching = {}, when?: { seconds?: number; by?: number }): Story<boolean> {
+    // a foot sent to rest on the ground, or on a thing, stands there: the body steps there with it
+    const moving = how.velocity && new Vector3().copy(how.velocity).lengthSq() > 0
+    const ground = !how.on && 'y' in place && place.y <= this.body.carrier.ground + this.body.size.ankle + EXACT
+    if (this.kind === 'foot' && 'y' in place && !moving && (ground || (how.on && how.on !== this.body.him))) {
+      return this.step(this.scene(place, how.on as Object3D | undefined), when?.seconds)
     }
-    return story
+    const frame = this.frame(place, how)
+    const after = Math.max(this.body.time(), ...this.channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
+    frame.at = when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after)
+    frame.leaves = this.leaves(frame, when?.by !== undefined)
+    // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
+    if ('target' in place) this.close(place.pose, frame.at - this.body.time())
+    return this.write(frame)
   }
-  return {
-    on(hand, grip, { turning = true } = {}) {
-      const end = binder.end(hand)
-      // (freed, it is bound again)
-      bindings.ensure(object, moved, clock.time)
-      bindings.on(object, end, grip, turning, clock.time)
-      void end.shape(grip.pose)
-    },
-    off(hand) {
-      const end = binder.end(hand)
-      const led = bindings.lead(object)?.hand === end
-      bindings.off(object, end, clock.time)
-      if (led) stay(object, binder)
-    },
-    get outside() {
-      return bindings.outside(object) ?? moved
-    },
-    set outside(to) {
-      moved = to
-      bindings.bind(object, to, clock.time)
-      if (!to) stay(object, binder)
-    },
-    to: (place, { seconds, ...how } = {}) => send((end, reaching) => end.to(place, { ...reaching, seconds }), how),
-    by: (when, place, how = {}) => send((end, reaching) => end.by(when, place, reaching), how),
-    get there() {
-      return bindings.there(object)
-    },
-    get velocity() {
-      return bindings.velocity(object)
-    },
-    free: () => bindings.free(object),
+
+  /**
+   * when it sets off for a frame: a fast arrival by a moment given well ahead swings for as long as the limb sways
+   * there and back, drawn back first; one at the first moment it can for half that, a short wind-up; a foot steps
+   * off for half that; and one at rest as late as it can at its ease
+   */
+  leaves(frame: Frame, given: boolean) {
+    const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
+    if (!moving && this.kind === 'hand') return undefined
+    return (frame.at ?? 0) - sway(this.limb) * (given && this.kind === 'hand' ? SWING : 0.5)
+  }
+
+  /** writes a frame the story has sent: it is the story's from when it sets off; tells whether it was there at its moment */
+  write(frame: Frame): Story<boolean> {
+    const written = this.channel.by(frame)
+    const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
+    if (this.kind === 'foot') this.body.carrier.take(this.side, { from: frame.leaves ?? this.body.time(), until: moving ? (frame.at ?? Infinity) : Infinity })
+    this.body.carrier.stale()
+    this.body.changed()
+    return this.met(written)
+  }
+
+  /** a place on a thing, as the thing is now, or in the scene */
+  private scene(place: Xyz, on?: Object3D) {
+    const at = new Vector3()
+    const turn = new Quaternion()
+    if (!on) return at.copy(place)
+    this.body.mover(on).state(this.body.time(), at, new Vector3(), turn)
+    return new Vector3().copy(place).applyQuaternion(turn).add(at)
+  }
+
+  /** the body steps with the foot to a place it stands on, in so many `seconds` or as soon as it can, and stands over it there: over once it is down there */
+  private step(place: Vector3, seconds?: number): Story<boolean> {
+    this.cancel()
+    const { carrier } = this.body
+    const put = carrier.put(this.side, place, seconds)
+    carrier.stale()
+    const foot = carrier.foot(this.side)
+    return waits(
+      () => foot.put === put,
+      () => foot.down && put !== undefined && foot.at.distanceTo(put) < EXACT,
+    )
+  }
+
+  /**
+   * one the story does not have is where the body has put it: told how it moves from where it was a step ago, so a
+   * frame written to it sets off from how it really is
+   */
+  track(dt: number, at?: Vector3, turn?: Quaternion) {
+    if (this.held || !at) return
+    const { channel } = this
+    if (dt > 0) channel.velocity.copy(at).sub(channel.value).divideScalar(dt)
+    channel.value.copy(at)
+    if (turn) channel.turn.copy(turn)
+  }
+
+  private *met(frame: Frame): Story<boolean> {
+    while (this.channel.frames.includes(frame)) yield
+    return this.channel.met(frame) && this.gap <= SLACK.place * this.body.size.leg
+  }
+
+  /** the things it was sent onto, until it is cancelled */
+  readonly on = new Set<Object3D>()
+
+  /** a thing it is sent onto, which may not hang from its own limb */
+  private onto(thing: Object3D) {
+    for (let up: Object3D | null = thing; up; up = up.parent) {
+      if (up === this.start) throw new Error(`the ${this.name} is sent to a thing that hangs from its own limb`)
+    }
+    this.on.add(thing)
+    return this.body.mover(thing)
+  }
+
+  /** a statement as a frame: where the wrist or the ankle is to be, how fast and how turned, counted as the place is */
+  frame(place: Xyz | Grip, { velocity, on, palm, pointing, with: part }: Reaching = {}): Frame {
+    const hand = this.limb.hand
+    if ('target' in place) {
+      if (!hand) throw new Error(`the ${this.name} is sent to hold something, and is no hand`)
+      const held = this.seats(place)
+      return { on: this.onto(place.target), place: held.place, turn: held.turn, by: 'story' }
+    }
+    const told = [place, velocity, palm, pointing].filter((one): one is Xyz => one !== undefined)
+    if (!told.every((one) => [one.x, one.y, one.z].every(Number.isFinite))) {
+      throw new Error(`the ${this.name} is sent to a place, to move there, or turned a way, as no numbers say`)
+    }
+    const mover = on === this.body.him ? this.root : on ? this.onto(on as Object3D) : undefined
+    const there = new Vector3().copy(place)
+    // (a foot goes no lower than it stands on the ground)
+    if (this.kind === 'foot' && !mover) there.y = Math.max(there.y, this.body.carrier.ground + this.body.size.ankle)
+    const ways = [palm, pointing].map((way) => way && new Vector3().copy(way))
+    if (ways.some((way) => way && way.lengthSq() < EXACT)) throw new Error(`the ${this.name} is turned a way that leads nowhere`)
+    // (said in the frame of what the place is on: the hand as it is now, told the same way)
+    const into = new Quaternion()
+    if (mover) mover.state(this.body.time(), new Vector3(), new Vector3(), into)
+    const now = into.clone().invert().multiply(this.channel.turn)
+    // (told only how the palm is to face, the fingers point on along the arm, as from its shoulder to the place)
+    const along = ways[0] && !ways[1] ? this.along(there, mover, into) : undefined
+    const turn = hand ? turnOf(ways[0], ways[1] ?? along, hand.palm, now) : undefined
+    // (sent with a part of the hand, or what sits in it by a grip, the wrist is where that has it there)
+    const offset = part && hand ? (typeof part === 'string' ? this.fingers().tip(part, 0) : this.sits(part).at) : undefined
+    if (offset) there.sub(offset.applyQuaternion(turn ?? now))
+    const frame: Frame = { on: mover, place: there, turn, velocity, by: 'story' }
+    const speed = velocity ? new Vector3().copy(velocity) : undefined
+    if (speed && speed.lengthSq() > 0) {
+      // a fast end swings round where its limb starts, and a hand's wrist whips on with it: the fingers led into the way it goes
+      frame.about = this.root
+      if (hand) {
+        const fingers = DOWN.clone().applyQuaternion(into.clone().multiply(turn ?? now))
+        frame.spin = fingers.cross(speed).divideScalar(this.body.size.forearm)
+      }
+    }
+    return frame
+  }
+
+  /** the fingers take a pose in so many seconds, or as soon as they can if that is too soon */
+  private close(pose: Pose, seconds: number) {
+    const fingers = this.limb.hand?.fingers
+    try {
+      void fingers?.shape(pose, seconds)
+    } catch {
+      void fingers?.shape(pose)
+    }
+  }
+
+  /** the way from where the limb starts to a place, counted as the place is */
+  private along(place: Vector3, mover: Mover | undefined, into: Quaternion) {
+    const root = new Vector3()
+    this.root.state(this.body.time(), root, new Vector3())
+    const at = mover ? new Vector3().copy(place).applyQuaternion(into).add(this.moverAt(mover)) : place.clone()
+    const way = at.sub(root)
+    return way.lengthSq() > EXACT ? way.applyQuaternion(into.clone().invert()).normalize() : undefined
+  }
+
+  private moverAt(mover: Mover) {
+    const at = new Vector3()
+    mover.state(this.body.time(), at, new Vector3())
+    return at
+  }
+
+  private fingers() {
+    const fingers = this.limb.hand?.fingers
+    if (!fingers) throw new Error(`the fingers of the ${this.name} are asked for, and its rig has no finger bones`)
+    return fingers
+  }
+
+  /** where a thing sits in the hand by a grip: its middle from the wrist, and its turn, in the frame of the hand hanging straight down */
+  sits({ position, quaternion }: Grip) {
+    const { hangs, large } = this.lies
+    return { at: new Vector3().copy(position).multiplyScalar(large).applyQuaternion(hangs), turned: new Quaternion().copy(quaternion).premultiply(hangs) }
+  }
+
+  /** where the wrist is and how the hand is turned on a thing for a grip to hold it, in the thing's frame */
+  seats(grip: Grip) {
+    if (!this.limb.hand) throw new Error(`the ${this.name} is sent to hold something, and is no hand`)
+    const { at, turned } = this.sits(grip)
+    const back = turned.clone().invert()
+    return { place: at.negate().applyQuaternion(back), turn: back }
+  }
+
+  /**
+   * the first moment after `after` the end can be at a frame at its ease: within its limb's reach along the ground from
+   * where the limb will start, and for a foot, spared by the body; with none in reach, the moment it comes nearest
+   */
+  first(frame: Frame, after: number) {
+    const { body, limb } = this
+    const now = body.time()
+    const [at, root, unused] = [new Vector3(), new Vector3(), new Vector3()]
+    const into = new Quaternion()
+    const place = (t: number) => {
+      if (frame.on) {
+        frame.on.state(t, at, unused, into)
+        return at.add(new Vector3().copy(frame.place ?? at).applyQuaternion(into))
+      }
+      return at.copy(frame.place ?? this.value)
+    }
+    // (at its ease: pushed a sixth as hard as it can be, which an arm sways in)
+    const strength = this.channel.strength / 6
+    const soonest = Math.max(after, now + Math.max(0.5 * body.size.beat, Math.sqrt((6 * place(now).distanceTo(this.value)) / strength)))
+    let best = { t: soonest, far: Infinity }
+    for (let t = soonest; t < now + LOOK.far * body.size.beat; t += LOOK.fine * body.size.beat) {
+      this.root.state(t, root, unused)
+      // (along the ground: how low it is he gets down for)
+      const far = Math.hypot(place(t).x - root.x, place(t).z - root.z) - EASE * limb.length
+      const spared = this.kind === 'hand' || body.carrier.spare(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
+      if (far <= 0 && spared) return t
+      if (far < best.far) best = { t, far }
+    }
+    return best.t
+  }
+
+  /** cancels what it was sent to: it goes on from the state it is in, a hand swinging on and then the body's */
+  cancel() {
+    this.on.clear()
+    // (one the story does not have yet is only told to set off for nothing)
+    if (this.held) this.channel.cancel()
+    else this.channel.set(this.channel.value, this.channel.turn)
+    if (this.kind === 'foot') this.body.carrier.take(this.side, undefined)
+    this.body.carrier.stale()
+    this.body.changed()
+  }
+
+  free() {
+    this.cancel()
+  }
+
+  shape(pose?: Pose, { by }: { by?: number } = {}): Story<boolean> {
+    return this.fingers().shape(pose, by === undefined ? undefined : by - this.body.time())
   }
 }

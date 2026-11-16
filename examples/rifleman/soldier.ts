@@ -258,7 +258,7 @@ export class Soldier {
     this.carry = 'hung'
     yield* right.to(place(BODY.belt), { on: body })
     this.object.add(ball)
-    const grenade = inHand(body, hands.right, grip(hands.right, ball, GRIP.ball), { turning: false })
+    const grenade = inHand(body, hands.right, grip(hands.right, ball, GRIP.ball))
     const way = new Vector3(Math.sin(this.aim), 0, Math.cos(this.aim))
     const velocity = way.multiplyScalar(THROW.speed * Math.cos(THROW.lift)).setY(THROW.speed * Math.sin(THROW.lift))
     yield* grenade.by(body.time + THROW.wind, place(BODY.release), { on: body, velocity })

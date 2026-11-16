@@ -1,0 +1,74 @@
+import { bends, DOWN, type Limb, RANGE, UP } from '@drawcall/limbs'
+import { Euler, Quaternion, Vector3 } from 'three'
+
+/** how far either way from the swing it had an elbow is looked at to swing out, and how finely (rad); and what moving it costs against a wrist turned past its range */
+const SWIVEL = { most: 0.6, fine: 0.1, moved: 0.3 }
+const euler = new Euler()
+const FULL = 2 * Math.PI
+const turned = new Quaternion()
+
+/** a joint turned as near so as it turns */
+const within = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) => {
+  for (const axis of ['x', 'y', 'z'] as const) {
+    const [least, most] = range[axis] ?? [-Infinity, Infinity]
+    value[axis] = Math.min(most, Math.max(least, value[axis]))
+  }
+  return value
+}
+
+/**
+ * a turn of an upper arm read the way that keeps within its range, and nearest how it is turned now: the same way to
+ * point reads a full turn apart, and also turned half round about each of its axes
+ */
+function read(turn: Vector3, was: Vector3) {
+  const now = [was.x, was.y, was.z].every(Number.isFinite) ? was : new Vector3()
+  const near = (angle: number, to: number) => angle - FULL * Math.round((angle - to) / FULL)
+  const ways = [turn.clone(), new Vector3(turn.x + Math.PI, Math.PI - turn.y, turn.z + Math.PI)].map((way) => way.set(near(way.x, now.x), near(way.y, now.y), near(way.z, now.z)))
+  const cost = (way: Vector3) => 10 * beyond(way, RANGE.arm) + way.distanceTo(now)
+  return cost(ways[0]) <= cost(ways[1]) ? ways[0] : ways[1]
+}
+
+/** how far a turn is past a range, summed over its axes (rad) */
+const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) =>
+  (['x', 'y', 'z'] as const).reduce((sum, axis) => {
+    const [least, most] = range[axis] ?? [-Infinity, Infinity]
+    return sum + Math.max(0, least - value[axis], value[axis] - most)
+  }, 0)
+
+/**
+ * How an arm turns for its wrist to be at a place and its hand turned so, from its shoulder on a trunk turned so: its
+ * elbow swung out or in from the swing it had as little as keeps it clear of the trunk and lets the wrist turn the
+ * hand as near so as it turns, so it never jumps between two ways of reaching the same place. Every joint as near as
+ * it turns.
+ */
+export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist: Vector3, turn: Quaternion, swivel: number) {
+  const hand = arm.hand!
+  const to = wrist.clone().sub(shoulder).applyQuaternion(trunk.clone().invert())
+  const palm = hand.palm.clone().applyQuaternion(turn)
+  const pointing = DOWN.clone().applyQuaternion(turn)
+  const pose = (swung: number) => {
+    const { first, fold } = arm.reach(to, swung)
+    const upper = within(read(first, arm.first.value), RANGE.arm)
+    const elbow = Math.min(0, Math.max(RANGE.forearm.x[0], fold))
+    const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(upper))).multiply(new Quaternion().setFromEuler(euler.set(elbow, 0, 0)))
+    const wrist = bends(forearm, hand.palm, palm, pointing)
+    // (a hand that cannot be turned so at all is turned as it hangs)
+    const bent = wrist && [wrist.x, wrist.y, wrist.z].every(Number.isFinite) ? wrist : new Vector3()
+    const cost = beyond(bent, RANGE.wrist) + (arm.inside(upper, elbow) ? 10 : 0) + SWIVEL.moved * Math.abs(swung - swivel)
+    return { first: upper, fold: elbow, wrist: within(bent, RANGE.wrist), swivel: swung, cost }
+  }
+  let best = pose(swivel)
+  for (let by = -SWIVEL.most; by <= SWIVEL.most + 1e-9; by += SWIVEL.fine) {
+    const tried = pose(swivel + by)
+    if (tried.cost < best.cost - 1e-6) best = tried
+  }
+  // (and with no swing of the elbow that keeps it out of the trunk, the arm is held off it as little as clears it)
+  if (arm.inside(best.first, best.fold)) arm.off(best.first, best.fold)
+  return best
+}
+
+/** How a leg turns for its ankle to be at a place, from its hip, the leg facing as its foot points (rad about y) */
+export function reachLeg(leg: Limb, hip: Vector3, toes: number, ankle: Vector3) {
+  const { first, fold } = leg.reach(ankle.clone().sub(hip).applyAxisAngle(UP, -toes))
+  return { first: within(first.clone(), RANGE.thigh), fold: Math.min(RANGE.shin.x[1], Math.max(RANGE.shin.x[0], fold)) }
+}

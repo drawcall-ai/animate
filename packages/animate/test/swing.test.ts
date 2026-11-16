@@ -25,19 +25,19 @@ test('a jump shot goes the way its plan has it: the ball in the hand never more 
   new Scene().add(rig, ball)
   const hand = new Hand(rig, 'right')
   const body = new Body(rig)
-  const held = inHand(body, hand, grip(hand, ball, SEAT), { turning: false })
+  const held = inHand(body, hand, grip(hand, ball, SEAT))
   let left: Vector3 | undefined
   body.play(jumpShot(body, held, (velocity) => (left = velocity)))
   let first: { time: number; path: Mark[]; speed: number } | undefined
   let worst = 0
   while (body.playing && !left) {
     body.update(FRAME)
-    const { sent, path, at, tip } = body.intent().hand.right
-    const [next] = sent
-    if (next && path.length && !(first && Math.abs(first.time - next.time) < 0.15))
-      first = { time: next.time, path: path.map((mark) => ({ ...mark, at: mark.at.clone() })), speed: next.velocity.length() }
+    // the ball's plan: its way ahead, a thirtieth of a second a mark, and the frame it is sent to
+    const plan = body.intent().channels.find(({ frames }) => frames.some(({ velocity }) => velocity.length() > 1))
+    const moving = plan?.frames.find(({ velocity }) => velocity.length() > 1)
+    if (plan && moving && !first) first = { time: body.time, path: plan.path.map((at, k) => ({ at: at.clone(), time: body.time + k / 30 })), speed: moving.velocity.length() }
     const planned = first && along(first.path, body.time)
-    if (planned) worst = Math.max(worst, planned.distanceTo(at.clone().add(tip)))
+    if (planned) worst = Math.max(worst, planned.distanceTo(ball.getWorldPosition(new Vector3())))
   }
   expect(worst).toBeLessThan(0.05)
   expect(left?.length()).toBeCloseTo(first?.speed ?? NaN, 0)

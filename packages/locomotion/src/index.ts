@@ -1,3 +1,5 @@
-export type { Footfall, Foreseen } from './foresee'
+export type { Footfall, Foreseen, Mark } from './foresee'
 export { flat, type Going, type Ground, type Run, type Walk } from './going'
 export { Locomotion } from './locomotion'
+export type { Carrier, Foothold } from './carrier'
+export type { Posture } from './pelvis'

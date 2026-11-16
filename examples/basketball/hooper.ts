@@ -148,7 +148,7 @@ export class Hooper implements Game {
     left.by(moment, side, { with: 'palm', palm: leftward.clone().negate() })
     yield* taken
     if (!this.near()) return this.drop()
-    this.held.on(right, this.seat, { turning: false })
+    this.held.on(right, this.seat)
     carry(body, this.held)
     body.face()
     body.play(this.handle())
@@ -187,7 +187,7 @@ export class Hooper implements Game {
       // the hand goes back up to where it pushed from, and has the ball as it comes up there under it
       yield* right.by(ball.rising(high), from, { on: body, velocity: { x, y: MEET, z }, palm: DOWN, with: seat })
       ball.rest()
-      held.on(right, seat, { turning: false })
+      held.on(right, seat)
     }
   }
 

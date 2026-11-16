@@ -14,7 +14,7 @@ test('the delivery: the ball sent leaves as written, the body does the rest, and
   new Scene().add(man, drawn)
   const hands = { left: new Hand(man, 'left'), right: new Hand(man, 'right') }
   const body = new Body(man)
-  const held = inHand(body, hands.right, grip(hands.right, drawn, GRIP), { turning: false })
+  const held = inHand(body, hands.right, grip(hands.right, drawn, GRIP))
   let velocity: Vector3 | undefined
   body.play(
     (function* () {

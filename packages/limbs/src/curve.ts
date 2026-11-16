@@ -92,9 +92,3 @@ export function quickest(from: State, to: State, strength: number, range: Range)
   }
   return between(short, long, (seconds) => hard(seconds) && keeps(from, to, seconds, range))[1]
 }
-
-/** how long that curve can take at the most, and no longer than `most`, to keep within a range (s): so long, it draws back as far as the range goes before a fast arrival */
-export function longest(from: State, to: State, most: number, range: Range) {
-  if (keeps(from, to, most, range)) return most
-  return between(0, most, (seconds) => keeps(from, to, seconds, range))[0]
-}

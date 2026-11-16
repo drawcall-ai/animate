@@ -57,7 +57,7 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
     new Scene().add(rig, ball)
     const hands = { left: new Hand(rig, 'left'), right: new Hand(rig, 'right') }
     const body = new Body(rig)
-    const held = inHand(body, hands.right, grip(hands.right, ball, lane.GRIP), { turning: false })
+    const held = inHand(body, hands.right, grip(hands.right, ball, lane.GRIP))
     let bowled = lane.ball()
     body.play(
       (function* () {
@@ -73,7 +73,7 @@ const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: num
     const hand = new Hand(rig, 'right')
     const seat = grip(hand, ball, SEAT)
     const body = new Body(rig)
-    const held = inHand(body, hand, seat, { turning: false })
+    const held = inHand(body, hand, seat)
     let thrown = court.ball()
     body.play(jumpShot(body, held, (velocity) => (thrown = { position: ball.getWorldPosition(new Vector3()), velocity })))
     return { body, world: (dt) => thrown.velocity && court.fly(thrown, dt) }

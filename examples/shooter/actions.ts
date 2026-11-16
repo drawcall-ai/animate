@@ -70,7 +70,7 @@ export function* grenade(soldier: Soldier): Story {
   // (from the pouch on the flank of his vest, out past his shoulder, where his elbow clears his trunk however it is turned)
   yield* hand.to(chest(body, 'right', 0.55, -0.6), { on: body })
   soldier.shown.add(soldier.grenade)
-  const grenade = inHand(body, soldier.hands.right, soldier.held.grenade, { turning: false })
+  const grenade = inHand(body, soldier.hands.right, soldier.held.grenade)
 
   const { yaw, pitch } = soldier.aimed
   const up = pitch + THROW.above

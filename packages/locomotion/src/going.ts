@@ -349,7 +349,7 @@ export class Going {
     const arrived = () =>
       mover.halted &&
       Math.abs(mover.value.y - Math.min(course.y - mover.low, mover.ceiling())) < HIGH * leg &&
-      mover.low - mover.stoops.low(mover.time) < THERE * leg
+      mover.low - mover.posture.low(mover.time) < THERE * leg
     return waits(
       () => mover.course === course,
       () => arrived() && (!stands || mover.stands),

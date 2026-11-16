@@ -1,19 +1,25 @@
-import { Object3D, Quaternion, Vector3 } from 'three'
+import { Object3D, Vector3 } from 'three'
 import { flat, type Ground, Locomotion, type Run, type Walk } from '@drawcall/locomotion'
-import { type Band, Bindings, Bones, both, due, End, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
+import { type Band, Bones, both, due, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
+import type { Mover } from '@drawcall/plan'
 import { Clock, type Workings } from './clock'
+import { End, type Foot, type Hand } from './ends'
 import { type Intent, intent } from './intent'
-import { type Binder, type Foot, type Hand, hand as handOf, stay, type Thing, thing } from './ends'
+import { OnHim, Watched } from './movers'
+import { Asks } from './posture'
+import { Bound, type Thing } from './thing'
 
 /** the body made for each rig */
 const rigs = new WeakMap<Object3D, Body>()
 
 /**
  * A person as joints that turn, which turn the bones of a rigged humanoid. The hips are given somewhere to go, and the
- * feet step under them; the feet and the hands can be sent to places, the trunk, the head and the arms to rotations
- * against what they hang on, rest being none. Every part has its strength, so it takes the time it needs and moves
- * like a thing with weight, and every joint turns only as far as joints do. What is not sent anywhere reacts to what
- * the rest of the body does: the trunk leans into a push and winds up for a fast hand, the arms swing against the legs.
+ * feet step under them; the feet and the hands are channels a story writes frames to, each a place, a velocity and a
+ * moment, and every thing bound to him is one too; the trunk, the head and the arms can be sent to rotations against
+ * what they hang on, rest being none. Every part has its strength, so it takes the time it needs and moves like a
+ * thing with weight, and every joint turns only as far as joints do. What is not sent anywhere reacts to what the rest
+ * of the body does: the trunk turns after a hand and his weight goes with it, he gets down for a low one, and the arms
+ * swing against the legs.
  */
 export class Body {
   /** how large he is, as the rig is at rest */
@@ -39,51 +45,36 @@ export class Body {
   /** what a story sends to places (m) */
   readonly foot: Record<Side, Foot>
   readonly hand: Record<Side, Hand>
-  private readonly hands: Record<Side, End>
-  private readonly bindings: Bindings
-  private readonly binder: Binder
   /** what he is made of, for telling what he means to do */
   private readonly workings: Workings
+  private readonly things = new Map<Object3D, Bound>()
+  private readonly watched = new Map<Object3D, Watched>()
 
-  /** the body of a rigged humanoid, as it is posed now: its rest pose. Places are told from where the `rig` is, along its axes */
+  /** the body of a rigged humanoid, as it is posed now: its rest pose. Places are told from where the rig is, along its axes */
   constructor(rig: Object3D) {
     const bones = (this.bones = new Bones(rig))
     const size = (this.size = bones.size)
     const turning = joints(bones)
     const locomotion = (this.locomotion = new Locomotion(this, bones, turning))
-    const carried = locomotion.carrier
-    const rigged = (end: 'foot' | 'hand', side: Side) => ({
-      frame: bones.frame,
-      rig,
-      limb: bones.starts[end][side],
-      body: this,
-      ...bones.lies(end, side),
-    })
-    const foot = both(
-      (side) => new End(`${side} foot`, 'foot', side, turning.legs[side], carried, size, rigged('foot', side)),
-    )
-    const hand = both(
-      (side) => new End(`${side} hand`, 'hand', side, turning.arms[side], carried, size, rigged('hand', side)),
-    )
-    const bindings = (this.bindings = new Bindings(bones, () => locomotion.facing))
-    this.foot = foot
-    this.hands = hand
-    const ends = new Map<Hand, End>()
-    this.binder = {
-      bindings,
-      clock: this,
-      end: (of) => {
-        const found = ends.get(of)
-        if (!found) throw new Error('a thing is bound to a hand that is not his')
-        return found
-      },
-      ways: (on) => this.ways(on),
-      body: this,
-      onHim: (side, place) =>
-        place.clone().applyMatrix4(bones.frame).sub(bones.shouldered(side, new Vector3())).applyAxisAngle(UP, -locomotion.facing),
+    const { carrier } = locomotion
+    const facing = () => ({ at: locomotion.hips.value, velocity: locomotion.hips.velocity, facing: locomotion.facing, ground: locomotion.ground })
+    const asks = new Asks([], size, both(() => new Vector3()), facing)
+    const body = { size, carrier, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget() }
+    const end = (kind: 'hand' | 'foot', side: Side) => {
+      const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
+      const root = new OnHim(carrier, kind, side, () => ({ ...facing(), hips: locomotion.hips.value, at: kind === 'hand' ? bones.shouldered(side, new Vector3()) : bones.hip(side).clone() }), size)
+      return new End(kind, side, limb, root, body, bones.lies(kind, side), bones.starts[kind][side])
     }
-    this.hand = both((side) => handOf(hand[side], this.binder))
-    for (const side of SIDES) ends.set(this.hand[side], hand[side])
+    const ends = { hand: both((side) => end('hand', side)), foot: both((side) => end('foot', side)) }
+    asks.hands.push(ends.hand.left, ends.hand.right)
+    Object.assign(locomotion.posture, {
+      low: (t: number) => asks.low(t),
+      bend: (t: number) => asks.bend(t),
+      turn: (t: number) => asks.turn(t),
+      shift: (t: number) => asks.shift(t),
+    })
+    this.hand = both((side) => facade(ends.hand[side]) as Hand)
+    this.foot = both((side) => facade(ends.foot[side]) as Foot)
     const { going, hips: at } = locomotion
     this.hips = { ...at, to: (target, way) => going.to(target, way), at: (place) => going.at(place) }
     this.trunk = turning.trunk
@@ -91,36 +82,56 @@ export class Body {
     this.arm = both((side) => turning.arms[side].first)
     this.forearm = both((side) => turning.arms[side].second)
     for (const part of parts(turning)) part.free()
-    for (const side of SIDES) foot[side].anchor = locomotion.stands(side)
-    const all = { size, bones, locomotion, joints: turning, bindings, ends: { foot, hand } }
+    for (const side of SIDES) ends.foot[side].anchor = locomotion.stands(side)
+    const all = { rig, size, bones, locomotion, joints: turning, ends, things: this.things, watched: this.watched, asks }
     this.clock = new Clock((this.workings = all))
     rigs.set(rig, this)
     this.clock.pose(0)
+    for (const side of SIDES) {
+      asks.shoulders[side].copy(bones.shouldered(side, new Vector3())).sub(locomotion.hips.value)
+      ends.hand[side].root.rest.copy(asks.shoulders[side])
+    }
+  }
+
+  /** what a frame on a thing moves on: its channel if it is bound to him, or the thing as it is seen to move */
+  private mover(thing: Object3D): Mover {
+    const bound = this.things.get(thing)
+    if (bound) return bound.channel
+    let watched = this.watched.get(thing)
+    if (!watched) this.watched.set(thing, (watched = new Watched(thing, this.bones.frame)))
+    watched.look(this.time)
+    return watched
   }
 
   /**
    * A thing is bound to him from now on, and moved by one owner: the body, or from `outside`. Hands go `on` it by
-   * grips. Moved by the body, the first hand on it leads it, and the story sends the thing, never that hand: it is the
-   * end of that arm, offset by the grip, so the body plans it as it plans a hand, and every other hand on it follows
-   * it. Moved from outside, the game or physics sets where it is every frame, and every hand on it follows it as near
-   * as the arm reaches. `free` gives it up, telling how fast it was moving.
+   * grips. Moved by the body, the story sends the thing, never a hand on it: every hand on it goes with it, bound
+   * where its grip has it, and the body plans it as the end of the first hand's arm. Moved from outside, the game or
+   * physics sets where it is every frame, and every hand on it follows it as near as the arm reaches. `free` gives it
+   * up, every hand on it going on as it was moving, and tells how fast it was moving.
    */
   bind(object: Object3D, { outside = false }: { outside?: boolean } = {}): Thing {
-    return thing(object, outside, this.binder)
+    const { ends } = this.workings
+    const of = (hand: Hand) => {
+      const found = SIDES.find((side) => this.hand[side] === hand)
+      if (!found) throw new Error('a thing is bound to a hand that is not his')
+      return ends.hand[found]
+    }
+    const { strength, draw } = ends.hand.right.channel
+    const others = (end: End) => {
+      for (const thing of this.things.values()) {
+        const k = thing.hands.findIndex((one) => one.end === end)
+        if (k >= 0) thing.hands.splice(k, 1)
+      }
+    }
+    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, () => this.workings.asks.forget(), { strength, draw })
+    this.things.set(object, bound)
+    return bound.facade()
   }
 
-  /** what is bound to him: each thing, the sides of the hands on it, the leading one first, the grips they hold it by, whether it turns with that hand, and whether it is moved from outside */
+  /** what is bound to him: each thing, the sides of the hands on it and the grips they hold it by, and whether it is moved from outside */
   get bound() {
-    return this.bindings.bound
-  }
-
-  /** what turns a way counted as a place `on` him, on a thing or in the scene into the frame of the body */
-  private ways(on?: Object3D | Body) {
-    const turn = new Quaternion().setFromRotationMatrix(this.bones.frame)
-    if (on === this) return new Quaternion().setFromAxisAngle(UP, this.locomotion.facing)
-    if (!(on instanceof Object3D)) return turn
-    on.updateWorldMatrix(true, false)
-    return turn.multiply(on.getWorldQuaternion(new Quaternion()))
+    return [...this.things.values()].filter(({ hands }) => hands.length).map(({ mesh, hands, outside }) => ({ thing: mesh, hands: hands.map(({ end }) => end.side), grips: hands.map(({ grip }) => grip), outside }))
   }
 
   /** the place on the ground where a foot stands under its hip, he over a place, facing as he does: where a story puts one down */
@@ -282,12 +293,13 @@ export class Body {
    * story it returns is over when he stands.
    */
   stand(): Story<boolean> {
+    const { ends, things } = this.workings
     const stands = this.locomotion.stand(() => {
-      for (const side of SIDES) for (const end of [this.foot[side], this.hands[side]]) end.free()
+      const bound = new Set([...things.values()].flatMap(({ hands }) => hands.map(({ end }) => end)))
+      for (const side of SIDES) for (const end of [ends.foot[side], ends.hand[side]]) if (!bound.has(end)) end.free()
     })
-    // (the hands on what is bound to him stay on it: what the body moves stays where it is on him)
-    this.bindings.rejoin()
-    for (const { thing: object, outside } of this.bindings.bound) if (!outside) stay(object, this.binder)
+    // (what the body moves stays where it is on him, and the hands on it stay on it)
+    for (const thing of things.values()) if (!thing.outside) thing.cancel()
     return stands
   }
 
@@ -298,4 +310,23 @@ export class Body {
   update(delta: number) {
     this.clock.update(delta)
   }
+}
+
+/** what a story has of an end */
+function facade(end: End): Hand | Foot {
+  return {
+    value: end.value,
+    velocity: end.velocity,
+    get there() {
+      return end.there
+    },
+    get anchor() {
+      return end.anchor
+    },
+    to: (place: never, { seconds, ...how }: { seconds?: number } = {}) => end.send(place, how, { seconds }),
+    by: (when: number, place: never, how = {}) => end.send(place, how, { by: when }),
+    shape: (pose?: never, how?: { by?: number }) => end.shape(pose, how),
+    cancel: () => end.cancel(),
+    free: () => end.free(),
+  } as unknown as Hand
 }

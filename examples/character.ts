@@ -141,18 +141,6 @@ export class Character {
   }
 }
 
-/** a thing is put where a grip has it, or the part of it the grip holds, in a hand as the hand is now */
-function seat(hand: Hand, held: Grip, thing = held.target) {
-  hand.bone.updateWorldMatrix(true, false)
-  thing.updateWorldMatrix(true, true)
-  const part = thing.matrixWorld.clone().invert().multiply(held.target.matrixWorld)
-  const large = held.target.getWorldScale(new Vector3()).divide(hand.bone.getWorldScale(new Vector3()))
-  const placed = new Matrix4().compose(held.position, held.quaternion, large)
-  const world = hand.bone.matrixWorld.clone().multiply(placed).multiply(part.invert())
-  if (thing.parent) world.premultiply(thing.parent.matrixWorld.clone().invert())
-  world.decompose(thing.position, thing.quaternion, thing.scale)
-}
-
 /**
  * which way a hand's palm faces on a thing it holds by a grip, in the thing's frame, and which way the thing points its
  * z there: what turns a hand sent `with` the grip for the thing to be turned so, once it is bound to the hand
@@ -161,13 +149,9 @@ export function lying(hand: Hand, held: Grip) {
   return { palm: hand.normal.clone().applyQuaternion(held.quaternion.clone().invert()), pointing: new Vector3(0, 0, 1) }
 }
 
-/**
- * a hand has a thing from the start: it is put where the grip seats it in the hand as the hand is now, and bound to him
- * there, the hand leading it, turning it or by a point. Tells the thing as bound
- */
-export function inHand(body: Body, hand: Hand, held: Grip, how: { turning?: boolean } = {}) {
-  seat(hand, held)
+/** a hand has a thing from the start: it is bound to him where the grip seats it in the hand as the hand is now. Tells the thing as bound */
+export function inHand(body: Body, hand: Hand, held: Grip) {
   const thing = body.bind(held.target)
-  thing.on(body.hand[hand.side], held, how)
+  thing.on(body.hand[hand.side], held)
   return thing
 }

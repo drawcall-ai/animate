@@ -65,7 +65,7 @@ export class Mover extends Way {
     // (what is told along the way he is going is told anew as that turns: the copy has its own)
     const course = { ...this.course }
     const same = (sent?: typeof course) => (sent === this.course ? course : sent)
-    return Object.assign(new Mover(this.size, this.stoops), this, {
+    return Object.assign(new Mover(this.size, this.posture), this, {
       value: this.value.clone(),
       velocity: this.velocity.clone(),
       acceleration: this.acceleration.clone(),

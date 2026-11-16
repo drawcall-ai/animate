@@ -25,7 +25,7 @@ const RELEASE = { aside: -0.2, ahead: 0.1, over: 0.1, speed: 7 }
 export function carry(body: Body, ball: Thing, side: Grip) {
   const { arm } = body.size
   const { x, y, z } = CARRY.at
-  ball.on(body.hand.left, side, { turning: false })
+  ball.on(body.hand.left, side)
   return ball.to(place(x * arm, y * arm, z * arm), { on: body, palm: CARRY.palm, pointing: place(0, 0, 1) })
 }
 

@@ -15,7 +15,8 @@
   "dependencies": {
     "@drawcall/limbs": "workspace:*",
     "@drawcall/locomotion": "workspace:*",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "@drawcall/plan": "workspace:*"
   },
   "files": [
     "src",

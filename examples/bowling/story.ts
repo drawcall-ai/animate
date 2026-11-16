@@ -26,11 +26,11 @@ run({
     const hands = { left: new Hand(man, 'left'), right: new Hand(man, 'right') }
     const seat = grip(hands.right, ballMesh, GRIP)
     body = new Body(man)
-    const held = inHand(body, hands.right, seat, { turning: false })
+    const held = inHand(body, hands.right, seat)
     // (upright, its holes to his right, as it sits on the palm by a point: it keeps that turn)
     held.off(body.hand.right)
     ballMesh.quaternion.identity()
-    held.on(body.hand.right, seat, { turning: false })
+    held.on(body.hand.right, seat)
     bowled = ball()
     left = undefined
     body.play(
