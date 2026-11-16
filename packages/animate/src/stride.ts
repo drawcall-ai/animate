@@ -92,6 +92,10 @@ export class Stride {
   private unheld = 0
   /** the way he turns to face where he looks, until he faces it (rad about y) */
   private toward?: number
+  /** how he was led since the last update */
+  private led?: { x: number; z: number }
+  /** where the world has him by the end of the next update */
+  private placed?: { x: number; z: number }
 
   constructor(
     private readonly clock: Clock,
@@ -395,7 +399,12 @@ export class Stride {
     const self = this
     const arrived = () => waits(() => true, () => gait.arrived)
     return {
-      places: (_time: number) => {},
+      // (led between updates, he is led from the moment the update is for)
+      places(time: number) {
+        if (self.led) gait.go(self.led, time)
+        if (self.placed) gait.at(self.placed, time)
+        self.led = self.placed = undefined
+      },
       looks: () => {},
       looking: (_share: number) => self.looked,
       to(target: Xyz | { y: number }, way?: { speed?: number; plant?: Side }): Story<boolean> {
@@ -408,7 +417,7 @@ export class Stride {
       },
       at(place: { x: number; y?: number; z: number }) {
         if (place.y !== undefined) gait.lead.place.y = place.y
-        gait.at(place)
+        self.placed = place
       },
       when: (to: Ground) => gait.when(flat(to)),
       highest: () => gait.highest(),
@@ -423,7 +432,7 @@ export class Stride {
         })()
       },
       go(velocity: { x: number; z: number }) {
-        gait.go(velocity)
+        self.led = { x: velocity.x, z: velocity.z }
       },
       face(way?: { x: number; z: number }): Story<boolean> {
         gait.face(way)

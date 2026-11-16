@@ -108,8 +108,11 @@ export class Gait {
     this.lead.face = way && angleOf(way.x, way.z)
   }
 
-  /** the world has him on the ground at a place now, as a character controller does */
-  at(place: { x: number; z: number }) {
+  /** the world has him on the ground at a place at a moment, by default now, as a character controller does */
+  at(place: { x: number; z: number }, time = this.time) {
+    // (where it has him at a moment to come is where his lead has him from now)
+    const back = this.lead.velocity.clone().multiplyScalar(time - this.time)
+    place = { x: place.x - back.x, z: place.z - back.z }
     const by = new Vector3(place.x, this.lead.place.y, place.z).sub(this.lead.place)
     // (further off than he steps, he is there at once, feet and all)
     if (by.length() > KEEPS * this.size.leg) {
@@ -491,6 +494,7 @@ export class Gait {
     const prior = this.steps[partner]
     const last = prior && through(partner, this.phase) > after ? prior.to : (prior?.from ?? feet[partner].value)
     const lands = (swingShare - after) / this.rate
+
     const { to, toes } = footfall(size, going, side, lands, this.duty / this.rate, last, (seconds) => this.path(seconds))
     to.y = this.lead.place.y + size.ankle
     Object.assign(step, { to, toes, lands: now + lands })

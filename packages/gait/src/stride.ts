@@ -101,10 +101,10 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
   // never across the other footfall: at a run the two are down one after the other, half a stride apart, as his way
   // turns between them; and its ball clear of the other's, as it points
   const apart = (runs(size, going.speed) * going.curves * (lands + stays)) / 2
-  clear(size, to, side, onward(going, partner, apart), faced, going.speed)
+  const other = onward(going, partner, apart)
+  clear(size, to, side, other, faced, going.speed)
   const ball = (turned: number) => ahead(turned).multiplyScalar(SOLE.ball * size.leg)
-  to.add(ball(toes))
-  clear(size, to, side, partner.clone().add(ball(faced)), faced, going.speed)
+  clear(size, to.add(ball(toes)), side, other.add(ball(faced)), faced, going.speed)
   to.sub(ball(toes))
   return { to, toes }
 }
