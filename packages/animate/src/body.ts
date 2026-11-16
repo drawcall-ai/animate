@@ -6,13 +6,20 @@ import { End, type Foot, type Hand } from './ends'
 import { type Intent, intent } from './intent'
 import { OnHim, Watched } from './movers'
 import { Asks } from './posture'
-import { flat, type Ground, type Run, Stride, type Walk } from './stride'
+import { Free } from './free'
+import { Legs } from './legs'
 import { Bound, type Thing } from './thing'
 
 /** the body made for each rig */
 /** how near the way he is to face counts as facing it (rad), and how far a knock carries him before he steps after it (in legs) */
 const [FACED, KNOCK] = [0.02, 0.114]
 const rigs = new WeakMap<Object3D, Body>()
+
+/** a place on the ground, or told as a number, so far along z on x = 0; a run to one and a walk */
+type Ground = number | { x: number; z: number }
+const flat = (to: Ground) => (typeof to === 'number' ? { x: 0, z: to } : to)
+type Run = { speed: number; at: Ground; plant?: Side; push?: number; arrive?: number }
+type Walk = { speed?: number; plant?: Side }
 
 /**
  * A person as joints that turn, which turn the bones of a rigged humanoid. The hips are given somewhere to go, and the
@@ -27,7 +34,8 @@ export class Body {
   /** how large he is, as the rig is at rest */
   readonly size: Size
   private readonly bones: Bones
-  private readonly locomotion: Stride
+  private readonly legs: Legs
+  private readonly free: Free
   private readonly clock: Clock
   /**
    * the hips: where they are and how they move, `to` a place they go at a walk, or to a height alone, which they are
@@ -57,48 +65,43 @@ export class Body {
     const bones = (this.bones = new Bones(rig))
     const size = (this.size = bones.size)
     const turning = joints(bones)
-    const locomotion = (this.locomotion = new Stride(this, bones, turning))
-    const facing = () => ({ at: locomotion.hips.value, velocity: locomotion.hips.velocity, facing: locomotion.facing, ground: locomotion.ground })
+    const facing = () => ({ at: legs.hips.value, velocity: legs.hips.velocity, facing: legs.facing, ground: legs.ground })
     const asks = new Asks([], size, both(() => new Vector3()), facing, turning.trunk)
-    const body = { size, gait: locomotion.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place), rising: () => asks.rising(turning.trunk.value.x, size.stand - (locomotion.hips.value.y - locomotion.ground)) }
+    const legs = (this.legs = new Legs(this, bones, turning, asks))
+    const free = (this.free = new Free(legs, turning, size))
+    const body = { size, gait: legs.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place), rising: () => asks.rising(turning.trunk.value.x, size.stand - (legs.hips.value.y - legs.ground)) }
     const end = (kind: 'hand' | 'foot', side: Side) => {
       const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
-      const root = new OnHim(locomotion.gait)
+      const root = new OnHim(legs.gait)
       return new End(kind, side, limb, root, body, bones.lies(kind, side), bones.starts[kind][side])
     }
     const ends = { hand: both((side) => end('hand', side)), foot: both((side) => end('foot', side)) }
     asks.hands.push(ends.hand.left, ends.hand.right)
-    Object.assign(locomotion.posture, {
-      low: (t: number) => asks.low(t),
-      bend: (t: number) => asks.bend(t),
-      turn: (t: number) => asks.turn(t),
-      shift: (t: number) => asks.shift(t),
-    })
     this.hand = both((side) => facade(ends.hand[side]) as Hand)
     this.foot = both((side) => facade(ends.foot[side]) as Foot)
-    const { hips: at } = locomotion
-    this.hips = { ...at, to: (target, way) => locomotion.to(target, way), at: (place) => locomotion.at(place) }
+    const { hips: at } = legs
+    this.hips = { ...at, to: (target, way) => legs.to(target, way), at: (place) => legs.at(place) }
     this.trunk = turning.trunk
     this.head = turning.head
     this.arm = both((side) => turning.arms[side].first)
     this.forearm = both((side) => turning.arms[side].second)
     for (const part of parts(turning)) part.free()
-    for (const side of SIDES) ends.foot[side].anchor = locomotion.stands(side)
-    const all = { rig, size, bones, locomotion, joints: turning, ends, things: this.things, watched: this.watched, asks }
+    for (const side of SIDES) ends.foot[side].anchor = legs.stands(side)
+    const all = { rig, size, bones, legs, free, joints: turning, ends, things: this.things, watched: this.watched, asks }
     this.clock = new Clock((this.workings = all))
     rigs.set(rig, this)
     this.clock.pose(0)
     for (const side of SIDES) {
-      asks.shoulders[side].copy(bones.shouldered(side, new Vector3())).sub(locomotion.hips.value)
-      asks.shoulders[side].applyAxisAngle(UP, -locomotion.facing)
+      asks.shoulders[side].copy(bones.shouldered(side, new Vector3())).sub(legs.hips.value)
+      asks.shoulders[side].applyAxisAngle(UP, -legs.facing)
       ends.hand[side].root.rest.copy(asks.shoulders[side])
-      ends.foot[side].root.rest.copy(bones.hip(side)).sub(locomotion.hips.value).applyAxisAngle(UP, -locomotion.facing)
+      ends.foot[side].root.rest.copy(bones.hip(side)).sub(legs.hips.value).applyAxisAngle(UP, -legs.facing)
     }
   }
 
   /** a thing as he sees it move */
   private seen(thing: Object3D, carries = true) {
-    return new Watched(thing, this.bones.frame, () => ({ at: this.locomotion.hips.value, facing: this.locomotion.facing }), carries)
+    return new Watched(thing, this.bones.frame, () => ({ at: this.legs.hips.value, facing: this.legs.facing }), carries)
   }
 
   /** what a frame on a thing moves on: its channel if it is bound to him, or the thing as it is seen to move */
@@ -147,8 +150,8 @@ export class Body {
   ground(side: Side, to: Ground) {
     const { x, z } = flat(to)
     const { hip, ankle } = this.size
-    const y = this.locomotion.ground + ankle
-    return new Vector3(SIGN[side] * hip, 0, 0).applyAxisAngle(UP, this.locomotion.facing).add({ x, y, z })
+    const y = this.legs.ground + ankle
+    return new Vector3(SIGN[side] * hip, 0, 0).applyAxisAngle(UP, this.legs.facing).add({ x, y, z })
   }
 
   /**
@@ -183,12 +186,12 @@ export class Body {
 
   /** the gait he walks and runs by: its hips and feet, and what it means to do */
   get gait() {
-    return this.locomotion.gait
+    return this.legs.gait
   }
 
   /** which way he faces along the ground, in the scene: what `face` turns him to */
   get facing() {
-    return new Vector3(0, 0, 1).applyAxisAngle(UP, this.locomotion.facing)
+    return new Vector3(0, 0, 1).applyAxisAngle(UP, this.legs.facing)
   }
 
   /** the body made for a rig, if one was */
@@ -268,7 +271,7 @@ export class Body {
    * is making he still makes, and he is not brought to a stand for want of a story.
    */
   go(velocity: { x: number; z: number }) {
-    this.locomotion.go(velocity)
+    this.legs.go(velocity)
   }
 
   /**
@@ -288,7 +291,7 @@ export class Body {
    * and only the head turns from it; going, he goes his way.
    */
   look(place?: Xyz) {
-    this.locomotion.look(place)
+    this.free.look(place)
   }
 
   /**
@@ -325,9 +328,12 @@ export class Body {
    * story it returns is over when he stands.
    */
   stand(): Story<boolean> {
-    const stands = this.locomotion.stand(() => this.letGo())
+    this.letGo()
+    for (const part of [this.trunk, this.head]) part.free()
+    this.free.look()
+    this.gait.stand()
     this.hold()
-    return stands
+    return this.arrives()
   }
 
   /** whatever the stories have is let go at once, going on from the state it is in, but the hands on what is bound to him, which stay on it as it stays where it is on him: for a game, on fresh input */

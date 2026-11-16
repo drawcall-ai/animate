@@ -1,5 +1,4 @@
 import { EASY, RANGE, type Side, SIGN, type Size } from '@drawcall/limbs'
-import type { Posture } from './stride'
 import { Vector3 } from 'three'
 import type { End } from './ends'
 import { Watched } from './movers'
@@ -68,7 +67,7 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size) {
  * plan has it a little ahead, on him as he will face. Turns and shifts add, the most bend and sink is kept. Asked
  * again for the same moment it is told from what it worked out, until a frame is written or the clock goes on.
  */
-export class Asks implements Posture {
+export class Asks {
   private readonly known = new Map<number, Asked>()
 
   constructor(

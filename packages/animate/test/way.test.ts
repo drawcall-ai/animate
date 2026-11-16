@@ -220,7 +220,7 @@ test('put a little way off he steps after his hips: put far off he is there as h
 
 test('a jump stated straight after a run to a place off the way he faces goes there: he turns on the way to take off', () => {
   let landed: Vector3 | undefined
-  const { body, until } = stage(function* (body) {
+  const { until } = stage(function* (body) {
     body.run({ speed: 4, at: { x: 3, z: 3 } })
     yield* body.jump({ x: 4, y: 1.4, z: 4 })
     landed = flat(body.hips.value)

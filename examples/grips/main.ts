@@ -1,5 +1,5 @@
 import { hold } from '@drawcall/hand'
-import { Group, Vector3 } from 'three'
+import { Group } from 'three'
 import { run } from '../stage'
 import { mannequin } from '../mannequin'
 import { Hand } from '@drawcall/hand'

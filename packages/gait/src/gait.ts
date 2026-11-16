@@ -344,7 +344,7 @@ export class Gait {
     if (!SIDES.some(resting) || SIDES.some((side) => this.held(side) && !resting(side)) || this.jumping) return undefined
     const [left, right] = SIDES.map((side) => this.ends(side))
     const half = Math.hypot(left.x - right.x, left.z - right.z) / 2
-    const { leg, hip, stand, ankle } = this.size
+    const { leg, stand, ankle } = this.size
     const reach = Math.sqrt(Math.max(0, leg ** 2 - (half + SLACK * leg) ** 2))
     const low = Math.min(left.y, right.y) - ankle
     return left.add(right).multiplyScalar(0.5).setY(Math.min(low + stand, low + ankle + reach))

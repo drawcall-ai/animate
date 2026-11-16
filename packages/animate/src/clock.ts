@@ -1,4 +1,5 @@
-import type { Stride } from './stride'
+import type { Free } from './free'
+import type { Legs } from './legs'
 import { type Bones, both, type Joints, parts, type Side, SIDES, type Size, type Story, tick, UP } from '@drawcall/limbs'
 import { Euler, type Object3D, Quaternion, Vector3 } from 'three'
 import type { End } from './ends'
@@ -12,7 +13,8 @@ export type Workings = {
   rig: Object3D
   size: Size
   bones: Bones
-  locomotion: Stride
+  legs: Legs
+  free: Free
   joints: Joints
   ends: Record<'foot' | 'hand', Record<Side, End>>
   things: Map<Object3D, Bound>
@@ -57,7 +59,7 @@ export class Clock {
     // (the steps go on from him as he is, not as he was drawn ahead of them)
     if (this.owed > 0) this.draw(0)
     this.span = { from: this.time + this.owed, to: this.time + this.owed + delta }
-    this.body.locomotion.places(this.span.to)
+    this.body.legs.places(this.span.to)
     for (this.owed += delta; this.owed >= dt; this.updated = false) {
       this.owed -= dt
       this.advance(dt, this.updated)
@@ -67,7 +69,7 @@ export class Clock {
   }
 
   private advance(delta: number, frame: boolean) {
-    const { locomotion, joints, things, watched, asks } = this.body
+    const { legs, joints, things, watched, asks } = this.body
     const now = this.time + delta
     // a thing moves only between updates: what the story's frames are on is looked at anew once an update
     if (frame) for (const thing of watched.values()) thing.look(this.time)
@@ -95,26 +97,24 @@ export class Clock {
     }
     asks.now = this.time
     asks.forget()
-    // where he looks is told as it lies from his shoulders now
-    const looked = locomotion.looking
     // the things go first, then the hips and the feet, then the ends, those on a thing with it
     for (const thing of things.values()) thing.channel.advance(now)
-    locomotion.step(delta, this.body.ends.foot, looked)
+    legs.step(delta, this.body.ends.foot)
     for (const end of this.all) end.channel.advance(now)
     // (a foot the story has goes no lower than it stands on the ground)
-    const floor = locomotion.gait.lead.place.y + this.body.size.ankle
+    const floor = legs.gait.lead.place.y + this.body.size.ankle
     for (const side of SIDES) {
       const { channel, held } = this.body.ends.foot[side]
       if (held && channel.value.y < floor) channel.value.y = floor
     }
     // a hand or a foot swung on and come to rest is the body's again, and so is a foot held in the air as he lands
-    const lands = locomotion.gait.jumps && locomotion.gait.hips.velocity.y <= 0
+    const lands = legs.gait.jumps && legs.gait.hips.velocity.y <= 0
     for (const end of this.all) {
       const { busy, owner, holding } = end.channel
       if ((!busy && owner === 'on') || (end.kind === 'foot' && lands && holding && !busy)) end.free()
     }
     for (const part of parts(joints)) part.advance(delta)
-    locomotion.react(delta)
+    this.body.free.react(delta)
     this.pose(delta)
     this.time = now
     const faults = this.faults.splice(0)
@@ -125,10 +125,10 @@ export class Clock {
 
   /** the limbs the story has reach for their channels, the free ones are as the body has them, and the bones are turned */
   pose(delta: number) {
-    const { locomotion, joints, bones, ends, things } = this.body
-    locomotion.pose(delta, ends.foot)
+    const { legs, joints, bones, ends, things } = this.body
+    legs.pose(delta, ends.foot)
     this.draw(0)
-    const posed = locomotion.posed()
+    const posed = legs.posed()
     const trunk = new Quaternion().setFromAxisAngle(UP, posed.facing).multiply(new Quaternion().setFromEuler(euler.setFromVector3(joints.trunk.value)))
     for (const side of SIDES) {
       const hand = ends.hand[side]
@@ -167,7 +167,7 @@ export class Clock {
       foot.gap = bones.ankle[side].distanceTo(foot.channel.value)
       hand.track(delta, posed, bones.hand[side])
       foot.track(delta, bones.ankle[side])
-      this.bent[side] = locomotion.tread(side, foot, delta)
+      this.bent[side] = legs.tread(side, foot, delta)
     }
     this.feet()
   }
@@ -175,15 +175,15 @@ export class Clock {
   /** the bones are turned to where everything is `seconds` on from his last step, going as it goes then */
   private draw(seconds: number) {
     const { joints, bones } = this.body
-    bones.pose(this.body.locomotion.posed(), joints, seconds)
+    bones.pose(this.body.legs.posed(), joints, seconds)
     bones.grasp(joints)
     this.feet()
   }
 
   /** the feet are laid as they stand or step, or as their shins have them, the story having them */
   private feet() {
-    const { joints, bones, ends, locomotion } = this.body
-    const { toes } = locomotion.posed()
+    const { joints, bones, ends, legs } = this.body
+    const { toes } = legs.posed()
     for (const side of SIDES) {
       const { first: thigh, second: shin } = joints.legs[side]
       if (ends.foot[side].held) bones.pitch(side, this.bent[side])

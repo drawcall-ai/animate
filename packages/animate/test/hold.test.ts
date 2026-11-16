@@ -298,7 +298,7 @@ test.each([1, 2])(
 )
 
 test('a rifle swept half round him with his feet planted is no error: the hands come as near as their arms turn, never past a joint, and are not there while it is out of reach', () => {
-  const { scene, body, gun, bound, pose, off } = rifleman()
+  const { scene, body, bound, pose, off } = rifleman()
   for (let t = 0; t < 1.5; t += FRAME) {
     pose(0)
     body.update(FRAME)

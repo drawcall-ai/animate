@@ -6,7 +6,7 @@ import type { Game, Input } from '../play'
 import type { Thing } from '../thing'
 import { balls, done, home, Pins } from './alley'
 import { bowl, carry, SIDE } from './bowl'
-import { GRIP, LINE, RADIUS } from './lane'
+import { GRIP, LINE } from './lane'
 
 /** how fast he walks and runs (m/s) */
 const SPEED = { walk: 1.4, run: 3.5 }

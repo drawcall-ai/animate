@@ -1,7 +1,7 @@
 import { Body, type Story } from '@drawcall/animate'
 import type { Grip, Hand } from '@drawcall/hand'
 import type { PhysicsWorld } from '@drawcall/physics'
-import { Matrix4, Object3D, Vector3 } from 'three'
+import { Object3D, Vector3 } from 'three'
 import { Capsule } from './capsule'
 
 /** how high and how wide the capsule the world moves him as is (of how high his hips stand) */
