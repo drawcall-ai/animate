@@ -107,34 +107,38 @@ export class Bound {
    */
   on(hand: Hand, grip: Grip): Story<boolean> {
     const end = this.ends(hand)
+    if (this.hands.some((one) => one.end === end && one.grip === grip)) return nothing(true)
     this.others(end)
-    this.joining.delete(end)
+    // (sent onto it again, it goes there from where it is, not after where it was going)
+    if (this.joining.delete(end)) end.channel.cancel('story')
     if (end.channel.bound) end.channel.unbind()
-    // (one the world has is where it is seen: its grip is counted on it as it goes)
+    // (one with no hand on it, not moved from outside, is where it is seen: its grip is counted on it there)
     if (!this.hands.length && !this.channel.outside) this.look()
     const seat = this.seat(end, grip)
     if (end.channel.value.distanceTo(seat.place.clone().applyQuaternion(this.channel.turn).add(this.channel.value)) <= NEAR * end.limb.length) {
       this.bind(end, grip)
       return nothing(true)
     }
-    const sent = end.timed({ on: this.watch(this.mesh), place: seat.place, turn: seat.turn, by: 'story' }, end.channel)
+    // (on it as the game moves it, it is where it was last told; else as it is seen to go)
+    const sent = end.timed({ on: this.channel.outside ? this.channel : this.watch(this.mesh), place: seat.place, turn: seat.turn, by: 'story' }, end.channel)
     void end.write(sent)
     end.close(grip.pose, sent.at - this.now())
     const frame = end.channel.frames.find(({ place }) => place === seat.place)!
-    this.joining.add(end)
+    this.joining.set(end, frame)
     const self = this
     this.play(
       (function* () {
-        while (end.channel.frames.includes(frame) && self.joining.has(end)) yield
-        if (!self.joining.delete(end) || !end.channel.met(frame)) return
-        self.bind(end, grip)
+        while (end.channel.frames.includes(frame) && self.joining.get(end) === frame) yield
+        if (self.joining.get(end) !== frame) return
+        self.joining.delete(end)
+        if (end.channel.met(frame)) self.bind(end, grip)
       })(),
     )
     return waits(() => this.joining.has(end), () => this.hands.some((one) => one.end === end))
   }
 
-  /** hands on their way to go onto it */
-  private readonly joining = new Set<End>()
+  /** hands on their way to go onto it, and the frames that take them there */
+  private readonly joining = new Map<End, Frame>()
 
   /** where a hand on it by a grip is, and how it is turned, in its frame as it is now: a grip on a part of it is a grip on it, where that part is on it */
   private seat(end: End, grip: Grip) {
@@ -211,8 +215,10 @@ export class Bound {
     return this.send(place, how, { by: when })
   }
 
-  /** sends it: as the first hand on it would be sent, so it is planned as the end of that arm; sent while that hand is on its way to it, once it has it */
+  /** sends it, the body's from now: as the first hand on it would be sent, so it is planned as the end of that arm; sent while that hand is on its way to it, once it has it */
   private send(place: Xyz, how: Sending, when: { seconds?: number; by?: number }): Story<boolean> {
+    // (sent, one moved from outside with a hand on it is the body's from now)
+    if (this.hands.length || this.joining.size) this.outside = false
     if (this.channel.outside) return nothing()
     if (this.lead) return this.sent(place, how, when)
     let written: Story<boolean> | undefined
@@ -293,7 +299,7 @@ export class Bound {
 
   /** let go: every hand on it goes on as it was moving, and it is moved from outside from now. Tells how fast it moves */
   free() {
-    for (const end of this.joining) end.cancel()
+    for (const end of this.joining.keys()) end.cancel()
     this.joining.clear()
     for (const { end } of this.hands.splice(0)) end.channel.unbind()
     this.channel.outside = true

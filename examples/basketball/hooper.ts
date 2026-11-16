@@ -195,6 +195,8 @@ export class Hooper implements Game {
   private *shot(): Story {
     this.doing = 'shooting'
     this.shooting = false
+    // (from a dribble, the hand has the ball first)
+    if (!(yield* this.held.on(this.character.body.hand.right, this.seat))) return this.drop()
     yield* jumpShot(this.character.body, this.held, (velocity) => {
       this.ball.release(velocity)
       this.doing = undefined

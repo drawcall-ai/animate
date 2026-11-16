@@ -76,9 +76,11 @@ export function court() {
 }
 
 /** how a ball leaves a place `up` from level (rad), heading for the ring, to come down through its middle (m/s) */
-export function arc(from: Vector3, up: number) {
+export function arc(from: Vector3, steep: number) {
   const way = new Vector3(HOOP.x - from.x, 0, HOOP.z - from.z)
-  const [far, rise] = [way.length(), HOOP.y - from.y]
+  const [far, rise] = [Math.max(way.length(), 0.1), HOOP.y - from.y]
+  // (near the ring, steeper: at least halfway between straight at it and straight up)
+  const up = Math.max(steep, (Math.atan2(rise, far) + Math.PI / 2) / 2)
   const speed = Math.sqrt((GRAVITY * far * far) / (2 * Math.cos(up) ** 2 * (far * Math.tan(up) - rise)))
   return way.setLength(speed * Math.cos(up)).setY(speed * Math.sin(up))
 }
