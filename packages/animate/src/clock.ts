@@ -101,6 +101,12 @@ export class Clock {
     for (const thing of things.values()) thing.channel.advance(now)
     locomotion.step(delta, this.body.ends.foot, looked)
     for (const end of this.all) end.channel.advance(now)
+    // (a foot the story has goes no lower than it stands on the ground)
+    const floor = locomotion.gait.lead.place.y + this.body.size.ankle
+    for (const side of SIDES) {
+      const { channel, held } = this.body.ends.foot[side]
+      if (held && channel.value.y < floor) channel.value.y = floor
+    }
     // a hand or a foot swung on and come to rest is the body's again, and so is a foot held in the air as he lands
     const lands = locomotion.gait.jumps && locomotion.gait.hips.velocity.y <= 0
     for (const end of this.all) {

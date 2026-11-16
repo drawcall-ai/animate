@@ -132,6 +132,8 @@ export class End {
     const off = channel.setsOff
     // (swung on and come to rest, it is the body's)
     if (channel.owner === 'on' && !channel.busy) return false
+    // (a foot just sent, not yet fitted, has not set off: the gait keeps it until it does)
+    if (this.kind === 'foot' && off === undefined && channel.frames.length) return channel.holding
     // (as of the step being made, which ends a step of his time after his clock)
     return channel.holding || (channel.busy && (off === undefined || off <= this.body.time() + tick(this.body.size) + EXACT))
   }
