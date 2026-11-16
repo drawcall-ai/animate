@@ -7,6 +7,7 @@ import { End, type Foot, type Hand } from './ends'
 import { type Intent, intent } from './intent'
 import { OnHim, Watched } from './movers'
 import { Asks } from './posture'
+import { Stride } from './stride'
 import { Bound, type Thing } from './thing'
 
 /** the body made for each rig */
@@ -22,6 +23,8 @@ const rigs = new WeakMap<Object3D, Body>()
  * swing against the legs.
  */
 export class Body {
+  /** whether bodies made from now on walk and run by the frame gait (`@drawcall/gait`) rather than the old locomotion */
+  static frames = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.GAIT_FRAMES === '1'
   /** how large he is, as the rig is at rest */
   readonly size: Size
   private readonly bones: Bones
@@ -55,7 +58,7 @@ export class Body {
     const bones = (this.bones = new Bones(rig))
     const size = (this.size = bones.size)
     const turning = joints(bones)
-    const locomotion = (this.locomotion = new Locomotion(this, bones, turning))
+    const locomotion = (this.locomotion = Body.frames ? (new Stride(this, bones, turning) as unknown as Locomotion) : new Locomotion(this, bones, turning))
     const { carrier } = locomotion
     const facing = () => ({ at: locomotion.hips.value, velocity: locomotion.hips.velocity, facing: locomotion.facing, ground: locomotion.ground })
     const asks = new Asks([], size, both(() => new Vector3()), facing)
@@ -177,6 +180,12 @@ export class Body {
    */
   shoulder(side: Side, place: Xyz = { x: 0, y: 0, z: 0 }) {
     return this.bones.shouldered(side, new Vector3().copy(place)).applyMatrix4(this.bones.frame.clone().invert())
+  }
+
+  /** the frame gait he walks and runs by, if he does */
+  get gait() {
+    const stride: unknown = this.locomotion
+    return stride instanceof Stride ? stride.gait : undefined
   }
 
   /** which way he faces along the ground, in the scene: what `face` turns him to */

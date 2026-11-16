@@ -7,6 +7,8 @@
   },
   "dependencies": {
     "@drawcall/animate": "workspace:*",
+    "@drawcall/gait": "workspace:*",
+    "@drawcall/limbs": "workspace:*",
     "@drawcall/rig": "^0.7.0",
     "three": "^0.187.0",
     "vitecache": "^0.5.1"
