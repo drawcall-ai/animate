@@ -1,0 +1,30 @@
+{
+  "name": "@drawcall/locomotion",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One humanoid locomotion planner for @drawcall/ik: walk to sprint, crouch and jump from a desired velocity, as this frame's goals.",
+  "exports": "./src/index.ts",
+  "sideEffects": false,
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@drawcall/ik": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@drawcall/humanoid": "workspace:*",
+    "@types/three": "^0.187.0",
+    "three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

@@ -12,6 +12,7 @@
     "tennis": "pnpm --filter @drawcall/ik-example-tennis dev",
     "grip": "pnpm --filter @drawcall/grab-example-grip dev",
     "match": "pnpm --filter @drawcall/ik-example-match dev",
+    "controller": "pnpm --filter @drawcall/locomotion-example-controller dev",
     "format": "prettier --write ."
   },
   "devDependencies": {

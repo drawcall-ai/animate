@@ -3,7 +3,7 @@
 // meets the ball at its contact time the racket sets the ball's velocity towards where the player aimed.
 
 import { type Goal, type SolveResult, solve } from "@drawcall/ik"
-import { Matrix4, Vector3 } from "three"
+import { Matrix4, type Object3D, Vector3 } from "three"
 import { BALL, LENGTH, WIDTH, createCourt, launch } from "./court"
 import { type Incoming, createPlayer } from "./player"
 
@@ -22,11 +22,12 @@ export interface Frame {
   ended?: string
 }
 
-export async function createMatch(seed = 1) {
+/** `rigged` are the two players' characters (see rig.ts), if they are to have any. */
+export async function createMatch(seed = 1, rigged: Object3D[] = []) {
   let rnd = seed
   const random = () => (rnd = (rnd * 1103515245 + 12345) % 2147483648) / 2147483648
   const court = await createCourt()
-  const players = [createPlayer(0, random), createPlayer(Math.PI, random)] // A on the -z side, B on the +z side
+  const players = [createPlayer(0, random, rigged[0]), createPlayer(Math.PI, random, rigged[1])] // A on the -z side, B on the +z side
   let t = 0,
     id = 0,
     receiver = -1,

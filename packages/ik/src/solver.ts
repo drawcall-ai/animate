@@ -118,6 +118,7 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
     body.before = q.slice()
     body.dt = dt
   }
+  body.limits()
   body.update()
   const seed = tasks.map((goal) => ("a" in goal ? body.positionOf(goal.a) : ZERO)) // where each point was before the solve, for velocities
   // Hard 3-row blocks at the current iterate: Jacobian and error, and a function that adds the Hessian of (r . e) to S.

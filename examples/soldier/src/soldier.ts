@@ -5,7 +5,8 @@
 // In between, the planner places the world point a share of the way from where the chest marker is now to the aim.
 // The walk's arm swing is not emitted: the planner knows the arms are busy.
 
-import { type Body, type Goal, type Pose, createHumanoid, ease, hard, mark, mixPose, Target, upright } from '@drawcall/ik'
+import { createHumanoid, upright } from '@drawcall/humanoid'
+import { type Body, type Goal, type Pose, ease, hard, mark, mixPose, Target } from '@drawcall/ik'
 import { Group, Matrix4, Quaternion, Vector3 } from 'three'
 import { createWalker, makeWalk } from './walk'
 

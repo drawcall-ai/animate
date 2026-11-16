@@ -9,10 +9,11 @@
 // that the swing is committed and left alone.
 // Everything is in the player's own frame: he stands at negative z, the net is ahead at z = 0.
 
-import { type Body, type Goal, type Pose, bump, createHumanoid, ease, hard, mark, posture, soft, Target, toward } from "@drawcall/ik"
-import { Group, Matrix4, Quaternion, Vector3 } from "three"
+import { createHumanoid } from "@drawcall/humanoid"
+import { type Body, type Goal, type Pose, bump, ease, hard, mark, posture, soft, Target, toward } from "@drawcall/ik"
+import { Group, Matrix4, type Object3D, Quaternion, Vector3 } from "three"
 import { type BallState, LENGTH, WIDTH, predict } from "./court"
-import { createWalker } from "./walker"
+import { createLocomotion } from "@drawcall/locomotion"
 
 const X = new Vector3(1, 0, 0),
   Y = new Vector3(0, 1, 0)
@@ -20,6 +21,9 @@ const V = (x: number, y: number, z: number) => new Vector3(x, y, z)
 const turn = (axis: Vector3, angle: number) => new Quaternion().setFromAxisAngle(axis, angle)
 const HOME = V(0, 0, -14.5) // where he waits: well behind the baseline (the ball keeps its pace through the bounce), in the middle
 const HIP = 0.9 // the planned pelvis height
+const SPEED = 3.2 // m/s forwards and back
+const SIDE = 1.6 // m/s sideways: he faces the net and side-steps
+const ACCELERATION = 8 // m/s^2
 const READY = V(0, 0.1, 0.8) // where the sweet spot is held between strokes, from the racket's pivot: straight ahead of the hand
 const SWING = 0.5 // s from the start of the swing to contact
 const COMMIT = 0.15 // s before contact after which the swing is not replanned
@@ -85,11 +89,13 @@ export interface Incoming {
   id: number
 }
 
-export function createPlayer(facing: number, random: () => number) {
+/** `rigged` is a rigged character to play as (see rig.ts); without one he is a bare skeleton. */
+export function createPlayer(facing: number, random: () => number, rigged?: Object3D) {
   const frame = new Group() // the player's own frame: turned to face the net
   frame.rotation.y = facing
-  const body: Body = createHumanoid()
+  const body: Body = createHumanoid({ skeleton: rigged })
   frame.add(body.root)
+  if (rigged) frame.add(rigged)
   body.q[0] = HOME.x
   body.q[2] = HOME.z
   body.update()
@@ -98,9 +104,14 @@ export function createPlayer(facing: number, random: () => number) {
   racket.userData.mass = 0.3
   const sweet = mark(racket, "sweet", V(0, REACH, 0))
   body.attach(racket, mark(body.get("handR"), "hold", V(0, -0.08, 0), turn(X, 0.6).multiply(new Quaternion(0.5, 0.5, 0.5, 0.5))))
-  const walker = createWalker(body, frame)
+  // Where he is over the ground and how he moves, in his own frame: the locomotion planner follows it with steps.
+  const position = HOME.clone().setY(0),
+    velocity = V(0, 0, 0)
+  const walker = createLocomotion(body, { acceleration: ACCELERATION })
+  const world = (own: Vector3) => frame.localToWorld(own.clone())
+  const turnOut = (own: Vector3) => own.clone().applyAxisAngle(Y, facing) // a direction or velocity out of the player's frame
   const top = Object.assign(mark(racket, "top", V(0, 0.1, 0)), { userData: { given: { position: true } } }) // where the other hand holds it for a backhand
-  const eyes = mark(body.get("head"), "eyes", V(0, 0.1, 0))
+  const eyes = body.get("eyes")
   const to = { sweet: new Target(), hand: new Target(), roll: new Target(), look: new Target() }
   frame.add(...Object.values(to))
   const local = (world: Vector3) => frame.worldToLocal(world.clone())
@@ -126,7 +137,7 @@ export function createPlayer(facing: number, random: () => number) {
       const time = k * dt,
         contact = predict(state, time - t).position
       for (const stroke of [FOREHAND, BACKHAND]) {
-        const go = contact.clone().sub(stroke.contact).setY(0).sub(walker.position),
+        const go = contact.clone().sub(stroke.contact).setY(0).sub(position),
           way = go.length()
         const hurry = Math.max(0, Math.max(Math.abs(go.x) / 1.5, Math.abs(go.z) / 3) + 0.5 - (time - t)) // s short of walking there and setting the feet
         const cost =
@@ -163,14 +174,31 @@ export function createPlayer(facing: number, random: () => number) {
       // "this foot planted here, turned so, by then": the back foot first, then the front one
       const back = stroke.sign > 0 ? "R" : "L",
         front = stroke.sign > 0 ? "L" : "R"
-      walker.plant(back, stance.clone().add(stroke.feet[back]), stroke.yaw, playing.time - 0.45)
-      walker.plant(front, stance.clone().add(stroke.feet[front]), stroke.yaw, playing.time - 0.2)
+      walker.plant(back, world(stance.clone().add(stroke.feet[back])), playing.time - 0.45 - t, facing + stroke.yaw)
+      walker.plant(front, world(stance.clone().add(stroke.feet[front])), playing.time - 0.2 - t, facing + stroke.yaw)
     }
-    const goals = walker.step(t, dt, since < FOLLOW ? stance : HOME, turned)
+    // He goes to where he is to stand: facing the net he side-steps, so he is slower sideways.
+    const heading = (since < FOLLOW ? stance : HOME).clone().setY(0).sub(position).multiplyScalar(5)
+    heading.multiplyScalar(Math.min(1, SIDE / Math.abs(heading.x || 1), SPEED / Math.abs(heading.z || 1)))
+    velocity.add(
+      heading
+        .clone()
+        .sub(velocity)
+        .clampLength(0, ACCELERATION * dt),
+    )
+    position.addScaledVector(velocity, dt)
+    const goals = walker.step(dt, {
+      position: world(position),
+      velocity: turnOut(velocity),
+      desired: turnOut(heading),
+      facing: facing + turned,
+      crouch: 0.13, // on his toes, knees bent
+      taken: ["armL", "armR", "head", "trunk"],
+    })
 
     // The racket: the sweet spot's path, from where it is and how it moves now.
     side += Math.min(1, Math.max(-1, stroke.sign - side)) * Math.min(1, 6 * dt)
-    const hips = V(walker.position.x, HIP, walker.position.z)
+    const hips = V(position.x, HIP, position.z)
     const pivot = hips.clone().add(FOREHAND.pivot.clone().lerp(BACKHAND.pivot, (1 - side) / 2))
     const now = local(body.positionOf(sweet)),
       moving = spin(body.velocityOf(sweet))
@@ -193,11 +221,11 @@ export function createPlayer(facing: number, random: () => number) {
         hips
           .clone()
           .add(stroke.finish)
-          .addScaledVector(walker.velocity, FOLLOW - since + dt),
-        walker.velocity,
+          .addScaledVector(velocity, FOLLOW - since + dt),
+        velocity,
         FOLLOW - since + dt,
       )
-    else curve = toward(now, moving, pivot.clone().add(READY).addScaledVector(walker.velocity, 0.3), walker.velocity, 0.3) // carried along with the pelvis
+    else curve = toward(now, moving, pivot.clone().add(READY).addScaledVector(velocity, 0.3), velocity, 0.3) // carried along with the pelvis
     const want = curve(ahead).position
     const out = want.clone().sub(pivot)
     out.setLength(Math.min(1.1, Math.max(0.75, out.length()))) // the racket swings about the pivot: no further than the arm reaches, no nearer than keeps the hand off the body
@@ -241,10 +269,11 @@ export function createPlayer(facing: number, random: () => number) {
     /** The names of the goals `plan` returns, in order. */
     names: [
       "foot L",
-      "foot R",
-      "pelvis (soft)",
       "foot L flat (soft)",
+      "foot R",
       "foot R flat (soft)",
+      "pelvis (soft)",
+      "legs (soft)",
       "sweet spot",
       "racket hand (soft)",
       "racket roll (soft)",
@@ -261,7 +290,7 @@ export function createPlayer(facing: number, random: () => number) {
     /** Where he means the ball to land, in the world. */
     aim: () => (shot ? frame.localToWorld(shot.aim.clone()) : new Vector3()),
     /** How far his pelvis is from where the stroke wanted it. */
-    offStance: () => (shot ? walker.position.distanceTo(shot.contact.clone().sub(shot.stroke.contact).setY(0)) : 0),
+    offStance: () => (shot ? position.distanceTo(shot.contact.clone().sub(shot.stroke.contact).setY(0)) : 0),
   }
 }
 export type Player = ReturnType<typeof createPlayer>

@@ -1,11 +1,12 @@
 // Headless numeric proofs. `pnpm test` prints the numbers as a report.
 import { Object3D, Quaternion, Vector3 } from 'three'
 import { afterAll, expect, test } from 'vitest'
-import { type Body, type Goal, createHumanoid, hard, mark, posture, soft, solve, Target, toward, upright } from '../src'
+import { balance, createHumanoid, upright } from '@drawcall/humanoid'
+import { type Body, type Goal, hard, mark, posture, soft, solve, Target, toward } from '../src'
 
 const DT = 1 / 60
 const V = (x: number, y: number, z: number) => new Vector3(x, y, z)
-const Y = V(0, 1, 0), FLAT = V(1, 0, 1)
+const Y = V(0, 1, 0)
 const report: string[] = []
 const say = (s: string) => report.push(s)
 const e = (x: number) => x.toExponential(2)
@@ -14,10 +15,9 @@ afterAll(() => console.log('\n' + report.join('\n') + '\n'))
 /** Standing still: both soles pinned where they are, trunk and legs upright, the centre of mass over the feet. */
 function standing(body: Body): Goal[] {
   const soles = [body.get('soleL'), body.get('soleR')]
-  const support = new Target().set({ position: body.positionOf(soles[0]).add(body.positionOf(soles[1])).multiplyScalar(0.5), axes: FLAT })
   return [
     ...soles.map(sole => hard(sole, new Target().set({ position: body.positionOf(sole), quaternion: body.rotationOf(sole) }))),
-    posture(body, upright(body)), soft(body.centre, support),
+    posture(body, upright(body)), balance(body),
   ]
 }
 /** Standing, the right hand hard on a point that `move` places each frame. */

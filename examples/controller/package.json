@@ -1,0 +1,28 @@
+{
+  "name": "@drawcall/locomotion-example-controller",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@drawcall/example-stage": "workspace:*",
+    "@drawcall/humanoid": "workspace:*",
+    "@drawcall/ik": "workspace:*",
+    "@drawcall/locomotion": "workspace:*",
+    "@drawcall/physics": "^0.20.0",
+    "@drawcall/physics-rapier": "^0.20.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}

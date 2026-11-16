@@ -1,5 +1,6 @@
 // Headless numeric proof for the soldier example. `pnpm test` prints the numbers.
-import { createHumanoid, solve, upright } from '@drawcall/ik'
+import { createHumanoid, upright } from '@drawcall/humanoid'
+import { solve } from '@drawcall/ik'
 import { Vector3 } from 'three'
 import { afterAll, expect, test } from 'vitest'
 import { createSoldier } from '../src/soldier'
