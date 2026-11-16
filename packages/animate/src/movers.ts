@@ -10,6 +10,8 @@ const [spin, none, moved] = [new Quaternion(), new Quaternion(), new Vector3()]
  * seen to move between the last two looks.
  */
 export class Watched implements Mover {
+  /** whether it was last seen going with him, stiller against his hips than in the scene */
+  carried = false
   /** where it was and how it was turned when last looked at and the time before: in the scene, and against his hips as he faced */
   private readonly looks = [look(), look()]
 
@@ -44,7 +46,7 @@ export class Watched implements Mover {
     velocity.copy(seen.at).sub(was.at)
     // (told on as it went in the scene, or as it went with him if it is carried with him: whichever it was stiller in)
     const along = moved.copy(seen.on).sub(was.on)
-    const carried = along.length() < velocity.length()
+    const carried = (this.carried = along.length() < velocity.length())
     const [at, turned, before] = carried ? [seen.on, seen.onTurn, was.onTurn] : [seen.at, seen.turn, was.turn]
     place.copy(at).addScaledVector(carried ? along : velocity, share)
     spin.copy(before).invert().premultiply(turned)

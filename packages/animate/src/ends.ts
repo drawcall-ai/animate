@@ -58,6 +58,8 @@ export type Body = {
   frame: Matrix4
   /** a frame was written or cancelled: what the hands ask of the rest of him may have changed */
   changed(): void
+  /** how long before a hand is at a place he takes to get down for it, if he must (s) */
+  lowering(side: Side, place: Vector3): number
 }
 
 /**
@@ -149,6 +151,8 @@ export class End {
     const frame = this.frame(place, how)
     const after = Math.max(this.body.time(), ...this.channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
     frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
+    // (a hand told no moment, for a place he gets down for, is there no sooner than he is down)
+    if (this.kind === 'hand' && when?.by === undefined && when?.seconds === undefined) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
     const swung = this.leaves(frame)
     frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
@@ -191,6 +195,13 @@ export class End {
     this.root.state(this.body.time(), new Vector3(), new Vector3(), facing)
     const back = facing.invert()
     return room(this.limb, out.clone().applyQuaternion(back), axis.clone().applyQuaternion(back))
+  }
+
+  /** where a frame has it in the scene at a moment */
+  private placed(frame: Frame, at: number) {
+    const [place, turn] = [new Vector3(), new Quaternion()]
+    if (frame.on) frame.on.state(at, place, new Vector3(), turn)
+    return place.add(new Vector3().copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(turn))
   }
 
   /** a moment is the first step of his time at or after it */

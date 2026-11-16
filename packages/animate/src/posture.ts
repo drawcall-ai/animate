@@ -2,6 +2,7 @@ import type { Side, Size } from '@drawcall/limbs'
 import type { Posture } from '@drawcall/locomotion'
 import { Vector3 } from 'three'
 import type { End } from './ends'
+import { Watched } from './movers'
 
 const SIGN = { left: 1, right: -1 }
 /**
@@ -95,8 +96,9 @@ export class Asks implements Posture {
       const due = Math.max(time, (channel.bound ?? channel).frames[0]?.at ?? time)
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
-      // (nor for a place on him, which goes down with him)
-      const lowers = due - time <= LEAD.lowered * this.size.beat && (channel.bound ?? channel).goal?.on !== end.root
+      // (nor for a place on him, or on a thing carried with him, which goes down with him)
+      const held = (channel.bound ?? channel).goal?.on
+      const lowers = due - time <= LEAD.lowered * this.size.beat && held !== end.root && !(held instanceof Watched && held.carried)
       const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), ...(lowers ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }) }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
@@ -110,6 +112,14 @@ export class Asks implements Posture {
     this.known.set(key, all)
     this.working = false
     return all
+  }
+
+  /** how long before a hand is at a place he takes to get down for it, if he must (s) */
+  lowering(side: Side, place: Vector3) {
+    const { at, facing, ground } = this.hips()
+    const on = place.clone().sub(at.clone().setY(ground + this.size.stand)).applyAxisAngle(new Vector3(0, 1, 0), -facing)
+    const { bend, sink } = down(on, this.shoulders[side], this.size)
+    return bend > 0 || sink > 0 ? LEAD.lowered * this.size.beat : 0
   }
 
   /** the moment it is now, on his clock */
