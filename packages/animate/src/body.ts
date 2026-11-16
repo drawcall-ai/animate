@@ -1,4 +1,4 @@
-import { Object3D, Vector3 } from 'three'
+import { Object3D, Quaternion, Vector3 } from 'three'
 import { FACED, type Side, SIDES, SIGN, UP, wrap } from '@drawcall/gait'
 import type { Mover, Xyz } from '@drawcall/plan'
 import { Clock, type Workings } from './clock'
@@ -72,7 +72,7 @@ export class Body {
     const size = (this.size = bones.size)
     const turning = joints(bones)
     const facing = () => ({ at: legs.hips.value, velocity: legs.hips.velocity, facing: legs.facing, ground: legs.ground })
-    const asks = new Asks([], size, both(() => new Vector3()), facing, turning.trunk)
+    const asks = new Asks([], size, both(() => new Vector3()), facing, turning.trunk, (side, bend) => bones.shoulder(side, new Vector3(), 0, 0, 0, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), bend), 0, new Vector3()))
     const legs = (this.legs = new Legs(this, bones, turning, asks))
     const free = (this.free = new Free(legs, turning, size))
     const body = { size, gait: legs.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place), rising: () => asks.rising(turning.trunk.value.x, size.stand - (legs.hips.value.y - legs.ground)) }

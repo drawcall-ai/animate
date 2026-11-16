@@ -5,7 +5,7 @@ import { RANGE } from './rig/joints'
 import { type Size } from './rig/size'
 import { Vector3 } from 'three'
 import type { End } from './ends'
-import { Watched } from './movers'
+import { OnHim, Watched } from './movers'
 
 /**
  * How the trunk and the hips share what a hand is to do: how far the trunk turns for a hand drawn back behind its
@@ -45,8 +45,8 @@ function asks(side: Side, hand: Vector3, shoulder: Vector3, { arm }: Size) {
   return { turn: SIGN[side] * SHARE.turn * Math.max(-0.6, Math.min(1.2, -ahead)), shift: SHARE.shift * arm * Math.max(-1, Math.min(1, ahead)) }
 }
 
-/** for a hand lower than it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is */
-function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size) {
+/** for a hand lower than it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is: the shoulder where the trunk `bent` so has it */
+function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size, bent: (bend: number) => Vector3) {
   const most = (1 - DEEPEST.low) * stand
   // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
   if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
@@ -54,8 +54,9 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size) {
   const low = hand.y < -0.5 * leg
   let best = { bend: 0, sink: 0, cost: Infinity }
   for (let bend = 0; bend <= DEEPEST.bend + 1e-6; bend += DEEPEST.bend / 12) {
+    const over = bent(bend)
     for (let sink = 0; sink <= most + 1e-6; sink += most / 12) {
-      const at = new Vector3(shoulder.x, shoulder.y * Math.cos(bend) - sink, shoulder.z + shoulder.y * Math.sin(bend))
+      const at = over.clone().setY(over.y - sink)
       const short = Math.max(0, at.distanceTo(hand) - REACH * arm)
       const costs = 100 * short + (low ? COST.low.bend * bend + COST.low.sink * (sink / leg) : (sink + UPPER * shoulder.y * (1 - Math.cos(bend))) / leg)
       if (costs < best.cost) best = { bend, sink, cost: costs }
@@ -81,6 +82,8 @@ export class Asks {
     private readonly hips: () => { at: Vector3; velocity: Vector3; facing: number; ground: number },
     /** how strong the trunk is and how fast it comes round */
     private readonly trunk: { strength: number; rate: number },
+    /** where a shoulder is from the middle of the hips, the trunk bent forward so far (rad) */
+    private readonly bent: (side: Side, bend: number) => Vector3,
   ) {}
 
   /** how long getting down so far takes him (s): the hips letting down and settling, the trunk bending at its ease and coming round */
@@ -129,12 +132,15 @@ export class Asks {
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
       // (nor for a place on him, or on a thing carried with him, which goes down with him)
       const held = (channel.bound ?? channel).goal?.on
-      const lowered = !swung && held !== end.root && !(held instanceof Watched && held.carried) ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }
+      const lowers = !swung && !(held instanceof OnHim) && !(held instanceof Watched && held.carried)
+      const lowered = lowers ? down(on(there), this.shoulders[end.side], this.size, (bend) => this.bent(end.side, bend)) : { bend: 0, sink: 0 }
+      // (and holding a thing on its way to a frame met at rest, as low as where the hand is then: he comes up with what he lifts)
+      const now = lowers && channel.bound && !frame?.velocity ? down(on(hand.clone()), this.shoulders[end.side], this.size, (bend) => this.bent(end.side, bend)) : { bend: 0, sink: 0 }
       // (from as long before as getting down that far takes him)
       const { sinks, bends } = this.leads(lowered)
       // (easing in over as long before as each takes)
       const eased = (lead: number) => (lead > 0 ? smooth(1 - (due - time) / lead) : 1)
-      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: lowered.bend * eased(bends), sink: lowered.sink * eased(sinks) }
+      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: Math.max(now.bend, lowered.bend * eased(bends)), sink: Math.max(now.sink, lowered.sink * eased(sinks)) }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
       all.turn += going ? one.turn : 0
@@ -152,7 +158,7 @@ export class Asks {
   lowering(side: Side, place: Vector3) {
     const { at, facing, ground } = this.hips()
     const on = place.clone().sub(at.clone().setY(ground + this.size.stand)).applyAxisAngle(new Vector3(0, 1, 0), -facing)
-    return this.takes(down(on, this.shoulders[side], this.size))
+    return this.takes(down(on, this.shoulders[side], this.size, (bend) => this.bent(side, bend)))
   }
 
   /** how long he takes to be up again from how far he is let down and bent now (s) */

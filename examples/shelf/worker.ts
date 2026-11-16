@@ -27,8 +27,6 @@ const LONGEST = 3
 const RAISE = 0.08
 /** how far above the floor his hands let go of a box they set down: they come down no further (m) */
 const DROP = 0.06
-/** where the palms are on a box's sides: low, under its weight (m, from its middle) */
-const PALMS = new Vector3(0, -BOX.high / 4, 0)
 /** what of a hand is on a box's side: the palm and the fingers, flat */
 const FLAT = ['palm', 'index', 'middle', 'ring', 'little'] as const
 /** how far below ahead the fingers on a box's sides point, as one carries a box before one (rad) */
@@ -211,11 +209,11 @@ export class Worker implements Game {
     // (his feet together, to come down to the floor)
     yield* this.body.stand()
     box.take()
-    // both palms go flat onto its sides, the left onto the side facing `left` in its frame, the fingers pointing ahead
+    // both palms go flat onto the middle of its sides (lower, he would not reach one on the floor), the left onto the side facing `left` in its frame, the fingers pointing ahead
     // and down
     const ahead = left.clone().cross(UP).applyAxisAngle(left, FINGERS)
     const on = (side: Side, out: Vector3) => {
-      const statement = { at: out.clone().multiplyScalar(BOX.side / 2).add(PALMS), from: out, using: FLAT, start: flat }
+      const statement = { at: out.clone().multiplyScalar(BOX.side / 2), from: out, using: FLAT, start: flat }
       return pointed(grip(this.hands[side], box.mesh, statement), this.hands[side], ahead)
     }
     const grips = { left: on('left', left), right: on('right', left.clone().negate()) }

@@ -305,9 +305,9 @@ export class Gait {
     const { facing, spins, aims } = this.going
     const turned = facing + Math.sign(spins) * Math.min(Math.abs(spins * seconds), spins * aims > 0 ? Math.abs(aims) : 0)
     const place = left(facing).multiplyScalar(this.sway(phase)).add(ground)
-    // (and they come down no faster than they fall)
+    // (and they come down no faster than they fall: rising, they are not thrown up)
     const { value, velocity } = this.hips
-    place.y = Math.max(this.ride(ground, seconds, phase, facing), value.y + velocity.y * seconds - (GRAVITY / 2) * seconds ** 2)
+    place.y = Math.max(this.ride(ground, seconds, phase, facing), value.y + Math.min(0, velocity.y) * seconds - (GRAVITY / 2) * seconds ** 2)
     return { place, turn: turned }
   }
 
