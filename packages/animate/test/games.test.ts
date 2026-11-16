@@ -74,20 +74,22 @@ test('gladiator: a press during a blow gives the next blow after it, and between
   expect(between / gladiator.character.body.size.stand).toBeGreaterThan(0.95)
 }, 30000)
 
-test('led: walking into the second platform from the gap he stays on the ground, never in the air for a frame, and Space takes him up onto it', async () => {
+test('led: down off the first platform into the gap he stands on its floor; walking into the second platform he stays on the ground, never in the air for a frame, and Space takes him up onto it', async () => {
   const scene = new Scene()
   const world = await buildWorld({ scene })
   scene.add(yard())
   const character = new Character(person(), world)
-  let [lifted, frames] = [0, 0]
+  let [lifted, frames, above] = [0, 0, 0]
   for (let t = 0; t < 8; t += FRAME) {
     if (Math.abs(t - 7) < FRAME / 2) character.jump(5)
     character.update(FRAME, { x: 0, z: 1.5 })
     world.update(FRAME)
     // (up the stairs, along the first platform, down into the gap and against the wall)
-    if (t > 5 && t < 7) [lifted, frames] = [lifted + Number(!character.capsule.grounded), frames + 1]
+    if (t > 5 && t < 7) [lifted, frames, above] = [lifted + Number(!character.capsule.grounded), frames + 1, Math.max(above, character.body.hips.value.y - character.capsule.position.y)]
   }
   expect(frames).toBeGreaterThan(100)
   expect(lifted).toBe(0)
+  // (his hips as high over the floor of the gap as he stands: he stood 0.64 m above it on his feet's height before he fell)
+  expect(above).toBeLessThan(1.05 * character.body.size.stand)
   expect(character.capsule.position.y).toBeGreaterThan(0.85)
 }, 30000)

@@ -213,7 +213,7 @@ export class Legs {
 
   /** where the world has him by the end of the next update, and how high the ground under him is */
   at(place: { x: number; y?: number; z: number }) {
-    if (place.y !== undefined) this.gait.lead.place.y = place.y
+    if (place.y !== undefined) this.gait.lead.place.y = this.gait.floor = place.y
     this.placed = place
   }
 

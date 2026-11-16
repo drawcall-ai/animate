@@ -73,6 +73,8 @@ export class Gait {
   private planted?: Side
   /** whether he keeps facing as he did, stepping to a place close by */
   private keeps = false
+  /** how high the world has the ground under him, if it says (m) */
+  floor?: number
   /** how far below where he rides the hips are let down at a moment, as whoever has them low asks (m) */
   low: (time: number) => number = () => 0
   /** a jump he is making */
@@ -314,14 +316,6 @@ export class Gait {
   /** a foot a story has, from outside the gait, is where it is now; with none, it is the gait's again and steps home */
   hold(side: Side, place?: { x: number; y: number; z: number }) {
     const foot = this.feet[side]
-    // (given back in the air, it comes down from there into his stride, no faster than it falls: the clock has it so far through its step)
-    const [ground, high] = [this.lead.place.y + this.size.ankle, foot.value.y - this.lead.place.y - this.size.ankle]
-    if (!place && foot.outside && high > SOFT * this.size.leg) {
-      const through = Math.max(0, 1 - this.duty - this.rate * Math.sqrt((2 * high) / GRAVITY))
-      ;[this.stepping, this.phase] = [true, start(side) + through]
-      const pointed = yawOf(foot.turn)
-      this.steps[side] = { side, from: foot.value.clone().setY(ground), leaves: this.time - through / this.rate, to: foot.value.clone(), lands: this.time, pointed, toes: pointed }
-    }
     foot.outside = place !== undefined
     if (place) foot.value.copy(place)
   }
@@ -416,6 +410,16 @@ export class Gait {
       if (lands > 0) this.rate = this.timed(lands, swingShare, natural)
       else if (!this.steps[plant.side] && now >= plant.at) [this.plant, this.planted] = [undefined, this.course?.way.arrive === 0 ? plant.side : undefined]
     }
+    // (a foot of his own above the ground with no step to come down on, given back in the air or left there as the world has him lower, comes down from there into his stride, no faster than it falls)
+    for (const side of SIDES) {
+      const foot = feet[side]
+      const high = foot.value.y - this.lead.place.y - size.ankle
+      if (high < SOFT * leg || this.steps.left || this.steps.right || foot.outside || this.held(side) || foot.frames.length || this.jumping) continue
+      const through = Math.max(0, swingShare - this.rate * Math.sqrt((2 * high) / GRAVITY))
+      ;[this.stepping, this.phase] = [true, start(side) + through]
+      const pointed = yawOf(foot.turn)
+      this.steps[side] = { side, from: foot.value.clone().setY(this.lead.place.y + size.ankle), leaves: now - through / this.rate, to: foot.value.clone(), lands: now, pointed, toes: pointed }
+    }
     const was = this.phase
     // (a foot down that its leg no longer reaches from where the hips are hurries the clock on to its share)
     const hips0 = hips.value.clone().setY(this.lead.place.y)
@@ -429,9 +433,9 @@ export class Gait {
       this.stepping = !!(this.steps.left || this.steps.right)
     }
     for (const side of SIDES) if (!stance || this.steps[side] || this.held(side)) this.tread(side, was, going, swingShare, moving, strays[side])
-    // the ground he stands on is where his lowest foot down stands: up on what a story put him on, down again as he steps off it
+    // the ground he stands on is where the world has it, or else where his lowest foot down stands: up on what a story put him on, down again as he steps off it
     const lows = SIDES.filter((side) => !this.steps[side] && !this.feet[side].frames.length).map((side) => this.feet[side].value.y - size.ankle)
-    if (lows.length && !this.jumping) this.lead.place.y = Math.min(...lows)
+    if (lows.length && !this.jumping) this.lead.place.y = this.floor ?? Math.min(...lows)
     if (this.stepping && !moving && !this.steps.left && !this.steps.right && away < TOGETHER * leg) this.stepping = false
     const down = Object.fromEntries(SIDES.map((side) => [side, { at: feet[side].value, down: !this.steps[side] }])) as Record<Side, { at: Vector3; down: boolean }>
     const speed = Math.hypot(hips.velocity.x, hips.velocity.z)
