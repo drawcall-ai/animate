@@ -1,5 +1,5 @@
 import { EASY, RANGE, type Side, type Size } from '@drawcall/limbs'
-import type { Posture } from '@drawcall/locomotion'
+import type { Posture } from './stride'
 import { Vector3 } from 'three'
 import type { End } from './ends'
 import { OnHim, Watched } from './movers'

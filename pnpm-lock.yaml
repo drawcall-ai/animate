@@ -543,9 +543,6 @@ importers:
       '@drawcall/limbs':
         specifier: workspace:*
         version: link:../limbs
-      '@drawcall/locomotion':
-        specifier: workspace:*
-        version: link:../locomotion
       '@drawcall/plan':
         specifier: workspace:*
         version: link:../plan
@@ -611,19 +608,6 @@ importers:
       '@drawcall/plan':
         specifier: workspace:*
         version: link:../plan
-      three:
-        specifier: ^0.187.0
-        version: 0.187.0
-    devDependencies:
-      '@types/three':
-        specifier: ^0.187.0
-        version: 0.187.0
-
-  packages/locomotion:
-    dependencies:
-      '@drawcall/limbs':
-        specifier: workspace:*
-        version: link:../limbs
       three:
         specifier: ^0.187.0
         version: 0.187.0

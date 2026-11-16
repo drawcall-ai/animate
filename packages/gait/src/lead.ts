@@ -36,10 +36,10 @@ export class Lead {
     const { told } = this
     const dt = now - told.at
     this.velocity.set(velocity.x, 0, velocity.z)
-    if (dt > 1e-6 && dt < 0.25) {
+    if (dt > 1e-6 && dt < 0.8 * this.size.beat) {
       this.faster.subVectors(this.velocity, told.velocity).divideScalar(dt)
       const [was, is] = [told.velocity.length(), this.velocity.length()]
-      this.turns = was > 0.3 && is > 0.3 ? wrap(angleOf(velocity.x, velocity.z) - angleOf(told.velocity.x, told.velocity.z)) / dt : 0
+      this.turns = was > SLOW * this.size.pace && is > SLOW * this.size.pace ? wrap(angleOf(velocity.x, velocity.z) - angleOf(told.velocity.x, told.velocity.z)) / dt : 0
       if (told.face !== undefined && this.face !== undefined) this.swings = wrap(this.face - told.face) / dt
     }
     told.velocity.copy(this.velocity)
@@ -50,7 +50,7 @@ export class Lead {
   /** the way he is to go, turned as it turns, and how fast along it, speeding up as he is led to, after so long */
   private heading(seconds: number) {
     const speed = this.velocity.length()
-    return angleOf(this.velocity.x, this.velocity.z) + (speed > 0.3 ? this.turns * seconds : 0)
+    return angleOf(this.velocity.x, this.velocity.z) + (speed > SLOW * this.size.pace ? this.turns * seconds : 0)
   }
 
   /** where on the ground he will be in so long, led on as he is: the speeding up dying away, the way turning as it turns */
@@ -60,7 +60,7 @@ export class Lead {
     const lasts = SPEEDS * this.size.beat
     const mean = speed + this.faster.dot(way) * lasts * (1 - (lasts / Math.max(seconds, 1e-6)) * (1 - Math.exp(-seconds / lasts)))
     const going = clamp(mean, 0, RUN * this.size.pace)
-    const curves = speed > 0.3 ? this.turns : 0
+    const curves = speed > SLOW * this.size.pace ? this.turns : 0
     const heading = this.heading(0)
     if (Math.abs(curves * seconds) < 1e-4) return to.copy(way).multiplyScalar(going * seconds).add(this.place)
     const r = going / curves
@@ -95,7 +95,9 @@ export class Lead {
     const widest = backs ? Math.PI / 2 : this.widest(going)
     const off = wrap(way + clamp(wrap(want - way), -widest, widest) - this.facing)
     const pull = (2 * Math.PI) / (FOLLOW.pelvis * size.beat)
-    const along = (asked !== undefined ? this.swings : led ? this.turns : 0) * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
+    // (slowing below a walk, he follows the turn of the way he goes the less, standing not at all)
+    const slows = Math.min(1, going / (WALK.speed * size.pace))
+    const along = (asked !== undefined ? this.swings : led ? this.turns * slows : 0) * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
     this.spins = along + damped(this.spins - along, off, pull, dt)
     // (no further round from a foot on the ground than a hip turns over it: his feet step round for him to come on)
     let round = this.spins * dt

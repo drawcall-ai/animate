@@ -1,6 +1,5 @@
 import { Gait } from '@drawcall/gait'
-import { ANKLE, type Bones, clamp, GRAVITY, HEEL, type Joints, type Limb, RANGE, raised, REST, type Side, SIDES, SIGN, SOLE, type Story, UP, waits, type Xyz } from '@drawcall/limbs'
-import type { Carrier, Foothold, Foreseen, Posture } from '@drawcall/locomotion'
+import { ANKLE, type Bones, clamp, GRAVITY, HEEL, type Joints, type Limb, RANGE, raised, REST, type Side, SIDES, SIGN, SOLE, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
 import { Quaternion, Vector3 } from 'three'
 
 /** how fast a heel comes down again, and comes up (rad a beat), and how finely it is brought up (rad) */
@@ -15,9 +14,9 @@ const EASE = 6
  * against it; how far it leans forward for the hips riding back behind the ankles (by the angle whose sine is so many
  * times as far, in legs); how far it leans into the way he goes for every pace (rad); how much of his weight pushes up
  * at the least; how much of the way the pelvis lists it tilts back over the foot he stands on; how far ahead it leans
- * as the plan has the hips (s)
+ * as the plan has the hips (in beats)
  */
-const LEAN = { pushed: 0.6, swung: 0.25, back: 2.2, going: 0.059, light: 0.25, listed: 0.5, ahead: 0.12 }
+const LEAN = { pushed: 0.6, swung: 0.25, back: 2.2, going: 0.059, light: 0.25, listed: 0.5, ahead: 0.4 }
 /** how much of the way the trunk leans, turns and tilts the head turns back, to stay level and look ahead */
 const LEVEL = new Vector3(-0.6, -1, -1)
 /** how far ahead of the pelvis the trunk turns at the most to face as he is to, and the head (rad) */
@@ -32,8 +31,33 @@ const FACED = 0.02
 const HIGH = 0.034
 
 type Clock = { readonly time: number }
-type Ground = number | { x: number; z: number }
-const flat = (to: Ground) => (typeof to === 'number' ? { x: 0, z: to } : to)
+/** a place on the ground, or told as a number, so far along z on x = 0; a run to one and a walk */
+export type Ground = number | { x: number; z: number }
+export const flat = (to: Ground) => (typeof to === 'number' ? { x: 0, z: to } : to)
+export type Run = { speed: number; at: Ground; plant?: Side; push?: number; arrive?: number }
+export type Walk = { speed?: number; plant?: Side }
+/** what his hands ask of the hips and the trunk at a moment: how far lower, bent, turned and ahead */
+export type Posture = Record<'low' | 'bend' | 'turn' | 'shift', (time: number) => number>
+/** a foot as the rest of the body has it: whether a story has it, where its ankle is, where the ground holds it, and to give it back */
+export type Foothold = { readonly held: boolean; readonly value: Vector3; anchor?: Vector3; free(): void }
+/** a place and the moment he is to be there; a footfall to come */
+export type Mark = { at: Vector3; time: number }
+export type Footfall = Mark & { side: Side; put: boolean; swings: boolean }
+/** where the hips and the feet will be, as the plan has them, for whoever looks */
+export type Foreseen = { hips: Mark[]; to?: Vector3; footfalls: Footfall[]; top?: { asked?: Vector3; comes?: Mark }; facing: number; face: number; heading: number; led?: Vector3 }
+/** the hips and the feet as the rest of the body asks about them: where he will be and face, whether a foot can be spared, and a foot the story has or puts down */
+export type Carrier = {
+  readonly now: number
+  hips(seconds: number, value: Vector3, velocity: Vector3): Vector3
+  facing(seconds: number): number
+  spare(side: Side, seconds: number, until: number): boolean
+  stale(from?: number): void
+  take(side: Side, span: { from: number; until: number } | undefined): void
+  readonly ground: number
+  put(side: Side, place?: Vector3, seconds?: number): Vector3 | undefined
+  foot(side: Side): { readonly put?: Vector3; readonly down: boolean; readonly at: Vector3 }
+  readonly landing: boolean
+}
 const yawOf = (turn: Quaternion) => {
   const way = new Vector3(0, 0, 1).applyQuaternion(turn)
   return Math.atan2(way.x, way.z)
@@ -88,6 +112,14 @@ export class Stride {
   private readonly puts: Partial<Record<Side, Vector3>> = {}
   private readonly taken: Partial<Record<Side, { from: number; until: number }>> = {}
   private lift = 0
+  /** for how long no foot of his own has been on the ground (s) */
+  private unheld = 0
+  /** the way he turns to face where he looks, until he faces it (rad about y) */
+  private toward?: number
+  /** how he was led since the last update */
+  private led?: { x: number; z: number }
+  /** where the world has him by the end of the next update */
+  private placed?: { x: number; z: number }
 
   constructor(
     private readonly clock: Clock,
@@ -109,14 +141,14 @@ export class Stride {
   }
 
   get falls() {
-    return this.gait.jumps && SIDES.every((side) => this.gait.feet[side].value.y > this.ground + this.bones.size.ankle + 0.01)
+    return this.gait.jumps && SIDES.every((side) => this.gait.feet[side].value.y > this.ground + this.bones.size.ankle + TOE * this.bones.size.leg)
   }
 
   /** where a foot of his own stands on the ground, while it does */
   stands(side: Side) {
     const { gait } = this
     const foot = gait.feet[side]
-    return gait.steps[side] || gait.held(side) || foot.frames.length ? undefined : foot.value.clone()
+    return gait.steps[side] || foot.outside || foot.frames.length || gait.jumps ? undefined : foot.value.clone()
   }
 
   /** a step of time: a foot the story has is where it has it, and the gait steps on, writing its frames anew */
@@ -125,9 +157,14 @@ export class Stride {
     this.looked = looked
     const now = this.clock.time + dt
     for (const side of SIDES) gait.hold(side, feet[side].held ? feet[side].value : undefined)
+    // (left with no foot of his own on the ground for longer than he can be in the air, he comes down on both: the story has them no longer)
+    const standing = SIDES.some((side) => !feet[side].held && !gait.steps[side]) || gait.jumps
+    this.unheld = standing ? 0 : this.unheld + dt
+    if (this.unheld > this.bones.size.beat) for (const side of SIDES) if (feet[side].held) feet[side].free()
     gait.advance(now)
     gait.hips.advance(now)
-    for (const side of SIDES) if (!feet[side].held) gait.feet[side].advance(now)
+    // (a foot the story has is watched: how fast it moves is how it moved)
+    for (const side of SIDES) gait.feet[side].advance(now)
     for (const side of SIDES) if (!feet[side].held) feet[side].anchor = this.stands(side)
   }
 
@@ -215,9 +252,10 @@ export class Stride {
     const now = gait.time
     // (the trunk leans as the plan has the hips pushed a little ahead, by the time it has come round)
     const [p0, v0, v1] = [new Vector3(), new Vector3(), new Vector3()]
-    hips.state(now + LEAN.ahead, p0, v0)
-    hips.state(now + LEAN.ahead + 0.02, p0, v1)
-    const pushed = v1.sub(v0).divideScalar(0.02)
+    const [ahead, h] = [LEAN.ahead * size.beat, 0.066 * size.beat]
+    hips.state(now + ahead, p0, v0)
+    hips.state(now + ahead + h, p0, v1)
+    const pushed = v1.sub(v0).divideScalar(h)
     const way = new Vector3(Math.sin(facing), 0, Math.cos(facing))
     const up = Math.max(GRAVITY * LEAN.light, GRAVITY + pushed.y)
     const speed = hips.velocity.dot(way)
@@ -243,6 +281,12 @@ export class Stride {
     const free = SIDES.filter((side) => joints.arms[side].first.reacts).length / SIDES.length
     // (looking somewhere, the trunk turns there as far as it leads the pelvis, the head the rest)
     const looks = this.looked && this.sight(this.looked)
+    // (standing, he turns to face where he looks once his head does not turn that far round, unless he is to face a way)
+    if (looks && gait.lead.velocity.length() < 0.1 * size.pace && !gait.course && (this.toward !== undefined || Math.abs(wrap(looks.yaw - facing)) > LEADS.head)) {
+      const there = Math.abs(wrap(looks.yaw - facing)) < FACED
+      this.toward = there ? undefined : looks.yaw
+      gait.face(there ? undefined : { x: Math.sin(looks.yaw), z: Math.cos(looks.yaw) })
+    }
     const toward = looks ? clamp(looks.yaw - facing, -LEADS.trunk, LEADS.trunk) : clamp(going.aims, -LEADS.trunk, LEADS.trunk)
     const want = new Vector3(along + (looks ? -0.5 * looks.pitch : 0), pelvis.turn + free * (size.shoulder / size.arm) * swung + toward + this.posture.turn(now), -tilt)
     trunk.react(want, dt)
@@ -307,7 +351,6 @@ export class Stride {
     const { gait, bones } = this
     const self = this
     const facing = (seconds: number) => yawOf(this.turnAt(seconds))
-    const placed = (seconds: number, to: Vector3) => gait.hips.state(gait.time + seconds, to, new Vector3())
     return {
       get now() {
         return gait.time
@@ -316,23 +359,7 @@ export class Stride {
         gait.hips.state(gait.time + seconds, value, velocity)
         return value
       },
-      hip(side, seconds, to, turned) {
-        placed(seconds, to)
-        turned.copy(yaw(facing(seconds)))
-        return to.add(new Vector3(SIGN[side] * bones.size.hip, 0, 0).applyQuaternion(turned))
-      },
-      shoulder(side, seconds, to, turned) {
-        // (the shoulder as it lies from the hips now, turned with him)
-        const lies = bones.shouldered(side, new Vector3()).sub(self.hips.value).applyAxisAngle(UP, -self.facing)
-        placed(seconds, to)
-        turned.copy(yaw(facing(seconds)))
-        return to.add(lies.applyQuaternion(turned))
-      },
       facing,
-      stepped(side, seconds, to) {
-        gait.feet[side].state(gait.time + seconds, to, new Vector3())
-        return to
-      },
       spare: (side, seconds, until) => gait.spares(side, seconds, until),
       stale() {},
       take(side, span) {
@@ -343,12 +370,9 @@ export class Stride {
         return gait.lead.place.y
       },
       put(side, place, seconds) {
-        const foot = gait.feet[side]
-        foot.cancel('story')
-        delete self.puts[side]
-        if (!place) return undefined
-        self.puts[side] = place.clone()
-        foot.by({ at: seconds === undefined ? undefined : gait.time + seconds, place, by: 'story' })
+        gait.put(side, place, seconds)
+        if (place) self.puts[side] = place.clone()
+        else delete self.puts[side]
         return self.puts[side]
       },
       foot(side) {
@@ -382,7 +406,12 @@ export class Stride {
     const self = this
     const arrived = () => waits(() => true, () => gait.arrived)
     return {
-      places: (_time: number) => {},
+      // (led between updates, he is led from the moment the update is for)
+      places(time: number) {
+        if (self.led) gait.go(self.led, time)
+        if (self.placed) gait.at(self.placed, time)
+        self.led = self.placed = undefined
+      },
       looks: () => {},
       looking: (_share: number) => self.looked,
       to(target: Xyz | { y: number }, way?: { speed?: number; plant?: Side }): Story<boolean> {
@@ -395,7 +424,7 @@ export class Stride {
       },
       at(place: { x: number; y?: number; z: number }) {
         if (place.y !== undefined) gait.lead.place.y = place.y
-        gait.at(place)
+        self.placed = place
       },
       when: (to: Ground) => gait.when(flat(to)),
       highest: () => gait.highest(),
@@ -410,11 +439,12 @@ export class Stride {
         })()
       },
       go(velocity: { x: number; z: number }) {
-        gait.go(velocity)
+        self.led = { x: velocity.x, z: velocity.z }
       },
       face(way?: { x: number; z: number }): Story<boolean> {
         gait.face(way)
-        return waits(() => true, () => Math.abs(gait.going.aims) < FACED)
+        const faced = () => way === undefined || Math.abs(wrap(Math.atan2(way.x, way.z) - gait.lead.facing)) < FACED
+        return waits(() => true, faced)
       },
       look(place?: Xyz) {
         self.looked = place && new Vector3().copy(place)
@@ -423,7 +453,9 @@ export class Stride {
         // (carried further than a step catches, he steps after the hips)
         const by = new Vector3(velocity.x, 0, velocity.z)
         gait.hips.velocity.add(by)
-        gait.lead.place.addScaledVector(by, by.length() / 6)
+        // (carried further than a step is worth, he is to rest there and steps after the hips; else he sways back over his feet)
+        const carries = by.lengthSq() / 6
+        if (carries > 0.114 * self.bones.size.leg) gait.lead.place.addScaledVector(by, carries / by.length())
       },
       jump(top: Xyz): Story<boolean> {
         gait.jump(top)
