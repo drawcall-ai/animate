@@ -95,7 +95,9 @@ export class Lead {
     const widest = backs ? Math.PI / 2 : this.widest(going)
     const off = wrap(way + clamp(wrap(want - way), -widest, widest) - this.facing)
     const pull = (2 * Math.PI) / (FOLLOW.pelvis * size.beat)
-    const along = (asked !== undefined ? this.swings : led ? this.turns : 0) * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
+    // (slowing below a walk, he follows the turn of the way he goes the less, standing not at all)
+    const slows = Math.min(1, going / (WALK.speed * size.pace))
+    const along = (asked !== undefined ? this.swings : led ? this.turns * slows : 0) * Math.max(0, 1 - Math.abs(off) / FOLLOW.near)
     this.spins = along + damped(this.spins - along, off, pull, dt)
     // (no further round from a foot on the ground than a hip turns over it: his feet step round for him to come on)
     let round = this.spins * dt

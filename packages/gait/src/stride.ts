@@ -1,5 +1,5 @@
 import { Vector3 } from 'three'
-import { ahead, clamp, left, leant, over, runs, type Side, SIGN, type Size, span, twist, UP, wide, wrap } from './measure'
+import { ahead, clamp, left, leant, over, runs, type Side, SIGN, type Size, SOLE, span, twist, UP, wide, wrap } from './measure'
 
 /**
  * the hips as the strides need them: where on the ground, how fast along the way he goes (m/s, back on it below 0),
@@ -86,9 +86,6 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
   const toes = faced + clamp(wrap(faces(going, middle) - faced), least, most)
   const out = left(toes).multiplyScalar(SIGN[side] * wide(size, going.speed))
   to.add(out).addScaledVector(left(going.heading + going.curves * middle), -leant(going.speed, going.curves) * size.stand)
-  // (at a run the two are down one after the other, half a stride apart, as his way turns between them)
-  const apart = (runs(size, going.speed) * going.curves * (lands + stays)) / 2
-  clear(size, to, side, onward(going, partner, apart), faced, going.speed)
   // (sidestepping, the foot whose hip is ahead steps out half a step, and the other closes up to it, no nearer than his hips are wide)
   const way = ahead(going.heading).multiplyScalar(Math.sign(going.speed) || 1)
   if (Math.abs(Math.sin(going.facing - going.heading)) > SIDLE.across && Math.abs(going.speed) < SIDLE.most * size.pace) {
@@ -96,9 +93,18 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
     if (leads) to.addScaledVector(way, ((SIDLE.step + (SIDLE.faster * Math.abs(going.speed)) / size.pace) * size.leg) / 2)
     else to.addScaledVector(way, Math.min(0, partner.clone().sub(to).dot(way) - 2 * size.hip))
   }
+  // (no further than its leg reaches as it comes down)
   const under = hips(lands).add(out)
   const off = to.clone().sub(under).setY(0)
   const reach = span(size, going.speed).ahead + REACH * size.leg
   if (off.length() > reach) to.copy(under).add(off.setLength(reach))
+  // never across the other footfall: at a run the two are down one after the other, half a stride apart, as his way
+  // turns between them; and its ball clear of the other's, as it points
+  const apart = (runs(size, going.speed) * going.curves * (lands + stays)) / 2
+  clear(size, to, side, onward(going, partner, apart), faced, going.speed)
+  const ball = (turned: number) => ahead(turned).multiplyScalar(SOLE.ball * size.leg)
+  to.add(ball(toes))
+  clear(size, to, side, partner.clone().add(ball(faced)), faced, going.speed)
+  to.sub(ball(toes))
   return { to, toes }
 }
