@@ -57,3 +57,23 @@ test('the javelin never passes through his head on its way to the release', () =
   // (the hand's way round the shoulder dipped in through it and out, and the shaft went 12 cm from his eyes)
   expect(nearest).toBeGreaterThan(0.2)
 })
+
+test('the throw is made over a braced front leg: as the javelin leaves, the planted left knee is bent no more than a third of a right angle', () => {
+  const man = person()
+  const drawn = shaft()
+  new Scene().add(man, drawn)
+  const hand = new Hand(man, 'right')
+  const body = new Body(man)
+  const held = inHand(body, hand, grip(hand, drawn, GRIP))
+  let bent = Number.NaN
+  const at = (name: string) => man.getObjectByName(name)!.getWorldPosition(new Vector3())
+  body.play(
+    javelinThrow(body, held, 5.5, new Vector3(0, 0, 10), () => {
+      man.updateMatrixWorld(true)
+      const [hip, knee, ankle] = ['leftUpperLeg', 'leftLowerLeg', 'leftFoot'].map(at)
+      bent = (knee.clone().sub(hip).angleTo(ankle.clone().sub(knee)) * 180) / Math.PI
+    }),
+  )
+  for (let n = 0; n < 4000 && body.playing && Number.isNaN(bent); n++) body.update(body.size.beat / 60)
+  expect(bent).toBeLessThan(33)
+})

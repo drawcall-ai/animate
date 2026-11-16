@@ -264,10 +264,12 @@ export class Gait {
     const { size } = this
     const speed = this.going.speed
     const middle = 1 - this.duty + this.duty * over(size, speed)
-    const bounce = this.stepping ? bob(size, speed) * Math.cos(4 * Math.PI * (phase - middle)) : 0
+    // (over the foot he plants, on a leg braced straight, it rides no lower for his speed)
+    const braced = this.plant && this.time + seconds >= this.plant.lands! && this.time + seconds <= this.plant.at
+    const bounce = this.stepping && !braced ? bob(size, speed) * Math.cos(4 * Math.PI * (phase - middle)) : 0
     // (held lower than he stands, he rides no lower for his stride than that; going along, no lower than a crouch, and running, as high as he stands)
     const held = Math.abs(speed) > WALK.most * size.pace ? size.stand : Math.abs(speed) > STILL * size.pace ? Math.max(this.height, RIDE * size.stand) : this.height
-    const ride = ground.y + held - Math.max(0, dip(size, speed) - (size.stand - held)) + bounce
+    const ride = ground.y + held - Math.max(0, dip(size, braced ? 0 : speed) - (size.stand - held)) + bounce
     // (from the feet that are down by then, or on their way down)
     const down = SIDES.filter((side) => !this.held(side) && (!this.stepping || this.steps[side] || through(side, phase) >= 1 - this.duty))
     const reach = Math.max(...down.map((side) => this.holds(side, this.stands(side, ground, seconds), ground, facing)))

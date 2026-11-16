@@ -13,7 +13,8 @@ export type Way = { speed: number; push: number; arrive: number }
 /**
  * Where the hips will be, a step at a time, going from a place and a velocity to another place: turned toward it as
  * hard as the ground pushes him round, sped up no harder than `push`, kept to `speed`, and braked as hard as a leg
- * pushes to arrive as fast as asked; to rest, the last of the way ever slower. Past it still going, it goes on so.
+ * pushes to arrive as fast as asked; to rest, the last of the way ever slower. Past it still going, it goes on so, or
+ * braked to arrive slower than it went, brakes on to rest.
  * Told once, it is where he will be: the gait is led along it, and it tells when he comes by a place.
  */
 export class Course {
@@ -51,7 +52,8 @@ export class Course {
       const turned = heading + Math.max(-most, Math.min(most, turn))
       // (braked half the time, a foot being down only so much of it: so as slow as he is to arrive a beat in the air early)
       const brakes = Math.sqrt(way.arrive ** 2 + PUSH.along * Math.max(0, far - (way.arrive && size.beat * speed)))
-      const want = past ? way.arrive : Math.min(way.speed, brakes, way.arrive > 0 ? Infinity : far / settle)
+      // (past it, braked to arrive slower than it went, it brakes on to rest: a leg planted to stop him; else it goes on as it arrives)
+      const want = past ? (way.arrive < way.speed ? 0 : way.arrive) : Math.min(way.speed, brakes, way.arrive > 0 ? Infinity : far / settle)
       const next = speed + Math.max(-PUSH.along * STEP, Math.min((want > speed ? way.push : PUSH.along) * STEP, want - speed))
       v.set(Math.sin(turned), 0, Math.cos(turned)).multiplyScalar(Math.max(0, next))
       p.addScaledVector(v, STEP)
