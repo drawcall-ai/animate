@@ -2,7 +2,7 @@ import { EASY, RANGE, type Side, type Size } from '@drawcall/limbs'
 import type { Posture } from './stride'
 import { Vector3 } from 'three'
 import type { End } from './ends'
-import { OnHim, Watched } from './movers'
+import { Watched } from './movers'
 
 const SIGN = { left: 1, right: -1 }
 /**
@@ -62,7 +62,6 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size) {
  */
 export class Asks implements Posture {
   private readonly known = new Map<number, Asked>()
-  private working = false
 
   constructor(
     readonly hands: End[],
@@ -91,10 +90,6 @@ export class Asks implements Posture {
     const key = Math.round((time / this.size.beat) * 80)
     const known = this.known.get(key)
     if (known) return known
-    // (asked again while it works something out, through where the hips will be, it asks nothing more)
-    if (this.working) return { turn: 0, bend: 0, sink: 0, shift: 0 }
-    this.working = true
-    OnHim.near = true
     const all: Asked = { turn: 0, bend: 0, sink: 0, shift: 0 }
     const { at, velocity, facing, ground } = this.hips()
     // (from the hips as they would stand: what he is down for is what is asked)
@@ -125,8 +120,6 @@ export class Asks implements Posture {
     all.turn = Math.max(-1.2, Math.min(1.2, all.turn))
     all.shift = Math.max(-0.12, Math.min(0.12, all.shift))
     this.known.set(key, all)
-    this.working = false
-    OnHim.near = false
     return all
   }
 

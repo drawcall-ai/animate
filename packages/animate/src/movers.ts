@@ -80,15 +80,10 @@ export class OnHim implements Mover {
     private readonly hips: { now: number; hips(seconds: number, at: Vector3, velocity: Vector3): Vector3; facing(seconds: number): number },
   ) {}
 
-  /** while the hands' asks are worked out, a place on him is told on from the hips as they go now: goes with locomotion, whose look-ahead reads those asks */
-  static near = false
-
   state(t: number, place: Vector3, velocity: Vector3, turn?: Quaternion) {
-    const ahead = Math.max(0, t - this.hips.now)
-    const seconds = OnHim.near ? 0 : ahead
+    const seconds = Math.max(0, t - this.hips.now)
     const facing = this.hips.facing(seconds)
     this.hips.hips(seconds, place, velocity)
-    if (OnHim.near) place.addScaledVector(velocity, ahead)
     place.add(this.at.copy(this.rest).applyAxisAngle(UP, facing))
     turn?.setFromAxisAngle(UP, facing)
   }
