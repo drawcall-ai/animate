@@ -46,8 +46,8 @@ function asks(side: Side, hand: Vector3, shoulder: Vector3, { arm }: Size) {
 }
 
 /** for a hand lower than it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is: the shoulder where the trunk `bent` so has it */
-function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size, bent: (bend: number) => Vector3) {
-  const most = (1 - DEEPEST.low) * stand
+function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size, bent: (bend: number) => Vector3, sinks = true) {
+  const most = sinks ? (1 - DEEPEST.low) * stand : 0
   // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
   if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
   // (above the knees, what it costs is how far his weight comes down: all of it getting down, what is above the hips bending)
@@ -55,7 +55,7 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size, bent:
   let best = { bend: 0, sink: 0, cost: Infinity }
   for (let bend = 0; bend <= DEEPEST.bend + 1e-6; bend += DEEPEST.bend / 12) {
     const over = bent(bend)
-    for (let sink = 0; sink <= most + 1e-6; sink += most / 12) {
+    for (let sink = 0; sink <= most + 1e-6; sink += most / 12 || 1) {
       const at = over.clone().setY(over.y - sink)
       const short = Math.max(0, at.distanceTo(hand) - REACH * arm)
       const costs = 100 * short + (low ? COST.low.bend * bend + COST.low.sink * (sink / leg) : (sink + UPPER * shoulder.y * (1 - Math.cos(bend))) / leg)
@@ -130,12 +130,13 @@ export class Asks {
       const due = next !== undefined && !passed ? next : time
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
-      // (nor for a place on him, or on a thing carried with him, which goes down with him)
+      // (nor for a thing carried with him, which goes down with him; for a place on him, which does too, he only bends)
       const held = (channel.bound ?? channel).goal?.on
-      const lowers = !swung && !(held instanceof OnHim) && !(held instanceof Watched && held.carried)
-      const lowered = lowers ? down(on(there), this.shoulders[end.side], this.size, (bend) => this.bent(end.side, bend)) : { bend: 0, sink: 0 }
+      const lowers = !swung && !(held instanceof Watched && held.carried)
+      const reach = (at: Vector3) => down(at, this.shoulders[end.side], this.size, (bend) => this.bent(end.side, bend), !(held instanceof OnHim))
+      const lowered = lowers ? reach(on(there)) : { bend: 0, sink: 0 }
       // (and holding a thing on its way to a frame met at rest, as low as where the hand is then: he comes up with what he lifts)
-      const now = lowers && channel.bound && !frame?.velocity ? down(on(hand.clone()), this.shoulders[end.side], this.size, (bend) => this.bent(end.side, bend)) : { bend: 0, sink: 0 }
+      const now = lowers && channel.bound && !frame?.velocity ? reach(on(hand.clone())) : { bend: 0, sink: 0 }
       // (from as long before as getting down that far takes him)
       const { sinks, bends } = this.leads(lowered)
       // (easing in over as long before as each takes)
