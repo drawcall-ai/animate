@@ -4,13 +4,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { Start } from '../play'
 import { model } from '../play'
 import { served } from '../served'
-import { Gladiator } from './gladiator'
+import { Gladiator, POST } from './gladiator'
 import { rig } from './skeleton'
 
 /** how far the sand reaches from the middle along x and z, and how thick it is (m) */
 const SAND = { wide: 12, thick: 0.2 }
-/** the training post: where it stands on the sand, how thick and how high it is (m) */
-export const POST = { x: 2.2, z: 0, radius: 0.12, high: 1.8 }
 
 /** something that stands where it is, which the world has things collide with: its middle, and how it is drawn */
 function solid(at: Vector3, mesh: Mesh) {

@@ -1,9 +1,10 @@
 import { buildWorld } from '@drawcall/physics-rapier'
-import { Scene } from 'three'
+import { BoxGeometry, Mesh, Scene } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import type { Game, Input } from '../../../examples/play'
 import { Boxer } from '../../../examples/boxing/boxer'
+import { Gladiator } from '../../../examples/gladiator/gladiator'
 import { Worker } from '../../../examples/shelf/worker'
 
 const FRAME = 1 / 60
@@ -49,4 +50,20 @@ test('boxing: walking at the bag he stops an arm\'s length from it, and the punc
   expect(throwing / 4).toBeLessThan(0.35)
   expect(nearest).toBeGreaterThan(0.3)
   expect(Number(/landed\s+(\d+)/.exec(boxer.readout())?.[1])).toBeGreaterThanOrEqual(3)
+}, 30000)
+
+test('gladiator: a press during a blow gives the next blow after it, and between blows he is back in his guard', async () => {
+  const scene = new Scene()
+  const world = await buildWorld({ scene })
+  const things = { gladius: new Mesh(new BoxGeometry(0.05, 0.02, 0.6)), scutum: new Mesh(new BoxGeometry(0.6, 0.05, 1)) }
+  const gladiator = new Gladiator(person(), world, scene, things)
+  const blows: string[] = []
+  let between = Infinity
+  play(gladiator, world, 6, [], [0.5, 1, 3.4], () => {
+    const blow = /(cut|thrust)[\w ]*$/.exec(gladiator.readout())?.[0]
+    if (blow && blow !== blows.at(-1)) blows.push(blow)
+    if (!gladiator.character.acting) between = Math.min(between, gladiator.character.body.hips.value.y)
+  })
+  expect(blows.length).toBe(3)
+  expect(between / gladiator.character.body.size.stand).toBeGreaterThan(0.95)
 }, 30000)

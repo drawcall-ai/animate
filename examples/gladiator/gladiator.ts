@@ -4,8 +4,9 @@ import type { PhysicsWorld } from '@drawcall/physics'
 import { Group, type Object3D, Vector3 } from 'three'
 import { Character, inHand } from '../character'
 import type { Game, Input } from '../play'
-import { POST } from './game'
 
+/** the training post: where it stands on the sand, how thick and how high it is (m) */
+export const POST = { x: 2.2, z: 0, radius: 0.12, high: 1.8 }
 /** how fast he walks and runs, and goes behind his raised shield (m/s) */
 const SPEED = { walk: 1.4, run: 4.2, guard: 0.9 }
 /** the key held to raise the shield */
@@ -19,6 +20,8 @@ const WIND = 0.7
 /** how far he steps into a blow with his front foot, and how far ahead of the middle of his shoulders his hand has the sword as a blow lands (of his leg, of his arm) */
 const STEP = 0.4
 const AHEAD = 0.75
+/** the sword in his guard: where the grip is from his right shoulder (of his arm: to his left, up, ahead), and where its point goes */
+const READY = { place: new Vector3(0.05, -0.6, 0.4), pointing: { x: 0, y: 0.6, z: 1 } }
 /** how near ahead of him the post must be for a blow at it (cos of the angle off his facing) */
 const FACING = 0.7
 /**
@@ -68,6 +71,7 @@ export class Gladiator implements Game {
   private next = 0
   hits = 0
   private guarding?: boolean
+  private pressed = false
 
   /** `rig` is his rigged body at rest, in the `scene` the `world` simulates */
   constructor(rig: Object3D, world: PhysicsWorld, scene: Object3D, things: Record<'gladius' | 'scutum', Object3D>) {
@@ -85,7 +89,9 @@ export class Gladiator implements Game {
 
   /** a frame: what the keys ask of him, and he goes as he is led */
   update(delta: number, input: Input) {
-    if (input.act && !this.character.acting) this.strike()
+    // (a press during a blow is kept for when he is back in his guard)
+    this.pressed ||= input.act
+    if (this.pressed && !this.character.acting) this.strike()
     this.guard(input.held.has(GUARD))
     const { move } = input
     const speed = this.guarding ? SPEED.guard : input.run ? SPEED.run : SPEED.walk
@@ -111,6 +117,7 @@ export class Gladiator implements Game {
 
   /** the next blow, as his action: at the post if he stands before it, else at the air ahead of him */
   private strike() {
+    this.pressed = false
     const blow = BLOWS[this.next++ % BLOWS.length]
     const { body } = this.character
     const { arm, trunk } = body.size
@@ -148,7 +155,9 @@ export class Gladiator implements Game {
     })
     if (landed && atPost) this.hits++
     this.blow = undefined
+    // then he comes back to his guard: the sword up before his right hip, its point ahead, his feet under him
     body.face()
+    void this.sword.to(READY.place.clone().multiplyScalar(body.size.arm), { on: body, pointing: READY.pointing })
     yield* body.stand()
   }
 }
