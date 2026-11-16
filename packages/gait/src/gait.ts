@@ -28,10 +28,6 @@ const CATCH = 4
 const TAKES = 0.3
 /** how long he takes at the least to crouch for a jump (s) */
 const CROUCH = 0.3
-/** how fast a footfall is moved once aimed, at the most (in paces) */
-const SHIFT = 0.35
-/** how far through its swing a foot is when its footfall is moved no faster than that */
-const LATE = 0.6
 
 const yaw = (angle: number) => new Quaternion().setFromAxisAngle(UP, angle)
 const yawOf = (turn: Quaternion) => {
@@ -65,7 +61,6 @@ export class Gait {
   duty = 0.6
   /** the moment it has stepped on to (s) */
   time = 0
-  private was = 0
   /** how high the hips are held over the ground, standing (m) */
   height: number
   /** a run or a walk he is led along, the foot to plant where it ends and when the hips come over it, and the foot he stays on there */
@@ -98,7 +93,10 @@ export class Gait {
   /** he is led: going so along the ground (m/s) from a moment, by default now, the lead telling where he will be by how it changes */
   go(velocity: { x: number; z: number }, at = this.time) {
     if (this.course || this.planted) this.sent()
+    const was = this.lead.velocity.clone()
     this.lead.go(velocity, at)
+    // (led anew, the plan is where he will be from now)
+    if (was.distanceTo(this.lead.velocity) > 0.05) this.plan()
   }
 
   /** he faces a way along the ground at a walk, wherever he goes; with none, the way he goes */
@@ -108,6 +106,12 @@ export class Gait {
 
   /** the world has him on the ground at a place now, as a character controller does */
   at(place: { x: number; z: number }) {
+    const by = new Vector3(place.x, this.lead.place.y, place.z).sub(this.lead.place)
+    // (further off than he steps, he is there at once, feet and all)
+    if (by.length() > KEEPS * this.size.leg) {
+      for (const channel of [this.hips, ...SIDES.map((side) => this.feet[side])]) channel.set(channel.value.clone().add(by), channel.turn)
+      for (const step of [...Object.values(this.steps), ...Object.values(this.placing)]) [step.from, step.to].forEach((one) => one.add(by))
+    }
     this.lead.place.set(place.x, this.lead.place.y, place.z)
   }
 
@@ -246,7 +250,7 @@ export class Gait {
     const bounce = this.stepping ? bob(size, speed) * Math.cos(4 * Math.PI * (phase - middle)) : 0
     const ride = ground.y + this.height - dip(size, speed) + bounce
     // (from the feet that are down by then, or on their way down)
-    const down = SIDES.filter((side) => !this.stepping || this.steps[side] || through(side, phase) >= 1 - this.duty)
+    const down = SIDES.filter((side) => !this.held(side) && (!this.stepping || this.steps[side] || through(side, phase) >= 1 - this.duty))
     const reach = Math.max(...down.map((side) => this.holds(side, this.stands(side, ground, seconds), ground, facing)))
     if (!down.length) return Math.min(ride, ground.y + size.stand)
     const soft = SOFT * size.leg
@@ -331,7 +335,6 @@ export class Gait {
   /** steps on to `now`: the lead goes on, the clock goes round, and the hips' and the feet's frames are written anew */
   advance(now: number) {
     const dt = now - this.time
-    this.was = this.time
     this.time = now
     if (dt <= 0) return
     const { size, hips, feet } = this
@@ -403,11 +406,15 @@ export class Gait {
     if (!hips.busy || hips.owner === 'gait' || theirs > now) {
       hips.cancel('gait')
       // (along a way he is sent, out to where it ends: the plan is where he will be)
-      const along = this.course ? Array.from({ length: Math.max(0, Math.ceil((Math.min(this.course.from + this.course.places.length / 60, now + FAR) - now - 0.7) / 0.3)) }, (_, k) => 1 + 0.3 * k) : []
-      for (const mark of [...MARKS, ...along].filter((mark) => now + mark < theirs - 0.1)) {
+      const ends = this.course ? Math.min(this.course.from + this.course.places.length / 60, now + FAR) : now + FAR / 2
+      const along = Array.from({ length: Math.max(1, Math.ceil((ends - now - 0.7) / 0.3)) }, (_, k) => 1 + 0.3 * k)
+      const marks = [...MARKS, ...along].filter((mark) => now + mark < theirs - 0.1)
+      for (const mark of marks) {
         const { place, turn } = this.planned(mark)
         const later = this.planned(mark + 1e-3)
         const [velocity, spin] = [later.place.sub(place).divideScalar(1e-3), { x: 0, y: (later.turn - turn) / 1e-3, z: 0 }]
+        // (and past the last of them it goes on along the ground)
+        if (mark === marks.at(-1)) velocity.y = 0
         hips.by({ at: now + mark, place, velocity, turn: yaw(turn), spin, by: 'gait' })
       }
     }
@@ -458,8 +465,6 @@ export class Gait {
     const lands = (swingShare - after) / this.rate
     const { to, toes } = footfall(size, going, side, lands, this.duty / this.rate, last, (seconds) => this.path(seconds))
     to.y = this.lead.place.y + size.ankle
-    // (aimed anew late in its swing, the footfall moves no faster than a foot in the air is brought round: so it never skids in)
-    if (after > LATE * swingShare) to.sub(step.to).clampLength(0, SHIFT * size.pace * (now - this.was)).add(step.to)
     Object.assign(step, { to, toes, lands: now + lands })
     foot.cancel('gait')
     for (const frame of swing(size, step, now, going.speed, feet[partner].value, going.facing)) foot.by(frame)

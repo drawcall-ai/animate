@@ -1,5 +1,5 @@
 import { Gait } from '@drawcall/gait'
-import { ANKLE, type Bones, clamp, GRAVITY, HEEL, type Joints, type Limb, RANGE, raised, REST, type Side, SIDES, SIGN, SOLE, type Story, UP, waits, type Xyz } from '@drawcall/limbs'
+import { ANKLE, type Bones, clamp, GRAVITY, HEEL, type Joints, type Limb, RANGE, raised, REST, type Side, SIDES, SIGN, SOLE, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
 import type { Carrier, Foothold, Foreseen, Posture } from '@drawcall/locomotion'
 import { Quaternion, Vector3 } from 'three'
 
@@ -116,7 +116,7 @@ export class Stride {
   stands(side: Side) {
     const { gait } = this
     const foot = gait.feet[side]
-    return gait.steps[side] || gait.held(side) || foot.frames.length ? undefined : foot.value.clone()
+    return gait.steps[side] || gait.held(side) || gait.jumps ? undefined : foot.value.clone()
   }
 
   /** a step of time: a foot the story has is where it has it, and the gait steps on, writing its frames anew */
@@ -127,7 +127,8 @@ export class Stride {
     for (const side of SIDES) gait.hold(side, feet[side].held ? feet[side].value : undefined)
     gait.advance(now)
     gait.hips.advance(now)
-    for (const side of SIDES) if (!feet[side].held) gait.feet[side].advance(now)
+    // (a foot the story has is watched: how fast it moves is how it moved)
+    for (const side of SIDES) gait.feet[side].advance(now)
     for (const side of SIDES) if (!feet[side].held) feet[side].anchor = this.stands(side)
   }
 
@@ -414,7 +415,8 @@ export class Stride {
       },
       face(way?: { x: number; z: number }): Story<boolean> {
         gait.face(way)
-        return waits(() => true, () => Math.abs(gait.going.aims) < FACED)
+        const faced = () => way === undefined || Math.abs(wrap(Math.atan2(way.x, way.z) - gait.lead.facing)) < FACED
+        return waits(() => true, faced)
       },
       look(place?: Xyz) {
         self.looked = place && new Vector3().copy(place)
