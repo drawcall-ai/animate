@@ -49,6 +49,11 @@ export class Fencer implements Game {
       const recovering = () => (this.phase = 'recovery')
       character.act(this.play(lunge(character.body, this.foil, dummy, recovering), 'en garde'))
     }
+    // pulled back during a lunge, he recovers at once into the guard
+    if (this.phase === 'lunge' && input.move.z < -0.5) {
+      this.phase = 'en garde'
+      character.act(this.play(guard(character.body, this.foil), 'en garde'))
+    }
     // en garde he advances and retreats along the piste: his stance steps along, the front foot first
     const ahead = guarding && !input.act && Math.abs(input.move.z) > 0.5 ? Math.sign(input.move.z) : 0
     if (guarding && !input.act) this.phase = ahead > 0 ? 'advance' : ahead < 0 ? 'retreat' : 'en garde'

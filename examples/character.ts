@@ -9,6 +9,8 @@ const CAPSULE = { high: 1.9, radius: 0.32 }
 /** how fast his going changes toward what the player asks on open ground (m/s²) */
 const PUSH = 8
 const GRAVITY = 9.81
+/** how much the player's ask has to change from what it was when an action began for him to take his character back from it (m/s) */
+const TURNED = 0.5
 
 /** where he stands on open, flat ground and how he goes there, as the player moves him: nothing to bump into */
 export class Ground {
@@ -89,8 +91,23 @@ export class Character {
    * going until it is over.
    */
   act(story: Story<unknown>) {
+    this.cancel()
     this.acting = true
-    this.body.play(this.owned(story))
+    this.action = this.owned(story)
+    this.body.play(this.action)
+    this.led.copy(this.feet.asked)
+  }
+
+  /** the action going on, if any, and how the player asked him to go when it began */
+  private action?: Story
+  private readonly led = new Vector3()
+
+  /** the action going on is over at once: what it had of him goes on from the state it is in, and the player leads him from there */
+  cancel() {
+    if (!this.action) return
+    this.action.return(undefined)
+    this.action = undefined
+    this.body.cancel()
   }
 
   private *owned(story: Story<unknown>): Story {
@@ -98,6 +115,7 @@ export class Character {
       yield* story
     } finally {
       this.acting = false
+      this.action = undefined
     }
   }
 
@@ -122,6 +140,8 @@ export class Character {
    */
   update(delta: number, asked: { x: number; z: number }, way?: { x: number; z: number }) {
     const { body, feet } = this
+    // (asked to go another way than when it began, the player takes him back from an action at once)
+    if (this.acting && this.led.distanceTo(new Vector3(asked.x, 0, asked.z)) > TURNED) this.cancel()
     if (this.acting) {
       this.tried(() => body.update(delta))
       const { value, velocity } = body.hips

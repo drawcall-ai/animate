@@ -309,14 +309,26 @@ export class Body {
    * story it returns is over when he stands.
    */
   stand(): Story<boolean> {
-    const { ends, things } = this.workings
-    const stands = this.locomotion.stand(() => {
-      const bound = new Set([...things.values()].flatMap(({ hands }) => hands.map(({ end }) => end)))
-      for (const side of SIDES) for (const end of [ends.foot[side], ends.hand[side]]) if (!bound.has(end)) end.free()
-    })
-    // (what the body moves stays where it is on him, and the hands on it stay on it)
-    for (const thing of things.values()) if (!thing.outside) thing.cancel()
+    const stands = this.locomotion.stand(() => this.letGo())
+    this.hold()
     return stands
+  }
+
+  /** whatever the stories have is let go at once, going on from the state it is in, but the hands on what is bound to him, which stay on it as it stays where it is on him: for a game, on fresh input */
+  cancel() {
+    this.letGo()
+    this.hold()
+  }
+
+  private letGo() {
+    const { ends, things } = this.workings
+    const bound = new Set([...things.values()].flatMap(({ hands }) => hands.map(({ end }) => end)))
+    for (const side of SIDES) for (const end of [ends.foot[side], ends.hand[side]]) if (!bound.has(end)) end.free()
+  }
+
+  /** what the body moves stays where it is on him, and the hands on it stay on it */
+  private hold() {
+    for (const thing of this.workings.things.values()) if (!thing.outside) thing.cancel()
   }
 
   /**
