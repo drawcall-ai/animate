@@ -1,3 +1,4 @@
+import { RigidBody } from '@drawcall/physics'
 import { buildWorld } from '@drawcall/physics-rapier'
 import { BoxGeometry, Mesh, Scene } from 'three'
 import { expect, test } from 'vitest'
@@ -55,6 +56,9 @@ test('boxing: walking at the bag he stops an arm\'s length from it, and the punc
 test('gladiator: a press during a blow gives the next blow after it, and between blows he is back in his guard', async () => {
   const scene = new Scene()
   const world = await buildWorld({ scene })
+  const floor = new RigidBody({ bodyType: 'static' })
+  floor.position.y = -0.1
+  scene.add(floor.add(new Mesh(new BoxGeometry(20, 0.2, 20))))
   const things = { gladius: new Mesh(new BoxGeometry(0.05, 0.02, 0.6)), scutum: new Mesh(new BoxGeometry(0.6, 0.05, 1)) }
   const gladiator = new Gladiator(person(), world, scene, things)
   const blows: string[] = []

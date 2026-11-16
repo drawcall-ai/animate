@@ -37,6 +37,8 @@ test('a standing jump to a place beside him or behind goes there: the hips are t
     // (he lands further on the way he jumped, on both feet)
     const landed = body.hips.value
     expect(landed.x * off.x + landed.z * off.z).toBeGreaterThan(off.x ** 2 + off.z ** 2)
+    // (and comes to rest there, the knees giving, not carried on along the ground)
+    expect(Math.hypot(landed.x - off.x, landed.z - off.z)).toBeLessThan(1.1 * Math.hypot(off.x, off.z))
     for (const side of ['left', 'right'] as const) expect(body.foot[side].value.y).toBeLessThan(body.size.ankle + 0.03)
   }
 })
@@ -49,6 +51,22 @@ test('a jump whose top is lower than he stands is a hop or a dive there: he come
   expect(Math.hypot(body.hips.value.x - top.x, body.hips.value.z - top.z)).toBeLessThan(0.25)
   expect(body.hips.value.y).toBeCloseTo(top.y, 1)
   for (const side of ['left', 'right'] as const) expect(body.foot[side].value.y).toBeLessThan(body.size.ankle + 0.03)
+})
+
+test('a dive with the hands sent to a ball at its top ends low, but no lower than a full squat', () => {
+  const { body } = setup()
+  body.play(
+    (function* () {
+      const dive = body.jump({ x: 1.4, y: 0.6, z: 0.1 })
+      yield
+      void body.hand.left.by(body.highest(), { x: 1.75, y: 0.75, z: 0.3 })
+      void body.hand.right.by(body.highest(), { x: 1.75, y: 0.5, z: 0.3 })
+      yield* dive
+    })(),
+  )
+  let lowest = Infinity
+  play(body, 4, () => (lowest = Math.min(lowest, body.hips.value.y)))
+  expect(lowest / body.size.stand).toBeGreaterThan(0.3)
 })
 
 test('a ladder is climbed by sending the feet and the hands to its rungs in turn: each foot stands on its rung', () => {

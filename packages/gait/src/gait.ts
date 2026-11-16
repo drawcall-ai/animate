@@ -382,9 +382,8 @@ export class Gait {
       // (his steps begin anew from where he landed)
       this.stepping = false
       for (const side of SIDES) delete this.steps[side]
-      const carries = leap.low === undefined ? going.length() / (2 * PUSH.along) : 0
       // (led on, he goes on as he is led)
-      if (this.course === leap.course && (leap.course || this.lead.velocity.length() < SLOW * size.pace)) this.course = new Course(size, now, from, going, from.clone().addScaledVector(going, carries), { speed: going.length() + STILL * size.pace, push: PUSH.along, arrive: 0 })
+      if (leap.course && this.course === leap.course) this.course = new Course(size, now, from, going, from.clone(), { speed: going.length() + STILL * size.pace, push: PUSH.along, arrive: 0 })
       if (leap.low !== undefined) this.height = Math.min(this.height, leap.low)
     }
     const toes = Object.fromEntries(SIDES.filter((side) => !this.steps[side]).map((side) => [side, yawOf(feet[side].turn)]))
@@ -452,7 +451,9 @@ export class Gait {
       for (const [k, mark] of marks.entries()) {
         const { place, turn } = this.planned(mark)
         const later = this.planned(mark + h)
-        ;[place.y, later.place.y] = [place.y - lows[k][0], later.place.y - lows[k][1]]
+        // (let down from standing: held lower already, as a dive has him, he goes no lower for it)
+        const stands = this.lead.place.y + this.size.stand
+        ;[place.y, later.place.y] = [Math.min(place.y, stands - lows[k][0]), Math.min(later.place.y, stands - lows[k][1])]
         const [velocity, spin] = [later.place.sub(place).divideScalar(h), { x: 0, y: (later.turn - turn) / h, z: 0 }]
         // (and past the last of them it goes on along the ground)
         if (mark === marks.at(-1)) velocity.y = 0

@@ -82,11 +82,14 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
     hips.push({ at: leaves + t, place: fall(t), velocity: velocity.clone().setY(up - GRAVITY * t), by: 'jump' })
   }
   hips.push({ at: lands, place: place.clone(), velocity: across.clone().setY(up - GRAVITY * air), by: 'jump' })
-  // (a hop or a dive rests as low as its top; a jump gives at the knees as he lands)
-  const rest = low ? Math.max(touch, ground + LOWEST * stand) : Math.min(touch, ground + stand) - GIVE * crouch
-  // (a hop or a dive stops where it came down; a jump goes on)
-  const on = low ? 0 : 1
-  hips.push({ at: lands + lasts, place: place.clone().addScaledVector(across, on * lasts).setY(rest), velocity: across.clone().multiplyScalar(on), by: 'jump' })
+  // (a hop or a dive rests as low as its top; a jump gives at the knees as he lands, as far as how fast he comes down takes, in as long)
+  const falling = Math.abs(up - GRAVITY * air)
+  const gives = Math.min((1 - LOWEST) * stand, (falling * falling) / (2 * PUSH.up))
+  const settles = (2 * gives) / Math.max(falling, 1e-3)
+  const rest = low ? Math.max(touch, ground + LOWEST * stand) : Math.min(touch, ground + stand) - GIVE * gives
+  // (a hop or a dive stops where it came down; a jump led on goes on, and one not led comes to rest as the knees give, easing to a stop)
+  const on = low ? 0 : led ? 1 : 1 / 3
+  hips.push({ at: lands + settles, place: place.clone().addScaledVector(across, on * settles).setY(rest), velocity: across.clone().multiplyScalar(on === 1 ? 1 : 0), by: 'jump' })
   // the feet leave with him, drawn up under him, and reach for the ground under where he lands: going on, the foot he
   // took off from comes down a step after the other
   const runs = across.length() > WALK.most * size.pace
