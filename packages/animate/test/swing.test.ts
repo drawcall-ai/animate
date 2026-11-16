@@ -44,6 +44,8 @@ test('a jump shot goes the way its plan has it: the ball in the hand never more 
   }
   expect(worst).toBeLessThan(0.05)
   expect(left?.length()).toBeCloseTo(first?.speed ?? NaN, 0)
+  // (the jump stated as he steps in leaves from that stride, not once he has come to rest: released 1.8 s after he set off)
+  expect(body.time).toBeLessThan(1.4)
 })
 
 test('a hand sent fast where the arm can only just reach still arrives moving the way it was sent', () => {

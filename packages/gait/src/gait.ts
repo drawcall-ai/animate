@@ -213,7 +213,10 @@ export class Gait {
    */
   jump(top: { x: number; y: number; z: number }) {
     const { size, lead } = this
-    const course = this.course
+    // (a walk to rest it ends he does not come to rest on: he arrives going on as he goes, and leaves from there)
+    const was = this.course
+    const course = (this.course = was?.way.arrive === 0 ? new Course(size, this.time, lead.place, this.hips.velocity.clone().setY(0), was.to, { ...was.way, arrive: was.way.speed }) : was)
+    this.plan()
     // (in the air, once he has come down)
     const soonest = Math.max(this.time + CROUCH * size.beat, (this.jumping?.lands ?? -Infinity) + CROUCH * size.beat)
     const leaves = course ? Math.max(this.plant?.at ?? course.when(course.to), soonest) : soonest
