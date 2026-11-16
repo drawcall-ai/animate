@@ -166,16 +166,22 @@ export class Stride {
     // (a foot the story has is watched: how fast it moves is how it moved)
     for (const side of SIDES) gait.feet[side].advance(now)
     for (const side of SIDES) if (!feet[side].held) feet[side].anchor = this.stands(side)
+    this.place()
+  }
+
+  /** the hips as planned, let down and shifted ahead for what the hands ask, as of now: what the ends read as they go on */
+  private place() {
+    const { gait } = this
+    const now = gait.time
+    this.hips.value.copy(gait.hips.value).add({ x: Math.sin(this.facing) * this.posture.shift(now), y: -this.posture.low(now), z: Math.cos(this.facing) * this.posture.shift(now) })
+    this.hips.velocity.copy(gait.hips.velocity)
   }
 
   /** the legs of the feet of his own reach them from where the hips are, and the hips are told */
   pose(dt: number, feet: Record<Side, Foothold>) {
     const { gait, joints, bones } = this
     const { size } = bones
-    // (the hips as planned, let down and shifted ahead for what the hands ask)
-    const now = gait.time
-    this.hips.value.copy(gait.hips.value).add({ x: Math.sin(this.facing) * this.posture.shift(now), y: -this.posture.low(now), z: Math.cos(this.facing) * this.posture.shift(now) })
-    this.hips.velocity.copy(gait.hips.velocity)
+    this.place()
     for (const side of SIDES) {
       const foot = gait.feet[side]
       const toes = (this.toes[side] = yawOf(foot.turn))
