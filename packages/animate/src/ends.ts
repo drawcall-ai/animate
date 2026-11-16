@@ -146,8 +146,17 @@ export class End {
     return (channel.holding || bound) && this.gap <= NEAR * this.body.size.leg
   }
 
-  /** sends the end somewhere: in `seconds`, by a moment, or at the first moment the body lets it be there */
-  send(place: Xyz | Grip, how: Reaching = {}, when?: { seconds?: number; by?: number }): Story<boolean> {
+  /** sends the end somewhere: in `seconds`, or at the first moment the body lets it be there */
+  to(place: Xyz | Grip, { seconds, ...how }: Reaching & { seconds?: number } = {}) {
+    return this.send(place, how, { seconds })
+  }
+
+  /** has the end somewhere by a moment */
+  by(when: number, place: Xyz | Grip, how: Reaching = {}) {
+    return this.send(place, how, { by: when })
+  }
+
+  private send(place: Xyz | Grip, how: Reaching, when: { seconds?: number; by?: number }): Story<boolean> {
     if (this.channel.bound) throw new Error(`the ${this.name} is on a thing and leads it with it: send the thing, or take the hand off it first`)
     // a foot sent to rest on the ground, or on a thing, stands there: the body steps there with it
     const moving = how.velocity && new Vector3().copy(how.velocity).lengthSq() > 0

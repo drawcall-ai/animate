@@ -152,8 +152,16 @@ export class Bound {
     return frame
   }
 
+  to(place: Xyz, { seconds, ...how }: Sending & { seconds?: number } = {}) {
+    return this.send(place, how, { seconds })
+  }
+
+  by(when: number, place: Xyz, how: Sending = {}) {
+    return this.send(place, how, { by: when })
+  }
+
   /** sends it: as the first hand on it would be sent, so it is planned as the end of that arm */
-  send(place: Xyz, how: Sending, when: { seconds?: number; by?: number }): Story<boolean> {
+  private send(place: Xyz, how: Sending, when: { seconds?: number; by?: number }): Story<boolean> {
     const lead = this.lead?.end
     if (!lead || this.channel.outside) return nothing()
     const written = this.channel.by(lead.timed(this.framed(place, how), this.channel, when))
@@ -209,31 +217,6 @@ export class Bound {
     this.channel.outside = true
     this.changed()
     return this.velocity
-  }
-
-  /** what a story or a game has of it */
-  facade(): Thing {
-    const self = this
-    return {
-      on: (hand, grip) => this.on(hand, grip),
-      off: (hand) => this.off(hand),
-      to: (place, { seconds, ...how } = {}) => this.send(place, how, { seconds }),
-      by: (when, place, how = {}) => this.send(place, how, { by: when }),
-      cancel: () => this.cancel(),
-      get there() {
-        return self.there
-      },
-      get velocity() {
-        return self.velocity
-      },
-      free: () => this.free(),
-      get outside() {
-        return self.outside
-      },
-      set outside(to) {
-        self.outside = to
-      },
-    }
   }
 }
 

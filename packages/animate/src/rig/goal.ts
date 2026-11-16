@@ -1,8 +1,7 @@
 import { Vector3 } from 'three'
-import { clamp } from '@drawcall/gait'
 import { cubic, EASE, type Xyz } from '@drawcall/plan'
 import { type Story, waits } from '../story'
-import { AXES, type Range, type State, bounds, hardest, quickest } from './curve'
+import { AXES, bounds, hardest, quickest, type Range, type State, within } from './curve'
 
 export const REST = { x: 0, y: 0, z: 0 }
 /** how many times its strength a part may be asked for before it says it cannot */
@@ -79,8 +78,7 @@ export class Goal {
       throw new Error(`the ${this.name} is sent somewhere, or to arrive moving, as no numbers say`)
     }
     // (as near as it turns, and in no less time than it takes)
-    const near = (axis: (typeof AXES)[number]) => clamp(target[axis], ...(this.range[axis] ?? [-Infinity, Infinity]))
-    const to = { value: new Vector3(near('x'), near('y'), near('z')), velocity }
+    const to = { value: within(new Vector3().copy(target), this.range), velocity }
     return this.drive(to, Math.max(seconds ?? 0, quickest(this, to, MOST * this.strength, this.range)))
   }
 

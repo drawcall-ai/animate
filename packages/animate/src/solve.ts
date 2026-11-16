@@ -1,5 +1,6 @@
 import { UP } from '@drawcall/gait'
 import { bends, bent, DOWN } from './rig/fingers'
+import { beyond, type Range, within } from './rig/curve'
 import { RANGE } from './rig/joints'
 import { type Limb } from './rig/limb'
 import { Euler, Quaternion, Vector3 } from 'three'
@@ -10,15 +11,6 @@ const euler = new Euler()
 const FULL = 2 * Math.PI
 const turned = new Quaternion()
 
-/** a joint turned as near so as it turns */
-const within = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) => {
-  for (const axis of ['x', 'y', 'z'] as const) {
-    const [least, most] = range[axis] ?? [-Infinity, Infinity]
-    value[axis] = Math.min(most, Math.max(least, value[axis]))
-  }
-  return value
-}
-
 /**
  * a turn of an upper arm read the way that keeps within its range, and nearest how it is turned now: the same way to
  * point reads a full turn apart, and also turned half round about each of its axes
@@ -27,16 +19,9 @@ function read(turn: Vector3, was: Vector3) {
   const now = [was.x, was.y, was.z].every(Number.isFinite) ? was : new Vector3()
   const near = (angle: number, to: number) => angle - FULL * Math.round((angle - to) / FULL)
   const ways = [turn.clone(), new Vector3(turn.x + Math.PI, Math.PI - turn.y, turn.z + Math.PI)].map((way) => way.set(near(way.x, now.x), near(way.y, now.y), near(way.z, now.z)))
-  const cost = (way: Vector3) => 10 * beyond(way, RANGE.arm) + way.distanceTo(now)
+  const cost = (way: Vector3) => 10 * beyond(way, RANGE.arm, 0) + way.distanceTo(now)
   return cost(ways[0]) <= cost(ways[1]) ? ways[0] : ways[1]
 }
-
-/** how far a turn is past a range, summed over its axes (rad) */
-const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) =>
-  (['x', 'y', 'z'] as const).reduce((sum, axis) => {
-    const [least, most] = range[axis] ?? [-Infinity, Infinity]
-    return sum + Math.max(0, least - value[axis], value[axis] - most)
-  }, 0)
 
 /**
  * How an arm turns for its wrist to be at a place and its hand turned so, from its shoulder on a trunk turned so: its
@@ -72,14 +57,14 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
     const { first, fold } = arm.reach(to, swung)
     const asked = read(first, arm.first.value)
     // (what a joint cannot turn to costs: the hand comes short by it)
-    const stopped = beyond(asked, RANGE.arm) + Math.max(0, RANGE.forearm.x[0] - fold, fold)
+    const stopped = beyond(asked, RANGE.arm, 0) + Math.max(0, RANGE.forearm.x[0] - fold, fold)
     const upper = within(asked, RANGE.arm)
     const elbow = Math.min(0, Math.max(RANGE.forearm.x[0], fold))
     const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(upper))).multiply(new Quaternion().setFromEuler(euler.set(elbow, 0, 0)))
     const wrist = bends(forearm, hand.palm, palm, pointing)
     // (a hand that cannot be turned so at all is turned as it hangs)
     const bent = wrist && [wrist.x, wrist.y, wrist.z].every(Number.isFinite) ? wrist : new Vector3()
-    const cost = 10 * stopped + beyond(bent, RANGE.wrist) + (arm.inside(upper, elbow) ? 10 : 0) + SWIVEL.moved * Math.abs(swung - swivel)
+    const cost = 10 * stopped + beyond(bent, RANGE.wrist, 0) + (arm.inside(upper, elbow) ? 10 : 0) + SWIVEL.moved * Math.abs(swung - swivel)
     return { first: upper, fold: elbow, wrist: within(bent, RANGE.wrist), swivel: swung, cost }
   }
   // (it swings on from the swing it had, a little either way a step; only an arm in the trunk looks further)
@@ -109,11 +94,11 @@ export function reachLeg(leg: Limb, hip: Vector3, toes: number, ankle: Vector3) 
  */
 export function room(limb: Limb, out: Vector3, axis: Vector3) {
   // (a turn is within its range if any way of reading it is: a full turn apart, or turned half round about each axis)
-  const within = (turn: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) =>
+  const reads = (turn: Vector3, range: Range) =>
     [turn, new Vector3(turn.x + Math.PI, Math.PI - turn.y, turn.z + Math.PI)].some((way) =>
-      [-FULL, 0, FULL].some((x) => [-FULL, 0, FULL].some((z) => beyond(way.clone().add(new Vector3(x, 0, z)), range) < 1e-3)),
+      [-FULL, 0, FULL].some((x) => [-FULL, 0, FULL].some((z) => beyond(way.clone().add(new Vector3(x, 0, z)), range, 0) < 1e-3)),
     )
-  const reaches = (to: Vector3) => (limb.hand ? [-0.6, 0, 0.6].some((swivel) => within(limb.reach(to, swivel).first.clone(), RANGE.arm)) : within(limb.reach(to).first.clone(), RANGE.thigh))
+  const reaches = (to: Vector3) => (limb.hand ? [-0.6, 0, 0.6].some((swivel) => reads(limb.reach(to, swivel).first.clone(), RANGE.arm)) : reads(limb.reach(to).first.clone(), RANGE.thigh))
   let back = 0
   while (back < 1.5 * Math.PI && reaches(out.clone().applyAxisAngle(axis, -(back + SWIVEL.fine)))) back += SWIVEL.fine
   return back

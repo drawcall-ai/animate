@@ -83,8 +83,8 @@ export class Body {
     }
     const ends = { hand: both((side) => end('hand', side)), foot: both((side) => end('foot', side)) }
     asks.hands.push(ends.hand.left, ends.hand.right)
-    this.hand = both((side) => facade(ends.hand[side]) as Hand)
-    this.foot = both((side) => facade(ends.foot[side]) as Foot)
+    this.hand = ends.hand
+    this.foot = ends.foot
     const { hips: at } = legs
     this.hips = { ...at, to: (target, way) => legs.to(target, way), at: (place) => legs.at(place) }
     this.trunk = turning.trunk
@@ -144,7 +144,7 @@ export class Body {
     }
     const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, (thing) => this.seen(thing, false), () => this.workings.asks.forget(), { strength, draw })
     this.things.set(object, bound)
-    return bound.facade()
+    return bound
   }
 
   /** what is bound to him: each thing, the sides of the hands on it and the grips they hold it by, and whether it is moved from outside */
@@ -366,23 +366,4 @@ export class Body {
   update(delta: number) {
     this.clock.update(delta)
   }
-}
-
-/** what a story has of an end */
-function facade(end: End): Hand | Foot {
-  return {
-    value: end.value,
-    velocity: end.velocity,
-    get there() {
-      return end.there
-    },
-    get anchor() {
-      return end.anchor
-    },
-    to: (place: never, { seconds, ...how }: { seconds?: number } = {}) => end.send(place, how, { seconds }),
-    by: (when: number, place: never, how = {}) => end.send(place, how, { by: when }),
-    shape: (pose?: never, how?: { by?: number }) => end.shape(pose, how),
-    cancel: () => end.cancel(),
-    free: () => end.free(),
-  } as unknown as Hand
 }
