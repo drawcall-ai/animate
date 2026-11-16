@@ -50,6 +50,8 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size, bent:
   const most = sinks ? (1 - DEEPEST.low) * stand : 0
   // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
   if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
+  // (for what is beyond his reach along the ground he only bends: getting down brings it no nearer, a step would)
+  if (Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z) > REACH * arm) sinks = false
   // (above the knees, what it costs is how far his weight comes down: all of it getting down, what is above the hips bending)
   const low = hand.y < -0.5 * leg
   let best = { bend: 0, sink: 0, cost: Infinity }
