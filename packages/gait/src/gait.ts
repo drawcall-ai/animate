@@ -356,7 +356,7 @@ export class Gait {
       // (his steps begin anew from where he landed)
       this.stepping = false
       for (const side of SIDES) delete this.steps[side]
-      if (this.course === leap.course) this.course = new Course(size, now, leap.place, leap.velocity, leap.place.clone().addScaledVector(leap.velocity, leap.velocity.length() / (2 * PUSH.along)), { speed: leap.velocity.length() + 0.1, push: PUSH.along, arrive: 0 })
+      if (this.course === leap.course) this.course = new Course(size, now, leap.place, leap.velocity, leap.place.clone().addScaledVector(leap.velocity, leap.low === undefined ? leap.velocity.length() / (2 * PUSH.along) : 0), { speed: leap.velocity.length() + 0.1, push: PUSH.along, arrive: 0 })
       if (leap.low !== undefined) this.height = Math.min(this.height, leap.low)
     }
     const toes = Object.fromEntries(SIDES.filter((side) => !this.steps[side]).map((side) => [side, yawOf(feet[side].turn)]))
