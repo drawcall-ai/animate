@@ -1,6 +1,6 @@
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Gait, Side } from '@drawcall/gait'
-import { between, Channel, EASE, type Frame, hardest, type Mover, type Xyz } from '@drawcall/plan'
+import { between, Channel, EASE, SWAY, type Frame, hardest, type Mover, type Xyz } from '@drawcall/plan'
 import type { OnHim } from './movers'
 import { DOWN, type Grip, type Pose, type Touch } from './rig/fingers'
 import { type Limb, NEAR, REACH, sway } from './rig/limb'
@@ -13,8 +13,6 @@ import { type Story, waits } from './story'
  * each draws back before a fast arrival at the most (in lengths of its limb)
  */
 const END = { hand: { strength: 25, draw: 0.5 }, foot: { strength: 30, draw: 0.6 } }
-/** how hard a limb is pushed at its ease, the way an arm sways: a share of how hard it can be */
-const SWAYS = 1 / 6
 /** how far ahead the first moment a limb can reach something is looked for, and how finely (in his beats) */
 const LOOK = { far: 10, fine: 0.1 }
 
@@ -111,6 +109,8 @@ export class End {
     const { pace, beat } = body.size
     // (a hand turns no faster than its wrist does)
     this.channel = new Channel(`${side} ${kind}`, (strength * pace) / beat, draw * limb.length, limb.hand?.wrist.strength)
+    // (it swings on round where its limb starts, as far round as the limb goes)
+    this.channel.pivot = { about: root, room: (out, axis) => this.room(out, axis.clone().negate()) }
   }
 
   get name() {
@@ -217,7 +217,7 @@ export class End {
     this.root.state(this.body.time(), now, new Vector3())
     const start = from.clone().sub(now)
     const way = Math.abs(Math.atan2(start.clone().cross(out).dot(axis), start.dot(out))) * out.length()
-    const going = Math.sqrt((6 * way) / (SWAYS * this.channel.strength))
+    const going = Math.sqrt((6 * way) / (SWAY * this.channel.strength))
     return frame.at - Math.max(going, strong(least) ? least : between(Math.max(most, least), least, strong)[0])
   }
 
@@ -429,7 +429,7 @@ export class End {
     }
     // (at its ease: pushed a sixth as hard as it can be, which an arm sways in; a strike, half as hard)
     const strikes = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
-    const strength = this.channel.strength * (strikes ? EASE : SWAYS)
+    const strength = this.channel.strength * (strikes ? EASE : SWAY)
     const soonest = Math.max(after, now + Math.max(0.5 * body.size.beat, Math.sqrt((6 * place(now).distanceTo(this.value)) / strength)))
     let best = { t: soonest, far: Infinity }
     for (let t = soonest; t < now + LOOK.far * body.size.beat; t += LOOK.fine * body.size.beat) {

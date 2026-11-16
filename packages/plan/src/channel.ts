@@ -31,6 +31,8 @@ export type Frame = {
 type Planned = Frame & { met?: { at: number; velocity: Vector3; leaves: number; slow: number; late: number; turn: Quaternion } }
 /** what a share of its strength something is pushed with at its ease: coming round on its own, or reacting */
 export const EASE = 0.5
+/** what share of its strength it slows with as it swings on round its pivot: as an arm sways */
+export const SWAY = 1 / 6
 /** how many times as far as it draws back at the most it swings on after a fast arrival, at the most */
 const ON = 4
 /** how far a fast arrival draws back is `velocity × swing × 4/27`: so a swing of `DRAW × draw / speed` draws back `draw` */
@@ -64,6 +66,8 @@ export class Channel implements Mover {
   readonly spin = new Vector3()
   readonly frames: Planned[] = []
   outside = false
+  /** what it swings round, as a hand round its shoulder, if anything, and how far round an `axis` it goes from a place `out` from there (rad) */
+  pivot?: { about: Mover; room(out: Vector3, axis: Vector3): number }
   /** asked for a frame once it has none left and has come to rest: what owns it then */
   settle?: (channel: Channel) => Frame | undefined
   /** how the last frame it met came short: arriving so much slower (share) and later (s) */
@@ -164,17 +168,38 @@ export class Channel implements Mover {
     if (!this.frames.length) this.swingOn(this.now, this.value, this.velocity)
   }
 
-  /** arrived moving with nothing after, it swings on the way it was going and comes to rest at its ease */
-  private swingOn(when: number, place: Vector3, velocity: Vector3, about?: Mover) {
+  /**
+   * arrived moving with nothing after, it swings on the way it was going and comes to rest at its ease: round its
+   * pivot, if it has one, as far as it goes round there at the most, held on it as it goes
+   */
+  private swingOn(when: number, place: Vector3, velocity: Vector3) {
     const speed = velocity.length()
     // (what would swing on hardly at all does not)
     if ((speed * speed) / this.strength < 3e-3 * this.draw) return
-    // (no further than it may draw back so many times over: round a pivot, a fast arm wraps on round it)
-    const T = Math.min((2 * speed) / (EASE * this.strength), (2 * ON * this.draw) / speed)
-    // (and it turns on as it was turning, as far as that carries it)
+    const [pivot, pivoting, facing] = [new Vector3(), new Vector3(), new Quaternion()]
+    this.pivot?.about.state(when, pivot, pivoting, facing)
+    const out = place.clone().sub(pivot)
+    const axis = out.clone().cross(velocity.clone().sub(pivoting))
+    const round = axis.length() / Math.max(out.lengthSq(), 1e-9)
+    let T: number
+    let frame: Frame
+    if (this.pivot && round > 1e-3) {
+      // (round its pivot it slows as an arm sways, no further round than it goes, and no harder than it can)
+      axis.normalize()
+      const angle = Math.min(this.pivot.room(out, axis), (round * round * out.length()) / (2 * SWAY * this.strength))
+      T = Math.max((2 * speed) / this.strength, (2 * angle) / round)
+      const there = out.applyAxisAngle(axis, angle).applyQuaternion(facing.invert())
+      frame = { at: when + T, place: there, on: this.pivot.about, about: this.pivot.about, by: 'on' }
+    } else {
+      // (no further than it may draw back so many times over)
+      T = Math.min((2 * speed) / (EASE * this.strength), (2 * ON * this.draw) / speed)
+      frame = { at: when + T, place: place.clone().addScaledVector(velocity, T / 2), by: 'on' }
+    }
+    // (and it turns on as it was turning, as far as that carries it: told as what it is held on is turned)
     const spin = this.spin.clone().applyQuaternion(this.turn.clone().invert()).multiplyScalar(T / 2)
-    const turn = turnBy(this.turn, spin, new Quaternion())
-    this.frames.push({ at: when + T, place: place.clone().addScaledVector(velocity, T / 2), turn, about, by: 'on' })
+    frame.turn = turnBy(this.turn, spin, new Quaternion())
+    if (frame.on) frame.turn.premultiply(facing)
+    this.frames.push(frame)
   }
 
   /** a frame for this channel told as the frame its parent is to have */
@@ -395,7 +420,7 @@ export class Channel implements Mover {
       this.reached.add(head)
       this.last = this.frames.shift()
       if (!this.frames.length && head.met.velocity.lengthSq() > 0) {
-        this.swingOn(head.met.at, this.value, this.velocity, head.about)
+        this.swingOn(head.met.at, this.value, this.velocity)
         this.last = undefined
       }
       this.fitHead()

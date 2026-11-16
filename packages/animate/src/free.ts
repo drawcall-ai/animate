@@ -94,8 +94,8 @@ export class Free {
     const lead = looks ? looks.yaw - facing : going.aims
     head.react(want.setY(want.y + clamp(lead, -LEADS.head, LEADS.head)), dt)
     const folded = Math.min(ARMS.folded, ARMS.folds * fast * fast)
-    // the arms are thrown the way the legs push the hips: forward and up as he pushes off, up while he rises through the air, back as he drops and falls
-    const lift = flying ? hips.velocity.y / (THROW.flung * size.pace) : pushed.y / GRAVITY
+    // in a jump the arms are thrown the way the legs push the hips: back as he drops before the push, forward and up as he pushes off, up while he rises through the air
+    const lift = !gait.jumps ? 0 : flying ? Math.max(0, hips.velocity.y) / (THROW.flung * size.pace) : pushed.y / GRAVITY
     this.lift += (clamp(lift, THROW.least, THROW.most) - this.lift) * (1 - Math.exp(-2 * Math.PI * joints.arms.left.first.rate * dt))
     const thrown = -ARMS.thrown * this.lift
     for (const side of SIDES) {

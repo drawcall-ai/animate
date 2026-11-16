@@ -5,6 +5,7 @@ import { type Bones } from './rig/bones'
 import { type Joints, parts } from './rig/joints'
 import { both, type Size, tick } from './rig/size'
 import { type Story } from './story'
+import { SWAY } from '@drawcall/plan'
 import { Euler, type Object3D, Quaternion, Vector3 } from 'three'
 import type { End } from './ends'
 import type { Watched } from './movers'
@@ -143,11 +144,11 @@ export class Clock {
         arm.first.follow(reached.first, delta)
         arm.second.follow(new Vector3(reached.fold, 0, 0), delta)
         arm.hand.wrist.follow(reached.wrist, delta)
-      } else if (!joints.arms[side].first.reacts) {
-        // (given back at rest, it reacts from where it is)
+      } else if (!joints.arms[side].first.reacts && !joints.arms[side].first.loose) {
+        // (given back, it comes round from the state it is in to what the body has it do, as an arm sways)
         for (const part of [joints.arms[side].first, joints.arms[side].second, joints.arms[side].hand.wrist]) {
-          part.velocity.set(0, 0, 0)
-          part.free()
+          const ease = SWAY * part.strength
+          part.release(Math.max(Math.sqrt((6 * part.value.length()) / ease), (4 * part.velocity.length()) / ease))
         }
       }
       const foot = ends.foot[side]
