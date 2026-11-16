@@ -478,6 +478,8 @@ export class Gait {
     delete this.placing[side]
     const sets = theirs ? (theirs.leaves ?? (theirs.at ?? now) - TAKES * size.beat) : Infinity
     if ((this.steps[side]?.lands ?? now + (1 - this.duty) / this.rate) > sets) {
+      // (one in the air goes from where it is)
+      if (this.steps[side]) foot.cancel('gait')
       delete this.steps[side]
       return
     }
