@@ -1,25 +1,24 @@
 import { Object3D, Vector3 } from 'three'
-import { type Side, SIDES, SIGN, UP, wrap } from '@drawcall/gait'
-import { type Xyz } from '@drawcall/plan'
-import { Bones } from './rig/bones'
-import { type Part } from './rig/goal'
-import { joints, parts } from './rig/joints'
-import { type Band } from './rig/shape'
-import { both, type Size } from './rig/size'
-import { due, type Story, waits } from './story'
-import type { Mover } from '@drawcall/plan'
+import { FACED, type Side, SIDES, SIGN, UP, wrap } from '@drawcall/gait'
+import type { Mover, Xyz } from '@drawcall/plan'
 import { Clock, type Workings } from './clock'
 import { End, type Foot, type Hand } from './ends'
+import { Free } from './free'
 import { type Intent, intent } from './intent'
+import { Legs } from './legs'
 import { OnHim, Watched } from './movers'
 import { Asks } from './posture'
-import { Free } from './free'
-import { Legs } from './legs'
+import { Bones } from './rig/bones'
+import type { Part } from './rig/goal'
+import { joints, parts } from './rig/joints'
+import type { Band } from './rig/shape'
+import { both, type Size } from './rig/size'
+import { due, type Story, waits } from './story'
 import { Bound, type Thing } from './thing'
 
+/** how far a knock carries him before he steps after it (in legs) */
+const KNOCK = 0.114
 /** the body made for each rig */
-/** how near the way he is to face counts as facing it (rad), and how far a knock carries him before he steps after it (in legs) */
-const [FACED, KNOCK] = [0.02, 0.114]
 const rigs = new WeakMap<Object3D, Body>()
 
 /** a place on the ground, or told as a number, so far along z on x = 0; a run to one and a walk */

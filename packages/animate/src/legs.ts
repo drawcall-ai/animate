@@ -10,10 +10,9 @@ import type { Asks } from './posture'
 /** how fast a heel comes down again, and comes up (rad a beat), and how finely it is brought up (rad) */
 const ROLL = { down: 1.8, up: 9, step: 0.01, exact: 1e-4 }
 /** how many times a beat a foot in the air comes round to how it hangs, and an ankle eases to where it is to be from where it was as its foot came down or left */
-const DROOP = 9
+const COMES = { foot: 9, ankle: 6 }
 /** how far off the ground a foot in the air keeps its toe and heel (in legs) */
 const TOE = 0.02
-const EASE = 6
 /** how near as high as sent the hips count as there (in legs) */
 const HIGH = 0.034
 
@@ -144,7 +143,7 @@ export class Legs {
       // (coming down, or leaving the ground heel up, it goes on from where its ankle was, and eases to where it is to be)
       if (down !== this.down[side]) this.eased[side].copy(this.ankle[side]).applyAxisAngle(UP, -toes).sub(ankle)
       this.down[side] = down
-      ankle.add(this.eased[side].multiplyScalar(Math.exp((-EASE * dt) / size.beat)))
+      ankle.add(this.eased[side].multiplyScalar(Math.exp((-COMES.ankle * dt) / size.beat)))
       this.ankle[side].copy(ankle).applyAxisAngle(UP, toes)
       const { first, fold } = leg.reach(from.copy(ankle).sub(hip))
       leg.first.follow(first, dt)
@@ -170,7 +169,7 @@ export class Legs {
     const { size } = this.bones
     const { first: thigh, second: shin } = this.joints.legs[side]
     const own = !foot.held && !this.gait.steps[side] && !this.coming(side)
-    const hangs = this.pitch[side] + (thigh.value.x + shin.value.x - this.pitch[side]) * Math.min(1, (DROOP * dt) / size.beat)
+    const hangs = this.pitch[side] + (thigh.value.x + shin.value.x - this.pitch[side]) * Math.min(1, (COMES.foot * dt) / size.beat)
     // (in the air its toe and heel keep a little off the ground)
     const high = Math.max(0, foot.value.y - this.ground - size.ankle - (own ? 0 : TOE * size.leg))
     const tipped = (sole: number) => {

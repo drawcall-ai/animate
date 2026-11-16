@@ -1,12 +1,10 @@
 import { Vector3 } from 'three'
 import { clamp } from '@drawcall/gait'
-import { cubic, type Xyz } from '@drawcall/plan'
+import { cubic, EASE, type Xyz } from '@drawcall/plan'
 import { type Story, waits } from '../story'
 import { AXES, type Range, type State, bounds, hardest, quickest } from './curve'
 
 export const REST = { x: 0, y: 0, z: 0 }
-/** how much of its strength a part is pushed with that is not sent anywhere: coming round after it has arrived moving, or reacting */
-export const EASY = 0.5
 /** how many times its strength a part may be asked for before it says it cannot */
 export const MOST = 2
 
@@ -119,7 +117,7 @@ export class Goal {
 
   /** how long what is let go moving so takes to swing out and come round (s): as long as has it slowed at its ease, on its smoothest way */
   private swings(velocity: Xyz) {
-    return Math.max(...AXES.map((axis) => (4 * Math.abs(velocity[axis])) / (EASY * this.strength)))
+    return Math.max(...AXES.map((axis) => (4 * Math.abs(velocity[axis])) / (EASE * this.strength)))
   }
 
   /**
@@ -224,7 +222,7 @@ export class Goal {
     pushed.addVectors(this.velocity, push).divideScalar((1 + pull * dt) ** 2)
     // and pushed no harder than what is not sent anywhere is
     for (const axis of AXES) {
-      const most = EASY * this.strength * dt
+      const most = EASE * this.strength * dt
       this.velocity[axis] += Math.max(-most, Math.min(most, pushed[axis] - this.velocity[axis]))
     }
     this.value.addScaledVector(this.velocity, dt)

@@ -1,5 +1,6 @@
-import { type Side, SIGN } from '@drawcall/gait'
-import { EASY } from './rig/goal'
+import { LOWEST, SETTLE, type Side, SIGN } from '@drawcall/gait'
+import { EASE } from '@drawcall/plan'
+import { REACH } from './rig/limb'
 import { RANGE } from './rig/joints'
 import { type Size } from './rig/size'
 import { Vector3 } from 'three'
@@ -13,11 +14,9 @@ import { Watched } from './movers'
  */
 const SHARE = { turn: 0.7, shift: 0.12, ease: 0.45 }
 /** how far the trunk bends forward at the most (rad), and how low the hips come down at the most (of how high they stand): a full squat */
-const DOWN = { bend: RANGE.trunk.x[1], low: 0.316 }
+const DEEPEST = { bend: RANGE.trunk.x[1], low: LOWEST }
 /** how far below the shoulder a hand is, in lengths of his arm, before he gets down for it */
 const LOW = 0.4
-/** how much of an arm a hand reaches without stretching */
-const REACH = 0.97
 /** how far ahead of a hand the hips and the trunk move for it (in his beats): the hips first, as the parts nearer the middle lead; and how far ahead what he gets down for is looked at */
 const LEAD = { hips: 1, trunk: 0.5, down: 1 }
 /** what bending costs against getting down for a hand below the knees: a low one is reached with the legs */
@@ -25,8 +24,8 @@ const COST = { low: { bend: 0.9, sink: 0.25 } }
 /** how much of his weight is above the hips: what bending lowers, where getting down lowers all of it */
 const UPPER = 0.6
 
-/** how fast the hips let down (in his paces a second), and how long they take over the last of the way (in his beats): as locomotion lets them down */
-const HIPS = { sink: 0.34, settle: 0.835 }
+/** how fast the hips let down (in his paces a second), taking the gait's `SETTLE` over the last of the way */
+const SINK = 0.34
 
 /** how far through something is, eased in and out */
 const smooth = (s: number) => {
@@ -48,13 +47,13 @@ function asks(side: Side, hand: Vector3, shoulder: Vector3, { arm }: Size) {
 
 /** for a hand lower than it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is */
 function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size) {
-  const most = (1 - DOWN.low) * stand
+  const most = (1 - DEEPEST.low) * stand
   // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
   if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
   // (above the knees, what it costs is how far his weight comes down: all of it getting down, what is above the hips bending)
   const low = hand.y < -0.5 * leg
   let best = { bend: 0, sink: 0, cost: Infinity }
-  for (let bend = 0; bend <= DOWN.bend + 1e-6; bend += DOWN.bend / 12) {
+  for (let bend = 0; bend <= DEEPEST.bend + 1e-6; bend += DEEPEST.bend / 12) {
     for (let sink = 0; sink <= most + 1e-6; sink += most / 12) {
       const at = new Vector3(shoulder.x, shoulder.y * Math.cos(bend) - sink, shoulder.z + shoulder.y * Math.sin(bend))
       const short = Math.max(0, at.distanceTo(hand) - REACH * arm)
@@ -94,8 +93,8 @@ export class Asks {
   private leads({ bend, sink }: { bend: number; sink: number }) {
     const { pace, beat } = this.size
     return {
-      sinks: sink > 0 ? sink / (HIPS.sink * pace) + HIPS.settle * beat : 0,
-      bends: bend > 0 ? Math.sqrt((6 * bend) / (EASY * this.trunk.strength)) + 1 / this.trunk.rate : 0,
+      sinks: sink > 0 ? sink / (SINK * pace) + SETTLE * beat : 0,
+      bends: bend > 0 ? Math.sqrt((6 * bend) / (EASE * this.trunk.strength)) + 1 / this.trunk.rate : 0,
     }
   }
 
@@ -158,7 +157,7 @@ export class Asks {
 
   /** how long he takes to be up again from how far he is let down and bent now (s) */
   rising(bend: number, low: number) {
-    const most = { bend: DOWN.bend, sink: (1 - DOWN.low) * this.size.stand }
+    const most = { bend: DEEPEST.bend, sink: (1 - DEEPEST.low) * this.size.stand }
     return Math.max(0, bend / most.bend, low / most.sink) * this.takes(most)
   }
 

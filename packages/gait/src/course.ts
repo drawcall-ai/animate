@@ -1,14 +1,11 @@
 import { Vector3 } from 'three'
-import { angleOf, PUSH, type Size, wrap } from './measure'
+import { angleOf, PUSH, SETTLE, type Size, STILL, wrap } from './measure'
 
 /** how many steps a beat a course is told in, and how long it is told at the most (in beats) */
 const STEPS = 20
 const LONGEST = 66
-/** how long the hips take over the last of their way to rest (in beats) */
-const SETTLE = 0.835
-/** how near a place counts as there (in legs), and how slow as still (in paces) */
+/** how near a place counts as there (in legs) */
 const THERE = 0.0114
-const STILL = 0.017
 
 /** a way to go to a place: as fast as `speed`, sped up so hard (m/s²), arriving there so fast (none: to rest) */
 export type Way = { speed: number; push: number; arrive: number }

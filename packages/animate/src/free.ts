@@ -1,4 +1,4 @@
-import { clamp, GRAVITY, SIDES, SIGN, wrap } from '@drawcall/gait'
+import { clamp, FACED, GRAVITY, SIDES, SIGN, wrap } from '@drawcall/gait'
 import { type Xyz } from '@drawcall/plan'
 import { REST } from './rig/goal'
 import { ANKLE, type Joints, RANGE } from './rig/joints'
@@ -21,10 +21,7 @@ const LEADS = { trunk: 0.8, head: 1.2 }
 /** how an arm swings against the legs (of how far the thighs are apart, at rest, more for every pace, at the most); how far the elbow folds for every pace squared, at the most, and less for every rad it swings back; how far forward an arm is thrown for a push as hard as his weight (rad) */
 const ARMS = { least: 0.5, faster: 0.44, most: 1.5, folds: 1.3, folded: 1.5, opens: 0.3, thrown: 1.2 }
 /** how hard the arms take the legs to push him up (times his weight), and how fast the hips rise with them as far up as that throws them (in paces) */
-const LIFT = { least: -1, most: 1.2 }
-const FLUNG = 0.68
-/** how near the way he is to face counts as facing it (rad) */
-const FACED = 0.02
+const THROW = { least: -1, most: 1.2, flung: 0.68 }
 
 /**
  * The free parts reacting to the gait and the hands: the trunk leans as the planned hips push it and into a turn, and
@@ -97,8 +94,8 @@ export class Free {
     head.react(want.setY(want.y + clamp(lead, -LEADS.head, LEADS.head)), dt)
     const folded = Math.min(ARMS.folded, ARMS.folds * fast * fast)
     // the arms are thrown the way the legs push the hips: forward and up as he pushes off, up while he rises through the air, back as he drops and falls
-    const lift = flying ? hips.velocity.y / (FLUNG * size.pace) : pushed.y / GRAVITY
-    this.lift += (clamp(lift, LIFT.least, LIFT.most) - this.lift) * (1 - Math.exp(-2 * Math.PI * joints.arms.left.first.rate * dt))
+    const lift = flying ? hips.velocity.y / (THROW.flung * size.pace) : pushed.y / GRAVITY
+    this.lift += (clamp(lift, THROW.least, THROW.most) - this.lift) * (1 - Math.exp(-2 * Math.PI * joints.arms.left.first.rate * dt))
     const thrown = -ARMS.thrown * this.lift
     for (const side of SIDES) {
       const { first: arm, second: forearm, hand } = joints.arms[side]

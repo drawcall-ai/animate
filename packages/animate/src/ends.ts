@@ -1,14 +1,12 @@
-import { type Side } from '@drawcall/gait'
-import { DOWN, type Grip, type Pose, type Touch } from './rig/fingers'
-import { EASY } from './rig/goal'
-import { type Limb, SLACK, sway } from './rig/limb'
-import { EXACT, type Size, tick } from './rig/size'
-import { type Story, waits } from './story'
-import type { Gait } from '@drawcall/gait'
-import { between, Channel, type Frame, hardest, type Mover, type Xyz } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
+import type { Gait, Side } from '@drawcall/gait'
+import { between, Channel, EASE, type Frame, hardest, type Mover, type Xyz } from '@drawcall/plan'
 import type { OnHim } from './movers'
+import { DOWN, type Grip, type Pose, type Touch } from './rig/fingers'
+import { type Limb, NEAR, REACH, sway } from './rig/limb'
+import { EXACT, type Size, tick } from './rig/size'
 import { room } from './solve'
+import { type Story, waits } from './story'
 
 /**
  * how strong a hand and a foot are, how hard they can be pushed along at the most (in his paces a beat), and how far
@@ -19,8 +17,6 @@ const END = { hand: { strength: 25, draw: 0.5 }, foot: { strength: 30, draw: 0.6
 const SWAYS = 1 / 6
 /** how far ahead the first moment a limb can reach something is looked for, and how finely (in his beats) */
 const LOOK = { far: 10, fine: 0.1 }
-/** how much of its length a limb reaches at its ease */
-const EASE = 0.97
 
 /** a place counted `on` him, from where the limb starts and as he faces, or on a thing, in its frame as it moves */
 export type On = { on?: Object3D | object }
@@ -147,7 +143,7 @@ export class End {
   get there() {
     const { channel } = this
     const bound = channel.busy && !channel.frames.length
-    return (channel.holding || bound) && this.gap <= SLACK.place * this.body.size.leg
+    return (channel.holding || bound) && this.gap <= NEAR * this.body.size.leg
   }
 
   /** sends the end somewhere: in `seconds`, by a moment, or at the first moment the body lets it be there */
@@ -201,14 +197,14 @@ export class End {
     const round = axis.length() / Math.max(out.lengthSq(), 1e-9)
     if (round < 1e-3) return undefined
     axis.normalize()
-    const ease = (EASY * this.channel.strength) / out.length()
+    const ease = (EASE * this.channel.strength) / out.length()
     const back = Math.min(this.room(out, axis), (round * round) / (2 * ease))
     if (back < 1e-3) return undefined
     // (and no quicker than it is strong enough to come up to speed in, drawn back further on the way if it must)
     const far = back * out.length()
     const fast = speed.length()
-    const strong = (T: number) => hardest({ value: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }, { value: { x: far, y: 0, z: 0 }, velocity: { x: fast, y: 0, z: 0 } }, T) <= EASY * this.channel.strength
-    const [least, most] = [(3 * back) / round, (4 * fast) / (EASY * this.channel.strength)]
+    const strong = (T: number) => hardest({ value: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }, { value: { x: far, y: 0, z: 0 }, velocity: { x: fast, y: 0, z: 0 } }, T) <= EASE * this.channel.strength
+    const [least, most] = [(3 * back) / round, (4 * fast) / (EASE * this.channel.strength)]
     // (and no quicker than it goes at its ease the way round to there from where it is)
     const now = new Vector3()
     this.root.state(this.body.time(), now, new Vector3())
@@ -288,7 +284,7 @@ export class End {
 
   private *met(frame: Frame): Story<boolean> {
     while (this.channel.frames.includes(frame)) yield
-    return this.channel.met(frame) && this.gap <= SLACK.place * this.body.size.leg
+    return this.channel.met(frame) && this.gap <= NEAR * this.body.size.leg
   }
 
   /** the part of the hand it was last sent with, if not its wrist: its channel plans where that part is, and the arm puts it there */
@@ -426,14 +422,14 @@ export class End {
     }
     // (at its ease: pushed a sixth as hard as it can be, which an arm sways in; a strike, half as hard)
     const strikes = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
-    const strength = this.channel.strength * (strikes ? EASY : SWAYS)
+    const strength = this.channel.strength * (strikes ? EASE : SWAYS)
     const soonest = Math.max(after, now + Math.max(0.5 * body.size.beat, Math.sqrt((6 * place(now).distanceTo(this.value)) / strength)))
     let best = { t: soonest, far: Infinity }
     for (let t = soonest; t < now + LOOK.far * body.size.beat; t += LOOK.fine * body.size.beat) {
       this.root.state(t, root, unused)
       // (a hand's along the ground: how low it is he gets down for; a foot's from its hip)
       const off = place(t).clone().sub(root)
-      const far = (this.kind === 'hand' ? Math.hypot(off.x, off.z) : off.length()) - EASE * limb.length
+      const far = (this.kind === 'hand' ? Math.hypot(off.x, off.z) : off.length()) - REACH * limb.length
       const spared = this.kind === 'hand' || body.gait.spares(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
       if (far <= 0 && spared) return t
       if (far < best.far) best = { t, far }

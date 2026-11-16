@@ -19,10 +19,9 @@ const SOON = 0.7
 /** how much of a stride a foot is down at the least running, walking, and at the most */
 const DUTY = { least: 0.2, walk: 0.55, most: 0.65 }
 /** how far round past where he turns to a foot comes down, for him to come on round over it (rad) */
-const LEAD = 0.5
+const OVERTURN = 0.5
 /** how much further than a straight leg reaches a foot comes down at the most (in legs), and how far apart across him feet are at the least (in shares of how far out each stands) */
-const REACH = 0.03
-const APART = 1.5
+const FOOTFALL = { beyond: 0.03, apart: 1.5 }
 /** sidestepping, past how far off the way he goes he faces (the sine), and below how fast (in paces); the foot ahead steps out so far, and so much further for every pace (in legs) */
 const SIDLE = { across: 0.7, most: 0.5, step: 0.4, faster: 0.6 }
 
@@ -53,14 +52,14 @@ export function duty(size: Size, going: Going, stride: number) {
 }
 
 /** which way he will face in so long: on round as he turns, no further than he is to, and a lead further, for a foot to let him come round over it */
-export const faces = ({ facing, spins, aims }: Going, seconds: number, lead = LEAD) =>
+export const faces = ({ facing, spins, aims }: Going, seconds: number, lead = OVERTURN) =>
   facing + Math.sign(aims) * Math.min(Math.abs(aims), Math.abs(spins) * seconds + lead)
 
 /** a foot is kept to its own side of the other, as he faces so, and so much further (m): or so much of the way there */
 export function clear(size: Size, foot: Vector3, side: Side, partner: Vector3, faced: number, speed: number, share = 1, more = 0) {
   const across = left(faced)
   const gap = SIGN[side] * foot.clone().sub(partner).dot(across)
-  const least = APART * wide(size, speed) + more
+  const least = FOOTFALL.apart * wide(size, speed) + more
   if (gap < least) foot.addScaledVector(across, SIGN[side] * (least - gap) * share)
 }
 
@@ -96,7 +95,7 @@ export function footfall(size: Size, going: Going, side: Side, lands: number, st
   // (no further than its leg reaches as it comes down)
   const under = hips(lands).add(out)
   const off = to.clone().sub(under).setY(0)
-  const reach = span(size, going.speed).ahead + REACH * size.leg
+  const reach = span(size, going.speed).ahead + FOOTFALL.beyond * size.leg
   if (off.length() > reach) to.copy(under).add(off.setLength(reach))
   // never across the other footfall: at a run the two are down one after the other, half a stride apart, as his way
   // turns between them; and its ball clear of the other's, as it points

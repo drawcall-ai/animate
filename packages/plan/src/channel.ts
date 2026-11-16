@@ -29,8 +29,8 @@ export type Frame = {
 
 /** a frame as it is met: the moment, the velocity it can arrive with, when it sets off, and what it came short of */
 type Planned = Frame & { met?: { at: number; velocity: Vector3; leaves: number; slow: number; late: number; turn: Quaternion } }
-/** what a share of its strength it eases with, coming round on its own */
-const EASE = 0.5
+/** what a share of its strength something is pushed with at its ease: coming round on its own, or reacting */
+export const EASE = 0.5
 /** how many times as far as it draws back at the most it swings on after a fast arrival, at the most */
 const ON = 4
 /** how far a fast arrival draws back is `velocity × swing × 4/27`: so a swing of `DRAW × draw / speed` draws back `draw` */

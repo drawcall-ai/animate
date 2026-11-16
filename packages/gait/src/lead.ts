@@ -1,13 +1,11 @@
 import { Vector3 } from 'three'
-import { ahead, angleOf, clamp, damped, RUN, SIDES, type Side, type Size, SLOW, twist, WALK, wrap } from './measure'
+import { ahead, angleOf, clamp, damped, FACED, RUN, SIDES, type Side, type Size, SLOW, twist, WALK, wrap } from './measure'
 import type { Going } from './stride'
 
 /** how long being led faster goes on as it is, dying away (in beats) */
 const SPEEDS = 0.75
 /** how long his pelvis takes to come round to the way he is to face (in beats), and how far off it it no longer turns with the way he goes (rad) */
 const FOLLOW = { pelvis: 1.6, near: 0.5 }
-/** how near the way he is to face counts as facing it (rad) */
-const THERE = 0.02
 
 /**
  * Where he is led, and how he faces: the way along the ground he is to go (m/s), how fast that is speeding up and
@@ -71,7 +69,7 @@ export class Lead {
   /** how far off the way he goes he faces at the most going so fast (rad): facing it from as fast as he walks */
   private widest(going: number) {
     const fast = going / this.size.pace
-    if (fast >= WALK.most) return THERE
+    if (fast >= WALK.most) return FACED
     return Math.acos(Math.sqrt(clamp((fast - 0.5) / (WALK.most - 0.5), 0, 1)))
   }
 
@@ -90,7 +88,7 @@ export class Lead {
     const led = going > SLOW * size.pace
     const heading = led ? this.heading(0) : this.facing
     const want = asked ?? (led ? heading : (this.face ?? this.facing))
-    const backs = led && !fast && Math.cos(wrap(want - heading)) < -THERE
+    const backs = led && !fast && Math.cos(wrap(want - heading)) < -FACED
     const way = heading + (backs ? Math.PI : 0)
     const widest = backs ? Math.PI / 2 : this.widest(going)
     const off = wrap(way + clamp(wrap(want - way), -widest, widest) - this.facing)

@@ -1,11 +1,9 @@
 import type { Frame, Mover } from '@drawcall/plan'
 import { Vector3 } from 'three'
-import { GRAVITY, HEEL, left, PUSH, raised, type Side, SIDES, SIGN, type Size, WALK } from './measure'
+import { GRAVITY, HEEL, left, LOWEST, PUSH, raised, type Side, SIDES, SIGN, type Size, WALK } from './measure'
 
 /** how high above where he stands the hips go at the least: a hop (in legs) */
 const HOP = 0.05
-/** how low the hips go at the most, in shares of how high they stand */
-const LOWEST = 0.316
 /** how much of his weight he lets himself drop with into a crouch */
 const DROP = 0.6
 /** how much of its length a leg is at as he comes down on it, the knee bent to give; how much of the crouch he gives by landing */
@@ -22,7 +20,7 @@ const DRIVE = { y: 0.55, z: 0.3, beats: 0.5, clear: 0.12 }
 /** how long before he comes down his feet reach for the ground, from drawn up under him (in beats) */
 const UNTUCK = 0.5
 /** how far ahead of the hips or behind them a foot is carried through the air, going on (in legs) */
-const APART = 0.2
+const CARRY = 0.2
 
 /** a jump as planned: its frames for the hips and each foot, when he takes off, is highest and lands, and how he lands */
 export type Jump = { hips: Frame[]; feet: Record<Side, Frame[]>; leaves: number; top: number; lands: number; place: Vector3; velocity: Vector3; low?: number }
@@ -96,7 +94,7 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   // (through the air the legs stay as far apart as they left the ground, drawn up under him: the foot he took off from behind)
   for (const side of SIDES) {
     const out = left(facing).multiplyScalar(SIGN[side] * size.hip)
-    const split = runs ? (side === takes ? -APART : APART) * leg : 0
+    const split = runs ? (side === takes ? -CARRY : CARRY) * leg : 0
     const tucked = { x: SIGN[side] * size.hip, y: -(1 - TUCK) * leg, z: split }
     const later = runs && side === takes ? STEP * size.beat : 0
     const down = place.clone().add(out).addScaledVector(across, 0.165 * size.beat + later).setY(ground + ankle)

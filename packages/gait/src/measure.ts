@@ -42,6 +42,12 @@ export const PUSH = { along: 6, up: 20 }
 export const SLOW = 0.1
 export const STILL = 0.017
 export const TOGETHER = 0.114
+/** how near the way he is to face counts as facing it (rad) */
+export const FACED = 0.02
+/** how long the hips take over the last of their way to rest (in beats) */
+export const SETTLE = 0.835
+/** how low the hips go at the most, in shares of how high they stand: a full squat */
+export const LOWEST = 0.316
 
 /** how far he runs rather than walks, going so fast (m/s): from 0 to 1, about the fastest he walks */
 export const runs = ({ pace }: Size, speed: number) => {

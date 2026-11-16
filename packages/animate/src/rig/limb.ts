@@ -8,11 +8,10 @@ import { GRAVITY } from '@drawcall/gait'
 
 /** how much of its length a limb stretches to at the most, and how much further than straight back on itself it folds to at the least: its middle joint is never quite straight nor shut */
 const STRETCH = { most: 0.999, least: 0.011 }
-/**
- * how far off a limb may be and still count as where it is: short of where its end is to be (in lengths of his leg),
- * and a foot from where it is to come down (in lengths of his leg)
- */
-export const SLACK = { reach: 0.023, place: 0.057 }
+/** how near where it is to be a limb's end counts as there (in lengths of his leg) */
+export const NEAR = 0.057
+/** how much of its length a limb reaches without stretching */
+export const REACH = 0.97
 const first = new Vector3()
 const turn = new Euler()
 const swung = new Quaternion()
