@@ -146,7 +146,7 @@ export class Goal {
   /** what comes to the end of its range is stopped there, however hard that is */
   private stopped() {
     for (const axis of AXES) {
-      const [least, most] = bounds(this.range, axis)
+      const [least, most] = bounds(this.range, axis, 0)
       if (this.value[axis] >= least && this.value[axis] <= most) continue
       this.value[axis] = Math.min(most, Math.max(least, this.value[axis]))
       this.velocity[axis] = 0

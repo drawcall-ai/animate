@@ -1,29 +1,14 @@
-import { LOWEST, SETTLE, type Side, SIGN } from '@drawcall/gait'
-import { EASE } from '@drawcall/plan'
-import { REACH } from './rig/limb'
-import { RANGE } from './rig/joints'
-import { type Size } from './rig/size'
-import { Vector3 } from 'three'
+import { SETTLE, type Side } from '@drawcall/gait'
+import { EASE, type Mover } from '@drawcall/plan'
+import { Quaternion, Vector3 } from 'three'
 import type { End } from './ends'
 import { OnHim, Watched } from './movers'
+import { type Ask, type Lean, type Reach, upright } from './reach'
+import { REACH } from './rig/limb'
+import { type Size } from './rig/size'
 
-/**
- * How the trunk and the hips share what a hand is to do: how far the trunk turns for a hand drawn back behind its
- * shoulder or reaching across ahead (rad for an arm's length), how far his weight shifts after it (in lengths of his
- * arm for an arm's length), and how far ahead of its shoulder a hand is at its ease (in lengths of his arm)
- */
-const SHARE = { turn: 0.7, shift: 0.12, ease: 0.45 }
-/** how far the trunk bends forward at the most (rad), and how low the hips come down at the most (of how high they stand): a full squat */
-const DEEPEST = { bend: RANGE.trunk.x[1], low: LOWEST }
-/** how far below the shoulder a hand is, in lengths of his arm, before he gets down for it */
-const LOW = 0.4
-/** how far ahead of a hand the hips and the trunk move for it (in his beats): the hips first, as the parts nearer the middle lead; and how far ahead what he gets down for is looked at */
-const LEAD = { hips: 1, trunk: 0.5, down: 1 }
-/** what bending costs against getting down for a hand below the knees: a low one is reached with the legs */
-const COST = { low: { bend: 0.9, sink: 0.25 } }
-/** how much of his weight is above the hips: what bending lowers, where getting down lowers all of it */
-const UPPER = 0.6
-
+/** how far ahead of a hand each part leans for it (in his beats): the hips and the bend first, as the parts nearer the middle lead */
+const LEAD: Lean = { sink: 1, bend: 1, turn: 0.5, roll: 0.5 }
 /** how fast the hips let down (in his paces a second), taking the gait's `SETTLE` over the last of the way */
 const SINK = 0.34
 
@@ -33,73 +18,31 @@ const smooth = (s: number) => {
   return t * t * (3 - 2 * t)
 }
 
-type Asked = { turn: number; bend: number; sink: number; shift: number }
-
 /**
- * What a hand asks of the rest of him, told from where it will be, on him as he faces, from the middle of his hips:
- * the trunk turns after a hand drawn back and through as it swings, his weight going with it; for a hand lower than
- * it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is.
- */
-function asks(side: Side, hand: Vector3, shoulder: Vector3, { arm }: Size) {
-  const ahead = (hand.z - shoulder.z) / arm - SHARE.ease
-  return { turn: SIGN[side] * SHARE.turn * Math.max(-0.6, Math.min(1.2, -ahead)), shift: SHARE.shift * arm * Math.max(-1, Math.min(1, ahead)) }
-}
-
-/** for a hand lower than it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is: the shoulder where the trunk `bent` so has it */
-function down(hand: Vector3, shoulder: Vector3, { arm, leg, stand }: Size, bent: (bend: number) => Vector3, sinks = true) {
-  const most = sinks ? (1 - DEEPEST.low) * stand : 0
-  // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
-  if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
-  // (for what is beyond his reach along the ground he only bends: getting down brings it no nearer, a step would)
-  if (Math.hypot(hand.x - shoulder.x, hand.z - shoulder.z) > REACH * arm) sinks = false
-  // (above the knees, what it costs is how far his weight comes down: all of it getting down, what is above the hips bending)
-  const low = hand.y < -0.5 * leg
-  let best = { bend: 0, sink: 0, cost: Infinity }
-  for (let bend = 0; bend <= DEEPEST.bend + 1e-6; bend += DEEPEST.bend / 12) {
-    const over = bent(bend)
-    for (let sink = 0; sink <= most + 1e-6; sink += most / 12 || 1) {
-      const at = over.clone().setY(over.y - sink)
-      const short = Math.max(0, at.distanceTo(hand) - REACH * arm)
-      const costs = 100 * short + (low ? COST.low.bend * bend + COST.low.sink * (sink / leg) : (sink + UPPER * shoulder.y * (1 - Math.cos(bend))) / leg)
-      if (costs < best.cost) best = { bend, sink, cost: costs }
-    }
-  }
-  return { bend: best.bend, sink: best.sink }
-}
-
-/**
- * What the hands ask of the hips and the trunk at a moment, for locomotion to read: each hand the story has, as its
- * plan has it a little ahead, on him as he will face. Turns and shifts add, the most bend and sink is kept. Asked
- * again for the same moment it is told from what it worked out, until a frame is written or the clock goes on.
+ * What the hands ask of the hips and the trunk at a moment, for the gait and the free parts to read: how he leans for
+ * every hand the story has to reach where its plan has it then, and to be down in time for where it is to arrive.
+ * Asked again for the same moment it is told from what it worked out, until a frame is written or the clock goes on.
  */
 export class Asks {
-  private readonly known = new Map<number, Asked>()
+  private readonly known = new Map<number, Lean>()
 
   constructor(
     readonly hands: End[],
     private readonly size: Size,
-    /** where each shoulder is from the middle of the hips, he standing at rest */
-    readonly shoulders: Record<Side, Vector3>,
-    /** where the hips are now and how fast they go, and which way he faces */
-    private readonly hips: () => { at: Vector3; velocity: Vector3; facing: number; ground: number },
+    readonly reach: Reach,
+    /** the hips' plan, and how high the ground under him is */
+    private readonly hips: () => Mover,
+    private readonly ground: () => number,
     /** how strong the trunk is and how fast it comes round */
     private readonly trunk: { strength: number; rate: number },
-    /** where a shoulder is from the middle of the hips, the trunk bent forward so far (rad) */
-    private readonly bent: (side: Side, bend: number) => Vector3,
   ) {}
-
-  /** how long getting down so far takes him (s): the hips letting down and settling, the trunk bending at its ease and coming round */
-  private takes({ bend, sink }: { bend: number; sink: number }) {
-    const { sinks, bends } = this.leads({ bend, sink })
-    return Math.max(sinks, bends)
-  }
 
   /** how long the hips take to let down so far, and the trunk to bend so far (s): each from as long before as it takes */
   private leads({ bend, sink }: { bend: number; sink: number }) {
     const { pace, beat } = this.size
     return {
       sinks: sink > 0 ? sink / (SINK * pace) + SETTLE * beat : 0,
-      bends: bend > 0 ? Math.sqrt((6 * bend) / (EASE * this.trunk.strength)) + 1 / this.trunk.rate : 0,
+      bends: Math.abs(bend) > 0 ? Math.sqrt((6 * Math.abs(bend)) / (EASE * this.trunk.strength)) + 1 / this.trunk.rate : 0,
     }
   }
 
@@ -108,91 +51,109 @@ export class Asks {
     this.known.clear()
   }
 
-  private at(time: number): Asked {
+  /** a place in the scene on him, from the middle of his hips standing at a moment (or as high as a jump has them), as he faces then */
+  on(place: Vector3, time: number, carried = false) {
+    const [hips, turn] = [new Vector3(), new Quaternion()]
+    this.hips().state(Math.max(time, this.now), hips, new Vector3(), turn)
+    // (a place that goes with him is counted from where his hips will be, let down as they are)
+    if (!carried) hips.y = Math.max(hips.y, this.ground() + this.size.stand)
+    return place.clone().sub(hips).applyQuaternion(this.facing(turn).invert())
+  }
+
+  /** the way he faces, from how the hips are turned: about up alone */
+  private facing(turn: Quaternion) {
+    const way = new Vector3(0, 0, 1).applyQuaternion(turn)
+    return turn.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(way.x, way.z))
+  }
+
+  /** places in the scene for hands at a moment, each brought as near as the arms reach unstretched with him leaning so: how far short the furthest comes (m) */
+  within(time: number, asks: { side: Side; place: Vector3; carried?: boolean }[]) {
+    const on = asks.map(({ side, place, carried }) => ({ side, place: this.on(place, time, carried), carried }))
+    // (a place on him is counted from him standing: it is planned within what the arms reach upright)
+    // (and else as he leans for them, the arms unstretched)
+    const lean = on.some(({ carried }) => carried) ? upright() : this.reach.lean(on).lean
+    const short = Math.max(...on.map((ask) => this.reach.short(ask, lean, undefined, REACH)))
+    if (short <= 0) return 0
+    const [nearest, turn] = [new Vector3(), new Quaternion()]
+    this.hips().state(Math.max(time, this.now), new Vector3(), new Vector3(), turn)
+    this.facing(turn)
+    on.forEach((ask, k) => {
+      this.reach.short(ask, lean, nearest, REACH)
+      asks[k].place.add(nearest.sub(ask.place).applyQuaternion(turn))
+    })
+    return short
+  }
+
+  private at(time: number): Lean {
     const key = Math.round((time / this.size.beat) * 80)
     const known = this.known.get(key)
     if (known) return known
-    const all: Asked = { turn: 0, bend: 0, sink: 0, shift: 0 }
-    const { at, velocity, facing, ground } = this.hips()
-    // (from the hips as they would stand: what he is down for is what is asked)
-    const hips = at.clone().addScaledVector(velocity, Math.max(0, time - this.now)).setY(ground + this.size.stand)
+    const nows: Ask[] = []
+    const theres: { ask: Ask; due: number }[] = []
     for (const end of this.hands) {
       const { channel } = end
       if (!channel.busy && !channel.holding) continue
+      // (swinging on after a fast arrival, it asks nothing of him)
       if (channel.owner === 'on') continue
-      // (the trunk turns after the way a hand goes; he gets down for where it is to arrive, not for its wind-up)
-      const [hand, there] = [new Vector3(), new Vector3()]
-      channel.state(time, hand, new Vector3())
+      const [hand, there, turn] = [new Vector3(), new Vector3(), new Quaternion()]
+      // (the wrist, for a hand that plans a part of it)
+      const wrist = (at: Vector3) => at.sub(end.offset()?.applyQuaternion(turn) ?? new Vector3())
       // (a hand on a thing is where that is sent)
       const frame = (channel.bound ?? channel).frames[0]
       const next = frame?.at
-      // (for a frame still to come, at its moment; one met already moving is done with, one met at rest is held there)
+      // (for a frame still to come, at its moment; one met already moving he leans for till it is done with, as it was met; one met at rest is held there)
       const passed = next !== undefined && next < time - 1e-6 * this.size.beat
       const swung = passed && frame.velocity !== undefined && new Vector3().copy(frame.velocity).lengthSq() > 0
+      channel.state(swung ? next : time, hand, new Vector3(), turn)
+      wrist(hand)
       const due = next !== undefined && !passed ? next : time
-      channel.state(due, there, new Vector3())
-      const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
-      // (nor for a thing carried with him, which goes down with him; for a place on him, which does too, he only bends)
+      channel.state(due, there, new Vector3(), turn)
+      wrist(there)
+      // (a thing carried with him, a place on him, or a thing the game moves, goes down and along with him)
       const held = (channel.bound ?? channel).goal?.on
-      const lowers = !swung && !(held instanceof Watched && held.carried)
-      const reach = (at: Vector3) => down(at, this.shoulders[end.side], this.size, (bend) => this.bent(end.side, bend), !(held instanceof OnHim))
-      const lowered = lowers ? reach(on(there)) : { bend: 0, sink: 0 }
-      // (and holding a thing on its way to a frame met at rest, as low as where the hand is then: he comes up with what he lifts)
-      const now = lowers && channel.bound && !frame?.velocity ? reach(on(hand.clone())) : { bend: 0, sink: 0 }
-      // (from as long before as getting down that far takes him)
-      const { sinks, bends } = this.leads(lowered)
-      // (easing in over as long before as each takes)
-      const eased = (lead: number) => (lead > 0 ? smooth(1 - (due - time) / lead) : 1)
-      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: Math.max(now.bend, lowered.bend * eased(bends)), sink: Math.max(now.sink, lowered.sink * eased(sinks)) }
-      // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
-      const going = channel.frames.length > 0
-      all.turn += going ? one.turn : 0
-      all.shift += going ? one.shift : 0
-      all.bend = Math.max(all.bend, one.bend)
-      all.sink = Math.max(all.sink, one.sink)
+      const carried = (held instanceof Watched && held.carried) || held instanceof OnHim || !!channel.bound?.outside
+      // (before it sets off it is the body's, going with him)
+      const off = (channel.bound ?? channel).setsOff
+      // (a thing the game moves is where it was last told, against him as he was then)
+      if (off === undefined || off <= time) nows.push({ side: end.side, place: this.on(hand, channel.bound?.outside ? this.now : time, carried), carried })
+      if (due > time && !swung) theres.push({ ask: { side: end.side, place: this.on(there, due, carried), carried }, due })
     }
-    all.turn = Math.max(-1.2, Math.min(1.2, all.turn))
-    all.shift = Math.max(-0.12, Math.min(0.12, all.shift))
+    const all = this.reach.lean(nows).lean
+    // (he leans in time for where each hand is to arrive, from as long before as getting so far takes him)
+    for (const due of new Set(theres.map(({ due }) => due))) {
+      const going = theres.filter((one) => one.due === due).map(({ ask }) => ask)
+      const lean = this.reach.lean([...going, ...nows.filter(({ side }) => !going.some((ask) => ask.side === side))]).lean
+      const { sinks, bends } = this.leads(lean)
+      const eased = (lead: number) => (lead > 0 ? smooth(1 - (due - time) / lead) : 1)
+      const most = (a: number, b: number) => (Math.abs(b) > Math.abs(a) ? b : a)
+      all.sink = Math.max(all.sink, lean.sink * eased(sinks))
+      for (const part of ['bend', 'turn', 'roll'] as const) all[part] = most(all[part], lean[part] * eased(bends))
+    }
     this.known.set(key, all)
     return all
-  }
-
-  /** how long before a hand is at a place he takes to get down for it, if he must (s) */
-  lowering(side: Side, place: Vector3) {
-    const { at, facing, ground } = this.hips()
-    const on = place.clone().sub(at.clone().setY(ground + this.size.stand)).applyAxisAngle(new Vector3(0, 1, 0), -facing)
-    return this.takes(down(on, this.shoulders[side], this.size, (bend) => this.bent(side, bend)))
-  }
-
-  /** how long he takes to be up again from how far he is let down and bent now (s) */
-  rising(bend: number, low: number) {
-    const most = { bend: DEEPEST.bend, sink: (1 - DEEPEST.low) * this.size.stand }
-    return Math.max(0, bend / most.bend, low / most.sink) * this.takes(most)
   }
 
   /** the moment it is now, on his clock */
   now = 0
 
-  /** the most a hand will ask of the hips or the trunk from a moment until so long after it: he gets down in time, and stays down till it is done */
-  private most(time: number, within: number, of: 'sink' | 'bend') {
-    let most = 0
-    for (let ahead = 0; ahead <= within + 1e-9; ahead += within / 4) most = Math.max(most, this.at(time + ahead)[of])
+  /**
+   * the most a hand asks of a part of him from a moment until as far ahead as that part leads, looked at then and a quarter beat
+   * apart on his clock (a beat apart, further ahead than the gait's first marks): he leans in time, and stays so till it is done
+   */
+  private most(time: number, of: keyof Lean) {
+    const step = this.size.beat / (time < this.now + 3 * this.size.beat ? 4 : 1)
+    const ahead = LEAD[of] * this.size.beat
+    // (as of now exactly, further ahead from the quarter beat after)
+    let most = time < this.now + step ? this.at(time)[of] : 0
+    for (let k = Math.floor(time / step) + 1; k <= Math.ceil((time + ahead) / step); k++) {
+      const one = this.at(k * step)[of]
+      if (Math.abs(one) > Math.abs(most)) most = one
+    }
     return most
   }
 
-  low(time: number) {
-    return this.most(time, LEAD.down * this.size.beat, 'sink')
-  }
-
-  shift(time: number) {
-    return this.at(time + LEAD.hips * this.size.beat).shift
-  }
-
-  bend(time: number) {
-    return this.most(time, LEAD.down * this.size.beat, 'bend')
-  }
-
-  turn(time: number) {
-    return this.at(time + LEAD.trunk * this.size.beat).turn
-  }
+  low = (time: number) => this.most(time, 'sink')
+  bend = (time: number) => this.most(time, 'bend')
+  turn = (time: number) => this.at(time + LEAD.turn * this.size.beat).turn
+  roll = (time: number) => this.at(time + LEAD.roll * this.size.beat).roll
 }

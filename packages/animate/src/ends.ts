@@ -1,7 +1,7 @@
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Gait, Side } from '@drawcall/gait'
 import { Channel, EASE, SWAY, type Frame, type Mover, type Xyz } from '@drawcall/plan'
-import type { OnHim } from './movers'
+import { OnHim } from './movers'
 import { DOWN, type Grip, type Pose, type Touch } from './rig/fingers'
 import { type Limb, NEAR, REACH, sway } from './rig/limb'
 import { EXACT, type Size, tick } from './rig/size'
@@ -59,10 +59,10 @@ export type Body = {
   frame: Matrix4
   /** a frame was written or cancelled: what the hands ask of the rest of him may have changed */
   changed(): void
-  /** how long before a hand is at a place he takes to get down for it, if he must (s) */
-  lowering(side: Side, place: Vector3): number
-  /** how long he takes to be up again from how far down and bent he is now (s) */
-  rising(): number
+  /** places for hands at a moment brought as near as the arms reach with him leaning: how far short the furthest comes (m) */
+  within(time: number, asks: { side: Side; place: Vector3; carried?: boolean }[]): number
+  /** his hands */
+  hands: End[]
 }
 
 /**
@@ -111,8 +111,8 @@ export class End {
     const { pace, beat } = body.size
     // (a hand turns no faster than its wrist does)
     this.channel = new Channel(`${side} ${kind}`, (strength * pace) / beat, draw * limb.length, limb.hand?.wrist.strength)
-    // (it swings on round where its limb starts, as far round as the limb goes)
-    this.channel.pivot = { about: root, room: (out, axis) => this.room(out, axis.clone().negate()), near: FOLDED * limb.length }
+    // (it swings on round where its limb starts, as far round as the limb goes, coming to rest within its reach)
+    this.channel.pivot = { about: root, room: (out, axis) => this.room(out, axis.clone().negate()), near: FOLDED * limb.length, far: REACH * limb.length }
   }
 
   get name() {
@@ -177,12 +177,6 @@ export class End {
   timed(frame: Frame, channel: Channel, when?: { seconds?: number; by?: number }): Frame & { at: number } {
     const after = Math.max(this.body.time(), ...channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
     frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
-    // (a hand told no moment, for a place he gets down for, is there no sooner than he is down)
-    if (when?.by === undefined && when?.seconds === undefined && this.kind === 'hand') {
-      if (channel === this.channel) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
-      // (and one on him, no sooner than he is up again: it is counted from him standing)
-      if (frame.on === this.root) frame.at = Math.max(frame.at, this.moment(after + this.body.rising()))
-    }
     if (this.kind === 'hand') this.within(frame as Frame & { at: number }, channel)
     // (a foot steps off for half as long as it sways)
     if (this.kind === 'foot') frame.leaves = frame.at - sway(this.limb) / 2
@@ -197,24 +191,35 @@ export class End {
     return room(this.limb, out.clone().applyQuaternion(back), axis.clone().applyQuaternion(back))
   }
 
-  /** how far short of where it was sent the last frame written to it is planned, out of the arm's reach (m) */
+  /** how far short of where it was sent the last frame written to it is planned, out of the arms' reach (m) */
   short = 0
 
   /**
-   * a frame for a place above the shoulder, which only the arm reaches (getting down or bending brings nothing higher),
-   * is planned no further from the shoulder than the arm reaches, as the hips will have the shoulder then: for a thing
-   * the hand leads, the thing goes as far short as the hand does
+   * a frame is planned within what the arms reach with him leaning as far as he can, as the hips will have him at its
+   * moment: a thing goes as far short as the hand on it that comes furthest short
    */
   private within(frame: Frame & { at: number }, channel: Channel) {
-    const [shoulder, turn] = [new Vector3(), new Quaternion()]
-    this.root.state(frame.at, shoulder, new Vector3())
-    const wrist = this.placed(frame, frame.at).add(channel === this.channel ? new Vector3() : this.channel.value.clone().sub(channel.value))
-    const out = wrist.clone().sub(shoulder)
-    this.short = wrist.y > shoulder.y ? Math.max(0, out.length() - REACH * this.limb.length) : 0
-    if (!this.short || !frame.place) return
-    const by = out.setLength(-this.short)
+    this.short = 0
+    const hands = channel === this.channel ? [this] : this.body.hands.filter((end) => end.channel.bound === channel)
+    // (a grip on a thing is where the thing is: the body leans for it, it is not moved)
+    if (!frame.place || !hands.length || (frame.on && !(frame.on instanceof OnHim) && channel === this.channel)) return
+    const [turn, place] = [new Quaternion(), this.placed(frame, frame.at)]
     if (frame.on) frame.on.state(frame.at, new Vector3(), new Vector3(), turn)
-    frame.place = new Vector3().copy(frame.place).add(by.applyQuaternion(turn.invert()))
+    const turned = frame.turn ? turn.clone().multiply(frame.turn) : channel.turn
+    const back = channel.turn.clone().invert()
+    // (each wrist where the frame has it: for a part of the hand, that far back from it; for a thing, as each hand is on it)
+    const carried = frame.on instanceof OnHim
+    const asks = hands.map((end) => ({ side: end.side, carried, place: (end === this ? this.offset()?.applyQuaternion(turned).negate() ?? new Vector3() : end.channel.value.clone().sub(channel.value).applyQuaternion(back).applyQuaternion(turned)).add(place) }))
+    // (and any other hand sent somewhere for the same moment: he leans for them all at once)
+    for (const end of this.body.hands.filter((one) => !hands.includes(one) && Math.abs(((one.channel.bound ?? one.channel).frames.at(-1)?.at ?? -1) - frame.at) < EXACT)) {
+      end.channel.state(frame.at, (asks[asks.push({ side: end.side, carried, place: new Vector3() }) - 1]).place, new Vector3())
+    }
+    const was = asks.map((ask) => ask.place.clone())
+    this.short = this.body.within(frame.at, asks)
+    if (!this.short) return
+    const by = asks.slice(0, hands.length).map((ask, k) => ask.place.clone().sub(was[k])).reduce((most, one) => (one.length() > most.length() ? one : most))
+    // (moved where it is: what it was sent with is known by it)
+    Object.assign(frame.place, new Vector3().copy(frame.place).add(by.applyQuaternion(turn.invert())))
   }
 
   /** where a frame has it in the scene at a moment */

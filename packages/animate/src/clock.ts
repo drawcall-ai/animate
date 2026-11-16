@@ -145,9 +145,12 @@ export class Clock {
         arm.second.follow(new Vector3(reached.fold, 0, 0), delta)
         arm.hand.wrist.follow(reached.wrist, delta)
       } else if (!joints.arms[side].first.reacts && !joints.arms[side].first.loose) {
-        // (given back, it comes round from the state it is in to what the body has it do, as an arm sways)
+        // (given back, it comes round from the state it is in to what the body has it do, as an arm sways: its joints
+        // turning no faster than the hand they swing moved, which a step's jitter of the pose does not make faster)
+        const most = hand.velocity.length() / this.body.size.forearm
         for (const part of [joints.arms[side].first, joints.arms[side].second, joints.arms[side].hand.wrist]) {
           const ease = SWAY * part.strength
+          part.velocity.clampLength(0, most)
           part.release(Math.max(Math.sqrt((6 * part.value.length()) / ease), (4 * part.velocity.length()) / ease))
         }
       }

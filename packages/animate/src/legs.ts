@@ -50,7 +50,7 @@ function stood(size: Bones['size'], leg: Limb, anchor: Vector3, hip: Vector3, le
 }
 
 /**
- * The body over the gait: the hips where the gait plans them, shifted for what the hands ask, and the legs reaching the
+ * The body over the gait: the hips where the gait plans them, and the legs reaching the
  * gait's feet from hips the pelvis turns and lists, a heel coming up as the leg needs and rolling down again.
  */
 export class Legs {
@@ -114,11 +114,10 @@ export class Legs {
     this.place()
   }
 
-  /** the hips as planned, let down and shifted ahead for what the hands ask, as of now: what the ends read as they go on */
+  /** the hips as planned, as of now: what the ends read as they go on */
   private place() {
     const { gait } = this
-    const now = gait.time
-    this.hips.value.copy(gait.hips.value).add({ x: Math.sin(this.facing) * this.posture.shift(now), y: 0, z: Math.cos(this.facing) * this.posture.shift(now) })
+    this.hips.value.copy(gait.hips.value)
     this.hips.velocity.copy(gait.hips.velocity)
   }
 

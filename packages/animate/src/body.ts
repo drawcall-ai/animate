@@ -1,4 +1,4 @@
-import { Object3D, Quaternion, Vector3 } from 'three'
+import { Object3D, Vector3 } from 'three'
 import { FACED, type Side, SIDES, SIGN, UP, wrap } from '@drawcall/gait'
 import type { Mover, Xyz } from '@drawcall/plan'
 import { Clock, type Workings } from './clock'
@@ -8,6 +8,7 @@ import { type Intent, intent } from './intent'
 import { Legs } from './legs'
 import { OnHim, Watched } from './movers'
 import { Asks } from './posture'
+import { Reach } from './reach'
 import { Bones } from './rig/bones'
 import type { Part } from './rig/goal'
 import { joints, parts } from './rig/joints'
@@ -71,11 +72,11 @@ export class Body {
     const bones = (this.bones = new Bones(rig))
     const size = (this.size = bones.size)
     const turning = joints(bones)
-    const facing = () => ({ at: legs.hips.value, velocity: legs.hips.velocity, facing: legs.facing, ground: legs.ground })
-    const asks = new Asks([], size, both(() => new Vector3()), facing, turning.trunk, (side, bend) => bones.shoulder(side, new Vector3(), 0, 0, 0, new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), bend), 0, new Vector3()))
+    const reach = new Reach(both((side) => turning.arms[side]), (side, trunk, to) => bones.shoulder(side, new Vector3(), 0, 0, 0, trunk, 0, to), size)
+    const asks = new Asks([], size, reach, () => legs.gait.hips, () => legs.ground, turning.trunk)
     const legs = (this.legs = new Legs(this, bones, turning, asks))
     const free = (this.free = new Free(legs, turning, size))
-    const body = { size, gait: legs.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place), rising: () => asks.rising(turning.trunk.value.x, size.stand - (legs.hips.value.y - legs.ground)) }
+    const body = { size, gait: legs.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), within: (time: number, asks_: { side: Side; place: Vector3; carried?: boolean }[]) => asks.within(time, asks_), hands: asks.hands }
     const end = (kind: 'hand' | 'foot', side: Side) => {
       const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
       const root = new OnHim(legs.gait)
@@ -98,9 +99,7 @@ export class Body {
     rigs.set(rig, this)
     this.clock.pose(0)
     for (const side of SIDES) {
-      asks.shoulders[side].copy(bones.shouldered(side, new Vector3())).sub(legs.hips.value)
-      asks.shoulders[side].applyAxisAngle(UP, -legs.facing)
-      ends.hand[side].root.rest.copy(asks.shoulders[side])
+      ends.hand[side].root.rest.copy(bones.shouldered(side, new Vector3())).sub(legs.hips.value).applyAxisAngle(UP, -legs.facing)
       ends.foot[side].root.rest.copy(bones.hip(side)).sub(legs.hips.value).applyAxisAngle(UP, -legs.facing)
     }
   }

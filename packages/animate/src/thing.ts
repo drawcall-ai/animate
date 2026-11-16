@@ -201,7 +201,7 @@ export class Bound {
       const flat = (way: Vector3) => (axis ? way.clone().addScaledVector(axis, -way.dot(axis)).normalize() : way)
       turn = new Quaternion().setFromUnitVectors(flat(faces), flat(want)).multiply(turn)
     }
-    const frame: Frame = { on: mover, place, turn, velocity, by: 'story' }
+    const frame: Frame = { on: mover, place: new Vector3().copy(place), turn, velocity, by: 'story' }
     // (a fast thing swings round the shoulder of the arm that leads it; it is turned as it is sent, the wrist turning it there)
     if (velocity && new Vector3().copy(velocity).lengthSq() > 0 && lead) frame.about = lead.root
     return frame

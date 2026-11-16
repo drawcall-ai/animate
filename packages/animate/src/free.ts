@@ -87,7 +87,9 @@ export class Free {
     }
     // (but told to face a way, the trunk keeps to it and the head alone turns from it)
     const toward = clamp(looks && (gait.lead.face === undefined || this.toward !== undefined) ? looks.yaw - facing : going.aims, -LEADS.trunk, LEADS.trunk)
-    const want = new Vector3(along + (looks ? -0.5 * looks.pitch : 0), pelvis.turn + free * (size.shoulder / size.arm) * swung + toward + this.legs.posture.turn(now), -tilt)
+    // (he turns and rolls for his hands from how all else has the trunk)
+    const base = (this.legs.posture.reach.base = { turn: pelvis.turn + free * (size.shoulder / size.arm) * swung + toward, roll: -tilt })
+    const want = new Vector3(along + (looks ? -0.5 * looks.pitch : 0), base.turn + this.legs.posture.turn(now), base.roll + this.legs.posture.roll(now))
     trunk.react(want, dt)
     want.copy(trunk.value).multiply(LEVEL)
     if (looks) want.x = -looks.pitch - trunk.value.x

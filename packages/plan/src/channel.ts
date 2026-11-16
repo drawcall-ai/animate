@@ -78,8 +78,8 @@ export class Channel implements Mover {
     }
     this.moved = to
   }
-  /** what it swings round, as a hand round its shoulder, if anything, how far round an `axis` it goes from a place `out` from there (rad), and how near it may come to it on the way (m) */
-  pivot?: { about: Mover; room(out: Vector3, axis: Vector3): number; near: number }
+  /** what it swings round, as a hand round its shoulder, if anything, how far round an `axis` it goes from a place `out` from there (rad), and how near it may come to it on the way and how far from it it comes to rest (m) */
+  pivot?: { about: Mover; room(out: Vector3, axis: Vector3): number; near: number; far: number }
   /** asked for a frame once it has none left and has come to rest: what owns it then */
   settle?: (channel: Channel) => Frame | undefined
   /** how the last frame it met came short: arriving so much slower (share) and later (s) */
@@ -201,6 +201,7 @@ export class Channel implements Mover {
       const angle = Math.min(this.pivot.room(out, axis), (round * round * out.length()) / (2 * SWAY * this.strength))
       T = Math.max((2 * speed) / this.strength, (2 * angle) / round)
       const there = out.applyAxisAngle(axis, angle).applyQuaternion(facing.invert())
+      there.setLength(Math.min(there.length(), this.pivot.far))
       frame = { at: when + T, place: there, on: this.pivot.about, about: this.pivot.about, by: 'on' }
     } else {
       // (no further than it may draw back so many times over)
@@ -276,7 +277,10 @@ export class Channel implements Mover {
     const asked = frame.at ?? start + this.soonest(frame, start)
     // (as long as the way there would not go back on itself unasked: three times as long as it takes at that speed)
     this.resolve(frame, asked, this.to.velocity.set(0, 0, 0))
-    const far = this.to.value.distanceTo(this.from.value)
+    // (swung round a pivot, how far it goes is the way round it, as the pivot will be then)
+    const pivot = (when: number) => (frame.about ? (frame.about.state(when, this.at, this.rotated), this.at.clone()) : new Vector3())
+    const [a, b] = [this.from.value.clone().sub(pivot(start)), this.to.value.clone().sub(pivot(asked))]
+    const far = frame.about ? a.angleTo(b) * (a.length() + b.length()) / 2 + Math.abs(a.length() - b.length()) : a.distanceTo(b)
     let leaves = speed > 0 && still && this.draw > 0 ? Math.max(start, asked - Math.max(DRAW * this.draw, 3 * far) / speed) : start
     if (frame.leaves !== undefined) leaves = Math.min(asked, Math.max(start, frame.leaves))
     const hard = (when: number, share: number, from = leaves) => {

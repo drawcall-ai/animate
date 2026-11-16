@@ -27,7 +27,7 @@ examples ──▶ @drawcall/animate ──▶ @drawcall/gait ──▶ @drawcal
 4. the free parts react (trunk, head, free arms: `Free.react`);
 5. pose: the legs reach the gait's feet, the arms the hands' channels (`reachArm`), a thing the body moves is drawn where its leading hand has it.
 
-Data flows one way: hand and thing plans → posture (what the hands ask of the hips and trunk: sink, bend, turn, shift, worked out against the hips) → the gait's hips plan (it writes the sink into its frames, reading it before it rewrites them) → pose. A frame `on` him is counted on that hips plan (`OnHim`), so a hand's plan never reads itself through the body.
+Data flows one way: hand and thing plans → posture (how far he bends, turns, rolls the trunk and lets the hips down for every hand to reach where it is planned: `Reach.lean`, against the hips' plan) → the gait's hips plan (it writes the sink into its frames, reading it before it rewrites them) → pose. A frame `on` him is counted on that hips plan (`OnHim`), so a hand's plan never reads itself through the body.
 
 ## What each gives the layer above
 
@@ -40,14 +40,25 @@ Each `src/index.ts` exports only what the layer above imports.
 
 ## The contract a plan keeps with the pose
 
-The planner and the solver are one model of the body. A swing round where a limb starts sets off as the limb's own
-range and strength let it (`End.leaves`, with `room` from the solve); a hand plans the part it was sent with, and the
-solve puts that part there; a plan is never moved to where the pose ended up. A place on a thing the game carries with
-him is read against his hips; one the game sets for the very moment is read in the scene.
+The planner and the solver are one model of the body. `Reach` (`reach.ts`) is what the arms with the trunk reach:
+from where the hips are planned and how he faces, the least lean (trunk bent, turned, rolled, as far as its joint
+goes; hips let down to a full squat), each part going the same share of the way it has left, that has every hand's arm
+reach its place, no further behind him than an upper arm swings back. The posture is its answer for the hands' plans
+(now, and eased in before where they are to arrive); the planner plans every hand frame within it (`End.within`: a frame
+it cannot meet is brought as near as the arms reach unstretched and marked `short`; a place on him is planned within
+reach of him standing; a grip on a thing is never moved, the body leans for it). A swing round where a limb starts sets
+off as long before as three times the way round its pivot at the speed it arrives with, comes no nearer the pivot than
+half the limb and swings on to rest within its reach; a hand given back turns its joints no faster than it moved. A
+hand plans the part it was sent with, and the solve puts that part there; a plan is never moved to where the pose
+ended up. The hips are where the gait plans them: the posture lets them down through the gait's plan, never shifts them.
 
 ## Still to fix
 
-1. **Posture's own reach guess.** `posture.ts` still finds how far he must bend and sink with a grid (the shoulder
-   where the bones have it bent so, against a fixed reach); it should ask the arm's solve, as the swing timing does.
-2. **No package tests of their own** but plan's: everything else is tested through a whole `Body` in
+1. **The arm's solve still searches its swivel** (`reachArm`), apart from `Reach`: the reach function knows where the
+   shoulder must be, not how the elbow swings; the hands' default turn (`along`) is the reach's answer for a wrist at
+   rest only approximately.
+2. **The swing round a moving shoulder** measures where it sets off from the shoulder as it is at the moment asked
+   (see the gait log): counting it from the shoulder at set-off keeps a plan on a jumping body, but the hand-over to
+   the free arm after a release then needs the same care.
+3. **No package tests of their own** but plan's: everything else is tested through a whole `Body` in
    `packages/animate/test`.

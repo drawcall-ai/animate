@@ -332,6 +332,8 @@ export class Gait {
     const foot = this.feet[side]
     foot.cancel('story')
     if (place) foot.by({ at: this.time + (seconds ?? PLACE * this.size.beat), place, by: 'story' })
+    // (put down somewhere, the plan is where the hips will be over it from now)
+    this.plan()
   }
 
   /** whether a foot is someone else's: a story has put it somewhere or sends it */
