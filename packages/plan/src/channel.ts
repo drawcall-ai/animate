@@ -35,6 +35,8 @@ const EASE = 0.5
 const ON = 4
 /** how far a fast arrival draws back is `velocity × swing × 4/27`: so a swing of `DRAW × draw / speed` draws back `draw` */
 const DRAW = 27 / 4
+/** how much later than asked, in its short times, a frame too hard even at rest is looked for at the most */
+const LATE = 60
 
 /**
  * Something with a place and a turn that goes from frame to frame on the smoothest way, from whatever state it is in:
@@ -262,17 +264,22 @@ export class Channel implements Mover {
     if (hard(when, 1)) {
       const share = hard(when, 0) ? 0 : between(0, 1, (s) => !hard(when, s))[0]
       slow = 1 - share
-      if (share === 0) when = between(when + 5, when, (w) => !hard(w, 0))[0]
+      if (share === 0) when = between(when + LATE * this.quick, when, (w) => !hard(w, 0))[0]
     }
     const velocity = new Vector3().copy(frame.velocity ?? this.to.velocity.set(0, 0, 0)).multiplyScalar(1 - slow)
     // (told no turn, it keeps the one it had when it was fitted)
     return { at: when, velocity, leaves, slow, late: when - asked, turn: this.from.turn.clone() }
   }
 
+  /** how long it takes to go as far as it draws back, at its strength: what it counts short times in (s) */
+  private get quick() {
+    return Math.sqrt(this.draw / this.strength)
+  }
+
   /** how long it takes at its ease to go to a frame given no moment */
   private soonest(frame: Frame, start: number) {
     this.resolve(frame, start, this.to.velocity.set(0, 0, 0))
-    return Math.max(0.1, Math.sqrt((6 * this.to.value.distanceTo(this.from.value)) / (EASE * this.strength)))
+    return Math.max(this.quick, Math.sqrt((6 * this.to.value.distanceTo(this.from.value)) / (EASE * this.strength)))
   }
 
   /** where a frame has it at a moment: its place, as what it is on will be then, in `to`, and its turn in `spun` */
