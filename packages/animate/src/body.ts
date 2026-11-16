@@ -63,7 +63,7 @@ export class Body {
     const body = { size, gait: locomotion.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place) }
     const end = (kind: 'hand' | 'foot', side: Side) => {
       const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
-      const root = new OnHim(locomotion.gait.hips)
+      const root = new OnHim(locomotion.gait)
       return new End(kind, side, limb, root, body, bones.lies(kind, side), bones.starts[kind][side])
     }
     const ends = { hand: both((side) => end('hand', side)), foot: both((side) => end('foot', side)) }

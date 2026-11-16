@@ -1,7 +1,8 @@
 import { Body } from '@drawcall/animate'
 import { type Element, ELEMENTS, type Grip } from '@drawcall/hand'
 import { Color, Group, type Object3D, Vector3 } from 'three'
-import { bodies, warm } from './intent'
+import { warm } from './body'
+import { bodies } from './view'
 import { Labels } from './labels'
 import { Pen } from './pen'
 
