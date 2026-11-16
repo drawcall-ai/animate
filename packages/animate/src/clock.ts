@@ -1,4 +1,4 @@
-import type { Locomotion } from '@drawcall/locomotion'
+import type { Stride } from './stride'
 import { type Bones, both, type Joints, parts, type Side, SIDES, type Size, type Story, tick, UP } from '@drawcall/limbs'
 import { Euler, type Object3D, Quaternion, Vector3 } from 'three'
 import type { End } from './ends'
@@ -12,7 +12,7 @@ export type Workings = {
   rig: Object3D
   size: Size
   bones: Bones
-  locomotion: Locomotion
+  locomotion: Stride
   joints: Joints
   ends: Record<'foot' | 'hand', Record<Side, End>>
   things: Map<Object3D, Bound>

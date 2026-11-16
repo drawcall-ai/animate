@@ -1,5 +1,5 @@
 import { Matrix4, Vector3 } from 'three'
-import type { Foreseen, Mark } from '@drawcall/locomotion'
+import type { Foreseen, Mark } from './stride'
 import type { Channel } from '@drawcall/plan'
 import { parts, SIDES, UP } from '@drawcall/limbs'
 import type { Workings } from './clock'

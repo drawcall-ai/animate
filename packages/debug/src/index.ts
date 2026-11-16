@@ -1,7 +1,5 @@
 export { Intent } from './intent'
 export { legend } from './legend'
 export { LAYERS, type Layer, shown } from './layers'
-export { drawGait } from './gait'
-export { Pen } from './pen'
 export { drawPlan } from './plan'
 export { Grips } from './hand'

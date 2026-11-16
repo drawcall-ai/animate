@@ -1,5 +1,5 @@
 import { DOWN, EASY, EXACT, type Grip, type Limb, type Pose, type Side, type Size, SLACK, type Story, sway, tick, type Touch, waits, type Xyz } from '@drawcall/limbs'
-import type { Carrier } from '@drawcall/locomotion'
+import type { Carrier } from './stride'
 import { between, Channel, type Frame, hardest, type Mover } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { OnHim } from './movers'

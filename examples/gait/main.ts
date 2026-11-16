@@ -1,5 +1,4 @@
 import { Body } from '@drawcall/animate'
-import { drawGait, drawPlan, Pen, shown } from '@drawcall/debug'
 import {
   BoxGeometry,
   CanvasTexture,
@@ -105,10 +104,6 @@ scene.add(floor())
 const prints = { left: new Prints(0x4080ff), right: new Prints(0xff5040) }
 scene.add(prints.left.mesh, prints.right.mesh)
 intent(scene)
-// (the frame gait draws its own layers: `?debug=gait,plan`)
-const pen = new Pen()
-const layers = shown(location.search)
-scene.add(pen)
 
 let man: Object3D
 let body: Body
@@ -152,13 +147,6 @@ function draw() {
   // (at most 2 pixels drawn to a CSS pixel, which keeps a phone's frame rate)
   renderer.setPixelRatio(Math.min(2, devicePixelRatio))
   renderer.setSize(wide, high, false)
-  const gait = body.gait
-  if (gait) {
-    pen.begin()
-    if (layers.has('gait')) drawGait(pen, gait.intent())
-    if (layers.has('plan')) drawPlan(pen, [gait.hips, gait.feet.left, gait.feet.right].map((channel) => channel.intent()))
-    pen.show()
-  }
   renderer.render(scene, camera)
   const { x, z } = drive.velocity
   readout.textContent = `${name}   t ${drive.time.toFixed(2)} s   led ${Math.hypot(x, z).toFixed(1)} m/s`

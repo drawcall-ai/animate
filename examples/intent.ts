@@ -1,10 +1,6 @@
-import { Body } from '@drawcall/animate'
 import { Grips, Intent, legend, shown } from '@drawcall/debug'
 import type { Object3D } from 'three'
 import { touching } from './touch'
-
-// (`?gait=frames` has the bodies walk and run by the frame gait)
-Body.frames = new URLSearchParams(location.search).get('gait') === 'frames'
 
 /**
  * The views of what the bodies in a scene mean to do, with its legend, and of how the hands hold what they hold: shown

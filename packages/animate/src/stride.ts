@@ -1,6 +1,5 @@
 import { Gait } from '@drawcall/gait'
 import { ANKLE, type Bones, clamp, GRAVITY, HEEL, type Joints, type Limb, RANGE, raised, REST, type Side, SIDES, SIGN, SOLE, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
-import type { Carrier, Foothold, Foreseen, Posture } from '@drawcall/locomotion'
 import { Quaternion, Vector3 } from 'three'
 
 /** how fast a heel comes down again, and comes up (rad a beat), and how finely it is brought up (rad) */
@@ -32,8 +31,33 @@ const FACED = 0.02
 const HIGH = 0.034
 
 type Clock = { readonly time: number }
-type Ground = number | { x: number; z: number }
-const flat = (to: Ground) => (typeof to === 'number' ? { x: 0, z: to } : to)
+/** a place on the ground, or told as a number, so far along z on x = 0; a run to one and a walk */
+export type Ground = number | { x: number; z: number }
+export const flat = (to: Ground) => (typeof to === 'number' ? { x: 0, z: to } : to)
+export type Run = { speed: number; at: Ground; plant?: Side; push?: number; arrive?: number }
+export type Walk = { speed?: number; plant?: Side }
+/** what his hands ask of the hips and the trunk at a moment: how far lower, bent, turned and ahead */
+export type Posture = Record<'low' | 'bend' | 'turn' | 'shift', (time: number) => number>
+/** a foot as the rest of the body has it: whether a story has it, where its ankle is, where the ground holds it, and to give it back */
+export type Foothold = { readonly held: boolean; readonly value: Vector3; anchor?: Vector3; free(): void }
+/** a place and the moment he is to be there; a footfall to come */
+export type Mark = { at: Vector3; time: number }
+export type Footfall = Mark & { side: Side; put: boolean; swings: boolean }
+/** where the hips and the feet will be, as the plan has them, for whoever looks */
+export type Foreseen = { hips: Mark[]; to?: Vector3; footfalls: Footfall[]; top?: { asked?: Vector3; comes?: Mark }; facing: number; face: number; heading: number; led?: Vector3 }
+/** the hips and the feet as the rest of the body asks about them: where he will be and face, whether a foot can be spared, and a foot the story has or puts down */
+export type Carrier = {
+  readonly now: number
+  hips(seconds: number, value: Vector3, velocity: Vector3): Vector3
+  facing(seconds: number): number
+  spare(side: Side, seconds: number, until: number): boolean
+  stale(from?: number): void
+  take(side: Side, span: { from: number; until: number } | undefined): void
+  readonly ground: number
+  put(side: Side, place?: Vector3, seconds?: number): Vector3 | undefined
+  foot(side: Side): { readonly put?: Vector3; readonly down: boolean; readonly at: Vector3 }
+  readonly landing: boolean
+}
 const yawOf = (turn: Quaternion) => {
   const way = new Vector3(0, 0, 1).applyQuaternion(turn)
   return Math.atan2(way.x, way.z)
@@ -327,7 +351,6 @@ export class Stride {
     const { gait, bones } = this
     const self = this
     const facing = (seconds: number) => yawOf(this.turnAt(seconds))
-    const placed = (seconds: number, to: Vector3) => gait.hips.state(gait.time + seconds, to, new Vector3())
     return {
       get now() {
         return gait.time
@@ -336,23 +359,7 @@ export class Stride {
         gait.hips.state(gait.time + seconds, value, velocity)
         return value
       },
-      hip(side, seconds, to, turned) {
-        placed(seconds, to)
-        turned.copy(yaw(facing(seconds)))
-        return to.add(new Vector3(SIGN[side] * bones.size.hip, 0, 0).applyQuaternion(turned))
-      },
-      shoulder(side, seconds, to, turned) {
-        // (the shoulder as it lies from the hips now, turned with him)
-        const lies = bones.shouldered(side, new Vector3()).sub(self.hips.value).applyAxisAngle(UP, -self.facing)
-        placed(seconds, to)
-        turned.copy(yaw(facing(seconds)))
-        return to.add(lies.applyQuaternion(turned))
-      },
       facing,
-      stepped(side, seconds, to) {
-        gait.feet[side].state(gait.time + seconds, to, new Vector3())
-        return to
-      },
       spare: (side, seconds, until) => gait.spares(side, seconds, until),
       stale() {},
       take(side, span) {

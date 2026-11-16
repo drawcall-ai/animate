@@ -1,5 +1,4 @@
 import { Body, type Story } from '@drawcall/animate'
-import { drawGait, drawPlan, Pen, shown } from '@drawcall/debug'
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { mannequin } from '../mannequin'
 import { run } from '../stage'
@@ -71,8 +70,6 @@ const asked = new URLSearchParams(location.search).get('ask') ?? 'side'
 const ask = ASKS[asked] ?? RUNS[asked]
 if (!ask) throw new Error(`there is no ask ${asked}: ${[...Object.keys(ASKS), ...Object.keys(RUNS)].join(', ')}`)
 let body: Body
-const pen = new Pen()
-const layers = shown(location.search)
 const name = document.getElementById('name')
 if (name) name.textContent = asked
 
@@ -81,7 +78,6 @@ run({
     const man = mannequin()
     const scene = new Group().add(man)
     body = new Body(man)
-    scene.add(pen)
     if (asked === 'box') {
       const box = new Mesh(new BoxGeometry(0.6, 0.3, 0.4), new MeshStandardMaterial({ color: 0x806040 }))
       box.position.set(0, 0.15, 0.45)
@@ -90,16 +86,7 @@ run({
     body.play((ask as (body: Runner, scene: Group) => Story)(body, scene))
     return scene
   },
-  update: (delta) => {
-    body.update(delta)
-    // (the frame gait draws its own layers: `?debug=gait,plan`)
-    const gait = body.gait
-    if (!gait) return
-    pen.begin()
-    if (layers.has('gait')) drawGait(pen, gait.intent())
-    if (layers.has('plan')) drawPlan(pen, [gait.hips, gait.feet.left, gait.feet.right].map((channel) => channel.intent()))
-    pen.show()
-  },
+  update: (delta) => body.update(delta),
   focus: () => body.hips.value.z,
   readout: () => `${asked}  t ${body.time.toFixed(2)} s  hips ${body.hips.value.toArray().map((v) => v.toFixed(2)).join(' ')}`,
 })

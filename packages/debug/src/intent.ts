@@ -3,6 +3,7 @@ import { Body, type Intent as Told, type Side } from '@drawcall/animate'
 import { Labels } from './labels'
 import { Memory } from './memory'
 import { Pen } from './pen'
+import { drawGait } from './gait'
 import { drawPlan } from './plan'
 
 /** the colour of each part */
@@ -65,6 +66,8 @@ export class Intent extends Group {
       const memory = this.memories.get(body) ?? new Memory()
       this.memories.set(body, memory)
       this.body(body.intent(), memory)
+      // (and what his gait means to do: the lead, the stride clock, the footfalls to come and the hips' way)
+      drawGait(this.pen, body.gait.intent())
     }
     this.pen.show()
     this.labels.show()
