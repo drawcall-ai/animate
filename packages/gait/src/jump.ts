@@ -100,10 +100,10 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
     const tucked = { x: SIGN[side] * size.hip, y: -(1 - TUCK) * leg, z: split }
     const later = runs && side === takes ? STEP * size.beat : 0
     const down = place.clone().add(out).addScaledVector(across, 0.165 * size.beat + later).setY(ground + ankle)
-    // (the other knee drives up as he pushes off)
+    // (running, the other knee drives up as he pushes off)
     // (running, it swings through under him, clear of the ground, as he crouches)
     const passes: Frame[] = running ? [{ at: leaves - lasts, leaves: drops.at, on: hipsOf, place: { x: SIGN[side] * size.hip, y: ankle + DRIVE.clear * leg - stand + crouch, z: 0 }, by: 'jump' }] : []
-    const drives: Frame[] = side === takes ? [] : [...passes, { at: leaves, leaves: Math.max(now, leaves - DRIVE.beats * size.beat), on: hipsOf, place: { x: SIGN[side] * size.hip, y: -DRIVE.y * leg, z: DRIVE.z * leg }, by: 'jump' }]
+    const drives: Frame[] = side === takes || !running ? [] : [...passes, { at: leaves, leaves: Math.max(now, leaves - DRIVE.beats * size.beat), on: hipsOf, place: { x: SIGN[side] * size.hip, y: -DRIVE.y * leg, z: DRIVE.z * leg }, by: 'jump' }]
     feet[side] = [
       ...drives,
       { at: leaves + Math.min(UNTUCK * size.beat, air / 3), leaves, on: hipsOf, place: tucked, by: 'jump' },
