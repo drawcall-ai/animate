@@ -178,6 +178,9 @@ export class Gait {
    */
   spares(side: Side, seconds: number, until: number) {
     const now = this.time
+    // (in the air both feet are free, until he comes down)
+    const leap = this.jumping
+    if (leap && now + seconds > leap.leaves) return now + until < leap.lands
     const partner = other(side)
     const planted = this.plant && this.landing(this.plant)
     if (this.plant && now + seconds < this.plant.lands!) return false
@@ -378,7 +381,8 @@ export class Gait {
       this.stepping = false
       for (const side of SIDES) delete this.steps[side]
       const carries = leap.low === undefined ? going.length() / (2 * PUSH.along) : 0
-      if (this.course === leap.course) this.course = new Course(size, now, from, going, from.clone().addScaledVector(going, carries), { speed: going.length() + STILL * size.pace, push: PUSH.along, arrive: 0 })
+      // (led on, he goes on as he is led)
+      if (this.course === leap.course && (leap.course || this.lead.velocity.length() < SLOW * size.pace)) this.course = new Course(size, now, from, going, from.clone().addScaledVector(going, carries), { speed: going.length() + STILL * size.pace, push: PUSH.along, arrive: 0 })
       if (leap.low !== undefined) this.height = Math.min(this.height, leap.low)
     }
     const toes = Object.fromEntries(SIDES.filter((side) => !this.steps[side]).map((side) => [side, yawOf(feet[side].turn)]))
