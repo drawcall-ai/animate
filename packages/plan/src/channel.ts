@@ -78,8 +78,8 @@ export class Channel implements Mover {
     }
     this.moved = to
   }
-  /** what it swings round, as a hand round its shoulder, if anything, and how far round an `axis` it goes from a place `out` from there (rad) */
-  pivot?: { about: Mover; room(out: Vector3, axis: Vector3): number }
+  /** what it swings round, as a hand round its shoulder, if anything, how far round an `axis` it goes from a place `out` from there (rad), and how near it may come to it on the way (m) */
+  pivot?: { about: Mover; room(out: Vector3, axis: Vector3): number; near: number }
   /** asked for a frame once it has none left and has come to rest: what owns it then */
   settle?: (channel: Channel) => Frame | undefined
   /** how the last frame it met came short: arriving so much slower (share) and later (s) */
@@ -379,6 +379,8 @@ export class Channel implements Mover {
       return { r, far, out: v.dot(r) / far, spin: r.clone().cross(v).divideScalar(far * far) }
     }
     const [a, b] = [polar(this.from.value, this.from.velocity), polar(this.to.value, this.to.velocity)]
+    // (on the way it comes no nearer the pivot than it may: an arm swung fast does not fold its hand in through its shoulder)
+    const nearest = Math.min(a.far, b.far, this.pivot?.near ?? 0)
     const axis = a.r.clone().cross(b.r)
     const angle = Math.atan2(axis.length(), a.r.dot(b.r))
     const turned = axis.lengthSq() > 1e-12 ? axis.normalize().multiplyScalar(angle) : axis.set(0, 0, 0)
@@ -386,7 +388,7 @@ export class Channel implements Mover {
     const at = (u: number, out: Vector3) => {
       cubic(u, T, { value: new Vector3(), velocity: a.spin }, { value: turned, velocity: b.spin }, rv, unused)
       cubic(u, T, { value: new Vector3(a.far, 0, 0), velocity: new Vector3(a.out, 0, 0) }, { value: new Vector3(b.far, 0, 0), velocity: new Vector3(b.out, 0, 0) }, far, unused)
-      const r = a.r.clone().normalize().multiplyScalar(far.x)
+      const r = a.r.clone().normalize().multiplyScalar(Math.max(nearest, far.x))
       const by = rv.length()
       if (by > 1e-9) r.applyAxisAngle(rv.divideScalar(by), by)
       return out.copy(pivot).add(r)

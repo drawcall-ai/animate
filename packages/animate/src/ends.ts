@@ -13,6 +13,8 @@ import { type Story, waits } from './story'
  * each draws back before a fast arrival at the most (in lengths of its limb)
  */
 const END = { hand: { strength: 25, draw: 0.5 }, foot: { strength: 30, draw: 0.6 } }
+/** how near the limb's start its end comes swung round it at the most (of the limb's length): nearer, the limb is folded in through the body */
+const FOLDED = 0.5
 /** how far ahead the first moment a limb can reach something is looked for, and how finely (in his beats) */
 const LOOK = { far: 10, fine: 0.1 }
 
@@ -110,7 +112,7 @@ export class End {
     // (a hand turns no faster than its wrist does)
     this.channel = new Channel(`${side} ${kind}`, (strength * pace) / beat, draw * limb.length, limb.hand?.wrist.strength)
     // (it swings on round where its limb starts, as far round as the limb goes)
-    this.channel.pivot = { about: root, room: (out, axis) => this.room(out, axis.clone().negate()) }
+    this.channel.pivot = { about: root, room: (out, axis) => this.room(out, axis.clone().negate()), near: FOLDED * limb.length }
   }
 
   get name() {
