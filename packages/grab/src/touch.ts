@@ -10,6 +10,17 @@ const GIVE = 0.1
 const SPACING = 2 * Math.sqrt(1 - (1 - GIVE) ** 2)
 /** which joint turns each of a finger's angles, as `LIMITS` lists them */
 const JOINT = [0, 0, 1, 2]
+/** the thumb standing out to its side, in the palm's plane, and standing up out of the palm */
+export const SPLAYED = [limits('thumb')[0][1], 0, 0, 0]
+export const UP = [0, limits('thumb')[1][1], 0, 0]
+/** how far apart (rad) the poses lie that a finger sunk in tries, each joint over all its range, to get out */
+const COARSE = 0.45
+/** what each of a finger's angles may be, `COARSE` apart from its least to its most */
+const tries = (finger: Finger) =>
+  limits(finger).map(([low, high]) => {
+    const n = Math.ceil((high - low) / COARSE)
+    return Array.from({ length: n + 1 }, (_, i) => low + ((high - low) * i) / n)
+  })
 
 /** points along a rod close enough for balls of its thickness round them to cover it */
 export function samples({ a, b, radius }: Segment) {
@@ -65,10 +76,20 @@ export class Touch {
   /** a finger's bones, held so in a pose, the hand placed by `place` */
   bones = (finger: Finger, values: number[], pose: Pose, place = new Matrix4()) =>
     this.hand.segments({ ...pose, [finger]: part(values) }, place).filter((s) => s.element === finger)
-  /** whether a bone sinks into the target, or into one of `others`, past the give; first bones lie side by side */
-  sinks = (s: Segment, others: Segment[]) =>
-    samples(s).some((p) => this.skin.depth(p) < s.radius - this.fine) || apart(s, this.beside(s, others)) < -this.fine
+  /** how deep a bone is sunk, past the give, into the target or into one of `others`: 0 where it is clear; first
+   * bones lie side by side */
+  sunk = (s: Segment, others: Segment[], slack = 0) =>
+    Math.max(0, -this.fine - apart(s, this.beside(s, others)), ...this.room(s, slack).map((room) => -this.fine - room))
   beside = (s: Segment, others: Segment[]) => others.filter((o) => s.bone + o.bone > 0)
+  /** how deep a finger's root is sunk where the wrist has put it: no pose brings the root out, so the finger's first
+   * bone may be in the target as deep there, and less and less toward its end */
+  slack = (finger: Finger, place: Matrix4) =>
+    Math.max(0, this.radius - this.skin.depth(this.of(finger)[0].a.clone().applyMatrix4(place)))
+  /** how far the skin at each point along a bone is from the target, negative where it is in it, `slack` forgiven */
+  room = (s: Segment, slack: number) =>
+    samples(s).map((p, i, { length }) => {
+      return this.skin.depth(p) - s.radius + (s.bone ? 0 : slack * (1 - i / (length - 1)))
+    })
 
   /** how far a point of a finger's bone `upto` (its tip by default) moves at most, the joints from `first` on turning
    * from some angles to others: each angle's turn times the length from its joint out to that bone's end (world) */
@@ -81,30 +102,76 @@ export class Touch {
   }
 
   /** the first share of the way from `from` to `to`, a spacing's move at a time, at which nothing of the finger sinks
-   * in: undefined if none. Not a bisection: a finger may sink in at both ends and be clear between, past a handle */
+   * in; where something does all the way, the share at which it is `sunk` the least. Not a bisection: a finger may
+   * sink in at both ends and be clear between, past a handle */
   clear(finger: Finger, place: Matrix4, pose: Pose, from: number[], to: number[], others: Segment[]) {
+    const slack = this.slack(finger, place)
     const steps = Math.max(1, Math.ceil(this.travel(finger, from, to) / this.spacing))
-    for (let k = 0; k <= steps; k++)
-      if (!this.bones(finger, lerp(from, to, k / steps), pose, place).some((g) => this.sinks(g, others)))
-        return k / steps
+    let best = { share: 0, sunk: Infinity }
+    for (let k = 0; k <= steps && best.sunk > 0; k++) {
+      const bones = this.bones(finger, lerp(from, to, k / steps), pose, place)
+      const sunk = Math.max(...bones.map((g) => this.sunk(g, others, slack)))
+      if (sunk < best.sunk) best = { share: k / steps, sunk }
+    }
+    return best
+  }
+
+  /** a finger kept as it is held (`now`) where nothing of it sinks in. Else it gets out of the way: of all its
+   * poses that are clear, toward the one that moves it least, as far as clears; where none is, to the one sunk the
+   * least. The poses are tried joint by joint from the knuckle out: a bone sunk deeper than the best pose so far
+   * rules out all that the joints past it could do */
+  free(finger: Finger, place: Matrix4, pose: Pose, others: Segment[], now = angles(pose[finger])) {
+    const slack = this.slack(finger, place)
+    const sunk = (values: number[], bone: number) =>
+      this.sunk(this.bones(finger, [...values, 0, 0].slice(0, 4), pose, place)[bone], others, slack)
+    let best = { values: now, sunk: Math.max(...[0, 1, 2].map((bone) => sunk(now, bone))), moved: 0 }
+    if (!best.sunk) return now
+    const [spreads, ...bends] = tries(finger)
+    const search = (values: number[], above: number) => {
+      const bone = values.length - 2
+      const deep = Math.max(above, sunk(values, bone))
+      if (deep > best.sunk) return
+      if (bone < 2) return bends[bone + 1].forEach((bend) => search([...values, bend], deep))
+      const moved = this.travel(finger, now, values)
+      if (deep < best.sunk || moved < best.moved) best = { values, sunk: deep, moved }
+    }
+    for (const spread of spreads) for (const bend of bends[0]) search([spread, bend], 0)
+    const { values } = best
+    return best.sunk ? values : lerp(now, values, this.clear(finger, place, pose, now, values, others).share)
   }
 
   /** closes a finger from `open` toward `shut`, from the first share at which nothing of it sinks in, joint by joint:
    * each stops when a bone it carries meets the target or presses into `others` past the give, and those past it go
-   * on, so the finger wraps. A step turns the joints as far as the room between each bone and the target lets, so none
-   * passes through, till that room is less than the give; neighbours, slid along, only cut short a step into them */
+   * on, so the finger wraps. A step turns the joints as far as the room between each point of a bone and the target
+   * lets, for how far that point moves, so none passes through, till that room is less than the give; neighbours,
+   * slid along, only cut short a step into them. A finger sunk in all the way does not close: it gets out of the way
+   * as one left out does */
   close(finger: Finger, place: Matrix4, pose: Pose, open: number[], shut: number[], others: Segment[]) {
-    let [share, moving] = [this.clear(finger, place, pose, open, shut, others) ?? 1, 0]
+    const start = this.clear(finger, place, pose, open, shut, others)
+    let [share, moving] = [start.share, 0]
     let values = lerp(open, shut, share)
+    const whole = this.travel(finger, open, shut)
+    if (start.sunk) return this.free(finger, place, pose, others, values)
+    if (!whole) return values
+    const slack = this.slack(finger, place)
     const at = (s: number) => values.map((v, i) => (JOINT[i] >= moving ? open[i] + (shut[i] - open[i]) * s : v))
-    const room = (g: Segment) => Math.min(...samples(g).map((p) => this.skin.nearest(p).distance - g.radius))
+    /** the share of the way a bone may go on: each of its points moves at most as far as its place between the bone's
+     * ends, and the joint it turns about not at all */
+    const step = (g: Segment, k: number) => {
+      const [near, far] = [k - 1, k].map((upto) => this.travel(finger, open, shut, upto, moving))
+      const steps = this.room(g, slack).map((room, i, { length }) => {
+        const moves = near + ((far - near) * i) / (length - 1)
+        return moves ? room / moves : Infinity
+      })
+      return Math.min(...steps)
+    }
     const presses = (g: Segment, k: number) => k >= moving && apart(g, this.beside(g, others)) < -this.fine
     const pressing = (s: number) => this.bones(finger, at(s), pose, place).findIndex(presses)
     // the share of the way that moves no point of the finger further than the give
-    const finest = this.fine / this.travel(finger, open, shut)
+    const finest = this.fine / whole
     while (moving < 3 && share < 1) {
       const bones = this.bones(finger, values, pose, place)
-      const steps = bones.map((g, k) => (k < moving ? Infinity : room(g) / this.travel(finger, open, shut, k, moving)))
+      const steps = bones.map((g, k) => (k < moving ? Infinity : step(g, k)))
       const met = steps.findIndex((step) => step <= finest / 4)
       if (met >= 0) {
         moving = met + 1
@@ -117,38 +184,47 @@ export class Touch {
     return values
   }
 
-  /** a finger closed till it touches: straight from its knuckle if the plane it folds in passes within its thickness
-   * and `half` (the target's half width) of the segment `core` (world), else spread only as far as brings that plane
-   * through the segment's nearer end, so that it neither crosses its neighbours nor splays */
-  curl(finger: Finger, place: Matrix4, pose: Pose, core: Vector3[], half: number, others: Segment[]) {
+  /** a finger closed from straight till it touches: at `spread`; if it meets nothing so, turned at its knuckle toward
+   * the nearest of the target, as far as it spreads; and if nothing still, as in a fist, as far as the target and
+   * the others let it: it does not stop short, held open where it met its neighbours */
+  wrap(finger: Finger, place: Matrix4, pose: Pose, spread: number, others: Segment[]) {
     const [{ a: knuckle, b: joint }] = this.of(finger)
     const way = square(joint.clone().sub(knuckle), this.hand.normal)
     const side = new Vector3().crossVectors(this.hand.normal, way)
     if (side.dot(this.hand.thumbward) < 0) side.negate()
-    const ends = core.map((p) => p.clone().applyMatrix4(place.clone().invert()).sub(knuckle))
-    const [a, b] = ends.map((q) => q.dot(side) * this.scale)
-    const nearer = ends[Math.abs(a) < Math.abs(b) ? 0 : 1]
-    const off = a * b <= 0 ? 0 : Math.min(Math.abs(a), Math.abs(b))
+    const near = this.skin.nearest(knuckle.clone().applyMatrix4(place)).at
+    const off = near.applyMatrix4(place.clone().invert()).sub(knuckle)
     const [least, most] = limits(finger)[0]
-    const turn = off <= this.radius + half ? 0 : Math.atan(nearer.dot(side) / Math.abs(nearer.dot(way)))
-    const spread = Math.min(most, Math.max(least, turn))
-    return this.close(finger, place, pose, [spread, 0, 0, 0], [spread, ...angles(fist[finger]).slice(1)], others)
+    const aimed = Math.min(most, Math.max(least, Math.atan(off.dot(side) / Math.abs(off.dot(way))) || 0))
+    let values: number[] = []
+    for (const turned of [spread, aimed, fist[finger].spread]) {
+      values = this.close(finger, place, pose, [turned, 0, 0, 0], [turned, ...fist[finger].bend], others)
+      if (this.contact({ ...pose, [finger]: part(values) }, place, finger).gap <= this.fine) break
+    }
+    return values
   }
 
-  /** a finger folded from straight till it touches, aimed a finger's thickness off `point` (world) on `out`'s side */
-  reach(finger: Finger, place: Matrix4, pose: Pose, point: Vector3, out: Vector3, others: Segment[]) {
-    const there = this.skin.nearest(point).at.addScaledVector(out, this.radius)
+  /** a finger folded from straight till it touches, aimed a finger's thickness off `point` (world) on its knuckle's
+   * side: a point on the target, or for one off it, where the way to it from the knuckle meets the target */
+  reach(finger: Finger, place: Matrix4, pose: Pose, point: Vector3, others: Segment[]) {
+    const knuckle = this.of(finger)[0].a.clone().applyMatrix4(place)
+    const way = point.clone().sub(knuckle).normalize()
+    const [on, met] = [this.skin.nearest(point), this.skin.cast(knuckle, way)]
+    const at = on.distance > this.fine && Number.isFinite(met) ? knuckle.clone().addScaledVector(way, met) : on.at
+    const there = at.addScaledVector(way, -this.radius)
     const values = this.toward(finger, place, pose, there, angles(flat[finger]))
     return this.close(finger, place, pose, [values[0], 0, 0, 0], values, others)
   }
 
   /** a finger brought onto the target at `point` (world), on the side `out` faces, from near `start`: its tip comes in
-   * square to the surface from a finger's thickness off, so that it lands there and not where its fold first grazes */
+   * square to the surface from a finger's thickness off, so that it lands there and not where its fold first grazes.
+   * Where the target is in the way of that, it closes onto the point from `start`, or else from straight */
   press(finger: Finger, place: Matrix4, pose: Pose, point: Vector3, out: Vector3, others: Segment[], start: number[]) {
     const at = this.skin.nearest(point).at
     const off = this.toward(finger, place, pose, at.clone().addScaledVector(out, 2 * this.radius), start)
     const into = this.toward(finger, place, pose, at.addScaledVector(out, this.radius - this.fine), start)
-    return this.close(finger, place, pose, off, into, others)
+    const clear = (open: number[]) => !this.clear(finger, place, pose, open, into, others).sunk
+    return this.close(finger, place, pose, [off, start, angles(flat[finger])].find(clear) ?? off, into, others)
   }
 
   /** a finger's angles, from `start` and within its limits, that bring its tip nearest `goal` (world): least squares

@@ -78,7 +78,7 @@ test('a hand with its thumb along the index, bent back at the wrist and curled, 
     const hand = new Hand(other(), side)
     const handle = new Mesh(new CylinderGeometry(0.015, 0.015, 0.2, 24))
     handle.updateMatrixWorld(true)
-    const { contacts } = grip(hand, handle, { at: new Vector3(0.015, 0, 0), from: new Vector3(1, 0, 0) })
+    const { contacts } = grip(hand, handle, { at: new Vector3(0.015, 0, 0), from: new Vector3(1, 0, 0), thumb: new Vector3(0, 1, 0) })
     for (const e of ['palm', 'thumb', 'index', 'middle'] as const) expect(contacts[e].gap).toBeLessThan(0.002)
   }
 })

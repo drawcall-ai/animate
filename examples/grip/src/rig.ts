@@ -12,6 +12,9 @@ const FINGERS: Record<string, [number, number][]> = {
   Little: [[0.08, -0.03], [0.112, -0.03], [0.131, -0.03], [0.149, -0.03]],
 }
 
+/** how thick the example draws a finger: half of it (m) */
+export const FLESH = 0.008
+
 export function createHand(): Bone {
   const bone = (name: string) => Object.assign(new Bone(), { name })
   const hand = bone('rightHand')

@@ -12,7 +12,7 @@ pnpm install
 pnpm check        # typecheck, tests (they print their numbers), build the examples
 pnpm soldier      # walking with a rifle held in both hands, aiming at a draggable target
 pnpm tennis       # forehand, two-handed backhand and serve; drag the contact point
-pnpm grip         # state a grip (thing, point on it, side the hand comes from) and the hand takes it
+pnpm grip         # state a grip (thing, point on it, side the hand comes from); the hand holds on as the thing moves
 pnpm match        # two players rally; the ball is simulated by @drawcall/physics
 ```
 
@@ -32,7 +32,7 @@ Packages export their TypeScript source directly; there is no build step for the
 
 ## The two packages together
 
-They are independent. `@drawcall/ik` decides where bones are; `@drawcall/grab` decides what the fingers of a hand bone do and where a thing sits in it. The humanoid in `@drawcall/ik` has no finger bones yet, so the soldier and the tennis player hold their rifle and racket with a rigid hand, and the grip example uses a bare hand of its own.
+They are independent. `@drawcall/ik` decides where bones are; `@drawcall/grab` finds how a hand holds a thing, once: where the hand bone goes on it and what the fingers do. That place is a frame on the thing, to attach to the hand bone with `body.attach`, or to reach for as the hand bone's goal. The humanoid in `@drawcall/ik` has no finger bones yet, so the soldier and the tennis player hold their rifle and racket with a rigid hand, and the grip example uses a bare hand of its own.
 
 ## The match
 

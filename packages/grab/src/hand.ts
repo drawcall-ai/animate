@@ -71,6 +71,9 @@ export const fist: Pose = {
 }
 export const point: Pose = { ...fist, index: flat.index }
 
+/** a pose a share `u` of the way from `a` to `b`, finger by finger and joint by joint: to move into a grip */
+export const mix = (a: Pose, b: Pose, u: number): Pose => each((f) => part(lerp(angles(a[f]), angles(b[f]), u)))
+
 /**
  * a joint of a finger: its bone, its rest turn, its rest turn in the hand's frame, what it turns about there, and what
  * turns its bone from its rest to where the pose counts from
