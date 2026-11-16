@@ -36,7 +36,7 @@ function asks(side: Side, hand: Vector3, shoulder: Vector3, { arm }: Size) {
 /** for a hand lower than it reaches he bends and comes down, as little as has it reach, the legs doing more the lower it is */
 function down(hand: Vector3, shoulder: Vector3, { arm, leg }: Size) {
   // (he gets down only for what is lower than his shoulder by more than so much of his arm: out ahead the arm reaches)
-  if (hand.y > shoulder.y - LOW * arm) return { bend: 0, sink: 0 }
+  if (hand.y > shoulder.y - LOW * arm || hand.distanceTo(shoulder) <= REACH * arm) return { bend: 0, sink: 0 }
   const cost = hand.y < -0.5 * leg ? COST.low : COST.high
   let best = { bend: 0, sink: 0, cost: Infinity }
   for (let bend = 0; bend <= DOWN.bend + 1e-6; bend += DOWN.bend / 12) {
