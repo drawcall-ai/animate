@@ -9,6 +9,9 @@ import type { Game, Input } from '../../../examples/play'
 import { Boxer } from '../../../examples/boxing/boxer'
 import { Gladiator } from '../../../examples/gladiator/gladiator'
 import { Worker } from '../../../examples/shelf/worker'
+import { NET } from '../../../examples/volleyball/ball'
+import { court } from '../../../examples/volleyball/court'
+import { Spiker } from '../../../examples/volleyball/spiker'
 
 const FRAME = 1 / 60
 
@@ -92,4 +95,18 @@ test('led: down off the first platform into the gap he stands on its floor; walk
   // (his hips as high over the floor of the gap as he stands: he stood 0.64 m above it on his feet's height before he fell)
   expect(above).toBeLessThan(1.05 * character.body.size.stand)
   expect(character.capsule.position.y).toBeGreaterThan(0.85)
+}, 30000)
+
+test('volleyball: a spike lands short of the net, on his own side of it, and the ball goes over', async () => {
+  const scene = new Scene()
+  const world = await buildWorld({ scene })
+  scene.add(court())
+  const spiker = new Spiker(person(), world, scene)
+  let furthest = -Infinity
+  play(spiker, world, 5, [], [0.5], () => {
+    const { gait } = spiker.character.body
+    furthest = Math.max(furthest, spiker.character.body.hips.value.z, ...(['left', 'right'] as const).map((side) => gait.feet[side].value.z))
+  })
+  expect(spiker.readout()).toContain('spiked')
+  expect(furthest).toBeLessThan(NET.z - 0.1)
 }, 30000)

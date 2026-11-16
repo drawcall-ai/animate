@@ -11,7 +11,7 @@ import { Setter } from './setter'
 const SPEED = { walk: 1.6, run: 5, approach: 3.5 }
 /** how far a spike lifts his hips above standing (m), and how far short of where they are at its top he takes off */
 const RISE = 0.75
-const TAKEOFF = 0.65
+const TAKEOFF = 0.3
 /** how far forward of straight up his arm is as the hand meets the ball in a spike (rad), and how fast the hand goes (m/s) */
 const SWING = 0.35
 const SPIKE = 12
