@@ -57,6 +57,7 @@ function down(hand: Vector3, shoulder: Vector3, { arm, leg }: Size) {
  */
 export class Asks implements Posture {
   private readonly known = new Map<number, Asked>()
+  private working = false
 
   constructor(
     readonly hands: End[],
@@ -76,12 +77,13 @@ export class Asks implements Posture {
     const key = Math.round((time / this.size.beat) * 80)
     const known = this.known.get(key)
     if (known) return known
+    // (asked again while it works something out, through where the hips will be, it asks nothing more)
+    if (this.working) return { turn: 0, bend: 0, sink: 0, shift: 0 }
+    this.working = true
     const all: Asked = { turn: 0, bend: 0, sink: 0, shift: 0 }
     const { at, velocity, facing, ground } = this.hips()
     // (from the hips as they would stand: what he is down for is what is asked)
     const hips = at.clone().addScaledVector(velocity, Math.max(0, time - this.now)).setY(ground + this.size.stand)
-    // (where a hand will be on him is told from where he is now: what is looked ahead at already reads this)
-    for (const end of this.hands) end.root.flat = true
     for (const end of this.hands) {
       const { channel } = end
       if (!channel.busy && !channel.holding) continue
@@ -93,7 +95,8 @@ export class Asks implements Posture {
       const due = Math.max(time, (channel.bound ?? channel).frames[0]?.at ?? time)
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
-      const soon = due - time <= LEAD.down * this.size.beat
+      // (nor for a place on him, which goes down with him)
+      const soon = due - time <= LEAD.down * this.size.beat && (channel.bound ?? channel).goal?.on !== end.root
       const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), ...(soon ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }) }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
@@ -102,10 +105,10 @@ export class Asks implements Posture {
       all.bend = Math.max(all.bend, one.bend)
       all.sink = Math.max(all.sink, one.sink)
     }
-    for (const end of this.hands) end.root.flat = false
     all.turn = Math.max(-1.2, Math.min(1.2, all.turn))
     all.shift = Math.max(-0.12, Math.min(0.12, all.shift))
     this.known.set(key, all)
+    this.working = false
     return all
   }
 

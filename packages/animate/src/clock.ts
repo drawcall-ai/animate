@@ -21,8 +21,6 @@ export type Workings = {
 }
 
 const euler = new Euler()
-/** how far a hand may be from where its plan has it before it goes on from where the arm has it (in lengths of his leg) */
-const REACHED = 0.023
 
 /**
  * The body's time, which goes on a step at a time however it is updated: in each the stories go on, the things he
@@ -42,7 +40,6 @@ export class Clock {
   /** how far each elbow is swung out about the line from its shoulder to its hand (rad) */
   private readonly swivel = both(() => 0)
   /** where each wrist was after the last step */
-  private readonly wrist = both(() => new Vector3())
   /** from when until when on his clock the update being made goes on */
   private span = { from: 0, to: 0 }
 
@@ -106,10 +103,7 @@ export class Clock {
     // the things go first, then the hips and the feet, then the ends, those on a thing with it
     for (const thing of things.values()) thing.channel.advance(now)
     locomotion.step(delta, this.body.ends.foot, looked)
-    for (const end of this.all) {
-      if (end.kind === 'hand') end.retip()
-      end.channel.advance(now)
-    }
+    for (const end of this.all) end.channel.advance(now)
     // a hand or a foot swung on and come to rest is the body's again, and so is a foot held in the air as he lands
     const lands = locomotion.carrier.landing
     for (const end of this.all) {
@@ -158,34 +152,21 @@ export class Clock {
       }
     }
     this.draw(0)
-    // a thing the body moves is where the first hand on it has it, as near where it is to be as that arm reaches
+    // a thing the body moves is shown where the first hand on it has it, its plan going on as planned
     for (const thing of things.values()) {
       const lead = thing.hands[0]?.end
-      const gap = lead && !thing.outside ? bones.wrist[lead.side].clone().sub(lead.channel.value) : undefined
-      // (and it goes on from there: what the arm cannot do it is met as nearly as it can be)
-      if (gap && gap.length() > REACHED * this.body.size.leg) thing.channel.value.add(gap)
-      thing.write()
+      thing.write(lead && !thing.outside ? bones.wrist[lead.side].clone().sub(lead.channel.value) : undefined)
     }
     for (const side of SIDES) {
       const [hand, foot] = [ends.hand[side], ends.foot[side]]
-      hand.gap = bones.wrist[side].distanceTo(hand.channel.value)
-      // a hand on its way that its arm cannot follow goes on from where the arm has it: met as nearly as it can be
-      if (hand.held && hand.gap > REACHED * this.body.size.leg && !this.bound(hand)) {
-        hand.channel.velocity.copy(bones.wrist[side]).sub(this.wrist[side]).divideScalar(delta)
-        hand.channel.value.copy(bones.wrist[side])
-      }
-      this.wrist[side].copy(bones.wrist[side])
+      const posed = hand.point(bones.wrist[side], bones.hand[side])
+      hand.gap = posed.distanceTo(hand.channel.value)
       foot.gap = bones.ankle[side].distanceTo(foot.channel.value)
-      hand.track(delta, bones.wrist[side], bones.hand[side])
+      hand.track(delta, posed, bones.hand[side])
       foot.track(delta, bones.ankle[side])
       this.bent[side] = locomotion.tread(side, foot, delta)
     }
     this.feet()
-  }
-
-  /** whether a hand is on a thing */
-  private bound(hand: End) {
-    return [...this.body.things.values()].some(({ hands }) => hands.some(({ end }) => end === hand))
   }
 
   /** the bones are turned to where everything is `seconds` on from his last step, going as it goes then */

@@ -198,8 +198,6 @@ export class End {
     // (what it was sent onto before matters no more once it is sent elsewhere)
     const ons = this.channel.frames.map(({ on }) => (on && 'object' in on ? (on as { object: Object3D }).object : undefined))
     for (const thing of this.on) if (!ons.includes(thing)) this.on.delete(thing)
-    const tip = this.tips.get(frame)
-    if (tip) this.tips.set(written, tip)
     const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
     if (this.kind === 'foot') this.body.carrier.take(this.side, { from: frame.leaves ?? this.body.time(), until: moving ? (frame.at ?? Infinity) : Infinity })
     this.body.carrier.stale()
@@ -246,7 +244,7 @@ export class End {
     return this.channel.met(frame) && this.gap <= SLACK.place * this.body.size.leg
   }
 
-  /** the part of the hand it was last sent with, if not its wrist: the arm puts that part where the wrist's plan has it */
+  /** the part of the hand it was last sent with, if not its wrist: its channel plans where that part is, and the arm puts it there */
   part?: Touch
 
   /** where the part it was sent with is from the wrist now, in the frame of the hand: none, sent with the wrist */
@@ -254,17 +252,19 @@ export class End {
     return this.part ? this.fingers().tip(this.part, 0) : undefined
   }
 
-  /** the frames it was sent with a fingertip, the palm or the knuckles: that part, where it is to be and how the hand is turned */
-  private readonly tips = new WeakMap<Frame, { part: Touch; at: Vector3; turn: Quaternion }>()
+  /** where the part its channel plans is, for a wrist and a hand turned so */
+  point(wrist: Vector3, turn: Quaternion) {
+    const offset = this.offset()
+    return offset ? offset.applyQuaternion(turn).add(wrist) : wrist.clone()
+  }
 
-  /** the wrist of every frame sent with a part of the hand is where that part will be at the frame's moment, the fingers as they will be then */
-  retip() {
-    for (const frame of this.channel.frames) {
-      const tip = this.tips.get(frame)
-      if (!tip || !frame.place) continue
-      const offset = this.fingers().tip(tip.part, Math.max(0, (frame.at ?? 0) - this.body.time()))
-      ;(frame.place as Vector3).copy(tip.at).sub(offset.applyQuaternion(tip.turn))
-    }
+  /** it plans another part of the hand from now: what it plans goes over to where that part is */
+  private plans(part?: Touch) {
+    if (part === this.part) return
+    const { value, turn } = this.channel
+    const wrist = this.offset()?.applyQuaternion(turn).negate().add(value) ?? value.clone()
+    this.part = part
+    this.channel.set(this.point(wrist, turn), turn)
   }
 
   /** the things it was sent onto, until it is cancelled */
@@ -307,22 +307,15 @@ export class End {
     // (told nothing of how it is turned, or only how the palm faces, the fingers point on along the arm, as from its shoulder to the place)
     const along = !ways[1] ? this.along(there, mover, into) : undefined
     const turn = hand ? turnOf(ways[0], ways[1] ?? along, hand.palm, now) : undefined
-    // (sent with a part of the hand, or what sits in it by a grip, the wrist is where that has it there)
-    const offset = part && hand ? (typeof part === 'string' ? this.fingers().tip(part, 0) : this.sits(part).at) : undefined
-    const at = there.clone()
-    if (offset) there.sub(offset.applyQuaternion(turn ?? now))
+    // (sent with what sits in it by a grip, the wrist is where that has it there; with a part of the hand, it plans that part)
+    if (part && hand && typeof part !== 'string') there.sub(this.sits(part).at.applyQuaternion(turn ?? now))
+    this.plans(typeof part === 'string' ? part : undefined)
     const frame: Frame = { on: mover, place: there, turn, velocity, by: 'story' }
-    // (sent with a fingertip, the wrist is put anew each step for where that finger will be at the moment)
-    if (typeof part === 'string') this.tips.set(frame, { part, at, turn: (turn ?? now).clone() })
-    this.part = typeof part === 'string' ? part : undefined
     const speed = velocity ? new Vector3().copy(velocity) : undefined
     if (speed && speed.lengthSq() > 0) {
       // a fast end swings round where its limb starts, and a hand's wrist whips on with it: the fingers led into the way it goes
       frame.about = this.root
-      if (hand) {
-        const fingers = DOWN.clone().applyQuaternion(into.clone().multiply(turn ?? now))
-        frame.spin = fingers.cross(speed).divideScalar(this.body.size.forearm)
-      }
+      if (hand) frame.spin = DOWN.clone().applyQuaternion(into.clone().multiply(turn ?? now)).cross(speed).divideScalar(this.body.size.forearm)
     }
     return frame
   }
@@ -408,7 +401,6 @@ export class End {
   /** cancels what it was sent to: it goes on from the state it is in, a hand swinging on and then the body's */
   cancel() {
     this.on.clear()
-    this.part = undefined
     // (one the story does not have yet is only told to set off for nothing)
     if (this.held) this.channel.cancel()
     else this.channel.set(this.channel.value, this.channel.turn)

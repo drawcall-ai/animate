@@ -46,12 +46,14 @@ export class Bound {
     private readonly him: object,
     private readonly watch: (thing: Object3D) => Mover,
     private readonly now: () => number,
+    /** a thing as it is seen to move, looked at only when it is asked to be */
+    seen: (thing: Object3D) => Watched,
     private readonly changed: () => void,
     /** how hard the arm that moves it pushes, and how far it draws it back */
     { strength, draw }: { strength: number; draw: number },
   ) {
     this.channel = new Channel(mesh.name || 'thing', strength, draw)
-    this.watched = new Watched(mesh, frame)
+    this.watched = seen(mesh)
     this.look()
     this.channel.outside = outside
   }

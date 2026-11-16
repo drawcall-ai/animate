@@ -118,6 +118,11 @@ export class Channel implements Mover {
     return this.last !== undefined
   }
 
+  /** the frame it goes to next, or else the one it holds */
+  get goal(): Frame | undefined {
+    return this.frames[0] ?? this.last
+  }
+
   /** when it sets off, or set off, for the frame it is going to: until then it holds as it was */
   get setsOff() {
     return this.frames[0]?.met?.leaves
@@ -201,9 +206,14 @@ export class Channel implements Mover {
     let start = this.now
     let held = this.last
     for (const frame of this.frames) {
-      const met = frame.met ?? this.fit(frame, start)
+      const met = (frame.met ??= this.fit(frame, start))
       // (until it sets off it holds as it was: on what it was held on, if anything)
       if (t < met.leaves && held?.on && !held.velocity) return this.after(t, start, held, place, velocity, turn)
+      // (held on something that moves, it sets off from where that has it when it sets off)
+      if (held?.on && !held.velocity && met.leaves > start) {
+        this.after(met.leaves, start, held, this.from.value, this.from.velocity, this.from.turn)
+        start = met.leaves
+      }
       if (t <= met.at) return this.between(t, Math.max(start, met.leaves), met.at, frame, met.velocity, place, velocity, turn)
       this.resolve(frame, met.at, met.velocity)
       this.from.value.copy(this.to.value)

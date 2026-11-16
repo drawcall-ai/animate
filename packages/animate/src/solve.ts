@@ -1,7 +1,7 @@
 import { bends, bent, DOWN, type Limb, RANGE, UP } from '@drawcall/limbs'
 import { Euler, Quaternion, Vector3 } from 'three'
 
-/** how far either way from the swing it had an elbow is looked at to swing out, and how finely (rad); and what moving it costs against a wrist turned past its range */
+/** how far either way from the swing it had an elbow swung into the trunk is looked at to swing out, how far it swings a step at the most (rad); and what moving it costs against a wrist turned past its range */
 const SWIVEL = { most: 1.2, fine: 0.1, moved: 0.3 }
 const euler = new Euler()
 const FULL = 2 * Math.PI
@@ -45,15 +45,17 @@ const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly 
  */
 export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist: Vector3, turn: Quaternion, swivel: number, part?: Vector3) {
   const hand = arm.hand!
-  // (sent with a part of the hand, that part is put where the plan has it, however the wrist turns the hand: a few tries)
+  // (sent with a part of the hand, `wrist` is where that part is to be, however the wrist turns the hand: tried until it holds)
   if (part) {
-    const tip = part.clone().applyQuaternion(turn).add(wrist)
-    let at = wrist.clone()
-    for (let k = 0; k < 6; k++) {
+    const tip = wrist.clone()
+    let at = part.clone().applyQuaternion(turn).negate().add(tip)
+    for (let k = 0, moved = 1; k < 20 && moved > 1e-4; k++) {
       const posed = reachArm(arm, shoulder, trunk, at, turn, swivel)
       const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(posed.first))).multiply(new Quaternion().setFromEuler(euler.set(posed.fold, 0, 0)))
       const lies = bent(forearm, posed.wrist, new Quaternion())
-      at = tip.clone().sub(part.clone().applyQuaternion(lies))
+      const next = tip.clone().sub(part.clone().applyQuaternion(lies))
+      moved = next.distanceTo(at)
+      at = next
     }
     return reachArm(arm, shoulder, trunk, at, turn, swivel)
   }
@@ -74,8 +76,13 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
     const cost = 10 * stopped + beyond(bent, RANGE.wrist) + (arm.inside(upper, elbow) ? 10 : 0) + SWIVEL.moved * Math.abs(swung - swivel)
     return { first: upper, fold: elbow, wrist: within(bent, RANGE.wrist), swivel: swung, cost }
   }
+  // (it swings on from the swing it had, a little either way a step; only an arm in the trunk looks further)
   let best = pose(swivel)
-  for (let by = -SWIVEL.most; by <= SWIVEL.most + 1e-9; by += SWIVEL.fine) {
+  for (const by of [-3, -1, 1, 3].map((k) => k * SWIVEL.fine)) {
+    const tried = pose(swivel + by)
+    if (tried.cost < best.cost - 1e-6) best = tried
+  }
+  for (let by = -SWIVEL.most; best.cost >= 10 && by <= SWIVEL.most + 1e-9; by += SWIVEL.fine) {
     const tried = pose(swivel + by)
     if (tried.cost < best.cost - 1e-6) best = tried
   }

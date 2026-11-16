@@ -62,7 +62,7 @@ export class Body {
     const body = { size, carrier, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget() }
     const end = (kind: 'hand' | 'foot', side: Side) => {
       const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
-      const root = new OnHim(carrier, kind, side, () => ({ ...facing(), hips: locomotion.hips.value, at: kind === 'hand' ? bones.shouldered(side, new Vector3()) : bones.hip(side).clone() }), size)
+      const root = new OnHim(carrier)
       return new End(kind, side, limb, root, body, bones.lies(kind, side), bones.starts[kind][side])
     }
     const ends = { hand: both((side) => end('hand', side)), foot: both((side) => end('foot', side)) }
@@ -89,8 +89,15 @@ export class Body {
     this.clock.pose(0)
     for (const side of SIDES) {
       asks.shoulders[side].copy(bones.shouldered(side, new Vector3())).sub(locomotion.hips.value)
+      asks.shoulders[side].applyAxisAngle(UP, -locomotion.facing)
       ends.hand[side].root.rest.copy(asks.shoulders[side])
+      ends.foot[side].root.rest.copy(bones.hip(side)).sub(locomotion.hips.value).applyAxisAngle(UP, -locomotion.facing)
     }
+  }
+
+  /** a thing as he sees it move */
+  private seen(thing: Object3D) {
+    return new Watched(thing, this.bones.frame, () => ({ at: this.locomotion.hips.value, facing: this.locomotion.facing }))
   }
 
   /** what a frame on a thing moves on: its channel if it is bound to him, or the thing as it is seen to move */
@@ -98,7 +105,7 @@ export class Body {
     const bound = this.things.get(thing)
     if (bound) return bound.channel
     let watched = this.watched.get(thing)
-    if (!watched) this.watched.set(thing, (watched = new Watched(thing, this.bones.frame)))
+    if (!watched) this.watched.set(thing, (watched = this.seen(thing)))
     watched.look(this.time)
     return watched
   }
@@ -124,7 +131,7 @@ export class Body {
         if (k >= 0) thing.hands.splice(k, 1)
       }
     }
-    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, () => this.workings.asks.forget(), { strength, draw })
+    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, (thing) => this.seen(thing), () => this.workings.asks.forget(), { strength, draw })
     this.things.set(object, bound)
     return bound.facade()
   }
