@@ -128,7 +128,8 @@ export class Soldier {
     this.body = new Body(man)
     this.gun = this.body.bind(this.rifle, { outside: true })
     this.pose()
-    this.onRifle()
+    this.gun.in(this.body.hand.right, this.held.grip)
+    this.gun.in(this.body.hand.left, this.held.fore)
   }
 
   /** both hands go on the rifle by their grips */

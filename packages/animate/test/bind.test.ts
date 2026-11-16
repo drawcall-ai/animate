@@ -186,11 +186,11 @@ test('a hand is not sent onto a thing it leads, goes onto one thing at a time, a
   const right = body.hand.right
   const seat = grip(hands.right, one, SEAT)
   const held = body.bind(one)
-  held.on(right, seat)
+  held.in(right, seat)
   expect(() => right.to(seat)).toThrow(/leads/)
   expect(() => right.to({ x: 0, y: 0, z: 0 }, { on: one })).toThrow(/leads/)
   // (going on another thing, it comes off the first)
-  body.bind(two).on(right, grip(hands.right, two, SEAT))
+  body.bind(two).in(right, grip(hands.right, two, SEAT))
   expect(body.bound.map(({ thing }) => thing)).toEqual([two])
   const sent = held.to({ x: 0, y: 1, z: 0.5 })
   expect(sent.next()).toEqual({ done: true, value: false })
@@ -265,11 +265,56 @@ test('a thing taken in the hand with nowhere to go goes with him as he walks, th
   const mesh = ball()
   const { body, hands } = setup(mesh)
   const held = body.bind(mesh)
-  held.on(body.hand.right, grip(hands.right, mesh, SEAT))
+  held.in(body.hand.right, grip(hands.right, mesh, SEAT))
   for (let t = 0; t < 3; t += FRAME) {
     body.go({ x: 0, z: 1.4 })
     body.update(FRAME)
   }
   expect(place(mesh).z - body.hips.value.z).toBeGreaterThan(-0.3)
   expect(held.there).toBe(true)
+})
+
+test('taking hold is planned: each hand goes to its grip where the thing is, and from then they are one, with no jump of the thing or the hands', () => {
+  const box = new Mesh(new BoxGeometry(0.3, 0.2, 0.2))
+  box.position.set(0, 0.85, 0.42)
+  const { body, hands } = setup(box)
+  const side = (x: number): Statement => ({ at: new Vector3(x, 0, 0), from: new Vector3(Math.sign(x), 0, 0) })
+  const grips = { right: grip(hands.right, box, side(-0.15)), left: grip(hands.left, box, side(0.15)) }
+  const carried = body.bind(box)
+  const wrists = () => ({ right: body.hand.right.value.clone(), left: body.hand.left.value.clone() })
+  const at = () => box.getWorldPosition(new Vector3())
+  let [jump, thing, onGrip] = [0, 0, 0]
+  play(
+    body,
+    (function* () {
+      // (sent from rest, the first hand reaches it where it lies, and it does not move till that hand has it)
+      const took = carried.on(body.hand.right, grips.right)
+      expect(body.bound).toEqual([])
+      const lies = at()
+      expect(yield* took).toBe(true)
+      thing = at().distanceTo(lies)
+      // the second hand joins it while it is carried somewhere: on its grip from the moment it joins
+      const going = carried.to({ x: 0, y: 1.1, z: 0.4 }, { on: body, seconds: 1.2 })
+      const joined = carried.on(body.hand.left, grips.left)
+      expect(yield* joined).toBe(true)
+      // (the posed hand, against where its grip has it)
+      for (let k = 0; k < 30; k++) {
+        onGrip = Math.max(onGrip, body.intent().gaps.find(({ name }) => name === 'left hand')?.posed.distanceTo(body.intent().gaps.find(({ name }) => name === 'left hand')!.planned) ?? Infinity)
+        yield
+      }
+      yield* going
+    })(),
+    (() => {
+      let was = wrists()
+      return () => {
+        const now = wrists()
+        jump = Math.max(jump, now.right.distanceTo(was.right), now.left.distanceTo(was.left))
+        was = now
+      }
+    })(),
+  )
+  expect(thing).toBeLessThan(0.01)
+  // (no hand moves more in a frame than it can at a run of the arm)
+  expect(jump).toBeLessThan(0.1)
+  expect(onGrip).toBeLessThan(0.02)
 })

@@ -98,12 +98,12 @@ export class Thrower implements Game {
     yield* body.walk(javelin.grip.addScaledVector(left, shoulder - x * arm).addScaledVector(ahead, -z * arm))
     body.face()
     const seat = grip(this.hand, javelin.mesh, GRIP)
+    const held = body.bind(javelin.mesh)
     // (a hand that never got there leaves it lying)
-    if (!(yield* body.hand.right.to(seat))) return
+    if (!(yield* held.on(body.hand.right, seat))) return
     this.javelin = javelin
     javelin.take()
-    this.held = body.bind(javelin.mesh)
-    this.held.on(body.hand.right, seat)
+    this.held = held
     this.carry(this.held)
   }
 

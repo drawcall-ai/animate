@@ -47,9 +47,10 @@ on what they hold; `body.stand()` cancels and brings him to rest.
 ## Things: bind, hold, let go
 
 `const ball = body.bind(mesh)` makes a thing his; `ball.on(body.hand.right, grip)` puts a hand on it by a grip from
-`@drawcall/hand`. Make each `Hand` before the `Body`: it reads the rig at rest, and the body poses it. `on` binds at
-once, as things stand: the first hand on a thing has the thing jump into it, any other hand jumps to its grip. So
-send the hand there first (`yield* body.hand.right.to(grip)`, which also closes the fingers), then `on`.
+`@drawcall/hand`. Make each `Hand` before the `Body`: it reads the rig at rest, and the body poses it. `on` is planned
+like any frame: the hand goes to its grip on the thing where it is, moving or at rest, closing its fingers, and from
+the moment it arrives they are one (`yield* ball.on(…)` waits for that). A thing he holds from the start is put there
+with `ball.in(hand, grip)`.
 
 With a hand on it, send the thing, not the hand: `ball.to(…)`, `ball.by(release, place, { velocity })`. The body
 plans it as the end of the first hand's arm, and the other hands go with it; sending a hand that is on a thing throws.

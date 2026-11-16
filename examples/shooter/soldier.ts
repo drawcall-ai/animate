@@ -139,7 +139,8 @@ export class Soldier {
     this.shown.add(rig, this.rifle)
     this.carry({ move: { x: 0, z: 0 }, yaw: 0, pitch: 0 }, false)
     this.look(this.aimed)
-    this.hold()
+    this.gun.in(this.body.hand.right, this.held.grip)
+    this.gun.in(this.body.hand.left, this.held.fore)
   }
 
   private static grenade() {

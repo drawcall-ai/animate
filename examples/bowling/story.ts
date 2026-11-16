@@ -30,7 +30,7 @@ run({
     // (upright, its holes to his right, as it sits on the palm by a point: it keeps that turn)
     held.off(body.hand.right)
     ballMesh.quaternion.identity()
-    held.on(body.hand.right, seat)
+    held.in(body.hand.right, seat)
     bowled = ball()
     left = undefined
     body.play(

@@ -1,5 +1,6 @@
 import { type Grip } from './rig/fingers'
-import { type Story } from './story'
+import { type Story, waits } from './story'
+import { NEAR } from './rig/limb'
 import { Channel, type Frame, type Mover, type Xyz } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Arriving, End, Hand } from './ends'
@@ -9,14 +10,15 @@ import { Watched } from './movers'
 export type Sending = Arriving & { pointing?: Xyz; palm?: Xyz }
 
 /**
- * What a story or a game has of a thing bound to him: hands go `on` it by grips and come `off` it; it is sent
+ * What a story or a game has of a thing bound to him: hands go `on` it by grips, as hands are sent, and come `off` it, or it is put `in` a hand at once; it is sent
  * somewhere, or to be somewhere by a moment, as a hand is, and the hands on it come with it; `cancel` stops it where
  * it is; whether it is moved from `outside`, which hands it over to the game or back to the body; whether every hand
  * on it is where it is to be; how fast it moves; and `free` lets it go, every hand on it going on as it was moving,
  * telling how fast it was moving.
  */
 export type Thing = Readonly<{
-  on(hand: Hand, grip: Grip): void
+  on(hand: Hand, grip: Grip): Story<boolean>
+  in(hand: Hand, grip: Grip): void
   off(hand: Hand): void
   to(place: Xyz, how?: Sending & { seconds?: number }): Story<boolean>
   by(when: number, place: Xyz, how?: Sending): Story<boolean>
@@ -50,6 +52,8 @@ export class Bound {
     /** a thing as it is seen to move, looked at only when it is asked to be */
     seen: (thing: Object3D) => Watched,
     private readonly changed: () => void,
+    /** has a story played beside the others */
+    private readonly play: (story: Story<unknown>) => void,
     /** how hard the arm that moves it pushes, and how far it draws it back */
     { strength, draw }: { strength: number; draw: number },
   ) {
@@ -97,23 +101,60 @@ export class Bound {
     return this.hands[0]
   }
 
-  on(hand: Hand, grip: Grip) {
+  /**
+   * a hand goes onto it by a grip: it is sent to the grip on the thing as the thing is going, arriving as it moves, and
+   * from then they are one; one there already is on it at once. Tells whether it got there
+   */
+  on(hand: Hand, grip: Grip): Story<boolean> {
     const end = this.ends(hand)
     this.others(end)
+    this.joining.delete(end)
+    if (end.channel.bound) end.channel.unbind()
+    // (one the world has is where it is seen: its grip is counted on it as it goes)
+    if (!this.hands.length && !this.channel.outside) this.look()
+    const seat = this.seat(end, grip)
+    if (end.channel.value.distanceTo(seat.place.clone().applyQuaternion(this.channel.turn).add(this.channel.value)) <= NEAR * end.limb.length) {
+      this.bind(end, grip)
+      return nothing(true)
+    }
+    const sent = end.timed({ on: this.watch(this.mesh), place: seat.place, turn: seat.turn, by: 'story' }, end.channel)
+    void end.write(sent)
+    end.close(grip.pose, sent.at - this.now())
+    const frame = end.channel.frames.find(({ place }) => place === seat.place)!
+    this.joining.add(end)
+    const self = this
+    this.play(
+      (function* () {
+        while (end.channel.frames.includes(frame) && self.joining.has(end)) yield
+        if (!self.joining.delete(end) || !end.channel.met(frame)) return
+        self.bind(end, grip)
+      })(),
+    )
+    return waits(() => this.joining.has(end), () => this.hands.some((one) => one.end === end))
+  }
+
+  /** hands on their way to go onto it */
+  private readonly joining = new Set<End>()
+
+  /** where a hand on it by a grip is, and how it is turned, in its frame as it is now: a grip on a part of it is a grip on it, where that part is on it */
+  private seat(end: End, grip: Grip) {
     const seat = end.seats(grip)
-    // (a grip on a part of it is a grip on it, where that part is on it)
     const [part, partTurn] = [new Vector3(), new Quaternion()]
     this.look(grip.target, part, partTurn)
     const back = this.channel.turn.clone().invert()
-    const place = seat.place.clone().applyQuaternion(partTurn).add(part).sub(this.channel.value).applyQuaternion(back)
-    const turn = back.multiply(partTurn).multiply(seat.turn)
-    // (the first hand on a thing the body moves has it where the grip seats it, and every other goes onto its grip on it)
-    if (!this.channel.outside && this.hands.length === 0) {
-      const thing = end.channel.turn.clone().multiply(turn.clone().invert())
-      this.channel.set(end.channel.value.clone().sub(place.clone().applyQuaternion(thing)), thing)
-      this.write()
+    return { place: seat.place.clone().applyQuaternion(partTurn).add(part).sub(this.channel.value).applyQuaternion(back), turn: back.multiply(partTurn).multiply(seat.turn) }
+  }
+
+  /** a hand at its grip is on it from now: the first on a thing the body moves takes it as it is seen to go */
+  private bind(end: End, grip: Grip) {
+    if (!this.channel.outside && !this.hands.length) {
+      this.watched.look(this.now())
+      this.watched.state(this.now(), this.channel.value, this.channel.velocity, this.channel.turn)
+      this.channel.set(this.channel.value, this.channel.turn)
+      this.watched.state(this.now(), new Vector3(), this.channel.velocity)
     }
-    end.channel.set(place.clone().applyQuaternion(this.channel.turn).add(this.channel.value), this.channel.turn.clone().multiply(turn))
+    const { place, turn } = this.seat(end, grip)
+    end.channel.set(place.applyQuaternion(this.channel.turn).add(this.channel.value), this.channel.turn.clone().multiply(turn))
     end.channel.bind(this.channel)
     this.hands.push({ end, grip })
     this.led()
@@ -125,6 +166,7 @@ export class Bound {
 
   off(hand: Hand) {
     const end = this.ends(hand)
+    if (this.joining.delete(end)) end.cancel()
     const k = this.hands.findIndex((one) => one.end === end)
     if (k < 0) return
     this.hands.splice(k, 1)
@@ -169,13 +211,42 @@ export class Bound {
     return this.send(place, how, { by: when })
   }
 
-  /** sends it: as the first hand on it would be sent, so it is planned as the end of that arm */
+  /** sends it: as the first hand on it would be sent, so it is planned as the end of that arm; sent while that hand is on its way to it, once it has it */
   private send(place: Xyz, how: Sending, when: { seconds?: number; by?: number }): Story<boolean> {
-    const lead = this.lead?.end
-    if (!lead || this.channel.outside) return nothing()
-    const written = this.channel.by(lead.timed(this.framed(place, how), this.channel, when))
+    if (this.channel.outside) return nothing()
+    if (this.lead) return this.sent(place, how, when)
+    let written: Story<boolean> | undefined
+    const self = this
+    this.play(
+      (function* () {
+        while (!self.lead && self.joining.size) yield
+        if (self.lead) written = self.sent(place, how, when)
+      })(),
+    )
+    return (function* () {
+      while (!written && self.joining.size) yield
+      return written ? yield* written : false
+    })()
+  }
+
+  private sent(place: Xyz, how: Sending, when: { seconds?: number; by?: number }) {
+    const written = this.channel.by(this.lead!.end.timed(this.framed(place, how), this.channel, when))
     this.changed()
     return this.met(written)
+  }
+
+  /** it is in a hand from now, by a grip, as the hand is, or the hand on it as it is, moved from outside: for a thing he has from the start */
+  in(hand: Hand, grip: Grip) {
+    const end = this.ends(hand)
+    const { place, turn } = this.seat(end, grip)
+    if (this.channel.outside) end.channel.set(place.applyQuaternion(this.channel.turn).add(this.channel.value), this.channel.turn.clone().multiply(turn))
+    else {
+      for (const { end: other } of this.hands.splice(0)) other.channel.unbind()
+      const thing = end.channel.turn.clone().multiply(turn.clone().invert())
+      this.channel.set(end.channel.value.clone().sub(place.applyQuaternion(thing)), thing)
+      this.write()
+    }
+    void this.on(hand, grip)
   }
 
   private *met(frame: Frame): Story<boolean> {
@@ -213,7 +284,7 @@ export class Bound {
   }
 
   get there() {
-    return this.hands.every(({ end }) => end.gap <= 0.05)
+    return !this.joining.size && this.hands.every(({ end }) => end.gap <= 0.05)
   }
 
   get velocity() {
@@ -222,6 +293,8 @@ export class Bound {
 
   /** let go: every hand on it goes on as it was moving, and it is moved from outside from now. Tells how fast it moves */
   free() {
+    for (const end of this.joining) end.cancel()
+    this.joining.clear()
     for (const { end } of this.hands.splice(0)) end.channel.unbind()
     this.channel.outside = true
     this.changed()
@@ -229,7 +302,7 @@ export class Bound {
   }
 }
 
-/** a story over at once that came to nothing */
-function* nothing(): Story<boolean> {
-  return false
+/** a story over at once, that came to something or nothing */
+function* nothing(done = false): Story<boolean> {
+  return done
 }

@@ -173,6 +173,6 @@ export function lying(hand: Hand, held: Grip) {
 /** a hand has a thing from the start: it is bound to him where the grip seats it in the hand as the hand is now. Tells the thing as bound */
 export function inHand(body: Body, hand: Hand, held: Grip) {
   const thing = body.bind(held.target)
-  thing.on(body.hand[hand.side], held)
+  thing.in(body.hand[hand.side], held)
   return thing
 }

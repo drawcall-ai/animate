@@ -85,22 +85,18 @@ export class Bowler implements Game {
     mesh.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(toward.x, toward.z))
     // a hand goes to each side of it where it rests, and they are on it
     const sides = { right: grip(hands.right, mesh, SIDE.right), left: grip(hands.left, mesh, SIDE.left) }
-    const reached = left.to(sides.left)
-    yield* right.to(sides.right)
+    const ball = body.bind(mesh)
+    const reached = ball.on(left, sides.left)
+    yield* ball.on(right, sides.right)
     yield* reached
-    const ball = body.bind(mesh, { outside: true })
-    ball.on(right, sides.right)
-    ball.on(left, sides.left)
-    // the body has it, the right hand leading, and lifts it
-    ball.outside = false
+    // the body has it and lifts it
     this.held = { k, ball }
     const lifted = mesh.position.clone().setY(mesh.position.y + LIFT.up)
     yield* ball.to(lifted, { seconds: LIFT.seconds })
     // the left leads it, held where it is, while the right goes under it; then the right leads
     const under = grip(hands.right, mesh, GRIP)
     ball.off(right)
-    yield* right.to(under)
-    ball.on(right, under)
+    yield* ball.on(right, under)
     ball.off(left)
     yield* carry(body, ball, sides.left)
     body.face()

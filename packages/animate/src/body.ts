@@ -142,7 +142,7 @@ export class Body {
         if (k >= 0) thing.hands.splice(k, 1)
       }
     }
-    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, (thing) => this.seen(thing, false), () => this.workings.asks.forget(), { strength, draw })
+    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, (thing) => this.seen(thing, false), () => this.workings.asks.forget(), (story) => this.play(story), { strength, draw })
     this.things.set(object, bound)
     return bound
   }

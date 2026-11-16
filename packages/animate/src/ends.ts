@@ -371,7 +371,7 @@ export class End {
   }
 
   /** the fingers take a pose in so many seconds, or as soon as they can if that is too soon */
-  private close(pose: Pose, seconds: number) {
+  close(pose: Pose, seconds: number) {
     const fingers = this.limb.hand?.fingers
     try {
       void fingers?.shape(pose, seconds)
