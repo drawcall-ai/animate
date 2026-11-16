@@ -72,7 +72,8 @@ export class Hurdler implements Game {
     const { x } = feet.position
     const { leg } = body.size
     body.run({ speed, at: { x, z: z - OFF }, plant: 'left' })
-    const landing = body.jump({ x, y: height + HIPS, z })
+    // (highest as the trail foot, folded behind the hips, comes over the bar)
+    const landing = body.jump({ x, y: height + HIPS, z: z - TUCK.z * leg })
     const velocity = { x: 0, y: 0, z: speed }
     void body.foot.right.by(((body.gait.jumping?.leaves ?? body.time) + body.highest()) / 2, { x: KNEE.x * leg, y: KNEE.y * leg, z: KNEE.z * leg }, { on: body })
     body.foot.right.by(body.highest(), { x: LEAD.x * leg, y: LEAD.y * leg, z: LEAD.z * leg }, { on: body, velocity })

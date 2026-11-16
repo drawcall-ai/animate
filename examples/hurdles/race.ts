@@ -19,7 +19,8 @@ export function* race(body: Body, hurdles: Hurdle[], speed = SPEED): Story {
   for (const { z, height } of hurdles) {
     // he takes off from the left foot, and is highest over the bar
     body.run({ speed, at: z - OFF, plant: 'left' })
-    body.jump({ x: 0, y: height + HIPS, z })
+    // (highest as the trail foot, folded behind the hips, comes over the bar)
+    body.jump({ x: 0, y: height + HIPS, z: z - TUCK.z })
     // the lead foot goes over the bar ahead of him, and the trail foot comes through folded up at his side
     const top = body.highest()
     const { leg } = body.size

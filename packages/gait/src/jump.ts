@@ -54,11 +54,11 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   // (running, he crouches over the foot planted at the soonest moment, and pushes off from it)
   const running = going.length() > WALK.most * size.pace
   const leaves = Math.max(soonest + (running ? lasts : 0), now + lasts + drop)
-  const wanted = new Vector3(top.x - from.x, 0, top.z - from.z).divideScalar(flies + lasts / 2)
-  const most = hard * lasts
-  const across = led ? going.clone() : wanted.sub(going).clampLength(0, most).add(going)
   // (he crouches where his going has him then, and is pushed on from there to how he leaves)
   const crouches = from.clone().addScaledVector(going, leaves - lasts - soonest).setY(ground + stand - crouch)
+  const wanted = new Vector3(top.x - crouches.x, 0, top.z - crouches.z).addScaledVector(going, -lasts / 2).divideScalar(flies + lasts / 2)
+  const most = hard * lasts
+  const across = led ? going.clone() : wanted.sub(going).clampLength(0, most).add(going)
   const takeoff = crouches.clone().addScaledVector(across.clone().add(going), lasts / 2).setY(ground + stand)
   const velocity = across.clone().setY(up)
   const fall = (t: number) => takeoff.clone().addScaledVector(velocity, t).setY(takeoff.y + up * t - (GRAVITY / 2) * t * t)
