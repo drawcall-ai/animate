@@ -6,7 +6,7 @@ description: Pose the fingers of a rigged humanoid hand with `@drawcall/hand` â€
 # Natural hands with @drawcall/hand
 
 Every pose is checked against a person's range, and a grip closes the fingers onto the actual mesh. Your work is
-the statement of the grip; never tune angles to fit an object.
+the statement of the grip: angles tuned to one object break on the next mesh, where a restated grip still holds.
 
 ## Without a thing in the hand
 
@@ -44,22 +44,17 @@ grip(hand, target, { at, from, using, start })
    - `['thumb', 'index']`: a pinch; add `'middle'` for a three-finger hold. The palm stays clear.
    - One finger: a press â€” a trigger, a button.
 
-Never state where a handle seats, how the fingers wrap, in what order they close, or that the thumb comes level: the
-solver does. The hand rolls by itself about `from`: without the palm the line from thumb to fingers lies across the
+Where a handle seats, how the fingers wrap and where the thumb lands are the solver's; stating them only fights it.
+The hand rolls by itself about `from`: without the palm the line from thumb to fingers lies across the
 target's thin direction, so the pads land on its two broad faces; with it a long thing lies along the palm from the
 heel to the index knuckle, and the
 target's bulk (a racket's head, a mug's body) goes out on the thumb's side. Where there is no bulk to one side, as
 round the middle of a rod, a ball or a plate, either way round holds; the thumb then goes to the target's +y side,
 else +z, else +x. To have it the other way, state `from` and `at` on the target turned over, or give it a bulk.
 
-Closing is enclosing: each joint turns in until its bone meets the target. The fingers close first, each straight
-from its knuckle and spread only as far as it must to reach the target, and wrap it joint by joint. The thumb closes
-last, the same way: with the palm it comes round the other side of the target, onto it where there is room or across
-the backs of the fingers where they cover it, closing the ring; without the palm it presses the target against the
-fingers. A finger with nothing to close on closes to its fist, which counts
-as holding only round something within a finger's thickness. What is left out keeps `start` (`relaxed` by default)
-as far as the target allows: where it is in the way it opens or folds the least that clears, and only if it cannot
-is that an error. Give `start: fist` to curl the fingers that take no part out of the way, as round a trigger.
+Each joint turns in until its bone meets the target, the thumb last; a finger with nothing to close on closes to its
+fist. What is left out of `using` keeps `start` (`relaxed` by default) as far as the target lets it, opening or
+folding the least that clears; give `start: fist` to curl it out of the way, as round a trigger.
 
 ## Composing grips
 
@@ -83,10 +78,11 @@ together either way: if the target hangs from the hand bone it is moved into the
 onto the target where it stands. For an arm, the hand bone's goal is the target's matrix times the inverse of the
 grip's placement.
 
-To hand a grip to an animation, give it both halves: the placement says where the hand bone is against the target,
-the pose what the fingers do. A thing carried in the hand is hung on the hand bone at the placement; a thing the hand
-goes to has the hand sent to the placement on it. Read the `Hand` while the rig is still at rest, before the
-animation poses it.
+An animation takes both halves: the placement, where the hand bone is against the target, and the pose. With
+`@drawcall/animate`, give it the whole `Grip`: the hand is sent onto it (`body.hand.right.to(grip)`) and put on a
+bound thing by it (`thing.on(hand, grip)`); the thing is not hung on the hand bone. Make the `Hand` while the rig is
+still at rest, before anything poses it: its fingers may rest curled and its thumb anywhere, since a pose counts each
+finger from it straight in the palm.
 
 ## When it cannot hold as stated
 
@@ -97,8 +93,8 @@ target without a mesh, no or a zero `from`, nothing taking part, or a composed g
 ## Seeing why a grip came out so
 
 A `Grip` also carries what it was asked (`asked`), the target's long way (`roll`), how far it is from holding (`fault`,
-0 when it holds) and each element's `contacts`. `@drawcall/debug`'s `Grips` draws them over the thing: add `?debug=hand`
-to a page of the examples, or press I.
+0 when it holds) and each element's `contacts`. The `hand` layer of `@drawcall/debug` draws them over the thing: add `?debug=hand` to a
+page of the examples, or press I.
 
 ## Limits
 
@@ -107,6 +103,3 @@ to a page of the examples, or press I.
 - From above, a lever's stem can stand in the way of the fingers closing round its arm.
 - A straight finger pressing a trigger is only had by composing: a lone finger in a fresh grip presses with its pad,
   slightly bent.
-
-The rig must be at rest when the `Hand` is made; its fingers may rest curled and its thumb anywhere, since a pose
-counts each finger from it straight in the palm, pointing as the rig points its first bone.
