@@ -1,6 +1,6 @@
 import { DOWN, EASY, EXACT, type Grip, type Limb, type Pose, type Side, type Size, SLACK, type Story, sway, tick, type Touch, waits, type Xyz } from '@drawcall/limbs'
 import type { Carrier } from '@drawcall/locomotion'
-import { between, Channel, type Frame, hardest, type Mover } from '@drawcall/plan'
+import { between, Channel, type Frame, type Mover } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { OnHim } from './movers'
 import { room } from './solve'
@@ -150,7 +150,7 @@ export class End {
     const after = Math.max(this.body.time(), ...this.channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
     frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
-    const swung = this.leaves(frame)
+    const swung = this.leaves(frame, this.channel.value)
     frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     if ('target' in place) this.close(place.pose, frame.at - this.body.time())
@@ -158,31 +158,35 @@ export class End {
   }
 
   /**
-   * when a fast arrival round where the limb starts sets off: it swings for as long as takes it from as far back as it
-   * needs to come up to speed at its ease, no further back than the limb goes, without drawing back again,
-   * `3 × how far round ÷ how fast round`, and no quicker than it is strong enough for. None for one at rest, one that
-   * cannot be drawn back at all, or one that does not go round.
+   * when a fast arrival round where the limb starts sets off, from `from` where what it swings is now: as long before
+   * as takes it up to speed at its ease, `4 × speed ÷ strength at ease`, but no longer than keeps the draw-back of the
+   * way it swings, `θ(s) = A(3s² - 2s³) + Tω(s³ - s²)` round there, within how far the limb goes. A swing that cannot
+   * come up to speed within that comes slower. None for one at rest or one that does not go round.
    */
-  leaves(frame: Frame): number | undefined {
+  leaves(frame: Frame, from: Vector3): number | undefined {
     const speed = new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 })
     if (speed.lengthSq() === 0 || frame.at === undefined) return undefined
-    const [root, moving, place, into, facing] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion(), new Quaternion()]
-    this.root.state(frame.at, root, moving, facing)
+    const [root, moving, place, into, now] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion(), new Vector3()]
+    this.root.state(frame.at, root, moving)
     if (frame.on) frame.on.state(frame.at, place, new Vector3(), into)
     const out = place.add(new Vector3().copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(into)).sub(root)
-    const axis = out.clone().cross(speed.sub(moving))
+    const axis = out.clone().cross(speed.clone().sub(moving))
     const round = axis.length() / Math.max(out.lengthSq(), 1e-9)
     if (round < 1e-3) return undefined
     axis.normalize()
-    const ease = (EASY * this.channel.strength) / out.length()
-    const back = Math.min(this.room(out, axis), (round * round) / (2 * ease))
-    if (back < 1e-3) return undefined
-    // (and no quicker than it is strong enough to come up to speed in, drawn back further on the way if it must)
-    const far = back * out.length()
-    const fast = speed.length()
-    const strong = (T: number) => hardest({ value: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }, { value: { x: far, y: 0, z: 0 }, velocity: { x: fast, y: 0, z: 0 } }, T) <= EASY * this.channel.strength
-    const [least, most] = [(3 * back) / round, (4 * fast) / (EASY * this.channel.strength)]
-    return frame.at - (strong(least) ? least : between(Math.max(most, least), least, strong)[0])
+    this.root.state(this.body.time(), now, new Vector3())
+    const start = from.clone().sub(now)
+    // (how far round it goes from where it starts, the way it arrives turning, and how far behind where it arrives the limb lets it go)
+    const A = Math.atan2(start.clone().cross(out).dot(axis), start.dot(out))
+    const room = Math.max(this.room(out, axis), -A)
+    const behind = (T: number) => {
+      const B = T * round
+      const s = B > 3 * A && B !== 2 * A ? (2 * B - 6 * A) / (3 * B - 6 * A) : 0
+      const least = s > 0 && s < 1 ? A * (3 * s * s - 2 * s ** 3) + B * (s ** 3 - s * s) : Math.min(0, A)
+      return A - least
+    }
+    const ease = (4 * speed.length()) / (EASY * this.channel.strength)
+    return frame.at - (behind(ease) <= room ? ease : between(0, ease, (T) => behind(T) <= room)[0])
   }
 
   /** how far round `axis` behind a place `out` from where it starts in the scene it can be drawn back (rad) */
