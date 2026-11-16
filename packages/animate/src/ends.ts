@@ -1,6 +1,6 @@
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Gait, Side } from '@drawcall/gait'
-import { between, Channel, EASE, SWAY, type Frame, hardest, type Mover, type Xyz } from '@drawcall/plan'
+import { Channel, EASE, SWAY, type Frame, type Mover, type Xyz } from '@drawcall/plan'
 import type { OnHim } from './movers'
 import { DOWN, type Grip, type Pose, type Touch } from './rig/fingers'
 import { type Limb, NEAR, REACH, sway } from './rig/limb'
@@ -184,44 +184,9 @@ export class End {
       if (frame.on === this.root) frame.at = Math.max(frame.at, this.moment(after + this.body.rising()))
     }
     if (this.kind === 'hand') this.within(frame as Frame & { at: number }, channel)
-    // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
-    const swung = this.leaves(frame, channel.value)
-    frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
+    // (a foot steps off for half as long as it sways)
+    if (this.kind === 'foot') frame.leaves = frame.at - sway(this.limb) / 2
     return frame as Frame & { at: number }
-  }
-
-  /**
-   * when a fast arrival round where the limb starts sets off: it swings for as long as takes it from as far back as it
-   * needs to come up to speed at its ease, no further back than the limb goes, without drawing back again,
-   * `3 × how far round ÷ how fast round`, and no quicker than it is strong enough for. None for one at rest, one that
-   * cannot be drawn back at all, or one that does not go round.
-   */
-  leaves(frame: Frame, from: Vector3): number | undefined {
-    const speed = new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 })
-    if (speed.lengthSq() === 0 || frame.at === undefined) return undefined
-    const [root, moving, place, into, facing] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion(), new Quaternion()]
-    this.root.state(frame.at, root, moving, facing)
-    if (frame.on) frame.on.state(frame.at, place, new Vector3(), into)
-    const out = place.add(new Vector3().copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(into)).sub(root)
-    const axis = out.clone().cross(speed.sub(moving))
-    const round = axis.length() / Math.max(out.lengthSq(), 1e-9)
-    if (round < 1e-3) return undefined
-    axis.normalize()
-    const ease = (EASE * this.channel.strength) / out.length()
-    const back = Math.min(this.room(out, axis), (round * round) / (2 * ease))
-    if (back < 1e-3) return undefined
-    // (and no quicker than it is strong enough to come up to speed in, drawn back further on the way if it must)
-    const far = back * out.length()
-    const fast = speed.length()
-    const strong = (T: number) => hardest({ value: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }, { value: { x: far, y: 0, z: 0 }, velocity: { x: fast, y: 0, z: 0 } }, T) <= EASE * this.channel.strength
-    const [least, most] = [(3 * back) / round, (4 * fast) / (EASE * this.channel.strength)]
-    // (and no quicker than it goes at its ease the way round to there from where it is)
-    const now = new Vector3()
-    this.root.state(this.body.time(), now, new Vector3())
-    const start = from.clone().sub(now)
-    const way = Math.abs(Math.atan2(start.clone().cross(out).dot(axis), start.dot(out))) * out.length()
-    const going = Math.sqrt((6 * way) / (SWAY * this.channel.strength))
-    return frame.at - Math.max(going, strong(least) ? least : between(Math.max(most, least), least, strong)[0])
   }
 
   /** how far round `axis` behind a place `out` from where it starts in the scene it can be drawn back (rad) */
