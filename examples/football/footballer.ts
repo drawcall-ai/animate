@@ -25,6 +25,11 @@ const PLANT = { behind: 0.4, aside: 0.1 }
 const RUNUP = { least: 3.6, arrive: 2.5, step: 2 }
 /** how fast the shooting foot meets the ball, and how far it sends it up from level at least (m/s, rad) */
 const SHOT = { speed: 20, up: (10 * Math.PI) / 180 }
+/** how long after Space he meets the ball at the most (s), and how long before he meets it he goes on with where he found it (in beats) */
+const MEETS = 6
+const SETS = 2
+/** how far from where it was to be met the ball may be seen to go before the meeting is found anew (of his leg) */
+const STRAYS = 0.1
 /** how high in the goal he aims (of its height) */
 const AIM = 0.4
 
@@ -136,22 +141,36 @@ export class Footballer implements Game {
     }
   }
 
-  /** he runs onto where the ball comes to rest, braking onto his left foot beside it, and his right foot meets it toward the goal */
+  /** he runs onto where the ball will be as he gets to it, braking onto his left foot beside it, and his right foot meets it toward the goal then */
   private *shoot(): Story {
     const { body } = this.character
     const { leg } = body.size
-    // (where it comes to rest, if it rolls)
-    const place = this.ball.rolled(Infinity)
-    const aim = flat(new Vector3(GOAL.x, 0, GOAL.z).sub(place)).normalize()
-    const at = flat(place.clone().addScaledVector(aim, -PLANT.behind * leg).addScaledVector(leftOf(aim), PLANT.aside * leg))
-    // (near it, he steps onto the left foot rather than run)
     const speed = this.character.speed
-    if (speed < RUNUP.least && flat(body.hips.value).distanceTo(at) < RUNUP.step * leg) body.walk(at, { plant: 'left' })
-    else body.run({ speed: Math.max(speed, RUNUP.least), plant: 'left', at, arrive: RUNUP.arrive })
+    // (where it will have rolled to by the moment his hips come over the left foot beside it: that moment is found by halving)
+    const onto = (meets: number) => {
+      const place = this.ball.rolled(meets - body.time)
+      const aim = flat(new Vector3(GOAL.x, 0, GOAL.z).sub(place)).normalize()
+      const at = flat(place.clone().addScaledVector(aim, -PLANT.behind * leg).addScaledVector(leftOf(aim), PLANT.aside * leg))
+      // (near it, he steps onto the left foot rather than run)
+      if (speed < RUNUP.least && flat(body.hips.value).distanceTo(at) < RUNUP.step * leg) body.walk(at, { plant: 'left' })
+      else body.run({ speed: Math.max(speed, RUNUP.least), plant: 'left', at, arrive: RUNUP.arrive })
+      return { place, aim, comes: body.when(at) }
+    }
+    const meet = () => {
+      let [soon, late] = [body.time + (SETS / 2) * body.size.beat, body.time + MEETS]
+      for (let k = 0; k < 12; k++) [soon, late] = onto((soon + late) / 2).comes > (soon + late) / 2 ? [(soon + late) / 2, late] : [soon, (soon + late) / 2]
+      return { ...onto(late), meets: late }
+    }
+    // (no sooner than half the time the foot takes to swing to it; found anew if the ball is seen to roll elsewhere, until the foot is to set off for it)
+    let { place, aim, meets } = meet()
+    while (meets - body.time > SETS * body.size.beat) {
+      yield
+      if (this.ball.rolled(meets - body.time).distanceTo(place) > STRAYS * leg) ({ place, aim, meets } = meet())
+    }
     const target = new Vector3(GOAL.x, AIM * GOAL.high, GOAL.z).sub(place).normalize()
     const lift = Math.max(SHOT.up, Math.asin(target.y))
     const way = aim.clone().multiplyScalar(Math.cos(lift)).setY(Math.sin(lift))
-    yield* this.strike('right', way, way.clone().multiplyScalar(SHOT.speed), place)
+    yield* this.strike('right', way, way.clone().multiplyScalar(SHOT.speed), place, meets)
     yield* body.stand()
   }
 }

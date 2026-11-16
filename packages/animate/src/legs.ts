@@ -102,8 +102,8 @@ export class Legs {
     const { gait } = this
     const now = this.clock.time + dt
     for (const side of SIDES) gait.hold(side, feet[side].held ? feet[side].value : undefined)
-    // (left with no foot of his own on the ground for longer than he can be in the air, he comes down on both: the story has them no longer)
-    const standing = SIDES.some((side) => !feet[side].held && !gait.steps[side]) || gait.jumps
+    // (left with no foot of his own, down or on its way down, for longer than he can be in the air, he comes down on both: the story has them no longer)
+    const standing = SIDES.some((side) => !feet[side].held) || gait.jumps
     this.unheld = standing ? 0 : this.unheld + dt
     if (this.unheld > this.bones.size.beat) for (const side of SIDES) if (feet[side].held) feet[side].cancel()
     gait.advance(now)

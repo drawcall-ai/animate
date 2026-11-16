@@ -44,7 +44,9 @@ export class Ball {
     if (closing.dot(way) <= 0) return
     const hit = { position: this.place, velocity: new Vector3() }
     strike(hit, hit.position.clone().sub(way), closing)
-    this.solid.setVelocity({ linear: hit.velocity.add(was) })
+    // (sent along the grass it rolls at once, as an instep's touch sets it: so where it rolls to is told by its drag alone)
+    const linear = hit.velocity.add(was)
+    this.solid.setVelocity({ linear, angular: new Vector3(linear.z, 0, -linear.x).divideScalar(RADIUS) })
     this.solid.wake()
   }
 }

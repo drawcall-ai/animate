@@ -1,4 +1,8 @@
+import { buildWorld } from '@drawcall/physics-rapier'
+import { Scene } from 'three'
 import { expect, test } from 'vitest'
+import { field } from '../../../examples/football/field'
+import { Footballer } from '../../../examples/football/footballer'
 import { ballAt, fly } from '../../../examples/football/pitch'
 import { shot } from '../../../examples/football/shot'
 import { Body } from '../src'
@@ -6,6 +10,7 @@ import { person } from '../../../examples/person'
 import { SIDES } from '@drawcall/gait'
 import { tick } from '../src/rig/size'
 
+const FRAME = 1 / 60
 const degrees = (angle: number) => (angle * 180) / Math.PI
 
 test('the shot: what is written holds at the strike, the body does the rest, and he ends standing', () => {
@@ -53,3 +58,27 @@ test('the shot: what is written holds at the strike, the body does the rest, and
   // feet side by side: within a tenth of a metre of each other
   expect(Math.abs(body.foot.left.value.z - body.foot.right.value.z)).toBeLessThan(0.11)
 })
+
+test('Space while dribbling, at a run or a walk and from either side of the goal: he meets the ball where it has rolled to and shoots', async () => {
+  const shots = [
+    { way: 0, run: true, at: 1 },
+    { way: 0.5, run: true, at: 1.2 },
+    { way: -0.3, run: true, at: 0.8 },
+    { way: 0, run: false, at: 1.6 },
+  ]
+  for (const { way, run, at } of shots) {
+    const scene = new Scene()
+    const world = await buildWorld({ scene })
+    scene.add(field())
+    const game = Footballer.start(person(), scene)
+    let fastest = 0
+    for (let t = 0; t < at + 3; t += FRAME) {
+      const move = t < at ? { x: Math.sin(way), z: Math.cos(way) } : { x: 0, z: 0 }
+      game.update(FRAME, { move, run, act: t >= at && t - FRAME < at, held: new Set() })
+      world.update(FRAME)
+      if (t >= at) fastest = Math.max(fastest, game.ball.velocity.length())
+    }
+    // (a touch sends it at most 9 m/s; a shot over 20)
+    expect(fastest, `${way} ${run}`).toBeGreaterThan(15)
+  }
+}, 30000)
