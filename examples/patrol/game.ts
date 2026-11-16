@@ -13,6 +13,9 @@ const SPEED = { walk: 1.5, run: 4, search: 0.9 }
 const TURN = 1.8
 /** how far along the beam he looks (m), and how far below level it points (rad) */
 const LOOK = { far: 10, down: 0.12 }
+/** where the torch is held raised and lowered, from his right shoulder as he faces (in lengths of his arm) */
+const RAISED = { x: -0.15, y: -0.1, z: 0.8 }
+const LOWERED = { x: -0.05, y: -0.8, z: 0.25 }
 /** how dim the night leaves the scene's lights (of day) */
 const NIGHT = 0.35
 
@@ -44,14 +47,12 @@ export const start: Start = async (scene, world) => {
       if (input.act) searching = !searching
       const aim = { x: Math.sin(yaw), z: Math.cos(yaw) }
       const { arm } = body.size
-      if (input.act) {
-        const right = body.hand.right
+      // (raised before his eyes pointing along the beam, or lowered by his side pointing at the ground ahead)
+      if (input.act)
         character.tried(() => {
-          if (!searching) return void right.cancel()
-          const place = { x: -0.15 * arm, y: -0.1 * arm, z: 0.8 * arm }
-          void held.to(place, { on: body, pointing: { x: 0, y: -LOOK.down, z: 1 } })
+          const [place, pointing] = searching ? [RAISED, { x: 0, y: -LOOK.down, z: 1 }] : [LOWERED, { x: 0, y: -1, z: 0.6 }]
+          void held.to({ x: place.x * arm, y: place.y * arm, z: place.z * arm }, { on: body, pointing })
         })
-      }
       const speed = searching ? SPEED.search : input.run ? SPEED.run : SPEED.walk
       character.update(delta, { x: input.move.x * speed, z: input.move.z * speed }, searching ? aim : undefined)
       const { position } = character.feet

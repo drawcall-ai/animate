@@ -260,3 +260,16 @@ test('one thing is handed from outside to the body and back, its leading hand co
   expect(drift).toBeLessThan(0.05)
   expect(through).toBeLessThan(0.05)
 })
+
+test('a thing taken in the hand with nowhere to go goes with him as he walks, the hand on it', () => {
+  const mesh = ball()
+  const { body, hands } = setup(mesh)
+  const held = body.bind(mesh)
+  held.on(body.hand.right, grip(hands.right, mesh, SEAT))
+  for (let t = 0; t < 3; t += FRAME) {
+    body.go({ x: 0, z: 1.4 })
+    body.update(FRAME)
+  }
+  expect(place(mesh).z - body.hips.value.z).toBeGreaterThan(-0.3)
+  expect(held.there).toBe(true)
+})
