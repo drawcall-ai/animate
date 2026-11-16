@@ -155,11 +155,7 @@ export class Bound {
   send(place: Xyz, how: Sending, when: { seconds?: number; by?: number }): Story<boolean> {
     const lead = this.lead?.end
     if (!lead || this.channel.outside) return nothing()
-    const frame = this.framed(place, how)
-    const after = Math.max(this.now(), ...this.channel.frames.map((one) => one.at ?? 0))
-    frame.at = lead.moment(when.by !== undefined ? Math.max(when.by, after) : when.seconds !== undefined ? after + when.seconds : lead.first(frame, after))
-    frame.leaves = lead.leaves(frame, this.channel.value)
-    const written = this.channel.by(frame)
+    const written = this.channel.by(lead.timed(this.framed(place, how), this.channel, when))
     this.changed()
     return this.met(written)
   }

@@ -148,17 +148,25 @@ export class End {
     if (this.kind === 'foot' && 'y' in place && !moving && (ground || (how.on && how.on !== this.body.him))) {
       return this.step(this.scene(place, how.on as Object3D | undefined), when?.seconds)
     }
-    const frame = this.frame(place, how)
-    const after = Math.max(this.body.time(), ...this.channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
-    frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
-    // (a hand told no moment, for a place he gets down for, is there no sooner than he is down)
-    if (this.kind === 'hand' && when?.by === undefined && when?.seconds === undefined) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
-    // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
-    const swung = this.leaves(frame, this.channel.value)
-    frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
+    const frame = this.timed(this.frame(place, how), this.channel, when)
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     if ('target' in place) this.close(place.pose, frame.at - this.body.time())
     return this.write(frame)
+  }
+
+  /**
+   * a frame for this end, or for what it leads on `channel`, given its moment: by a moment, in `seconds` after the
+   * frames before it, or the first it can be there at, he getting down for it first; and when it sets off
+   */
+  timed(frame: Frame, channel: Channel, when?: { seconds?: number; by?: number }): Frame & { at: number } {
+    const after = Math.max(this.body.time(), ...channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
+    frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
+    // (a hand told no moment, for a place he gets down for, is there no sooner than he is down)
+    if (this.kind === 'hand' && channel === this.channel && when?.by === undefined && when?.seconds === undefined) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
+    // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
+    const swung = this.leaves(frame, channel.value)
+    frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
+    return frame as Frame & { at: number }
   }
 
   /**
