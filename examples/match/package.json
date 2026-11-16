@@ -1,0 +1,25 @@
+{
+  "name": "@drawcall/ik-example-match",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@drawcall/example-stage": "workspace:*",
+    "@drawcall/ik": "workspace:*",
+    "@drawcall/physics": "^0.20.0",
+    "@drawcall/physics-rapier": "^0.20.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@drawcall/ik",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Goal-driven whole-body inverse kinematics for three.js bones: one pose per frame from hard and soft goals.",
+  "exports": "./src/index.ts",
+  "sideEffects": false,
+  "files": ["src", "README.md"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

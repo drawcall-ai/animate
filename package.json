@@ -1,0 +1,25 @@
+{
+  "name": "ik-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "soldier": "pnpm --filter @drawcall/ik-example-soldier dev",
+    "tennis": "pnpm --filter @drawcall/ik-example-tennis dev",
+    "grip": "pnpm --filter @drawcall/grab-example-grip dev",
+    "match": "pnpm --filter @drawcall/ik-example-match dev",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6"
+  },
+  "prettier": {
+    "printWidth": 160,
+    "proseWrap": "never",
+    "semi": false
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@drawcall/example-stage",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What the examples share: a three.js stage and simple flesh on bones.",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

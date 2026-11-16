@@ -1,0 +1,23 @@
+{
+  "name": "@drawcall/grab",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hand poses for rigged three.js humanoids: holding a hand in a pose, and finding how it grips a mesh.",
+  "exports": "./src/index.ts",
+  "sideEffects": false,
+  "files": ["src", "README.md", "skills"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}
