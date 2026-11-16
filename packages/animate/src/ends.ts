@@ -154,7 +154,7 @@ export class End {
     // (a hand told no moment, for a place he gets down for, is there no sooner than he is down)
     if (this.kind === 'hand' && when?.by === undefined && when?.seconds === undefined) frame.at = Math.max(frame.at, this.moment(after + this.body.lowering(this.side, this.placed(frame, frame.at))))
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
-    const swung = this.leaves(frame)
+    const swung = this.leaves(frame, this.channel.value)
     frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     if ('target' in place) this.close(place.pose, frame.at - this.body.time())
@@ -167,7 +167,7 @@ export class End {
    * `3 × how far round ÷ how fast round`, and no quicker than it is strong enough for. None for one at rest, one that
    * cannot be drawn back at all, or one that does not go round.
    */
-  leaves(frame: Frame): number | undefined {
+  leaves(frame: Frame, from: Vector3): number | undefined {
     const speed = new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 })
     if (speed.lengthSq() === 0 || frame.at === undefined) return undefined
     const [root, moving, place, into, facing] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion(), new Quaternion()]
@@ -186,7 +186,13 @@ export class End {
     const fast = speed.length()
     const strong = (T: number) => hardest({ value: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }, { value: { x: far, y: 0, z: 0 }, velocity: { x: fast, y: 0, z: 0 } }, T) <= EASY * this.channel.strength
     const [least, most] = [(3 * back) / round, (4 * fast) / (EASY * this.channel.strength)]
-    return frame.at - (strong(least) ? least : between(Math.max(most, least), least, strong)[0])
+    // (and no quicker than it goes at its ease the way round to there from where it is)
+    const now = new Vector3()
+    this.root.state(this.body.time(), now, new Vector3())
+    const start = from.clone().sub(now)
+    const way = Math.abs(Math.atan2(start.clone().cross(out).dot(axis), start.dot(out))) * out.length()
+    const going = Math.sqrt((6 * way) / (EASY * this.channel.strength))
+    return frame.at - Math.max(going, strong(least) ? least : between(Math.max(most, least), least, strong)[0])
   }
 
   /** how far round `axis` behind a place `out` from where it starts in the scene it can be drawn back (rad) */

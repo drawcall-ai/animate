@@ -43,14 +43,16 @@ const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly 
  * hand as near so as it turns, so it never jumps between two ways of reaching the same place. Every joint as near as
  * it turns.
  */
-export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist: Vector3, turn: Quaternion, swivel: number, part?: Vector3) {
+export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist: Vector3, turn: Quaternion, swivel: number, part?: Vector3, held = false) {
   const hand = arm.hand!
   // (sent with a part of the hand, `wrist` is where that part is to be, however the wrist turns the hand: tried until it holds)
   if (part) {
     const tip = wrist.clone()
     let at = part.clone().applyQuaternion(turn).negate().add(tip)
+    // (the elbow swung as the first try has it, for the tries to come to one pose)
+    const swung = reachArm(arm, shoulder, trunk, at, turn, swivel).swivel
     for (let k = 0, moved = 1; k < 30 && moved > 1e-4; k++) {
-      const posed = reachArm(arm, shoulder, trunk, at, turn, swivel)
+      const posed = reachArm(arm, shoulder, trunk, at, turn, swung, undefined, true)
       const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(posed.first))).multiply(new Quaternion().setFromEuler(euler.set(posed.fold, 0, 0)))
       const lies = bent(forearm, posed.wrist, new Quaternion())
       // (halfway each try: a wrist at its stop can have it go to and fro)
@@ -58,7 +60,7 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
       moved = next.distanceTo(at)
       at = next
     }
-    return reachArm(arm, shoulder, trunk, at, turn, swivel)
+    return reachArm(arm, shoulder, trunk, at, turn, swung, undefined, true)
   }
   const to = wrist.clone().sub(shoulder).applyQuaternion(trunk.clone().invert())
   const palm = hand.palm.clone().applyQuaternion(turn)
@@ -81,7 +83,7 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
   }
   // (it swings on from the swing it had, a little either way a step; only an arm in the trunk looks further)
   let best = pose(swivel)
-  for (const by of [-3, -1, 1, 3].map((k) => k * SWIVEL.fine)) {
+  for (const by of held ? [] : [-3, -1, 1, 3].map((k) => k * SWIVEL.fine)) {
     const tried = pose(swivel + by)
     if (tried.cost < best.cost - 1e-6) best = tried
   }
