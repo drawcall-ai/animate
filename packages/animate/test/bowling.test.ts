@@ -23,12 +23,16 @@ test('the delivery: the ball sent leaves as written, the body does the rest, and
     })(),
   )
   let released: { left: number; right: number } | undefined
-  let back = 0
+  let [back, topped, leaves] = [0, 0, 0]
   for (let n = 0; n < 3000 && body.playing; n++) {
     body.update(tick(body.size))
-    if (!velocity) back = Math.min(back, body.hand.right.value.z - body.hips.value.z)
-    else released ??= { left: body.foot.left.value.z, right: body.foot.right.value.z }
+    const behind = body.hand.right.value.z - body.hips.value.z
+    if (!velocity && behind < back) [back, topped] = [behind, body.time]
+    else if (velocity) released ??= { left: body.foot.left.value.z, right: body.foot.right.value.z }
+    if (velocity && !leaves) leaves = body.time
   }
+  // (the backswing tops out during the last strides, not once he is down at the line)
+  expect(leaves - topped).toBeGreaterThan(0.25)
   // written: the ball leaves at 7 m/s forward
   expect(velocity?.z).toBeCloseTo(7, 0)
   expect(Math.hypot(velocity?.x ?? NaN, velocity?.y ?? NaN)).toBeLessThan(0.5)

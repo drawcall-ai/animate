@@ -18,6 +18,8 @@ const PLANT = { x: 0, z: LINE - 0.4 }
 const APPROACH = { speed: 3, arrive: 1 }
 /** the ball leaves the hand beside the left foot, to its right and a little ahead, just over the boards, rolling down the lane (m, m/s) */
 const RELEASE = { aside: -0.2, ahead: 0.1, over: 0.1, speed: 7 }
+/** the top of the backswing, from his right shoulder (of his arm), and how long before the release it is (in strides) */
+const BACKSWING = { at: { x: 0.1, y: -0.75, z: -0.55 }, before: 1 }
 /**
  * He carries the `ball`, led by his right hand, on its palm before his belly, turned the way he faces, the left hand
  * on it by the grip `side`, on its left. The story is over once it is there.
@@ -41,6 +43,9 @@ export function* bowl(body: Body, ball: Thing, letGo: (velocity: Vector3) => voi
   const moment = body.when(PLANT)
   const release = place(PLANT.x + RELEASE.aside, RADIUS + RELEASE.over, PLANT.z + RELEASE.ahead)
   body.hand.right.shape(flat, { by: moment })
+  // the backswing tops out behind his hip a stride before the release, as the last strides come
+  const { arm } = body.size
+  void ball.by(moment - BACKSWING.before * body.size.beat * 2, place(BACKSWING.at.x * arm, BACKSWING.at.y * arm, BACKSWING.at.z * arm), { on: body, palm: place(0.7, 1, 0) })
   yield* ball.by(moment, release, { velocity: place(0, 0, RELEASE.speed), palm: place(0, 0, 1) })
   letGo(ball.free())
   yield* body.stand()
