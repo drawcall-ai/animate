@@ -40,11 +40,6 @@ export type Walk = { speed?: number; plant?: Side }
 export type Posture = Record<'low' | 'bend' | 'turn' | 'shift', (time: number) => number>
 /** a foot as the rest of the body has it: whether a story has it, where its ankle is, where the ground holds it, and to give it back */
 export type Foothold = { readonly held: boolean; readonly value: Vector3; anchor?: Vector3; free(): void }
-/** a place and the moment he is to be there; a footfall to come */
-export type Mark = { at: Vector3; time: number }
-export type Footfall = Mark & { side: Side; put: boolean; swings: boolean }
-/** where the hips and the feet will be, as the plan has them, for whoever looks */
-export type Foreseen = { hips: Mark[]; to?: Vector3; footfalls: Footfall[]; top?: { asked?: Vector3; comes?: Mark }; facing: number; face: number; heading: number; led?: Vector3 }
 const yawOf = (turn: Quaternion) => {
   const way = new Vector3(0, 0, 1).applyQuaternion(turn)
   return Math.atan2(way.x, way.z)
@@ -309,26 +304,6 @@ export class Stride {
   private sight(place: Vector3) {
     const { x, y, z } = place.clone().sub(this.hips.value)
     return { yaw: Math.atan2(x, z), pitch: Math.atan2(y - this.bones.size.trunk, Math.hypot(x, z)) }
-  }
-
-  /** what the hips and the feet are to do for so many `seconds`, as the plan has them */
-  foresee(seconds: number): Foreseen {
-    const { gait } = this
-    const now = gait.time
-    const hips = Array.from({ length: 31 }, (_, k) => {
-      const place = new Vector3()
-      gait.hips.state(now + (k * seconds) / 30, place, new Vector3())
-      return { at: place, time: now + (k * seconds) / 30 }
-    })
-    const footfalls = SIDES.flatMap((side) => {
-      const step = gait.steps[side]
-      return step ? [{ at: step.to.clone(), time: step.lands, side, put: false, swings: true }] : []
-    })
-    const leap = gait.jumping
-    const top = leap && { comes: { at: new Vector3(), time: leap.top } }
-    if (top) gait.hips.state(top.comes.time, top.comes.at, new Vector3())
-    const { going, lead } = gait
-    return { hips, footfalls, to: gait.course?.to.clone(), top, facing: going.facing, face: lead.face ?? going.facing, heading: going.heading, led: lead.velocity.clone() }
   }
 
   /** he stands at his ease where he is, letting go of all a story had him do with `free` */

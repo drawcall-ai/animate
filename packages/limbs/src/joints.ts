@@ -4,7 +4,7 @@ import type { Range } from './curve'
 import { Goal, REST } from './goal'
 import { FINGERS, Fingers } from './fingers'
 import { Limb } from './limb'
-import { HEEL, SIDES, SIGN, TICKS, both } from './size'
+import { HEEL, SIDES, SIGN, both } from './size'
 
 /**
  * How strong each part that turns is: the most it can accelerate (rad a beat, a beat), and how many times a beat it
@@ -19,10 +19,8 @@ const PARTS = {
   thigh: { strength: 18, rate: 0 },
   shin: { strength: 90, rate: 0 },
 }
-/** how many steps of time a free trunk is behind what it comes round to: it leans as the hips will have it lean that much later, like a body that knows what it is about to do */
-export const LAGS = Math.round(TICKS / (Math.PI * PARTS.trunk.rate))
 /** how far back a thigh goes (rad) */
-export const TRAIL = 0.6
+const TRAIL = 0.6
 /** how far a shin leans over its foot before the heel comes up (rad) */
 export const ANKLE = 0.45
 /**

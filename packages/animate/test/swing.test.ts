@@ -7,7 +7,10 @@ import { inHand } from '../../../examples/character'
 import { person } from '../../../examples/person'
 import * as shelf from '../../../examples/shelf/box'
 import { shelve } from '../../../examples/shelf/shelve'
-import { type Mark, Body } from '../src'
+import { Body } from '../src'
+
+/** a place and the moment it is had */
+type Mark = { at: Vector3; time: number }
 
 const FRAME = 1 / 60
 

@@ -1,6 +1,5 @@
 export { Body } from './body'
-export type { Arriving, Foot, Hand, Reaching } from './ends'
+export type { Foot, Hand } from './ends'
 export type { Intent, Planned } from './intent'
-export type { Sending, Thing } from './thing'
-export type { Footfall, Foreseen, Mark } from './stride'
+export type { Thing } from './thing'
 export type { Finger, Grip, Part, Pose, Side, Size, Story, Touch, Xyz } from '@drawcall/limbs'

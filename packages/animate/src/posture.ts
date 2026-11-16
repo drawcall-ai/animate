@@ -1,10 +1,9 @@
-import { EASY, RANGE, type Side, type Size } from '@drawcall/limbs'
+import { EASY, RANGE, type Side, SIGN, type Size } from '@drawcall/limbs'
 import type { Posture } from './stride'
 import { Vector3 } from 'three'
 import type { End } from './ends'
 import { Watched } from './movers'
 
-const SIGN = { left: 1, right: -1 }
 /**
  * How the trunk and the hips share what a hand is to do: how far the trunk turns for a hand drawn back behind its
  * shoulder or reaching across ahead (rad for an arm's length), how far his weight shifts after it (in lengths of his

@@ -376,15 +376,11 @@ export class End {
   private along(place: Vector3, mover: Mover | undefined, into: Quaternion) {
     const root = new Vector3()
     this.root.state(this.body.time(), root, new Vector3())
-    const at = mover ? new Vector3().copy(place).applyQuaternion(into).add(this.moverAt(mover)) : place.clone()
+    const there = new Vector3()
+    mover?.state(this.body.time(), there, new Vector3())
+    const at = mover ? new Vector3().copy(place).applyQuaternion(into).add(there) : place.clone()
     const way = at.sub(root)
     return way.lengthSq() > EXACT ? way.applyQuaternion(into.clone().invert()).normalize() : undefined
-  }
-
-  private moverAt(mover: Mover) {
-    const at = new Vector3()
-    mover.state(this.body.time(), at, new Vector3())
-    return at
   }
 
   private fingers(asked = 'are asked for') {

@@ -5,8 +5,6 @@ export type Xyz = { x: number; y: number; z: number }
 /** A story: its statements take effect at once, and every `yield` waits for the next step of time. */
 export type Story<T = void> = Generator<void, T, void>
 
-/** how far on in time something is looked at again to tell how it is moving (s) */
-export const NUDGE = 1e-4
 export const GRAVITY = 9.81
 export const UP = new Vector3(0, 1, 0)
 /** how far off counts as none, for what numbers round to (m) */

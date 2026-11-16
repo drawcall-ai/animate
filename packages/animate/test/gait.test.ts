@@ -58,17 +58,23 @@ function measure(name: string) {
     const hips = at('hips')
     heights.push(hips.y)
     flats.push(hips.clone().setY(0))
-    const seen = body.intent().hips
-    if (frames % 6 === 0) foreseen.push({ time: body.time, hips: seen.hips.map(({ at, time }) => ({ at: at.clone(), time })) })
+    // (the gait's plan of the hips over the next 2.5 beats, and the footfalls it aims at)
+    const { gait } = body
+    const marks = Array.from({ length: 31 }, (_, k) => gait.time + (k * 2.5 * body.size.beat) / 30)
+    if (frames % 6 === 0) foreseen.push({ time: body.time, hips: marks.map((time) => {
+      const at = new Vector3()
+      gait.hips.state(time, at, new Vector3())
+      return { at, time }
+    }) })
     for (const [ahead, list] of Object.entries(missed)) {
       const then = foreseen.find(({ time }) => Math.abs(time + Number(ahead) - body.time) < FRAME / 2)
       const mark = then?.hips.find(({ time }) => Math.abs(time - body.time) < FRAME / 2)
       if (mark) list.push(Math.hypot(mark.at.x - body.hips.value.x, mark.at.z - body.hips.value.z))
     }
     for (const side of SIDES) {
-      const aim = seen.footfalls.find((fall) => fall.side === side && fall.swings)
+      const aim = gait.steps[side]
       const track = aims[side]
-      if (aim) track.push({ at: aim.at.clone(), time: body.time, lands: aim.time })
+      if (aim) track.push({ at: aim.to.clone(), time: body.time, lands: aim.lands })
       if (aim || !track.length) continue
       // (landed: how far the aim moved from lift-off, and over the last fifth of a second)
       const last = track[track.length - 1]

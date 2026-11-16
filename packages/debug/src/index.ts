@@ -1,2 +1,2 @@
-export { LAYERS, type Layer, shown } from './layers'
+export { shown } from './layers'
 export { Debug } from './view'
