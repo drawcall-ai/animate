@@ -88,6 +88,8 @@ export class Stride {
   private readonly puts: Partial<Record<Side, Vector3>> = {}
   private readonly taken: Partial<Record<Side, { from: number; until: number }>> = {}
   private lift = 0
+  /** for how long no foot of his own has been on the ground (s) */
+  private unheld = 0
 
   constructor(
     private readonly clock: Clock,
@@ -125,6 +127,10 @@ export class Stride {
     this.looked = looked
     const now = this.clock.time + dt
     for (const side of SIDES) gait.hold(side, feet[side].held ? feet[side].value : undefined)
+    // (left with no foot of his own on the ground for longer than he can be in the air, he comes down on both: the story has them no longer)
+    const standing = SIDES.some((side) => !feet[side].held && !gait.steps[side]) || gait.jumps
+    this.unheld = standing ? 0 : this.unheld + dt
+    if (this.unheld > this.bones.size.beat) for (const side of SIDES) if (feet[side].held) feet[side].free()
     gait.advance(now)
     gait.hips.advance(now)
     // (a foot the story has is watched: how fast it moves is how it moved)

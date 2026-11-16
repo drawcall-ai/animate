@@ -26,6 +26,8 @@ const KEEPS = 0.85
 const CATCH = 4
 /** how long before a frame someone else wrote to a foot it sets off, if it does not say (s) */
 const TAKES = 0.3
+/** how fast a foot the story has moves against the hips at the least while he stands on the other (in paces) */
+const SWUNG = 0.3
 /** how long he takes at the least to crouch for a jump (s) */
 const CROUCH = 0.3
 
@@ -92,7 +94,7 @@ export class Gait {
 
   /** he is led: going so along the ground (m/s) from a moment, by default now, the lead telling where he will be by how it changes */
   go(velocity: { x: number; z: number }, at = this.time) {
-    if (this.course || this.planted) this.sent()
+    if (this.course || this.planted || (Math.hypot(velocity.x, velocity.z) > SLOW * this.size.pace && SIDES.some((side) => this.feet[side].owner === 'story'))) this.sent()
     const was = this.lead.velocity.clone()
     this.lead.go(velocity, at)
     // (led anew, the plan is where he will be from now)
@@ -117,6 +119,8 @@ export class Gait {
 
   /** what he was sent to do is over: he is sent anew */
   private sent() {
+    // (sent somewhere, he steps off feet the story put down: they are his again)
+    for (const side of SIDES) if (this.feet[side].owner === 'story') this.feet[side].cancel('story')
     this.course = this.plant = this.planted = undefined
     if (this.keeps) this.lead.face = undefined
     this.keeps = false
@@ -182,7 +186,7 @@ export class Gait {
 
   /** whether he has done what he was sent to do: no way to go, no jump, his feet still */
   get arrived() {
-    return !this.course && !this.jumping && !this.stepping
+    return !this.course && !this.jumping && !this.stepping && this.hips.velocity.length() < STILL * this.size.pace
   }
 
   /** whether he is making a jump */
@@ -319,7 +323,7 @@ export class Gait {
     const [left, right] = SIDES.map((side) => this.ends(side))
     const half = Math.hypot(left.x - right.x, left.z - right.z) / 2
     const { leg, hip, stand, ankle } = this.size
-    const reach = Math.sqrt(Math.max(0, leg ** 2 - Math.max(0, half - hip) ** 2 - (SLACK * leg) ** 2))
+    const reach = Math.sqrt(Math.max(0, leg ** 2 - (half + SLACK * leg) ** 2))
     const low = Math.min(left.y, right.y) - ankle
     return left.add(right).multiplyScalar(0.5).setY(Math.min(low + stand, low + ankle + reach))
   }
@@ -349,6 +353,9 @@ export class Gait {
       // landed, he comes to rest where his going carries him, as low as a hop or a dive had him
       this.jumping = undefined
       this.lead.place.copy(leap.place)
+      // (his steps begin anew from where he landed)
+      this.stepping = false
+      for (const side of SIDES) delete this.steps[side]
       if (this.course === leap.course) this.course = new Course(size, now, leap.place, leap.velocity, leap.place.clone().addScaledVector(leap.velocity, leap.velocity.length() / (2 * PUSH.along)), { speed: leap.velocity.length() + 0.1, push: PUSH.along, arrive: 0 })
       if (leap.low !== undefined) this.height = Math.min(this.height, leap.low)
     }
@@ -425,8 +432,9 @@ export class Gait {
     const { size, feet, time: now } = this
     const foot = feet[side]
     // (a foot someone else has written frames to is theirs once its step would come down after theirs set off)
-    // (a foot the story has from outside is theirs; and while it has one, he stands on the other)
-    if (foot.outside || (this.held(other(side)) && !this.steps[side])) {
+    // (a foot the story has from outside is theirs; and while it swings one, or puts one down, he stands on the other)
+    const swung = this.held(other(side)) && this.feet[other(side)].velocity.distanceTo(this.hips.velocity) > SWUNG * this.size.pace
+    if (foot.outside || ((swung || this.placing[other(side)]) && !this.steps[side])) {
       delete this.steps[side]
       return
     }
