@@ -73,6 +73,8 @@ export class Gait {
   private planted?: Side
   /** whether he keeps facing as he did, stepping to a place close by */
   private keeps = false
+  /** how far below where he rides the hips are let down at a moment, as whoever has them low asks (m) */
+  low: (time: number) => number = () => 0
   /** a jump he is making */
   jumping?: Jump & { course?: Course }
   /** a foot a story puts somewhere, on its way there */
@@ -438,16 +440,19 @@ export class Gait {
     const theirs = hips.frames.filter((frame) => frame.by !== 'gait').map((frame) => frame.at ?? now)
     const [first, last] = [Math.min(...theirs), Math.max(...theirs)]
     if (!hips.busy || hips.owner === 'gait' || first > now || !this.jumping) {
-      hips.cancel('gait')
       // (along a way he is sent, out to where it ends: the plan is where he will be)
       const { beat } = this.size
       const h = 0.003 * beat
       const ends = this.course ? Math.min(this.course.from + this.course.places.length * this.course.step, now + FAR * beat) : now + (FAR / 2) * beat
       const along = Array.from({ length: Math.max(1, Math.ceil((ends - now) / beat - 3.3)) }, (_, k) => (3.3 + k) * beat)
       const marks = [...MARKS.map((mark) => mark * beat), ...along].filter((mark) => now + mark < first - 0.33 * beat || now + mark > last + 0.33 * beat)
-      for (const mark of marks) {
+      // (as low as he is let down then, asked before the plan it is asked of is written anew)
+      const lows = marks.map((mark) => [this.low(now + mark), this.low(now + mark + h)])
+      hips.cancel('gait')
+      for (const [k, mark] of marks.entries()) {
         const { place, turn } = this.planned(mark)
         const later = this.planned(mark + h)
+        ;[place.y, later.place.y] = [place.y - lows[k][0], later.place.y - lows[k][1]]
         const [velocity, spin] = [later.place.sub(place).divideScalar(h), { x: 0, y: (later.turn - turn) / h, z: 0 }]
         // (and past the last of them it goes on along the ground)
         if (mark === marks.at(-1)) velocity.y = 0

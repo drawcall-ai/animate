@@ -109,6 +109,8 @@ export class Stride {
     private readonly joints: Joints,
   ) {
     const gait = (this.gait = new Gait(bones.size))
+    // (how low his hands have him is in the hips' plan)
+    gait.low = (time) => this.posture.low(time)
     this.hips.value.copy(gait.hips.value)
   }
 
@@ -153,7 +155,7 @@ export class Stride {
   private place() {
     const { gait } = this
     const now = gait.time
-    this.hips.value.copy(gait.hips.value).add({ x: Math.sin(this.facing) * this.posture.shift(now), y: -this.posture.low(now), z: Math.cos(this.facing) * this.posture.shift(now) })
+    this.hips.value.copy(gait.hips.value).add({ x: Math.sin(this.facing) * this.posture.shift(now), y: 0, z: Math.cos(this.facing) * this.posture.shift(now) })
     this.hips.velocity.copy(gait.hips.velocity)
   }
 
