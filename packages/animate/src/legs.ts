@@ -18,7 +18,7 @@ const HIGH = 0.034
 
 type Clock = { readonly time: number }
 /** a foot as the rest of the body has it: whether a story has it, where its ankle is, where the ground holds it, and to give it back */
-export type Foothold = { readonly held: boolean; readonly value: Vector3; anchor?: Vector3; free(): void }
+export type Foothold = { readonly held: boolean; readonly value: Vector3; anchor?: Vector3; cancel(): void }
 const yawOf = (turn: Quaternion) => {
   const way = new Vector3(0, 0, 1).applyQuaternion(turn)
   return Math.atan2(way.x, way.z)
@@ -105,7 +105,7 @@ export class Legs {
     // (left with no foot of his own on the ground for longer than he can be in the air, he comes down on both: the story has them no longer)
     const standing = SIDES.some((side) => !feet[side].held && !gait.steps[side]) || gait.jumps
     this.unheld = standing ? 0 : this.unheld + dt
-    if (this.unheld > this.bones.size.beat) for (const side of SIDES) if (feet[side].held) feet[side].free()
+    if (this.unheld > this.bones.size.beat) for (const side of SIDES) if (feet[side].held) feet[side].cancel()
     gait.advance(now)
     // (a foot the story has is watched: how fast it moves is how it moved; a foot on the hips goes on from where they were, before they go on)
     for (const side of SIDES) gait.feet[side].advance(now)

@@ -136,7 +136,7 @@ export class Player implements Game {
     body.face(way)
     yield* stroke(body, this.held, kind, time, at, AIM.clone().sub(at).setY(0).normalize())
     yield* body.until(time + SWING.after)
-    body.hand.left.free()
+    body.hand.left.cancel()
     this.ready()
     body.face()
     this.swing = undefined

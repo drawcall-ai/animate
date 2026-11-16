@@ -28,7 +28,7 @@ export type Arriving = On & { velocity?: Xyz }
  */
 export type Reaching = Arriving & { palm?: Xyz; pointing?: Xyz; with?: Touch | Grip }
 
-/** What a story has of a hand: where its wrist is and how it moves, whether it is where it was sent, and to send it, have it somewhere by a moment, shape its fingers, cancel what it was sent to, or give it back to the body. */
+/** What a story has of a hand: where its wrist is and how it moves, whether it is where it was sent, and to send it, have it somewhere by a moment, shape its fingers, or cancel what it was sent to, which gives it back to the body once it has swung on. */
 export type Hand = Readonly<{
   value: Vector3
   velocity: Vector3
@@ -37,9 +37,8 @@ export type Hand = Readonly<{
   by(when: number, place: Xyz | Grip, how?: Reaching): Story<boolean>
   shape(pose?: Pose, how?: { by?: number }): Story<boolean>
   cancel(): void
-  free(): void
 }>
-/** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, and to send it, have it somewhere by a moment, cancel what it was sent to, or give it back to the body. */
+/** What a story has of a foot: where its ankle is and how it moves, where the ground holds it, and to send it, have it somewhere by a moment, or cancel what it was sent to. */
 export type Foot = Readonly<{
   value: Vector3
   velocity: Vector3
@@ -47,7 +46,6 @@ export type Foot = Readonly<{
   to(place: Xyz, how?: Arriving & { seconds?: number }): Story<boolean>
   by(when: number, place: Xyz, how?: Arriving): Story<boolean>
   cancel(): void
-  free(): void
 }>
 
 /** what an end needs of the body: its size, clock and gait, the body that a place `on` him names, and what a thing is as a frame moves on */
@@ -90,7 +88,7 @@ function turnOf(palm: Vector3 | undefined, pointing: Vector3 | undefined, rest: 
  * on him, on a thing or in the scene, a velocity and a turn to arrive with, and a moment, given or the first one the
  * body lets it be there at its ease. Frames are met in order, each from the state it is in; one met moving swings on
  * and comes round to where the body has it; one met at rest is held there, as near as the limb reaches, until it is
- * sent elsewhere, cancelled or let `free`.
+ * sent elsewhere or cancelled.
  */
 export class End {
   readonly channel: Channel
@@ -454,10 +452,6 @@ export class End {
     else this.channel.set(this.channel.value, this.channel.turn)
     this.put = undefined
     this.body.changed()
-  }
-
-  free() {
-    this.cancel()
   }
 
   shape(pose?: Pose, { by }: { by?: number } = {}): Story<boolean> {

@@ -47,7 +47,7 @@ export const start: Start = async (scene, world) => {
       if (input.act) {
         const right = body.hand.right
         character.tried(() => {
-          if (!searching) return void right.free()
+          if (!searching) return void right.cancel()
           const place = { x: -0.15 * arm, y: -0.1 * arm, z: 0.8 * arm }
           void held.to(place, { on: body, pointing: { x: 0, y: -LOOK.down, z: 1 } })
         })

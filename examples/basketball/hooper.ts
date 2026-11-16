@@ -111,8 +111,8 @@ export class Hooper implements Game {
   private drop() {
     const { hand } = this.character.body
     this.held.free()
-    hand.right.free()
-    hand.left.free()
+    hand.right.cancel()
+    hand.left.cancel()
     hand.right.shape()
     hand.left.shape()
     this.ball.release(new Vector3())
@@ -172,7 +172,7 @@ export class Hooper implements Game {
         continue
       }
       this.doing = 'dribbling'
-      left.free()
+      left.cancel()
       left.shape()
       const { stand, trunk, shoulder, arm } = body.size
       const high = feet.floor + stand + (1 - BOUNCE.down) * trunk

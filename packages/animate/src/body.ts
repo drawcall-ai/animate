@@ -351,7 +351,7 @@ export class Body {
   private letGo() {
     const { ends, things } = this.workings
     const bound = new Set([...things.values()].flatMap(({ hands }) => hands.map(({ end }) => end)))
-    for (const side of SIDES) for (const end of [ends.foot[side], ends.hand[side]]) if (!bound.has(end)) end.free()
+    for (const side of SIDES) for (const end of [ends.foot[side], ends.hand[side]]) if (!bound.has(end)) end.cancel()
   }
 
   /** what the body moves stays where it is on him, and the hands on it stay on it */

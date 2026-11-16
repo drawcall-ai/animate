@@ -84,7 +84,7 @@ export class Clock {
       watched.delete(object)
       for (const end of this.all) {
         if (!end.on.has(object)) continue
-        end.free()
+        end.cancel()
         this.faults.push(new Error(`the ${end.name} is to be on a thing that is not in the scene he is in`))
       }
     }
@@ -115,7 +115,7 @@ export class Clock {
     const lands = legs.gait.jumps && legs.gait.hips.velocity.y <= 0
     for (const end of this.all) {
       const { busy, owner, holding } = end.channel
-      if ((!busy && owner === 'on') || (end.kind === 'foot' && lands && holding && !busy)) end.free()
+      if ((!busy && owner === 'on') || (end.kind === 'foot' && lands && holding && !busy)) end.cancel()
     }
     for (const part of parts(joints)) part.advance(delta)
     this.body.free.react(delta)

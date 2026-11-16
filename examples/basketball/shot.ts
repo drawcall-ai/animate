@@ -63,6 +63,6 @@ export function* jumpShot(body: Body, ball: Thing, letGo: (velocity: Vector3) =>
   body.hand.right.shape(flat, { by: highest })
   yield* ball.by(highest, release, { velocity: flying })
   letGo(ball.free())
-  body.hand.left.free()
+  body.hand.left.cancel()
   yield* body.stand()
 }

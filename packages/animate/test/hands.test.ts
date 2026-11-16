@@ -112,7 +112,7 @@ test('a pose the fingers are given they keep as the hand is let free and he stan
   const body = new Body(rig)
   play(body, body.hand.left.shape(fist))
   const closed = curls(rig)
-  body.hand.left.free()
+  body.hand.left.cancel()
   play(body, body.stand())
   settle(body)
   curls(rig).forEach((curl, k) => expect(curl).toBeCloseTo(closed[k], 2))

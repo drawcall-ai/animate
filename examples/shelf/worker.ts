@@ -273,7 +273,7 @@ export class Worker implements Game {
     const { hand } = this.body
     const velocity = this.held?.thing.free() ?? new Vector3()
     for (const side of ['left', 'right'] as const) {
-      hand[side].free()
+      hand[side].cancel()
       hand[side].shape()
     }
     this.held?.box.release(velocity)

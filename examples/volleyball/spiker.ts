@@ -94,7 +94,7 @@ export class Spiker implements Game {
     const behind = ball.clone().addScaledVector(way, -RADIUS)
     yield* hand.by(top, behind, { velocity: way.clone().multiplyScalar(SPIKE), with: 'palm', palm: way })
     this.strike(hand.value, way, hand.velocity, 'spiked')
-    hand.free()
+    hand.cancel()
     hand.shape()
     yield* landing
   }
@@ -127,8 +127,8 @@ export class Spiker implements Game {
     yield* right.by(at, wrists.clone().sub(apart), { velocity, ...palms.right })
     const middle = left.value.clone().add(right.value).multiplyScalar(0.5)
     this.strike(middle, PLATFORM, left.velocity.clone().add(right.velocity).multiplyScalar(0.5), 'passed')
-    left.free()
-    right.free()
+    left.cancel()
+    right.cancel()
   }
 
   /** the ball is struck if it is at what strikes it (a wrist, or between them), to leave as that hits it */
