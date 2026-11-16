@@ -99,8 +99,8 @@ export class Body {
   }
 
   /** a thing as he sees it move */
-  private seen(thing: Object3D) {
-    return new Watched(thing, this.bones.frame, () => ({ at: this.locomotion.hips.value, facing: this.locomotion.facing }))
+  private seen(thing: Object3D, carries = true) {
+    return new Watched(thing, this.bones.frame, () => ({ at: this.locomotion.hips.value, facing: this.locomotion.facing }), carries)
   }
 
   /** what a frame on a thing moves on: its channel if it is bound to him, or the thing as it is seen to move */
@@ -135,7 +135,7 @@ export class Body {
         if (k >= 0) thing.hands.splice(k, 1)
       }
     }
-    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, (thing) => this.seen(thing), () => this.workings.asks.forget(), { strength, draw })
+    const bound = new Bound(object, outside, this.bones.frame, of, others, this, (thing) => this.mover(thing), () => this.time, (thing) => this.seen(thing, false), () => this.workings.asks.forget(), { strength, draw })
     this.things.set(object, bound)
     return bound.facade()
   }

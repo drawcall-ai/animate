@@ -20,6 +20,8 @@ export class Watched implements Mover {
     private readonly frame: Matrix4,
     /** where his hips are now and which way he faces: a thing carried with him is told on from them */
     private readonly him: () => { at: Vector3; facing: number },
+    /** whether it may be told on as carried with him: not one the game sets for the very moment it is followed at */
+    private readonly carries = true,
   ) {}
 
   /** looks at it at a moment, once */
@@ -46,7 +48,7 @@ export class Watched implements Mover {
     velocity.copy(seen.at).sub(was.at)
     // (told on as it went in the scene, or as it went with him if it is carried with him: whichever it was stiller in)
     const along = moved.copy(seen.on).sub(was.on)
-    const carried = (this.carried = along.length() < velocity.length())
+    const carried = (this.carried = this.carries && along.length() < velocity.length())
     const [at, turned, before] = carried ? [seen.on, seen.onTurn, was.onTurn] : [seen.at, seen.turn, was.turn]
     place.copy(at).addScaledVector(carried ? along : velocity, share)
     spin.copy(before).invert().premultiply(turned)
@@ -78,10 +80,15 @@ export class OnHim implements Mover {
     private readonly hips: { now: number; hips(seconds: number, at: Vector3, velocity: Vector3): Vector3; facing(seconds: number): number },
   ) {}
 
+  /** while the hands' asks are worked out, a place on him is told on from the hips as they go now: goes with locomotion, whose look-ahead reads those asks */
+  static near = false
+
   state(t: number, place: Vector3, velocity: Vector3, turn?: Quaternion) {
-    const seconds = Math.max(0, t - this.hips.now)
+    const ahead = Math.max(0, t - this.hips.now)
+    const seconds = OnHim.near ? 0 : ahead
     const facing = this.hips.facing(seconds)
     this.hips.hips(seconds, place, velocity)
+    if (OnHim.near) place.addScaledVector(velocity, ahead)
     place.add(this.at.copy(this.rest).applyAxisAngle(UP, facing))
     turn?.setFromAxisAngle(UP, facing)
   }
