@@ -46,7 +46,7 @@ export function swing(size: Size, step: Step, now: number, speed: number, partne
   const share = (t: number) => Math.min(1, Math.max(0, (t - step.leaves) / T))
   const frames: Frame[] = []
   const turn = (s: number) => new Quaternion().setFromAxisAngle(UP, step.pointed + wrap(step.toes - step.pointed) * ease(s))
-  const h = 1e-3
+  const h = 0.003 * size.beat
   for (const mark of MARKS) {
     const at = now + (step.lands - now) * mark
     if (mark === 1) {

@@ -15,9 +15,9 @@ const EASE = 6
  * against it; how far it leans forward for the hips riding back behind the ankles (by the angle whose sine is so many
  * times as far, in legs); how far it leans into the way he goes for every pace (rad); how much of his weight pushes up
  * at the least; how much of the way the pelvis lists it tilts back over the foot he stands on; how far ahead it leans
- * as the plan has the hips (s)
+ * as the plan has the hips (in beats)
  */
-const LEAN = { pushed: 0.6, swung: 0.25, back: 2.2, going: 0.059, light: 0.25, listed: 0.5, ahead: 0.12 }
+const LEAN = { pushed: 0.6, swung: 0.25, back: 2.2, going: 0.059, light: 0.25, listed: 0.5, ahead: 0.4 }
 /** how much of the way the trunk leans, turns and tilts the head turns back, to stay level and look ahead */
 const LEVEL = new Vector3(-0.6, -1, -1)
 /** how far ahead of the pelvis the trunk turns at the most to face as he is to, and the head (rad) */
@@ -113,7 +113,7 @@ export class Stride {
   }
 
   get falls() {
-    return this.gait.jumps && SIDES.every((side) => this.gait.feet[side].value.y > this.ground + this.bones.size.ankle + 0.01)
+    return this.gait.jumps && SIDES.every((side) => this.gait.feet[side].value.y > this.ground + this.bones.size.ankle + TOE * this.bones.size.leg)
   }
 
   /** where a foot of his own stands on the ground, while it does */
@@ -224,9 +224,10 @@ export class Stride {
     const now = gait.time
     // (the trunk leans as the plan has the hips pushed a little ahead, by the time it has come round)
     const [p0, v0, v1] = [new Vector3(), new Vector3(), new Vector3()]
-    hips.state(now + LEAN.ahead, p0, v0)
-    hips.state(now + LEAN.ahead + 0.02, p0, v1)
-    const pushed = v1.sub(v0).divideScalar(0.02)
+    const [ahead, h] = [LEAN.ahead * size.beat, 0.066 * size.beat]
+    hips.state(now + ahead, p0, v0)
+    hips.state(now + ahead + h, p0, v1)
+    const pushed = v1.sub(v0).divideScalar(h)
     const way = new Vector3(Math.sin(facing), 0, Math.cos(facing))
     const up = Math.max(GRAVITY * LEAN.light, GRAVITY + pushed.y)
     const speed = hips.velocity.dot(way)
@@ -253,7 +254,7 @@ export class Stride {
     // (looking somewhere, the trunk turns there as far as it leads the pelvis, the head the rest)
     const looks = this.looked && this.sight(this.looked)
     // (standing, he turns to face where he looks once his head does not turn that far round, unless he is to face a way)
-    if (looks && gait.lead.velocity.length() < 0.3 && !gait.course && (this.toward !== undefined || Math.abs(wrap(looks.yaw - facing)) > LEADS.head)) {
+    if (looks && gait.lead.velocity.length() < 0.1 * size.pace && !gait.course && (this.toward !== undefined || Math.abs(wrap(looks.yaw - facing)) > LEADS.head)) {
       const there = Math.abs(wrap(looks.yaw - facing)) < FACED
       this.toward = there ? undefined : looks.yaw
       gait.face(there ? undefined : { x: Math.sin(looks.yaw), z: Math.cos(looks.yaw) })
@@ -358,12 +359,9 @@ export class Stride {
         return gait.lead.place.y
       },
       put(side, place, seconds) {
-        const foot = gait.feet[side]
-        foot.cancel('story')
-        delete self.puts[side]
-        if (!place) return undefined
-        self.puts[side] = place.clone()
-        foot.by({ at: seconds === undefined ? undefined : gait.time + seconds, place, by: 'story' })
+        gait.put(side, place, seconds)
+        if (place) self.puts[side] = place.clone()
+        else delete self.puts[side]
         return self.puts[side]
       },
       foot(side) {

@@ -15,12 +15,12 @@ const GIVE = 1
 const TUCK = 0.25
 /** how many marks the flight is written as */
 const MARKS = 4
-/** how long after the other the foot he took off from comes down, landing going on (s) */
-const STEP = 0.15
+/** how long after the other the foot he took off from comes down, landing going on (in beats) */
+const STEP = 0.5
 /** where the knee that drives up as he pushes off has its foot, under and ahead of the hips (in legs) */
 const DRIVE = { y: 0.55, z: 0.3 }
-/** how long before he comes down his feet reach for the ground, from drawn up under him (s) */
-const UNTUCK = 0.15
+/** how long before he comes down his feet reach for the ground, from drawn up under him (in beats) */
+const UNTUCK = 0.5
 /** how far ahead of the hips or behind them a foot is carried through the air, going on (in legs) */
 const APART = 0.2
 
@@ -73,7 +73,9 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   hips.push({ at: lands, place: place.clone(), velocity: across.clone().setY(up - GRAVITY * air), by: 'jump' })
   // (a hop or a dive rests as low as its top; a jump gives at the knees as he lands)
   const rest = low ? Math.max(touch, ground + LOWEST * stand) : Math.min(touch, ground + stand) - GIVE * crouch
-  hips.push({ at: lands + lasts, place: place.clone().addScaledVector(across, lasts).setY(rest), velocity: across.clone(), by: 'jump' })
+  // (a hop or a dive stops where it came down; a jump goes on)
+  const on = low ? 0 : 1
+  hips.push({ at: lands + lasts, place: place.clone().addScaledVector(across, on * lasts).setY(rest), velocity: across.clone().multiplyScalar(on), by: 'jump' })
   // the feet leave with him, drawn up under him, and reach for the ground under where he lands: going on, the foot he
   // took off from comes down a step after the other
   const runs = across.length() > WALK.most * size.pace
@@ -83,14 +85,14 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
     const out = left(facing).multiplyScalar(SIGN[side] * size.hip)
     const split = runs ? (side === takes ? -APART : APART) * leg : 0
     const tucked = { x: SIGN[side] * size.hip, y: -(1 - TUCK) * leg, z: split }
-    const later = runs && side === takes ? STEP : 0
-    const down = place.clone().add(out).addScaledVector(across, 0.05 + later).setY(ground + ankle)
+    const later = runs && side === takes ? STEP * size.beat : 0
+    const down = place.clone().add(out).addScaledVector(across, 0.165 * size.beat + later).setY(ground + ankle)
     // (the other knee drives up as he pushes off)
     const drives: Frame[] = side === takes ? [] : [{ at: leaves, on: hipsOf, place: { x: SIGN[side] * size.hip, y: -DRIVE.y * leg, z: DRIVE.z * leg }, by: "jump" }]
     feet[side] = [
       ...drives,
-      { at: leaves + Math.min(UNTUCK, air / 3), leaves, on: hipsOf, place: tucked, by: 'jump' },
-      ...(air > 3 * UNTUCK ? [{ at: lands - UNTUCK, on: hipsOf, place: tucked, by: 'jump' }] : []),
+      { at: leaves + Math.min(UNTUCK * size.beat, air / 3), leaves, on: hipsOf, place: tucked, by: 'jump' },
+      ...(air > 3 * UNTUCK * size.beat ? [{ at: lands - UNTUCK * size.beat, on: hipsOf, place: tucked, by: 'jump' }] : []),
       { at: lands + later, place: down, by: 'jump' },
     ]
   }

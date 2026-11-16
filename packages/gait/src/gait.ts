@@ -8,10 +8,10 @@ import { Pelvis } from './pelvis'
 import { duty, footfall, type Going, rate } from './stride'
 import { type Step, swing } from './swing'
 
-/** when ahead of now the hips' frames are written (s): the first sets how soon he answers a new lead */
-const MARKS = [0.1, 0.2, 0.35, 0.5, 0.7]
-/** how far ahead along a way he is sent the hips' frames go at the most (s) */
-const FAR = 4
+/** when ahead of now the hips' frames are written (in beats): the first sets how soon he answers a new lead */
+const MARKS = [0.33, 0.66, 1.15, 1.65, 2.3]
+/** how far ahead along a way he is sent the hips' frames go at the most (in beats) */
+const FAR = 13
 /** how near how high the legs reach the hips ride before they give to it (in legs) */
 const SOFT = 0.03
 /** how strong the hips and a foot are (m/s²) */
@@ -27,11 +27,11 @@ const KEEPS = 0.85
 /** how many times as fast the clock goes while a leg reaches its foot on the ground no longer */
 const CATCH = 4
 /** how long before a frame someone else wrote to a foot it sets off, if it does not say (s) */
-const TAKES = 0.3
+const TAKES = 1
 /** how fast a foot the story has moves against the hips at the least while he stands on the other (in paces) */
 const SWUNG = 0.3
 /** how long he takes at the least to crouch for a jump (s) */
-const CROUCH = 0.3
+const CROUCH = 1
 
 const yaw = (angle: number) => new Quaternion().setFromAxisAngle(UP, angle)
 const yawOf = (turn: Quaternion) => {
@@ -100,7 +100,7 @@ export class Gait {
     const was = this.lead.velocity.clone()
     this.lead.go(velocity, at)
     // (led anew, the plan is where he will be from now)
-    if (was.distanceTo(this.lead.velocity) > 0.05) this.plan()
+    if (was.distanceTo(this.lead.velocity) > STILL * this.size.pace) this.plan()
   }
 
   /** he faces a way along the ground at a walk, wherever he goes; with none, the way he goes */
@@ -165,7 +165,7 @@ export class Gait {
     lead.face = undefined
     lead.go({ x: 0, z: 0 }, this.time)
     const to = lead.place.clone().addScaledVector(going, going.length() / PUSH.along)
-    this.course = new Course(this.size, this.time, lead.place, going, to, { speed: Math.max(going.length(), 0.1), push: PUSH.along, arrive: 0 })
+    this.course = new Course(this.size, this.time, lead.place, going, to, { speed: Math.max(going.length(), STILL * this.size.pace), push: PUSH.along, arrive: 0 })
     this.plan()
   }
 
@@ -183,7 +183,7 @@ export class Gait {
     const stands = this.steps[partner]?.to ?? this.feet[partner].value
     const hips = new Vector3()
     this.hips.state(now + until, hips, new Vector3())
-    return this.holds(partner, stands, hips.clone().setY(this.lead.place.y), this.going.facing) >= hips.y - 0.02
+    return this.holds(partner, stands, hips.clone().setY(this.lead.place.y), this.going.facing) + SLACK * this.size.leg >= hips.y
   }
 
   /** whether he has done what he was sent to do: no way to go, no jump, his feet still */
@@ -204,7 +204,7 @@ export class Gait {
     const { size, lead } = this
     const course = this.course
     // (in the air, once he has come down)
-    const soonest = Math.max(this.time + CROUCH, (this.jumping?.lands ?? -Infinity) + CROUCH)
+    const soonest = Math.max(this.time + CROUCH * size.beat, (this.jumping?.lands ?? -Infinity) + CROUCH * size.beat)
     const leaves = course ? Math.max(this.plant?.at ?? course.when(course.to), soonest) : soonest
     // (from a run he takes off from the footfall where it ends: the foot his strides bring there, if none is said)
     if (course && !this.plant) {
@@ -307,6 +307,13 @@ export class Gait {
     if (place) foot.value.copy(place)
   }
 
+  /** a story puts a foot down at a place to stand on, in so many seconds or at his ease; with none, it has it there no longer */
+  put(side: Side, place?: { x: number; y: number; z: number }, seconds?: number) {
+    const foot = this.feet[side]
+    foot.cancel('story')
+    if (place) foot.by({ at: this.time + (seconds ?? PLACE * this.size.beat), place, by: 'story' })
+  }
+
   /** whether a foot is someone else's: a story has put it somewhere or sends it */
   held(side: Side) {
     const { owner } = this.feet[side]
@@ -353,14 +360,19 @@ export class Gait {
       if (course.over(now)) this.course = undefined
     }
     const leap = this.jumping
-    if (leap && now >= leap.lands + 0.2) {
+    // (in the air, where he is led to be is where he flies)
+    if (leap && now > leap.leaves) this.lead.place.set(this.hips.value.x, this.lead.place.y, this.hips.value.z)
+    if (leap && now >= (leap.hips.at(-1)?.at ?? leap.lands) - 0.066 * size.beat) {
       // landed, he comes to rest where his going carries him, as low as a hop or a dive had him
       this.jumping = undefined
-      this.lead.place.copy(leap.place)
+      // (he comes to rest from where the hips are and how they go, as far on as that carries him: a hop or a dive where it came down)
+      const [from, going] = [this.hips.value.clone().setY(leap.place.y), this.hips.velocity.clone().setY(0)]
+      this.lead.place.copy(from)
       // (his steps begin anew from where he landed)
       this.stepping = false
       for (const side of SIDES) delete this.steps[side]
-      if (this.course === leap.course) this.course = new Course(size, now, leap.place, leap.velocity, leap.place.clone().addScaledVector(leap.velocity, leap.low === undefined ? leap.velocity.length() / (2 * PUSH.along) : 0), { speed: leap.velocity.length() + 0.1, push: PUSH.along, arrive: 0 })
+      const carries = leap.low === undefined ? going.length() / (2 * PUSH.along) : 0
+      if (this.course === leap.course) this.course = new Course(size, now, from, going, from.clone().addScaledVector(going, carries), { speed: going.length() + STILL * size.pace, push: PUSH.along, arrive: 0 })
       if (leap.low !== undefined) this.height = Math.min(this.height, leap.low)
     }
     const toes = Object.fromEntries(SIDES.filter((side) => !this.steps[side]).map((side) => [side, yawOf(feet[side].turn)]))
@@ -413,17 +425,21 @@ export class Gait {
   /** the hips' frames, along where he will be, written anew from now */
   private plan() {
     const { hips, time: now } = this
-    const theirs = hips.frames.find((frame) => frame.by !== 'gait')?.at ?? Infinity
-    if (!hips.busy || hips.owner === 'gait' || theirs > now) {
+    // (before frames someone else wrote, and after them)
+    const theirs = hips.frames.filter((frame) => frame.by !== 'gait').map((frame) => frame.at ?? now)
+    const [first, last] = [Math.min(...theirs), Math.max(...theirs)]
+    if (!hips.busy || hips.owner === 'gait' || first > now || !this.jumping) {
       hips.cancel('gait')
       // (along a way he is sent, out to where it ends: the plan is where he will be)
-      const ends = this.course ? Math.min(this.course.from + this.course.places.length / 60, now + FAR) : now + FAR / 2
-      const along = Array.from({ length: Math.max(1, Math.ceil((ends - now - 0.7) / 0.3)) }, (_, k) => 1 + 0.3 * k)
-      const marks = [...MARKS, ...along].filter((mark) => now + mark < theirs - 0.1)
+      const { beat } = this.size
+      const h = 0.003 * beat
+      const ends = this.course ? Math.min(this.course.from + this.course.places.length * this.course.step, now + FAR * beat) : now + (FAR / 2) * beat
+      const along = Array.from({ length: Math.max(1, Math.ceil((ends - now) / beat - 3.3)) }, (_, k) => (3.3 + k) * beat)
+      const marks = [...MARKS.map((mark) => mark * beat), ...along].filter((mark) => now + mark < first - 0.33 * beat || now + mark > last + 0.33 * beat)
       for (const mark of marks) {
         const { place, turn } = this.planned(mark)
-        const later = this.planned(mark + 1e-3)
-        const [velocity, spin] = [later.place.sub(place).divideScalar(1e-3), { x: 0, y: (later.turn - turn) / 1e-3, z: 0 }]
+        const later = this.planned(mark + h)
+        const [velocity, spin] = [later.place.sub(place).divideScalar(h), { x: 0, y: (later.turn - turn) / h, z: 0 }]
         // (and past the last of them it goes on along the ground)
         if (mark === marks.at(-1)) velocity.y = 0
         hips.by({ at: now + mark, place, velocity, turn: yaw(turn), spin, by: 'gait' })
@@ -451,11 +467,11 @@ export class Gait {
       step.to.copy(theirs.place)
       delete this.steps[side]
       foot.cancel('gait')
-      if (lands - now > 0.02) for (const frame of swing(size, step, now, 0, feet[side === 'left' ? 'right' : 'left'].value, this.going.facing).slice(0, -1)) foot.by(frame)
+      if (lands - now > 0.066 * size.beat) for (const frame of swing(size, step, now, 0, feet[side === 'left' ? 'right' : 'left'].value, this.going.facing).slice(0, -1)) foot.by(frame)
       return
     }
     delete this.placing[side]
-    const sets = theirs ? (theirs.leaves ?? (theirs.at ?? now) - TAKES) : Infinity
+    const sets = theirs ? (theirs.leaves ?? (theirs.at ?? now) - TAKES * size.beat) : Infinity
     if ((this.steps[side]?.lands ?? now + (1 - this.duty) / this.rate) > sets) {
       delete this.steps[side]
       return
