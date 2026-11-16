@@ -61,7 +61,7 @@ export class Body {
     const locomotion = (this.locomotion = Body.frames ? (new Stride(this, bones, turning) as unknown as Locomotion) : new Locomotion(this, bones, turning))
     const { carrier } = locomotion
     const facing = () => ({ at: locomotion.hips.value, velocity: locomotion.hips.velocity, facing: locomotion.facing, ground: locomotion.ground })
-    const asks = new Asks([], size, both(() => new Vector3()), facing)
+    const asks = new Asks([], size, both(() => new Vector3()), facing, turning.trunk)
     const body = { size, carrier, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place) }
     const end = (kind: 'hand' | 'foot', side: Side) => {
       const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
