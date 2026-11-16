@@ -262,6 +262,13 @@ export class Gait {
     return { place, turn: turned }
   }
 
+  /** a foot a story has, from outside the gait, is where it is now; with none, it is the gait's again and steps home */
+  hold(side: Side, place?: { x: number; y: number; z: number }) {
+    const foot = this.feet[side]
+    foot.outside = place !== undefined
+    if (place) foot.value.copy(place)
+  }
+
   /** whether a foot is someone else's: a story has put it somewhere or sends it */
   held(side: Side) {
     const { owner } = this.feet[side]
