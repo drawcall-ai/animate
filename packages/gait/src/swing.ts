@@ -29,7 +29,8 @@ function swung(size: Size, step: Step, share: number, speed: number, partner: Ve
   const on = (1 - forth) * ease(share) + forth * (1 - (1 - share) ** 2)
   to.lerpVectors(step.from, step.to, on)
   // (it leaves the ground heel up, the ankle as high as that has it)
-  to.y += high * Math.sin(Math.PI * share ** (Math.log(0.5) / Math.log(top))) + raised(size, TOE_OFF).y * (1 - share) * (share > 0 ? 1 : 0)
+  // (and comes down onto the ground softly, not dropped onto it)
+  to.y += high * Math.sin(Math.PI * share ** (Math.log(0.5) / Math.log(top))) ** 1.5 + raised(size, TOE_OFF).y * (1 - share) * (share > 0 ? 1 : 0)
   // (and swinging past the other its toe and heel clear the other's)
   clear(size, to, step.side, partner, faced, speed, Math.min(1, 2 * Math.sin(Math.PI * share)), PASS * size.leg)
   return to

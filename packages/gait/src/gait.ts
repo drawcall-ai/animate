@@ -16,6 +16,8 @@ const FAR = 4
 const SOFT = 0.03
 /** how strong the hips and a foot are (m/s²) */
 const STRENGTH = { hips: 300, foot: 2000 }
+/** how low the hips go at the least going along, in shares of how high they stand */
+const LOWEST = 0.737
 /** how much less than its length a leg reaches standing over a foot put down (in legs) */
 const SLACK = 0.023
 /** how long a foot takes to step where a story puts it, if it does not say (in beats) */
@@ -252,7 +254,9 @@ export class Gait {
     const speed = this.going.speed
     const middle = 1 - this.duty + this.duty * over(size, speed)
     const bounce = this.stepping ? bob(size, speed) * Math.cos(4 * Math.PI * (phase - middle)) : 0
-    const ride = ground.y + this.height - dip(size, speed) + bounce
+    // (held lower than he stands, he rides no lower for his stride than that; going along, no lower than a crouch, and running, as high as he stands)
+    const held = Math.abs(speed) > WALK.most * size.pace ? size.stand : Math.abs(speed) > STILL * size.pace ? Math.max(this.height, LOWEST * size.stand) : this.height
+    const ride = ground.y + held - Math.max(0, dip(size, speed) - (size.stand - held)) + bounce
     // (from the feet that are down by then, or on their way down)
     const down = SIDES.filter((side) => !this.held(side) && (!this.stepping || this.steps[side] || through(side, phase) >= 1 - this.duty))
     const reach = Math.max(...down.map((side) => this.holds(side, this.stands(side, ground, seconds), ground, facing)))
@@ -277,7 +281,7 @@ export class Gait {
     const pull = 9.81 / this.size.stand
     const often = (2 * Math.PI * this.rate) ** 2
     const swing = 1 - this.duty
-    return ((this.size.hip * pull) / (pull + often)) * Math.sin(2 * Math.PI * (phase - 0.25 - swing / 2))
+    return this.pelvis.over + ((this.size.hip * pull) / (pull + often)) * Math.sin(2 * Math.PI * (phase - 0.25 - swing / 2))
   }
 
   /** where the hips are to be in so long: over where he will be, riding and swaying with the stride, and facing so */

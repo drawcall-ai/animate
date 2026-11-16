@@ -14,6 +14,8 @@ const TURN = { stride: 0.1, most: 0.8, list: 0.09 / GRAVITY, rate: 0.9 }
  * to twice as deep and fast out of breath, which he runs out of and gets back so fast (in beats)
  */
 const IDLE = 2
+/** how soon he leaves his ease (in beats) */
+const LEAVES = 0.25
 const DRIFT = { over: 0.15, list: 0.025, swells: [29, 47] }
 const BREATH = { every: 14, lift: 0.02, runs: 20, recovers: 60 }
 
@@ -56,7 +58,7 @@ export class Pelvis {
   advance(dt: number, hips: Vector3, speed: number, up: number, facing: number, banks: number, feet: Record<Side, Foot>, free: boolean) {
     const { beat, pace } = this.size
     this.time += dt
-    this.idle = free ? Math.min(1, this.idle + dt / (IDLE * beat)) : 0
+    this.idle = free ? Math.min(1, this.idle + dt / (IDLE * beat)) : Math.max(0, this.idle - dt / (LEAVES * beat))
     const [slow, quick] = DRIFT.swells.map((beats) => Math.sin((2 * Math.PI * this.time) / (beats * beat)))
     this.drifts = (this.idle * (slow + quick)) / 2
     const runs = speed > WALK.most * pace ? 1 : 0

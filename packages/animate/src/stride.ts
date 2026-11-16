@@ -90,6 +90,8 @@ export class Stride {
   private lift = 0
   /** for how long no foot of his own has been on the ground (s) */
   private unheld = 0
+  /** the way he turns to face where he looks, until he faces it (rad about y) */
+  private toward?: number
 
   constructor(
     private readonly clock: Clock,
@@ -118,7 +120,7 @@ export class Stride {
   stands(side: Side) {
     const { gait } = this
     const foot = gait.feet[side]
-    return gait.steps[side] || gait.held(side) || gait.jumps ? undefined : foot.value.clone()
+    return gait.steps[side] || foot.outside || foot.frames.length || gait.jumps ? undefined : foot.value.clone()
   }
 
   /** a step of time: a foot the story has is where it has it, and the gait steps on, writing its frames anew */
@@ -250,6 +252,12 @@ export class Stride {
     const free = SIDES.filter((side) => joints.arms[side].first.reacts).length / SIDES.length
     // (looking somewhere, the trunk turns there as far as it leads the pelvis, the head the rest)
     const looks = this.looked && this.sight(this.looked)
+    // (standing, he turns to face where he looks once his head does not turn that far round, unless he is to face a way)
+    if (looks && gait.lead.velocity.length() < 0.3 && !gait.course && (this.toward !== undefined || Math.abs(wrap(looks.yaw - facing)) > LEADS.head)) {
+      const there = Math.abs(wrap(looks.yaw - facing)) < FACED
+      this.toward = there ? undefined : looks.yaw
+      gait.face(there ? undefined : { x: Math.sin(looks.yaw), z: Math.cos(looks.yaw) })
+    }
     const toward = looks ? clamp(looks.yaw - facing, -LEADS.trunk, LEADS.trunk) : clamp(going.aims, -LEADS.trunk, LEADS.trunk)
     const want = new Vector3(along + (looks ? -0.5 * looks.pitch : 0), pelvis.turn + free * (size.shoulder / size.arm) * swung + toward + this.posture.turn(now), -tilt)
     trunk.react(want, dt)
@@ -431,7 +439,9 @@ export class Stride {
         // (carried further than a step catches, he steps after the hips)
         const by = new Vector3(velocity.x, 0, velocity.z)
         gait.hips.velocity.add(by)
-        gait.lead.place.addScaledVector(by, by.length() / 6)
+        // (carried further than a step is worth, he is to rest there and steps after the hips; else he sways back over his feet)
+        const carries = by.lengthSq() / 6
+        if (carries > 0.114 * self.bones.size.leg) gait.lead.place.addScaledVector(by, carries / by.length())
       },
       jump(top: Xyz): Story<boolean> {
         gait.jump(top)
