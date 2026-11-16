@@ -155,7 +155,7 @@ export class Bound {
     if (!lead || this.channel.outside) return nothing()
     const frame = this.framed(place, how)
     const after = Math.max(this.now(), ...this.channel.frames.map((one) => one.at ?? 0))
-    frame.at = when.by !== undefined ? Math.max(when.by, after) : when.seconds !== undefined ? after + when.seconds : lead.first(frame, after)
+    frame.at = lead.moment(when.by !== undefined ? Math.max(when.by, after) : when.seconds !== undefined ? after + when.seconds : lead.first(frame, after))
     frame.leaves = lead.leaves(frame, when.by !== undefined)
     const written = this.channel.by(frame)
     this.changed()
@@ -169,7 +169,7 @@ export class Bound {
 
   /** it stops where it is, held there on him as he goes */
   cancel() {
-    this.channel.cancel()
+    this.channel.set(this.channel.value.clone(), this.channel.turn.clone())
     this.stay()
   }
 
@@ -180,7 +180,7 @@ export class Bound {
     const [at, into] = [new Vector3(), new Quaternion()]
     lead.root.state(this.now(), at, new Vector3(), into)
     const back = into.clone().invert()
-    this.channel.by({ on: lead.root, place: this.channel.value.clone().sub(at).applyQuaternion(back), turn: back.multiply(this.channel.turn), by: 'story' })
+    this.channel.by({ at: lead.moment(this.now()), on: lead.root, place: this.channel.value.clone().sub(at).applyQuaternion(back), turn: back.multiply(this.channel.turn), by: 'story' })
     this.changed()
   }
 

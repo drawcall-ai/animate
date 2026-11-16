@@ -8,7 +8,7 @@ import type { OnHim } from './movers'
  * how strong a hand and a foot are, how hard they can be pushed along at the most (in his paces a beat), and how far
  * each draws back before a fast arrival at the most (in lengths of its limb)
  */
-const END = { hand: { strength: 15, draw: 0.5 }, foot: { strength: 25, draw: 0.6 } }
+const END = { hand: { strength: 25, draw: 0.5 }, foot: { strength: 30, draw: 0.6 } }
 /** how far ahead the first moment a limb can reach something is looked for, and how finely (in his beats) */
 const LOOK = { far: 10, fine: 0.1 }
 /** how many times as long as the limb sways a fast arrival by a moment given well ahead swings for, drawn back first */
@@ -109,7 +109,8 @@ export class End {
   ) {
     const { strength, draw } = END[kind]
     const { pace, beat } = body.size
-    this.channel = new Channel(`${side} ${kind}`, (strength * pace) / beat, draw * limb.length)
+    // (a hand turns no faster than its wrist does)
+    this.channel = new Channel(`${side} ${kind}`, (strength * pace) / beat, draw * limb.length, limb.hand?.wrist.strength)
   }
 
   get name() {
@@ -151,7 +152,7 @@ export class End {
     }
     const frame = this.frame(place, how)
     const after = Math.max(this.body.time(), ...this.channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
-    frame.at = when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after)
+    frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
     frame.leaves = this.leaves(frame, when?.by !== undefined)
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     if ('target' in place) this.close(place.pose, frame.at - this.body.time())
@@ -185,9 +186,18 @@ export class End {
     return at - swing
   }
 
+  /** a moment is the first step of his time at or after it */
+  moment(at: number) {
+    const dt = tick(this.body.size)
+    return Math.ceil(at / dt - 1e-6) * dt
+  }
+
   /** writes a frame the story has sent: it is the story's from when it sets off; tells whether it was there at its moment */
   write(frame: Frame): Story<boolean> {
     const written = this.channel.by(frame)
+    // (what it was sent onto before matters no more once it is sent elsewhere)
+    const ons = this.channel.frames.map(({ on }) => (on && 'object' in on ? (on as { object: Object3D }).object : undefined))
+    for (const thing of this.on) if (!ons.includes(thing)) this.on.delete(thing)
     const tip = this.tips.get(frame)
     if (tip) this.tips.set(written, tip)
     const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
@@ -384,8 +394,9 @@ export class End {
     let best = { t: soonest, far: Infinity }
     for (let t = soonest; t < now + LOOK.far * body.size.beat; t += LOOK.fine * body.size.beat) {
       this.root.state(t, root, unused)
-      // (along the ground: how low it is he gets down for)
-      const far = Math.hypot(place(t).x - root.x, place(t).z - root.z) - EASE * limb.length
+      // (a hand's along the ground: how low it is he gets down for; a foot's from its hip)
+      const off = place(t).clone().sub(root)
+      const far = (this.kind === 'hand' ? Math.hypot(off.x, off.z) : off.length()) - EASE * limb.length
       const spared = this.kind === 'hand' || body.carrier.spare(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
       if (far <= 0 && spared) return t
       if (far < best.far) best = { t, far }

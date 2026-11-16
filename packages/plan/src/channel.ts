@@ -77,6 +77,8 @@ export class Channel implements Mover {
     readonly name: string,
     readonly strength: number,
     readonly draw: number,
+    /** how hard it can be turned at the most (rad/s²) */
+    readonly turning = Infinity,
   ) {}
 
   /** writes a frame: it goes there from the state it is in, after the frames before it */
@@ -230,6 +232,11 @@ export class Channel implements Mover {
       return hardest(this.from, this.to, when - from) > this.strength
     }
     let [when, slow] = [Math.max(asked, leaves + 1e-3), 0]
+    // (turned further than it can be turned in the time, it is there as soon after as it can be)
+    if (frame.turn && Number.isFinite(this.turning)) {
+      const angle = this.from.turn.angleTo(this.spun)
+      when = Math.max(when, leaves + Math.sqrt((6 * angle) / this.turning))
+    }
     // too hard: it sets off sooner, then arrives slower, and only at rest still too hard, later
     if (leaves > start && hard(when, 1)) leaves = hard(when, 1, start) ? start : between(start, leaves, (from) => !hard(when, 1, from))
     if (hard(when, 1)) {
@@ -326,6 +333,8 @@ export class Channel implements Mover {
       if (by > 1e-9) r.applyAxisAngle(rv.divideScalar(by), by)
       return out.copy(pivot).add(r)
     }
+    // (at its moment it is exactly as asked; on the way, how fast it goes is told over a little time)
+    if (s >= 1 - 1e-6) return void (place.copy(this.to.value), velocity.copy(this.to.velocity))
     const step = Math.min(1e-3, T / 4)
     const u = Math.min(1, s + step / T)
     at(s, place)
@@ -360,7 +369,7 @@ export class Channel implements Mover {
     this.state(now, this.value, this.velocity, this.turn)
     if (dt > 0 && !this.parent) turnFrom(was, this.turn, this.spin).applyQuaternion(was).divideScalar(dt)
     this.now = now
-    for (let head = this.frames[0]; head?.met && head.met.at <= now; head = this.frames[0]) {
+    for (let head = this.frames[0]; head?.met && head.met.at <= now + 1e-9; head = this.frames[0]) {
       this.short = { slow: head.met.slow, late: head.met.late }
       this.reached.add(head)
       this.last = this.frames.shift()
