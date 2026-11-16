@@ -47,7 +47,7 @@ him is read against his hips; one the game sets for the very moment is read in t
 
 ## Still to fix
 
-1. **Posture's own reach guess.** `posture.ts` still guesses how far he must bend and sink with a grid over a
-   simple shoulder model; it should ask the arm's solve, as the swing timing does.
+1. **Posture's own reach guess.** `posture.ts` still finds how far he must bend and sink with a grid (the shoulder
+   where the bones have it bent so, against a fixed reach); it should ask the arm's solve, as the swing timing does.
 2. **No package tests of their own** but plan's: everything else is tested through a whole `Body` in
    `packages/animate/test`.
