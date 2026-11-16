@@ -608,6 +608,9 @@ importers:
 
   packages/limbs:
     dependencies:
+      '@drawcall/plan':
+        specifier: workspace:*
+        version: link:../plan
       three:
         specifier: ^0.187.0
         version: 0.187.0

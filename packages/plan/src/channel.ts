@@ -250,11 +250,11 @@ export class Channel implements Mover {
       when = Math.max(when, leaves + Math.sqrt((6 * angle) / this.turning))
     }
     // too hard: it sets off sooner, then arrives slower, and only at rest still too hard, later
-    if (leaves > start && hard(when, 1)) leaves = hard(when, 1, start) ? start : between(start, leaves, (from) => !hard(when, 1, from))
+    if (leaves > start && hard(when, 1)) leaves = hard(when, 1, start) ? start : between(start, leaves, (from) => !hard(when, 1, from))[0]
     if (hard(when, 1)) {
-      const share = hard(when, 0) ? 0 : between(0, 1, (s) => !hard(when, s))
+      const share = hard(when, 0) ? 0 : between(0, 1, (s) => !hard(when, s))[0]
       slow = 1 - share
-      if (share === 0) when = between(when + 5, when, (w) => !hard(w, 0))
+      if (share === 0) when = between(when + 5, when, (w) => !hard(w, 0))[0]
     }
     const velocity = new Vector3().copy(frame.velocity ?? this.to.velocity.set(0, 0, 0)).multiplyScalar(1 - slow)
     // (told no turn, it keeps the one it had when it was fitted)

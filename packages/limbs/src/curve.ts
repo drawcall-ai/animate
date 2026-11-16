@@ -1,3 +1,4 @@
+import { between, cubic, hardest as push } from '@drawcall/plan'
 import { Vector3 } from 'three'
 import type { Xyz } from './world'
 
@@ -10,49 +11,15 @@ export const AXES = ['x', 'y', 'z'] as const
 const PAST = 0.02
 /** how many places along a way are looked at to tell whether it keeps within a range */
 const LOOKS = 8
-/** how a time is looked for: from the shortest tried and each try so many times longer, up to the longest (s), and then between two so many times over, halving */
-const TIMES = { shortest: 0.01, longer: 1.1, longest: 10, halvings: 10 }
-const gap = new Vector3()
-const push = new Vector3()
+/** how a time is looked for: from the shortest tried and each try so many times longer, up to the longest (s) */
+const TIMES = { shortest: 0.01, longer: 1.1, longest: 10 }
 const tried = new Vector3()
 const triedVelocity = new Vector3()
 
-/** where the one curve that leaves as it was going and arrives as asked with the least pushing is, a share `s` of the way through its `T` seconds */
-export function cubic(s: number, T: number, from: State, to: State, value: Vector3, velocity: Vector3) {
-  const [s2, s3] = [s * s, s * s * s]
-  velocity
-    .copy(from.value)
-    .multiplyScalar((6 * s2 - 6 * s) / T)
-    .addScaledVector(from.velocity, 3 * s2 - 4 * s + 1)
-    .addScaledVector(to.value, (6 * s - 6 * s2) / T)
-    .addScaledVector(to.velocity, 3 * s2 - 2 * s)
-  return value
-    .copy(from.value)
-    .multiplyScalar(2 * s3 - 3 * s2 + 1)
-    .addScaledVector(from.velocity, (s3 - 2 * s2 + s) * T)
-    .addScaledVector(to.value, 3 * s2 - 2 * s3)
-    .addScaledVector(to.velocity, (s3 - s2) * T)
-}
+export { between, cubic } from '@drawcall/plan'
 
 /** how hard a part is pushed at the most on that curve, at its start or at its end: in times its `strength` */
-export function hardest(from: State, to: State, seconds: number, strength: number) {
-  gap.copy(to.value).sub(from.value)
-  const times = (far: number, was: number, then: number) => {
-    push.copy(gap).multiplyScalar(far / seconds)
-    return push.addScaledVector(from.velocity, was).addScaledVector(to.velocity, then).length() / strength
-  }
-  return Math.max(times(6, -4, -2), times(-6, 2, 4)) / seconds
-}
-
-/** the most that `holds` and the least that does not, between one that does and one that does not: halving */
-export function between(short: number, long: number, holds: (value: number) => boolean) {
-  for (let k = 0; k < TIMES.halvings; k++) {
-    const middle = (short + long) / 2
-    if (holds(middle)) short = middle
-    else long = middle
-  }
-  return [short, long]
-}
+export const hardest = (from: State, to: State, seconds: number, strength: number) => push(from, to, seconds) / strength
 
 /** how far a value goes along or about an axis: what is at an end of its range still is within it */
 export function bounds(range: Range, axis: (typeof AXES)[number]) {

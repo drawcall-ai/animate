@@ -1,14 +1,15 @@
-import { Quaternion, Vector3 } from 'three'
+import { Quaternion, Vector3, type Vector3Like } from 'three'
 
-/** a place or a turn (as a rotation vector, rad) and how fast it changes */
+/** a place or a turn (as a rotation vector, rad) and how fast it changes; and the same as anything with x, y and z tells it */
 export type State = { value: Vector3; velocity: Vector3 }
+type Told = { value: Vector3Like; velocity: Vector3Like }
 
 /**
  * Where the smoothest way from one state to another in `T` seconds is a share `s` through, and how fast it goes there:
  * the cubic that leaves as it was going and arrives as asked. A fast arrival draws it back first, and one that leaves
  * fast swings on before it turns.
  */
-export function cubic(s: number, T: number, from: State, to: State, value: Vector3, velocity: Vector3) {
+export function cubic(s: number, T: number, from: Told, to: Told, value: Vector3, velocity: Vector3) {
   const [s2, s3] = [s * s, s * s * s]
   velocity
     .copy(from.value)
@@ -27,21 +28,21 @@ export function cubic(s: number, T: number, from: State, to: State, value: Vecto
 const gap = new Vector3()
 const push = new Vector3()
 /** how hard that cubic pushes at the most, at its start or its end (m/s²): it is hardest at one of them */
-export function hardest(from: State, to: State, T: number) {
+export function hardest(from: Told, to: Told, T: number) {
   gap.subVectors(to.value, from.value)
   const at = (far: number, was: number, then: number) =>
     push.copy(gap).multiplyScalar(far / T).addScaledVector(from.velocity, was).addScaledVector(to.velocity, then).length() / T
   return Math.max(at(6, -4, -2), at(-6, 2, 4))
 }
 
-/** the most that `holds` between one value that does and one that does not, halving */
+/** the most that `holds` and the least that does not, between one value that does and one that does not, halving */
 export function between(holds: number, fails: number, test: (value: number) => boolean) {
   for (let k = 0; k < 12; k++) {
     const middle = (holds + fails) / 2
     if (test(middle)) holds = middle
     else fails = middle
   }
-  return holds
+  return [holds, fails]
 }
 
 const half = new Quaternion()
