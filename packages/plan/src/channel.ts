@@ -85,6 +85,8 @@ export class Channel implements Mover {
   by(frame: Frame): Frame {
     if (this.parent) return this.parent.on.by(this.through(frame))
     const planned: Planned = { ...frame }
+    // (a frame written while it swings on takes over from the swing, from the state it is in)
+    if (frame.by !== 'on' && this.frames.some((one) => one.by === 'on')) this.frames.splice(0, this.frames.length, ...this.frames.filter((one) => one.by !== 'on'))
     const k = this.frames.findIndex((one) => (one.at ?? Infinity) > (frame.at ?? Infinity))
     this.frames.splice(k < 0 ? this.frames.length : k, 0, planned)
     this.replan(planned)

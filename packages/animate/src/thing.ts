@@ -169,10 +169,10 @@ export class Bound {
     return this.channel.met(frame) && this.there
   }
 
-  /** it stops where it is, held there on him as he goes */
+  /** it goes on from the state it is in: moving, it swings on; at rest, it is held where it is, on him as he goes */
   cancel() {
-    this.channel.set(this.channel.value.clone(), this.channel.turn.clone())
-    this.stay()
+    this.channel.cancel()
+    if (!this.channel.busy) this.stay()
   }
 
   /** held where it is now, on him as he goes */
