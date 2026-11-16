@@ -106,7 +106,8 @@ export class Body {
   /** what a frame on a thing moves on: its channel if it is bound to him, or the thing as it is seen to move */
   private mover(thing: Object3D): Mover {
     const bound = this.things.get(thing)
-    if (bound) return bound.channel
+    // (bound with no hand on it yet, it is the world's)
+    if (bound?.hands.length) return bound.channel
     let watched = this.watched.get(thing)
     if (!watched) this.watched.set(thing, (watched = this.seen(thing)))
     watched.look(this.time)

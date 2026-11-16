@@ -152,10 +152,10 @@ export class Clock {
       }
     }
     this.draw(0)
-    // a thing the body moves is shown where the first hand on it has it, its plan going on as planned
+    // a thing the body moves is shown where the first hand on it has it, its plan going on as planned; with no hand on it, it is the world's
     for (const thing of things.values()) {
       const lead = thing.hands[0]?.end
-      thing.write(lead && !thing.outside ? bones.wrist[lead.side].clone().sub(lead.channel.value) : undefined)
+      if (lead && !thing.outside) thing.write(bones.wrist[lead.side].clone().sub(lead.channel.value))
     }
     for (const side of SIDES) {
       const [hand, foot] = [ends.hand[side], ends.foot[side]]

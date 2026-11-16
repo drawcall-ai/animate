@@ -96,8 +96,8 @@ export class Asks implements Posture {
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
       // (nor for a place on him, which goes down with him)
-      const soon = due - time <= LEAD.down * this.size.beat && (channel.bound ?? channel).goal?.on !== end.root
-      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), ...(soon ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }) }
+      const lowers = (channel.bound ?? channel).goal?.on !== end.root
+      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), ...(lowers ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }) }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
       all.turn += going ? one.turn : 0
