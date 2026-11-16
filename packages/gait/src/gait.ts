@@ -263,7 +263,9 @@ export class Gait {
     // (from the feet that are down by then, or on their way down)
     const down = SIDES.filter((side) => !this.held(side) && (!this.stepping || this.steps[side] || through(side, phase) >= 1 - this.duty))
     const reach = Math.max(...down.map((side) => this.holds(side, this.stands(side, ground, seconds), ground, facing)))
-    if (!down.length) return Math.min(ride, ground.y + size.stand)
+    // (as far ahead as the feet are known: past their next footfalls, they will have stepped on)
+    const known = Math.max(0, ...SIDES.map((side) => (this.steps[side]?.lands ?? this.time) - this.time)) + this.duty / this.rate
+    if (!down.length || seconds > known) return Math.min(ride, ground.y + size.stand)
     const soft = SOFT * size.leg
     const off = reach - ride
     return Math.min(ride + Math.min(0, off) - soft * Math.log1p(Math.exp(-Math.abs(off) / soft)), ground.y + size.stand)

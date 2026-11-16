@@ -52,7 +52,8 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   const crouch = Math.min((1 - LOWEST) * stand, Math.max((up * up) / (2 * PUSH.up), (shove * up) / (2 * hard)))
   const lasts = (2 * crouch) / up
   // (standing, he lets himself down into the crouch no faster than he falls)
-  const leaves = Math.max(soonest, now + lasts + Math.sqrt((2 * crouch) / (DROP * GRAVITY)))
+  const drop = Math.sqrt((2 * crouch) / (DROP * GRAVITY))
+  const leaves = Math.max(soonest, now + lasts + drop)
   const wanted = new Vector3(top.x - from.x, 0, top.z - from.z).divideScalar(flies + lasts / 2)
   const most = hard * lasts
   const across = led ? going.clone() : wanted.sub(going).clampLength(0, most).add(going)
@@ -61,7 +62,15 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   const fall = (t: number) => takeoff.clone().addScaledVector(velocity, t).setY(takeoff.y + up * t - (GRAVITY / 2) * t * t)
   const lands = leaves + air
   const place = fall(air)
+  // (he lets himself drop from where his hips were going to be by then, as high as they go now: so the whole of the jump is planned from now)
+  const drops = { at: leaves - lasts - drop, place: new Vector3(), velocity: new Vector3(), by: 'jump' }
+  hipsOf.state(drops.at, drops.place, drops.velocity)
+  const walks = new Vector3()
+  hipsOf.state(now, walks, new Vector3())
+  drops.place.y = Math.max(drops.place.y, walks.y)
+  drops.velocity.y = 0
   const hips: Frame[] = [
+    ...(drops.at > now ? [drops] : []),
     // (the drop and the push one movement: going on as he comes, he is pushed to how he leaves)
     { at: leaves - lasts, place: from.clone().addScaledVector(going, -lasts / 2).setY(ground + stand - crouch), velocity: going.clone().add(across).multiplyScalar(0.5), by: 'jump' },
     { at: leaves, place: takeoff, velocity, by: 'jump' },
