@@ -16,8 +16,8 @@ const DOWN = { bend: 1.1, sink: 0.62 }
 const LOW = 0.4
 /** how much of an arm a hand reaches without stretching */
 const REACH = 0.97
-/** how far ahead of a hand the hips and the trunk move for it (in his beats): the hips first, as the parts nearer the middle lead; and how long getting down takes */
-const LEAD = { hips: 1, trunk: 0.5, down: 1 }
+/** how far ahead of a hand the hips and the trunk move for it (in his beats): the hips first, as the parts nearer the middle lead; how far ahead what he gets down for is looked at, and how long before a low place he starts getting down for it */
+const LEAD = { hips: 1, trunk: 0.5, down: 1, lowered: 2 }
 /** what bending costs against getting down, for a hand above the knees and below them: a low one is reached with the legs */
 const COST = { high: { bend: 0.6, sink: 0.5 }, low: { bend: 0.9, sink: 0.25 } }
 
@@ -96,7 +96,7 @@ export class Asks implements Posture {
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
       // (nor for a place on him, which goes down with him)
-      const lowers = (channel.bound ?? channel).goal?.on !== end.root
+      const lowers = due - time <= LEAD.lowered * this.size.beat && (channel.bound ?? channel).goal?.on !== end.root
       const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), ...(lowers ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }) }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
