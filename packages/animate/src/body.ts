@@ -24,7 +24,7 @@ const rigs = new WeakMap<Object3D, Body>()
  */
 export class Body {
   /** whether bodies made from now on walk and run by the frame gait (`@drawcall/gait`) rather than the old locomotion */
-  static frames = false
+  static frames = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.GAIT_FRAMES === '1'
   /** how large he is, as the rig is at rest */
   readonly size: Size
   private readonly bones: Bones

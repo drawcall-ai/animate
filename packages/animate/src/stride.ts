@@ -95,8 +95,6 @@ export class Stride {
     private readonly joints: Joints,
   ) {
     const gait = (this.gait = new Gait(bones.size))
-    gait.low = (t) => this.posture.low(t)
-    gait.shift = (t) => this.posture.shift(t)
     this.hips.value.copy(gait.hips.value)
     this.carrier = this.carried()
     this.going = this.words()
@@ -137,7 +135,9 @@ export class Stride {
   pose(dt: number, feet: Record<Side, Foothold>) {
     const { gait, joints, bones } = this
     const { size } = bones
-    this.hips.value.copy(gait.hips.value)
+    // (the hips as planned, let down and shifted ahead for what the hands ask)
+    const now = gait.time
+    this.hips.value.copy(gait.hips.value).add({ x: Math.sin(this.facing) * this.posture.shift(now), y: -this.posture.low(now), z: Math.cos(this.facing) * this.posture.shift(now) })
     this.hips.velocity.copy(gait.hips.velocity)
     for (const side of SIDES) {
       const foot = gait.feet[side]
@@ -167,7 +167,7 @@ export class Stride {
   private hip(side: Side, to: Vector3) {
     const { turn, list } = this.gait.pelvis
     to.set(Math.cos(turn) * Math.cos(list), Math.sin(list), -Math.sin(turn) * Math.cos(list)).multiplyScalar(SIGN[side] * this.bones.size.hip)
-    return to.applyAxisAngle(UP, this.facing).add(this.gait.hips.value)
+    return to.applyAxisAngle(UP, this.facing).add(this.hips.value)
   }
 
   /** how far a foot is bent toe down against its shin (rad): on the ground flat or on its ball, in the air square to its shin, no further than the ground lets it */
@@ -333,12 +333,7 @@ export class Stride {
         gait.feet[side].state(gait.time + seconds, to, new Vector3())
         return to
       },
-      spare(side, seconds, until) {
-        if (gait.steps[side]) return false
-        if (!gait.stepping) return true
-        const lifts = (((side === 'left' ? 0 : 0.5) - gait.phase) % 1 + 1) % 1 / gait.rate
-        return lifts > until || lifts < seconds - (1 - gait.duty) / gait.rate
-      },
+      spare: (side, seconds, until) => gait.spares(side, seconds, until),
       stale() {},
       take(side, span) {
         if (span) self.taken[side] = span
