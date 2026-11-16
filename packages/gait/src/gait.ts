@@ -69,7 +69,7 @@ export class Gait {
   height: number
   /** a run or a walk he is led along, the foot to plant where it ends and when the hips come over it, and the foot he stays on there */
   course?: Course
-  private plant?: { side: Side; at: number; stride: number }
+  private plant?: { side: Side; at: number; stride: number; lands?: number; place?: Vector3 }
   private planted?: Side
   /** whether he keeps facing as he did, stepping to a place close by */
   private keeps = false
@@ -150,7 +150,7 @@ export class Gait {
     // (to a place close by he keeps facing as he does, and backs or sidesteps there)
     if (lead.face === undefined && place.distanceTo(lead.place) < KEEPS * size.leg) [lead.face, this.keeps] = [lead.facing, true]
     const comes = course.when(place)
-    if (plant) this.plant = { side: plant, at: comes, stride: -Infinity }
+    if (plant) this.plant = { side: plant, at: comes, stride: -Infinity, place }
     this.plan()
     return comes
   }
@@ -178,12 +178,13 @@ export class Gait {
    */
   spares(side: Side, seconds: number, until: number) {
     const now = this.time
-    if (this.plant && now + seconds < this.plant.at - (over(this.size, this.going.speed) * this.duty) / this.rate) return false
     const partner = other(side)
+    const planted = this.plant && this.landing(this.plant)
+    if (this.plant && now + seconds < this.plant.lands!) return false
     const swing = 1 - this.duty
     const down = (t: number) => !this.stepping || this.held(side) || through(partner, this.phase + this.rate * t) >= swing
     if (!down(seconds)) return false
-    const stands = this.steps[partner]?.to ?? this.feet[partner].value
+    const stands = (this.plant?.side === partner && planted?.spot) || (this.steps[partner]?.to ?? this.feet[partner].value)
     const hips = new Vector3()
     this.hips.state(now + until, hips, new Vector3())
     return this.holds(partner, stands, hips.clone().setY(this.lead.place.y), this.going.facing) + SLACK * this.size.leg >= hips.y
@@ -394,13 +395,12 @@ export class Gait {
       this.stepping = true
       this.phase = (strays.left >= strays.right ? 0 : 0.5) - 1e-6
     }
-    // (the strides come out even onto the planted foot: down as the hips come over it from behind)
+    // (the strides come out even onto the planted foot, on as many strides as come nearest his own)
     const plant = this.plant
     if (plant && this.stepping) {
-      const lands = plant.at - (over(size, going.speed) * this.duty) / this.rate - now
-      // (as many strides as come nearest his own at the speed he goes there on average)
-      const mean = this.path(lands).distanceTo(this.lead.place) / Math.max(lands, 1e-3)
-      if (lands > 0) this.rate = this.timed(lands, swingShare, rate(size, { ...going, speed: mean, faster: 0 }))
+      const { natural } = this.landing(plant)
+      const lands = plant.lands! - now
+      if (lands > 0) this.rate = this.timed(lands, swingShare, natural)
       else if (!this.steps[plant.side]) [this.plant, this.planted] = [undefined, this.course?.way.arrive === 0 ? plant.side : undefined]
     }
     const was = this.phase
@@ -484,7 +484,7 @@ export class Gait {
       return
     }
     const [before, after] = [through(side, was), through(side, this.phase)]
-    if (this.stepping && after < before && !this.steps[side] && (moving || strays > (TOGETHER * size.leg) / 2)) {
+    if (this.stepping && after < before && !this.steps[side] && !this.planted && (moving || strays > (TOGETHER * size.leg) / 2)) {
       const pointed = yawOf(foot.turn)
       this.steps[side] = { side, from: foot.value.clone(), leaves: now, to: foot.value.clone(), lands: now, pointed, toes: pointed }
     }
@@ -500,10 +500,30 @@ export class Gait {
     const lands = (swingShare - after) / this.rate
 
     const { to, toes } = footfall(size, going, side, lands, this.duty / this.rate, last, (seconds) => this.path(seconds))
+    // (the planted foot comes down at its place along the way)
+    const plant = this.plant
+    if (plant?.place && plant.side === side && Math.abs(now + lands - plant.lands!) < 0.5 / this.rate) {
+      const way = new Vector3(Math.sin(going.heading), 0, Math.cos(going.heading))
+      to.addScaledVector(way, plant.place.clone().sub(to).dot(way))
+    }
     to.y = this.lead.place.y + size.ankle
     Object.assign(step, { to, toes, lands: now + lands })
     foot.cancel('gait')
     for (const frame of swing(size, step, now, going.speed, feet[partner].value, going.facing)) foot.by(frame)
+  }
+
+  /** when the planted foot comes down, told once: as far ahead of the hips as they come over it from */
+  private landing(plant: NonNullable<Gait['plant']>) {
+    const now = this.time
+    const spot = this.path(plant.at - now)
+    const far = spot.distanceTo(this.lead.place)
+    // (coming to rest on it, how fast he goes there on average; arriving going on, how fast he arrives)
+    const mean = this.course?.way.arrive || far / Math.max(plant.at - now, 1e-3)
+    const going = { ...this.going, speed: mean, faster: 0 }
+    const natural = rate(this.size, going)
+    const short = (over(this.size, mean) * duty(this.size, going, 1 / natural) * mean) / natural
+    plant.lands ??= this.course ? this.course.when(spot.lerp(this.lead.place, Math.min(1, short / Math.max(far, 1e-6)))) : plant.at - short / Math.max(mean, 1e-3)
+    return { natural, spot: this.path(plant.at - now) }
   }
 
   /**
