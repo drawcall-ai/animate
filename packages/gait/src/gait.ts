@@ -314,6 +314,14 @@ export class Gait {
   /** a foot a story has, from outside the gait, is where it is now; with none, it is the gait's again and steps home */
   hold(side: Side, place?: { x: number; y: number; z: number }) {
     const foot = this.feet[side]
+    // (given back in the air, it comes down from there into his stride, no faster than it falls: the clock has it so far through its step)
+    const [ground, high] = [this.lead.place.y + this.size.ankle, foot.value.y - this.lead.place.y - this.size.ankle]
+    if (!place && foot.outside && high > SOFT * this.size.leg) {
+      const through = Math.max(0, 1 - this.duty - this.rate * Math.sqrt((2 * high) / GRAVITY))
+      ;[this.stepping, this.phase] = [true, start(side) + through]
+      const pointed = yawOf(foot.turn)
+      this.steps[side] = { side, from: foot.value.clone().setY(ground), leaves: this.time - through / this.rate, to: foot.value.clone(), lands: this.time, pointed, toes: pointed }
+    }
     foot.outside = place !== undefined
     if (place) foot.value.copy(place)
   }
@@ -411,7 +419,7 @@ export class Gait {
     const was = this.phase
     // (a foot down that its leg no longer reaches from where the hips are hurries the clock on to its share)
     const hips0 = hips.value.clone().setY(this.lead.place.y)
-    const behind = !this.plant && !this.jumping && SIDES.some((side) => !this.steps[side] && this.holds(side, feet[side].value, hips0, going.facing) < hips.value.y)
+    const behind = !this.plant && !this.jumping && !this.steps.left && !this.steps.right && SIDES.some((side) => !this.steps[side] && this.holds(side, feet[side].value, hips0, going.facing) < hips.value.y)
     if (this.stepping) this.phase += this.rate * (behind ? CATCH : 1) * dt
     this.plan()
     const stance = this.stance()

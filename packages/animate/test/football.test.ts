@@ -13,7 +13,8 @@ test('the shot: what is written holds at the strike, the body does the rest, and
   const ball = ballAt(5.2)
   body.play(shot(body, ball))
   let struck: { speed: number; up: number; plant: number } | undefined
-  let [drawn, risen, back] = [0, 0, 0]
+  let [drawn, risen, back, dropped] = [0, 0, 0, 0]
+  const was = body.foot.right.value.clone()
   const steps: string[] = []
   const stood = { left: true, right: true }
   for (let n = 0; n < 2000 && body.playing; n++) {
@@ -30,6 +31,9 @@ test('the shot: what is written holds at the strike, the body does the rest, and
     }
     if (struck) risen = Math.max(risen, body.foot.right.value.y)
     else drawn = Math.max(drawn, body.foot.right.value.y)
+    // (on its way down after the kick, the foot comes down as fast as a swung leg goes, never in a frame)
+    if (struck && body.foot.right.value.y < risen - 0.05) dropped = Math.max(dropped, body.foot.right.value.distanceTo(was) / tick(body.size))
+    was.copy(body.foot.right.value)
     back = Math.min(back, degrees(body.trunk.value.x))
   }
   // written: the foot meets the ball at 20 m/s rising 8.6°, which sends it off at 27, with the left foot beside it
@@ -43,6 +47,7 @@ test('the shot: what is written holds at the strike, the body does the rest, and
   expect(drawn).toBeGreaterThan(0.2)
   expect(risen).toBeGreaterThan(0.25)
   expect(back).toBeLessThan(-10)
+  expect(dropped).toBeLessThan(8)
   expect(body.playing).toBe(false)
   expect(body.hips.value.y).toBeCloseTo(body.size.stand, 1)
   // feet side by side: within a tenth of a metre of each other
