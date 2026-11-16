@@ -113,12 +113,15 @@ export class Asks implements Posture {
       const [hand, there] = [new Vector3(), new Vector3()]
       channel.state(time, hand, new Vector3())
       // (a hand on a thing is where that is sent)
-      const due = Math.max(time, (channel.bound ?? channel).frames[0]?.at ?? time)
+      const next = (channel.bound ?? channel).frames[0]?.at
+      // (for a frame still to come, at its moment; one met already is done with)
+      const passed = next !== undefined && next < time - 1e-6 * this.size.beat
+      const due = next !== undefined && !passed ? next : time
       channel.state(due, there, new Vector3())
       const on = (at: Vector3) => at.sub(hips).applyAxisAngle(new Vector3(0, 1, 0), -facing)
       // (nor for a place on him, or on a thing carried with him, which goes down with him)
       const held = (channel.bound ?? channel).goal?.on
-      const lowered = held !== end.root && !(held instanceof Watched && held.carried) ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }
+      const lowered = !passed && held !== end.root && !(held instanceof Watched && held.carried) ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }
       // (from as long before as getting down that far takes him)
       const { sinks, bends } = this.leads(lowered)
       const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: due - time <= bends ? lowered.bend : 0, sink: due - time <= sinks ? lowered.sink : 0 }
