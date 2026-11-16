@@ -62,7 +62,9 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
   const to = wrist.clone().sub(shoulder).applyQuaternion(trunk.clone().invert())
   const palm = hand.palm.clone().applyQuaternion(turn)
   const pointing = DOWN.clone().applyQuaternion(turn)
-  const pose = (swung: number) => {
+  const pose = (swinging: number) => {
+    // (an elbow swings out or in so far from hanging under the arm at the most)
+    const swung = Math.max(-SWIVEL.most, Math.min(SWIVEL.most, swinging))
     const { first, fold } = arm.reach(to, swung)
     const asked = read(first, arm.first.value)
     // (what a joint cannot turn to costs: the hand comes short by it)
