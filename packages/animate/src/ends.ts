@@ -1,8 +1,9 @@
-import { DOWN, EXACT, type Grip, type Limb, type Pose, type Side, type Size, SLACK, type Story, sway, tick, type Touch, waits, type Xyz } from '@drawcall/limbs'
+import { DOWN, EASY, EXACT, type Grip, type Limb, type Pose, type Side, type Size, SLACK, type Story, sway, tick, type Touch, waits, type Xyz } from '@drawcall/limbs'
 import type { Carrier } from '@drawcall/locomotion'
-import { Channel, type Frame, type Mover } from '@drawcall/plan'
+import { between, Channel, type Frame, hardest, type Mover } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { OnHim } from './movers'
+import { room } from './solve'
 
 /**
  * how strong a hand and a foot are, how hard they can be pushed along at the most (in his paces a beat), and how far
@@ -11,12 +12,6 @@ import type { OnHim } from './movers'
 const END = { hand: { strength: 25, draw: 0.5 }, foot: { strength: 30, draw: 0.6 } }
 /** how far ahead the first moment a limb can reach something is looked for, and how finely (in his beats) */
 const LOOK = { far: 10, fine: 0.1 }
-/** how many times as long as the limb sways a fast arrival by a moment given well ahead swings for, drawn back first */
-const SWING = 1.4
-/** how far a fast arrival draws back is `velocity × swing × 4/27` */
-const DRAW = 27 / 4
-/** how far a limb draws its end back before a fast arrival at the most: in along itself, in lengths of it, and round its first joint, in radians */
-const DRAWS = { in: 0.5, round: 1.2 }
 /** how much of its length a limb reaches at its ease */
 const EASE = 0.97
 
@@ -156,37 +151,48 @@ export class End {
     frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
     // (a hand told no moment is there once the whole of him can have it there: asked of him first, so that he gets down for it, and then looked for as he will be)
     if (this.kind === 'hand' && when?.by === undefined && when?.seconds === undefined) frame.at = this.moment(this.reached(frame, after))
-    frame.leaves = this.leaves(frame, when?.by !== undefined)
+    // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
+    if (this.kind === 'foot' && !frame.velocity) frame.leaves = frame.at - sway(this.limb) / 2
+    frame.leaves ??= this.leaves(frame)
     // (a grip is handed over whole: the fingers close as it has them, by the moment the hand is on the thing)
     if ('target' in place) this.close(place.pose, frame.at - this.body.time())
     return this.write(frame)
   }
 
   /**
-   * when it sets off for a frame: a fast arrival by a moment given well ahead swings for as long as the limb sways
-   * there and back, drawn back first; one at the first moment it can for half that, a short wind-up; a foot steps
-   * off for half that; and one at rest as late as it can at its ease
+   * when a fast arrival round where the limb starts sets off: it swings for as long as takes it from as far back as it
+   * needs to come up to speed at its ease, no further back than the limb goes, without drawing back again,
+   * `3 × how far round ÷ how fast round`, and no quicker than it is strong enough for. None for one at rest, one that
+   * cannot be drawn back at all, or one that does not go round.
    */
-  leaves(frame: Frame, given: boolean) {
-    const velocity = new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 })
-    const at = frame.at ?? 0
-    if (velocity.lengthSq() === 0 && this.kind === 'hand') return undefined
-    let swing = sway(this.limb) * (given && this.kind === 'hand' ? SWING : 0.5)
-    // (a hand swings round its shoulder as far as it likes, but draws in along its arm only so far: it sets off no
-    // sooner than draws it back so far either way, `velocity × swing × 4/27`)
-    const [root, moving, place, into] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion()]
-    this.root.state(at, root, moving)
-    if (frame.on) frame.on.state(at, place, new Vector3(), into)
-    place.add(new Vector3().copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(into))
-    const out = place.sub(root)
-    const far = Math.max(out.length(), 1e-6)
-    velocity.sub(moving)
-    const along = Math.abs(velocity.dot(out)) / far
-    const round = Math.sqrt(Math.max(0, velocity.lengthSq() - along * along))
-    const { length } = this.limb
-    if (along > 0) swing = Math.min(swing, (DRAW * DRAWS.in * length) / along)
-    if (round > 0) swing = Math.min(swing, (DRAW * DRAWS.round * far) / round)
-    return at - swing
+  leaves(frame: Frame): number | undefined {
+    const speed = new Vector3().copy(frame.velocity ?? { x: 0, y: 0, z: 0 })
+    if (speed.lengthSq() === 0 || frame.at === undefined) return undefined
+    const [root, moving, place, into, facing] = [new Vector3(), new Vector3(), new Vector3(), new Quaternion(), new Quaternion()]
+    this.root.state(frame.at, root, moving, facing)
+    if (frame.on) frame.on.state(frame.at, place, new Vector3(), into)
+    const out = place.add(new Vector3().copy(frame.place ?? { x: 0, y: 0, z: 0 }).applyQuaternion(into)).sub(root)
+    const axis = out.clone().cross(speed.sub(moving))
+    const round = axis.length() / Math.max(out.lengthSq(), 1e-9)
+    if (round < 1e-3) return undefined
+    axis.normalize()
+    const ease = (EASY * this.channel.strength) / out.length()
+    const back = Math.min(this.room(out, axis), (round * round) / (2 * ease))
+    if (back < 1e-3) return undefined
+    // (and no quicker than it is strong enough to come up to speed in, drawn back further on the way if it must)
+    const far = back * out.length()
+    const fast = speed.length()
+    const strong = (T: number) => hardest({ value: { x: 0, y: 0, z: 0 }, velocity: { x: 0, y: 0, z: 0 } }, { value: { x: far, y: 0, z: 0 }, velocity: { x: fast, y: 0, z: 0 } }, T) <= EASY * this.channel.strength
+    const [least, most] = [(3 * back) / round, (4 * fast) / (EASY * this.channel.strength)]
+    return frame.at - (strong(least) ? least : between(Math.max(most, least), least, strong)[0])
+  }
+
+  /** how far round `axis` behind a place `out` from where it starts in the scene it can be drawn back (rad) */
+  room(out: Vector3, axis: Vector3) {
+    const facing = new Quaternion()
+    this.root.state(this.body.time(), new Vector3(), new Vector3(), facing)
+    const back = facing.invert()
+    return room(this.limb, out.clone().applyQuaternion(back), axis.clone().applyQuaternion(back))
   }
 
   /** a moment is the first step of his time at or after it */

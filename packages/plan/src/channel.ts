@@ -254,10 +254,11 @@ export class Channel implements Mover {
       return hardest(this.from, this.to, when - from) > this.strength
     }
     let [when, slow] = [Math.max(asked, leaves + 1e-3), 0]
-    // (turned further than it can be turned in the time, it is there as soon after as it can be)
+    // (turned further than it can be turned in the time, it sets off sooner, and only if it cannot is there as soon after as it can be)
     if (frame.turn && Number.isFinite(this.turning)) {
-      const angle = this.from.turn.angleTo(this.spun)
-      when = Math.max(when, leaves + Math.sqrt((6 * angle) / this.turning))
+      const turns = Math.sqrt((6 * this.from.turn.angleTo(this.spun)) / this.turning)
+      leaves = Math.max(start, Math.min(leaves, when - turns))
+      when = Math.max(when, leaves + turns)
     }
     // too hard: it sets off sooner, then arrives slower, and only at rest still too hard, later
     if (leaves > start && hard(when, 1)) leaves = hard(when, 1, start) ? start : between(start, leaves, (from) => !hard(when, 1, from))[0]

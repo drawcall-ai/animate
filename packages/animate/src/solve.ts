@@ -49,11 +49,12 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
   if (part) {
     const tip = wrist.clone()
     let at = part.clone().applyQuaternion(turn).negate().add(tip)
-    for (let k = 0, moved = 1; k < 20 && moved > 1e-4; k++) {
+    for (let k = 0, moved = 1; k < 30 && moved > 1e-4; k++) {
       const posed = reachArm(arm, shoulder, trunk, at, turn, swivel)
       const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(posed.first))).multiply(new Quaternion().setFromEuler(euler.set(posed.fold, 0, 0)))
       const lies = bent(forearm, posed.wrist, new Quaternion())
-      const next = tip.clone().sub(part.clone().applyQuaternion(lies))
+      // (halfway each try: a wrist at its stop can have it go to and fro)
+      const next = tip.clone().sub(part.clone().applyQuaternion(lies)).lerp(at, k > 4 ? 0.5 : 0)
       moved = next.distanceTo(at)
       at = next
     }
@@ -97,4 +98,20 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
 export function reachLeg(leg: Limb, hip: Vector3, toes: number, ankle: Vector3) {
   const { first, fold } = leg.reach(ankle.clone().sub(hip).applyAxisAngle(UP, -toes))
   return { first: within(first.clone(), RANGE.thigh), fold: Math.min(RANGE.shin.x[1], Math.max(RANGE.shin.x[0], fold)) }
+}
+
+/**
+ * how far round `axis` behind a place `out` from where a limb starts it can be drawn back, in the frame of the trunk,
+ * no joint at its stop (rad): as far as the limb's own solve reaches
+ */
+export function room(limb: Limb, out: Vector3, axis: Vector3) {
+  // (a turn is within its range if any way of reading it is: a full turn apart, or turned half round about each axis)
+  const within = (turn: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) =>
+    [turn, new Vector3(turn.x + Math.PI, Math.PI - turn.y, turn.z + Math.PI)].some((way) =>
+      [-FULL, 0, FULL].some((x) => [-FULL, 0, FULL].some((z) => beyond(way.clone().add(new Vector3(x, 0, z)), range) < 1e-3)),
+    )
+  const reaches = (to: Vector3) => (limb.hand ? [-0.6, 0, 0.6].some((swivel) => within(limb.reach(to, swivel).first.clone(), RANGE.arm)) : within(limb.reach(to).first.clone(), RANGE.thigh))
+  let back = 0
+  while (back < 1.5 * Math.PI && reaches(out.clone().applyAxisAngle(axis, -(back + SWIVEL.fine)))) back += SWIVEL.fine
+  return back
 }
