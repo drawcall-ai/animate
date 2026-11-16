@@ -4,6 +4,14 @@ import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import { ARM, fore, pistol, pocket, rifle } from '../../../examples/shooter/rifle'
 import { Body } from '../src'
+import { RANGE } from '@drawcall/limbs'
+
+/** how far a turn is past a range, summed over its axes (rad) */
+const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) =>
+  (['x', 'y', 'z'] as const).reduce((sum, axis) => {
+    const [least, most] = range[axis] ?? [-Infinity, Infinity]
+    return sum + Math.max(0, least - value[axis], value[axis] - most)
+  }, 0)
 
 const FRAME = 1 / 60
 const UP = new Vector3(0, 1, 0)
@@ -264,7 +272,7 @@ function rifleman() {
 }
 
 test.each([1, 2])(
-  'a rifle the game sweeps half round him and back at %i turns a second is where the game sets it, no error, and the hands stay on it: they follow it, derived from where it is',
+  'a rifle the game sweeps half round him and back at %i turns a second, turning him to face where it aims as the shooter does and carrying it along the way his chest faces, is where the game sets it, no error, and the hands stay on it',
   (rate) => {
     const { scene, body, gun, bound, pose, off } = rifleman()
     for (let t = 0; t < 1.5; t += FRAME) {
@@ -274,7 +282,10 @@ test.each([1, 2])(
     const long = 1 / (2 * rate)
     let lag = 0
     for (let t = 0; t < 2 * long + 1.5; t += FRAME) {
-      const set = pose(Math.PI * Math.max(0, t < long ? t / long : 2 - t / long))
+      const aim = Math.PI * Math.max(0, t < long ? t / long : 2 - t / long)
+      body.face({ x: Math.sin(aim), z: Math.cos(aim) })
+      // (the rifle along the way his chest faces, as he comes round to the aim)
+      const set = pose(Math.atan2(body.facing.x, body.facing.z) + body.trunk.value.y)
       body.update(FRAME)
       scene.updateMatrixWorld(true)
       expect(gun.position.distanceTo(set.position)).toBe(0)
@@ -285,3 +296,24 @@ test.each([1, 2])(
     expect(bound.there).toBe(true)
   },
 )
+
+test('a rifle swept half round him with his feet planted is no error: the hands come as near as their arms turn, never past a joint, and are not there while it is out of reach', () => {
+  const { scene, body, gun, bound, pose, off } = rifleman()
+  for (let t = 0; t < 1.5; t += FRAME) {
+    pose(0)
+    body.update(FRAME)
+  }
+  let [past, short] = [0, false]
+  for (let t = 0; t < 2; t += FRAME) {
+    pose(Math.PI * Math.min(1, t))
+    body.update(FRAME)
+    scene.updateMatrixWorld(true)
+    for (const side of ['left', 'right'] as const) {
+      const { first, second } = body.arm[side] === undefined ? { first: undefined, second: undefined } : { first: body.arm[side].value, second: body.forearm[side].value }
+      if (first) past = Math.max(past, beyond(first, RANGE.arm), beyond(second!, RANGE.forearm))
+    }
+    if (off() > 0.03) short ||= !bound.there
+  }
+  expect(past).toBeLessThan(1e-6)
+  expect(short).toBe(true)
+})

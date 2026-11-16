@@ -5,8 +5,6 @@ import { Euler, Quaternion, Vector3 } from 'three'
 const SWIVEL = { most: 1.2, fine: 0.1, moved: 0.3 }
 const euler = new Euler()
 const FULL = 2 * Math.PI
-/** how far past where it shuts an elbow still folds, pressed (rad) */
-const PAST = 0.07
 const turned = new Quaternion()
 
 /** a joint turned as near so as it turns */
@@ -71,9 +69,9 @@ export function reachArm(arm: Limb, shoulder: Vector3, trunk: Quaternion, wrist:
     const { first, fold } = arm.reach(to, swung)
     const asked = read(first, arm.first.value)
     // (what a joint cannot turn to costs: the hand comes short by it)
-    const stopped = beyond(asked, RANGE.arm) + Math.max(0, RANGE.forearm.x[0] - PAST - fold, fold)
+    const stopped = beyond(asked, RANGE.arm) + Math.max(0, RANGE.forearm.x[0] - fold, fold)
     const upper = within(asked, RANGE.arm)
-    const elbow = Math.min(0, Math.max(RANGE.forearm.x[0] - PAST, fold))
+    const elbow = Math.min(0, Math.max(RANGE.forearm.x[0], fold))
     const forearm = trunk.clone().multiply(turned.setFromEuler(euler.setFromVector3(upper))).multiply(new Quaternion().setFromEuler(euler.set(elbow, 0, 0)))
     const wrist = bends(forearm, hand.palm, palm, pointing)
     // (a hand that cannot be turned so at all is turned as it hangs)

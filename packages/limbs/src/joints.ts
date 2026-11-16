@@ -41,7 +41,7 @@ export const RANGE = {
   // an upper arm goes on over the top to behind the head, where a thrower cocks it: turned out sideways there, which shows from the side as this
   arm: { x: [-Math.PI - 1, 1], y: [-1.5, 1.5], z: [-3.2, 3.2] },
   // an elbow folds one way only
-  forearm: { x: [-2.5, 0], y: [0, 0], z: [0, 0] },
+  forearm: { x: [-2.57, 0], y: [0, 0], z: [0, 0] },
   wrist: { x: [-0.35, 0.6], y: [-1.6, 1.6], z: [-1.3, 1.3] },
   ankle: { x: [-HEEL, ANKLE] },
 } satisfies Record<string, Range>
