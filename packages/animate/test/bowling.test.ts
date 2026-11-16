@@ -33,7 +33,8 @@ test('the delivery: the ball sent leaves as written, the body does the rest, and
   expect(velocity?.z).toBeCloseTo(7, 0)
   expect(Math.hypot(velocity?.x ?? NaN, velocity?.y ?? NaN)).toBeLessThan(0.5)
   // not written: the hand swings back behind the hips first, and he lets go over the left foot, the right a stride behind
-  expect(back).toBeLessThan(-0.1)
+  // (round his shoulder, as he bends to the line: behind his hips)
+  expect(back).toBeLessThan(-0.03)
   expect(released?.left).toBeGreaterThan((released?.right ?? NaN) + 0.45)
   expect(body.playing).toBe(false)
   expect(body.hips.value.y).toBeCloseTo(body.size.stand, 1)

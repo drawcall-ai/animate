@@ -388,8 +388,9 @@ export class End {
       }
       return at.copy(frame.place ?? this.value)
     }
-    // (at its ease: pushed a sixth as hard as it can be, which an arm sways in)
-    const strength = this.channel.strength / 6
+    // (at its ease: pushed a sixth as hard as it can be, which an arm sways in; a strike, half as hard)
+    const strikes = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
+    const strength = this.channel.strength / (strikes ? 2 : 6)
     const soonest = Math.max(after, now + Math.max(0.5 * body.size.beat, Math.sqrt((6 * place(now).distanceTo(this.value)) / strength)))
     let best = { t: soonest, far: Infinity }
     for (let t = soonest; t < now + LOOK.far * body.size.beat; t += LOOK.fine * body.size.beat) {

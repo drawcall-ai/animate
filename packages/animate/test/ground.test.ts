@@ -128,6 +128,7 @@ test('a walk that leaves him no foot on the ground is no error: he comes down on
       // (the right foot is taken as the left steps off)
       body.foot.right.to({ x: 0, y: -0.6, z: 0.2 }, { on: body, seconds: 0.3 })
       yield* there
+      yield* body.stand()
     })(),
   )
   for (let n = 0; n < 2000 && body.playing; n++) body.update(tick(body.size))
