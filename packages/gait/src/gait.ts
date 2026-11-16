@@ -14,8 +14,8 @@ const MARKS = [0.33, 0.66, 1.15, 1.65, 2.3]
 const FAR = 13
 /** how near how high the legs reach the hips ride before they give to it (in legs) */
 const SOFT = 0.03
-/** how strong the hips and a foot are (m/s²) */
-const STRENGTH = { hips: 300, foot: 2000 }
+/** how strong the hips and a foot are (in paces a beat) */
+const STRENGTH = { hips: 30.6, foot: 204 }
 /** how low the hips go at the least going along, in shares of how high they stand */
 const LOWEST = 0.737
 /** how much less than its length a leg reaches standing over a foot put down (in legs) */
@@ -83,7 +83,7 @@ export class Gait {
   constructor(readonly size: Size) {
     this.lead = new Lead(size)
     this.pelvis = new Pelvis(size)
-    this.hips = new Channel('hips', STRENGTH.hips, 0)
+    this.hips = new Channel('hips', (STRENGTH.hips * size.pace) / size.beat, 0)
     this.hips.set({ x: 0, y: size.stand, z: 0 })
     this.feet = { left: this.foot('left'), right: this.foot('right') }
     this.height = size.stand
@@ -91,7 +91,7 @@ export class Gait {
   }
 
   private foot(side: Side) {
-    const foot = new Channel(`${side} foot`, STRENGTH.foot, 0)
+    const foot = new Channel(`${side} foot`, (STRENGTH.foot * this.size.pace) / this.size.beat, 0)
     foot.set(new Vector3(SIGN[side] * this.size.hip, this.size.ankle, 0))
     return foot
   }

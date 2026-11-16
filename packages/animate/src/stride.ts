@@ -170,7 +170,7 @@ export class Stride {
       if (feet[side].held) continue
       const hip = this.hip(side, new Vector3()).applyAxisAngle(UP, -toes)
       const leg = joints.legs[side]
-      const down = !gait.steps[side] && !foot.frames.length
+      const down = !gait.steps[side] && !this.coming(side)
       const [roll, rise] = [(ROLL.down * dt) / size.beat, (ROLL.up * dt) / size.beat]
       if (!down) this.heel[side] = this.pitch[side]
       const was = this.heel[side]
@@ -188,6 +188,12 @@ export class Stride {
     }
   }
 
+  /** whether a foot has frames still to come: one met now, as the numbers round, is not */
+  private coming(side: Side) {
+    const { gait } = this
+    return gait.feet[side].frames.some(({ at }) => (at ?? Infinity) > gait.time + 1e-6 * this.bones.size.beat)
+  }
+
   /** where a hip is, the pelvis turned and listing as it is */
   private hip(side: Side, to: Vector3) {
     const { turn, list } = this.gait.pelvis
@@ -199,7 +205,7 @@ export class Stride {
   tread(side: Side, foot: Foothold, dt: number) {
     const { size } = this.bones
     const { first: thigh, second: shin } = this.joints.legs[side]
-    const own = !foot.held && !this.gait.steps[side] && !this.gait.feet[side].frames.length
+    const own = !foot.held && !this.gait.steps[side] && !this.coming(side)
     const hangs = this.pitch[side] + (thigh.value.x + shin.value.x - this.pitch[side]) * Math.min(1, (DROOP * dt) / size.beat)
     // (in the air its toe and heel keep a little off the ground)
     const high = Math.max(0, foot.value.y - this.ground - size.ankle - (own ? 0 : TOE * size.leg))
