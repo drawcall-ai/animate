@@ -79,9 +79,17 @@ export class Asks implements Posture {
 
   /** how long getting down so far takes him (s): the hips letting down and settling, the trunk bending at its ease and coming round */
   private takes({ bend, sink }: { bend: number; sink: number }) {
-    if (bend === 0 && sink === 0) return 0
+    const { sinks, bends } = this.leads({ bend, sink })
+    return Math.max(sinks, bends)
+  }
+
+  /** how long the hips take to let down so far, and the trunk to bend so far (s): each from as long before as it takes */
+  private leads({ bend, sink }: { bend: number; sink: number }) {
     const { pace, beat } = this.size
-    return Math.max(sink / (HIPS.sink * pace) + HIPS.settle * beat, Math.sqrt((6 * bend) / (EASY * this.trunk.strength)) + 1 / this.trunk.rate)
+    return {
+      sinks: sink > 0 ? sink / (HIPS.sink * pace) + HIPS.settle * beat : 0,
+      bends: bend > 0 ? Math.sqrt((6 * bend) / (EASY * this.trunk.strength)) + 1 / this.trunk.rate : 0,
+    }
   }
 
   /** what was worked out is worked out again: a frame was written, or the clock went on */
@@ -112,7 +120,8 @@ export class Asks implements Posture {
       const held = (channel.bound ?? channel).goal?.on
       const lowered = held !== end.root && !(held instanceof Watched && held.carried) ? down(on(there), this.shoulders[end.side], this.size) : { bend: 0, sink: 0 }
       // (from as long before as getting down that far takes him)
-      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), ...(due - time <= this.takes(lowered) ? lowered : { bend: 0, sink: 0 }) }
+      const { sinks, bends } = this.leads(lowered)
+      const one = { ...asks(end.side, on(hand), this.shoulders[end.side], this.size), bend: due - time <= bends ? lowered.bend : 0, sink: due - time <= sinks ? lowered.sink : 0 }
       // (a hand on its way turns him after it and shifts his weight; one held where it is, or on a thing, only gets him down)
       const going = channel.frames.length > 0
       all.turn += going ? one.turn : 0
