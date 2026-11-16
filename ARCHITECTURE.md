@@ -28,7 +28,7 @@ examples ──▶ @drawcall/animate ──▶ @drawcall/gait ──▶ @drawcal
 4. the free parts react (trunk, head, free arms: `Stride.react`);
 5. pose: the legs reach the gait's feet, the arms the hands' channels (`reachArm`), a thing the body moves is drawn where its leading hand has it.
 
-Data flows one way: gait → hand and thing plans → posture (what the hands ask of the hips and trunk: sink, bend, turn, shift) → pose. A frame `on` him is counted on the gait's hips plan (`OnHim`), so a hand's plan never reads itself through the body.
+Data flows one way: hand and thing plans → posture (what the hands ask of the hips and trunk: sink, bend, turn, shift, worked out against the hips) → the gait's hips plan (it writes the sink into its frames, reading it before it rewrites them) → pose. A frame `on` him is counted on that hips plan (`OnHim`), so a hand's plan never reads itself through the body.
 
 ## What each gives the layer above
 
@@ -49,9 +49,9 @@ him is read against his hips; one the game sets for the very moment is read in t
 
 ## Still to fix
 
-1. **Places on him miss the posture's sink.** The gait's hips plan carries no sink the hands ask for, so a swing
-   round a shoulder he will get down for is planned round a standing shoulder (bowling's backswing).
-2. **`stride.ts`** in animate still poses the legs, heels and free parts over the gait (373 lines); that belongs in
+1. **`stride.ts`** in animate still poses the legs, heels and free parts over the gait (373 lines); that belongs in
    the gait's own pose.
+2. **Posture's own reach guess.** `posture.ts` still guesses how far he must bend and sink with a grid over a
+   simple shoulder model; it should ask the arm's solve, as the swing timing does.
 3. **No package tests of their own** but plan's: everything else is tested through a whole `Body` in
    `packages/animate/test`.
