@@ -137,10 +137,12 @@ export class Player implements Game {
     yield* stroke(body, this.held, kind, time, at, AIM.clone().sub(at).setY(0).normalize())
     yield* body.until(time + SWING.after)
     body.hand.left.cancel()
-    this.ready()
     body.face()
     this.swing = undefined
-    yield* body.stand()
+    // (standing lets go of what the racket was sent to: it is sent to the ready once he stands)
+    const standing = body.stand()
+    this.ready()
+    yield* standing
   }
 
   /** the racket before him, ready */

@@ -10,6 +10,9 @@ import { person } from '../../../examples/person'
 import { Body, type Thing } from '../src'
 import { RANGE } from '../src/rig/joints'
 import { tick } from '../src/rig/size'
+import * as tennis from '../../../examples/tennis/ball'
+import { stroke } from '../../../examples/tennis/stroke'
+import { FOREHAND, racket } from '../../../examples/tennis/racket'
 
 /**
  * after a release, each arm that held on as a viewer sees it: how far behind the trunk it is drawn at the most (rad), and how much
@@ -75,4 +78,35 @@ test('after the bowling ball leaves, the arm is never thrown back behind him, an
     expect(behind).toBeLessThan(0.3)
   // (an arm lowered as it sways, not thrown: thrown, it went 13 m/s)
   expect(faster).toBeLessThan(8)
+})
+
+test('a forehand swings on through the ball round his shoulder before it comes to rest', () => {
+  const rig = person()
+  const bat = racket()
+  new Scene().add(rig, bat)
+  const hand = new Hand(rig, 'right')
+  const body = new Body(rig)
+  const held = inHand(body, hand, grip(hand, bat, FOREHAND))
+  const ball = tennis.ballAt()
+  tennis.feed(ball)
+  const { seconds, at } = tennis.top(ball)
+  let met = false
+  body.play(
+    (function* () {
+      yield* stroke(body, held, 'forehand', body.time + seconds, at, new Vector3(0, 0, 1))
+      met = true
+      yield* body.until(body.time + 1)
+    })(),
+  )
+  while (!met) body.update(tick(body.size))
+  const from = body.hand.right.value.clone()
+  let [far, moving] = [0, 0]
+  for (let t = 0; t < 0.8; t += tick(body.size)) {
+    body.update(tick(body.size))
+    far = Math.max(far, body.hand.right.value.distanceTo(from))
+    if (body.hand.right.velocity.length() > 0.5) moving = t
+  }
+  // (it went on half a metre and more, for 0.15 s and more: frozen, it stopped dead)
+  expect(far).toBeGreaterThan(0.5)
+  expect(moving).toBeGreaterThan(0.15)
 })

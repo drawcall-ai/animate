@@ -116,6 +116,7 @@ export class Bound {
     end.channel.set(place.clone().applyQuaternion(this.channel.turn).add(this.channel.value), this.channel.turn.clone().multiply(turn))
     end.channel.bind(this.channel)
     this.hands.push({ end, grip })
+    this.led()
     void end.limb.hand?.fingers?.shape(grip.pose)
     // (and with nowhere to go, it is held where it is, on him as he goes)
     if (!this.channel.busy) this.stay()
@@ -128,7 +129,13 @@ export class Bound {
     if (k < 0) return
     this.hands.splice(k, 1)
     end.channel.unbind()
+    this.led()
     this.changed()
+  }
+
+  /** it swings round the shoulder of the arm that leads it, as that hand would */
+  private led() {
+    this.channel.pivot = this.lead?.end.channel.pivot
   }
 
   /** the frame that has it where a statement says: turned for its z to point and the first hand's palm to face as said */
