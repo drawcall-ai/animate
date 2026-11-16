@@ -142,9 +142,9 @@ export class Stride {
     this.unheld = standing ? 0 : this.unheld + dt
     if (this.unheld > this.bones.size.beat) for (const side of SIDES) if (feet[side].held) feet[side].free()
     gait.advance(now)
-    gait.hips.advance(now)
-    // (a foot the story has is watched: how fast it moves is how it moved)
+    // (a foot the story has is watched: how fast it moves is how it moved; a foot on the hips goes on from where they were, before they go on)
     for (const side of SIDES) gait.feet[side].advance(now)
+    gait.hips.advance(now)
     for (const side of SIDES) if (!feet[side].held) feet[side].anchor = this.stands(side)
     this.place()
   }

@@ -52,7 +52,8 @@ export class Course {
       const turn = past ? 0 : wrap(angleOf(gap.x, gap.z) - heading)
       const most = speed > still ? (PUSH.along / speed) * STEP : Math.PI
       const turned = heading + Math.max(-most, Math.min(most, turn))
-      const brakes = Math.sqrt(way.arrive ** 2 + 2 * PUSH.along * far)
+      // (braked half the time, a foot being down only so much of it: so as slow as he is to arrive a beat in the air early)
+      const brakes = Math.sqrt(way.arrive ** 2 + PUSH.along * Math.max(0, far - (way.arrive && size.beat * speed)))
       const want = past ? way.arrive : Math.min(way.speed, brakes, way.arrive > 0 ? Infinity : far / settle)
       const next = speed + Math.max(-PUSH.along * STEP, Math.min((want > speed ? way.push : PUSH.along) * STEP, want - speed))
       v.set(Math.sin(turned), 0, Math.cos(turned)).multiplyScalar(Math.max(0, next))

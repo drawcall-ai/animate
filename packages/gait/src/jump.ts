@@ -17,8 +17,8 @@ const TUCK = 0.25
 const MARKS = 4
 /** how long after the other the foot he took off from comes down, landing going on (in beats) */
 const STEP = 0.5
-/** where the knee that drives up as he pushes off has its foot, under and ahead of the hips (in legs) */
-const DRIVE = { y: 0.55, z: 0.3 }
+/** where the knee that drives up as he pushes off has its foot, under and ahead of the hips (in legs), swung there from the ground in so long (in beats); running, how high it passes under him as he crouches (in legs) */
+const DRIVE = { y: 0.55, z: 0.3, beats: 0.5, clear: 0.12 }
 /** how long before he comes down his feet reach for the ground, from drawn up under him (in beats) */
 const UNTUCK = 0.5
 /** how far ahead of the hips or behind them a foot is carried through the air, going on (in legs) */
@@ -53,11 +53,15 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   const lasts = (2 * crouch) / up
   // (standing, he lets himself down into the crouch no faster than he falls)
   const drop = Math.sqrt((2 * crouch) / (DROP * GRAVITY))
-  const leaves = Math.max(soonest, now + lasts + drop)
+  // (running, he crouches over the foot planted at the soonest moment, and pushes off from it)
+  const running = going.length() > WALK.most * size.pace
+  const leaves = Math.max(soonest + (running ? lasts : 0), now + lasts + drop)
   const wanted = new Vector3(top.x - from.x, 0, top.z - from.z).divideScalar(flies + lasts / 2)
   const most = hard * lasts
   const across = led ? going.clone() : wanted.sub(going).clampLength(0, most).add(going)
-  const takeoff = from.clone().addScaledVector(across, lasts / 2).setY(ground + stand)
+  // (he crouches where his going has him then, and is pushed on from there to how he leaves)
+  const crouches = from.clone().addScaledVector(going, leaves - lasts - soonest).setY(ground + stand - crouch)
+  const takeoff = crouches.clone().addScaledVector(across.clone().add(going), lasts / 2).setY(ground + stand)
   const velocity = across.clone().setY(up)
   const fall = (t: number) => takeoff.clone().addScaledVector(velocity, t).setY(takeoff.y + up * t - (GRAVITY / 2) * t * t)
   const lands = leaves + air
@@ -72,7 +76,7 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
   const hips: Frame[] = [
     ...(drops.at > now ? [drops] : []),
     // (the drop and the push one movement: going on as he comes, he is pushed to how he leaves)
-    { at: leaves - lasts, place: from.clone().addScaledVector(going, -lasts / 2).setY(ground + stand - crouch), velocity: going.clone().add(across).multiplyScalar(0.5), by: 'jump' },
+    { at: leaves - lasts, place: crouches, velocity: going.clone().add(across).multiplyScalar(0.5), by: 'jump' },
     { at: leaves, place: takeoff, velocity, by: 'jump' },
   ]
   for (let k = 1; k < MARKS; k++) {
@@ -97,7 +101,9 @@ export function jump(size: Size, hipsOf: Mover, top: Vector3, now: number, soone
     const later = runs && side === takes ? STEP * size.beat : 0
     const down = place.clone().add(out).addScaledVector(across, 0.165 * size.beat + later).setY(ground + ankle)
     // (the other knee drives up as he pushes off)
-    const drives: Frame[] = side === takes ? [] : [{ at: leaves, on: hipsOf, place: { x: SIGN[side] * size.hip, y: -DRIVE.y * leg, z: DRIVE.z * leg }, by: "jump" }]
+    // (running, it swings through under him, clear of the ground, as he crouches)
+    const passes: Frame[] = running ? [{ at: leaves - lasts, leaves: drops.at, on: hipsOf, place: { x: SIGN[side] * size.hip, y: ankle + DRIVE.clear * leg - stand + crouch, z: 0 }, by: 'jump' }] : []
+    const drives: Frame[] = side === takes ? [] : [...passes, { at: leaves, leaves: Math.max(now, leaves - DRIVE.beats * size.beat), on: hipsOf, place: { x: SIGN[side] * size.hip, y: -DRIVE.y * leg, z: DRIVE.z * leg }, by: 'jump' }]
     feet[side] = [
       ...drives,
       { at: leaves + Math.min(UNTUCK * size.beat, air / 3), leaves, on: hipsOf, place: tucked, by: 'jump' },
