@@ -12,6 +12,10 @@ import { type Matrix4, type Object3D, Vector3 } from 'three'
 const PUSH = { ground: 8, air: 2 }
 /** how far down the ground snaps him onto it as he goes, and is looked for under him in the air (m) */
 const SNAP = 0.3
+/** how long off the ground he still counts as on it, not yet falling (s) */
+const SLIPS = 0.1
+/** how fast up he goes at the least to be rising off the ground (m/s) */
+const RISING = 0.1
 const FAR = 50
 /** how far off level a wall's face may lean and still be upright (of a right angle's cosine) */
 const UPRIGHT = 0.05
@@ -39,6 +43,8 @@ export class Capsule {
   private readonly met: PhysicsWorld
   /** how fast he is to leave the ground, and how long until he does, once he is told (m/s, s) */
   private takeoff?: { up: number; left: number }
+  /** how long he has been off the ground (s) */
+  private aloft = 0
 
   constructor(
     private readonly world: PhysicsWorld,
@@ -98,8 +104,11 @@ export class Capsule {
       else if (!this.grounded || Math.abs(normal.y) < UPRIGHT)
         velocity.addScaledVector(normal, -Math.min(0, velocity.dot(normal)))
     }
-    const ground = velocity.y > 0 ? null : motor.ground(this.grounded ? SNAP : 0.025)
-    this.grounded = ground !== null
+    // (rising is going up as a jump does, not the crumb of speed a wall he slides along gives)
+    const ground = velocity.y > RISING ? null : motor.ground(this.grounded ? SNAP : 0.025)
+    // (off it only a moment, as a rounded foot slips off an edge it perched on, he has not fallen yet)
+    this.aloft = ground ? 0 : this.aloft + delta
+    this.grounded = ground !== null || (velocity.y <= RISING && this.grounded && this.aloft < SLIPS)
     if (ground) velocity.y = 0
     // the ground under him: what he stands on, or below him in the air
     const below = this.grounded ? undefined : this.met.raycast(motor.position, DOWN, FAR)
