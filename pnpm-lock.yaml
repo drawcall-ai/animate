@@ -537,12 +537,18 @@ importers:
 
   packages/animate:
     dependencies:
+      '@drawcall/gait':
+        specifier: workspace:*
+        version: link:../gait
       '@drawcall/limbs':
         specifier: workspace:*
         version: link:../limbs
       '@drawcall/locomotion':
         specifier: workspace:*
         version: link:../locomotion
+      '@drawcall/plan':
+        specifier: workspace:*
+        version: link:../plan
       three:
         specifier: ^0.187.0
         version: 0.187.0

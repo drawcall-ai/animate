@@ -64,16 +64,19 @@ export class Gait {
   /** the moment it has stepped on to (s) */
   time = 0
   private was = 0
+  /** what the rest of him asks of the hips at a moment: how far lower and how far ahead they are to be (m) */
+  low = (_time: number) => 0
+  shift = (_time: number) => 0
   /** how high the hips are held over the ground, standing (m) */
   height: number
   /** a run or a walk he is led along, the foot to plant where it ends and when the hips come over it, and the foot he stays on there */
-  private course?: Course
+  course?: Course
   private plant?: { side: Side; at: number; stride: number }
   private planted?: Side
   /** whether he keeps facing as he did, stepping to a place close by */
   private keeps = false
   /** a jump he is making */
-  private jumping?: Jump & { course?: Course }
+  jumping?: Jump & { course?: Course }
   /** a foot a story puts somewhere, on its way there */
   private readonly placing: Partial<Record<Side, Step>> = {}
 
@@ -153,6 +156,11 @@ export class Gait {
     lead.go({ x: 0, z: 0 }, this.time)
     const to = lead.place.clone().addScaledVector(going, going.length() / PUSH.along)
     this.course = new Course(this.size, this.time, lead.place, going, to, { speed: Math.max(going.length(), 0.1), push: PUSH.along, arrive: 0 })
+  }
+
+  /** whether he has done what he was sent to do: no way to go, no jump, his feet still */
+  get arrived() {
+    return !this.course && !this.jumping && !this.stepping
   }
 
   /** whether he is making a jump */
@@ -250,15 +258,15 @@ export class Gait {
   private planned(seconds: number) {
     // (between feet the story has put down he stands over them, as high as his legs reach both)
     const stance = this.stance()
-    if (stance) return { place: stance, turn: this.going.facing }
+    if (stance) return { place: stance.setY(stance.y - this.low(this.time + seconds)), turn: this.going.facing }
     const ground = this.path(seconds)
     const phase = this.phase + this.rate * seconds
     const { facing, spins, aims } = this.going
     const turned = facing + Math.sign(spins) * Math.min(Math.abs(spins * seconds), spins * aims > 0 ? Math.abs(aims) : 0)
-    const place = left(facing).multiplyScalar(this.sway(phase)).add(ground)
+    const place = left(facing).multiplyScalar(this.sway(phase)).add(ground).addScaledVector(ahead(facing), this.shift(this.time + seconds))
     // (and they come down no faster than they fall)
     const { value, velocity } = this.hips
-    place.y = Math.max(this.ride(ground, seconds, phase, facing), value.y + velocity.y * seconds - (GRAVITY / 2) * seconds ** 2)
+    place.y = Math.max(this.ride(ground, seconds, phase, facing) - this.low(this.time + seconds), value.y + velocity.y * seconds - (GRAVITY / 2) * seconds ** 2)
     return { place, turn: turned }
   }
 

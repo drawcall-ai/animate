@@ -16,7 +16,8 @@
     "@drawcall/limbs": "workspace:*",
     "@drawcall/locomotion": "workspace:*",
     "three": "^0.187.0",
-    "@drawcall/plan": "workspace:*"
+    "@drawcall/plan": "workspace:*",
+    "@drawcall/gait": "workspace:*"
   },
   "files": [
     "src",

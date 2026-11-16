@@ -54,11 +54,11 @@ export function duty(size: Size, going: Going, stride: number) {
 export const faces = ({ facing, spins, aims }: Going, seconds: number, lead = LEAD) =>
   facing + Math.sign(aims) * Math.min(Math.abs(aims), Math.abs(spins) * seconds + lead)
 
-/** a foot is kept to its own side of the other, as he faces so: or so much of the way there */
-export function clear(size: Size, foot: Vector3, side: Side, partner: Vector3, faced: number, speed: number, share = 1) {
+/** a foot is kept to its own side of the other, as he faces so, and so much further (m): or so much of the way there */
+export function clear(size: Size, foot: Vector3, side: Side, partner: Vector3, faced: number, speed: number, share = 1, more = 0) {
   const across = left(faced)
   const gap = SIGN[side] * foot.clone().sub(partner).dot(across)
-  const least = APART * wide(size, speed)
+  const least = APART * wide(size, speed) + more
   if (gap < least) foot.addScaledVector(across, SIGN[side] * (least - gap) * share)
 }
 
