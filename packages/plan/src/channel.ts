@@ -107,14 +107,6 @@ export class Channel implements Mover {
     if (by === undefined && !this.frames.length && !this.parent && !this.outside) this.swingOn(this.now, this.value, this.velocity)
   }
 
-  /** takes back a frame it was written, as though it never was */
-  drop(frame: Frame) {
-    const k = this.frames.indexOf(frame as Planned)
-    if (k < 0) return
-    this.frames.splice(k, 1)
-    this.replan(this.frames[k])
-  }
-
   /** whether a frame was met, rather than cancelled before its moment */
   met(frame: Frame) {
     return this.reached.has(frame)

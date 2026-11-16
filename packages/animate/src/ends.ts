@@ -149,8 +149,6 @@ export class End {
     const frame = this.frame(place, how)
     const after = Math.max(this.body.time(), ...this.channel.frames.filter((one) => one.by === 'story').map((one) => one.at ?? 0))
     frame.at = this.moment(when?.by !== undefined ? Math.max(when.by, after) : when?.seconds !== undefined ? after + when.seconds : this.first(frame, after))
-    // (a hand told no moment is there once the whole of him can have it there: asked of him first, so that he gets down for it, and then looked for as he will be)
-    if (this.kind === 'hand' && when?.by === undefined && when?.seconds === undefined) frame.at = this.moment(this.reached(frame, after))
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
     const swung = this.leaves(frame)
     frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
@@ -378,7 +376,7 @@ export class End {
    * the first moment after `after` the end can be at a frame at its ease: within its limb's reach along the ground from
    * where the limb will start, and for a foot, spared by the body; with none in reach, the moment it comes nearest
    */
-  first(frame: Frame, after: number, whole = false) {
+  first(frame: Frame, after: number) {
     const { body, limb } = this
     const now = body.time()
     const [at, root, unused] = [new Vector3(), new Vector3(), new Vector3()]
@@ -399,22 +397,12 @@ export class End {
       this.root.state(t, root, unused)
       // (a hand's along the ground: how low it is he gets down for; a foot's from its hip)
       const off = place(t).clone().sub(root)
-      const far = (this.kind === 'hand' && !whole ? Math.hypot(off.x, off.z) : off.length()) - EASE * limb.length
+      const far = (this.kind === 'hand' ? Math.hypot(off.x, off.z) : off.length()) - EASE * limb.length
       const spared = this.kind === 'hand' || body.carrier.spare(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
       if (far <= 0 && spared) return t
       if (far < best.far) best = { t, far }
     }
     return best.t
-  }
-
-  /** the first moment the arm reaches a frame, he being as the frame has him be: written while it is looked for */
-  private reached(frame: Frame, after: number) {
-    const written = this.channel.by(frame)
-    this.body.changed()
-    this.body.carrier.stale()
-    const at = this.first(written, after, true)
-    this.channel.drop(written)
-    return at
   }
 
   /** cancels what it was sent to: it goes on from the state it is in, a hand swinging on and then the body's */
