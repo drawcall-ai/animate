@@ -1,6 +1,5 @@
-import { between, cubic, hardest as push } from '@drawcall/plan'
+import { between, cubic, hardest as push, type Xyz } from '@drawcall/plan'
 import { Vector3 } from 'three'
-import type { Xyz } from './world'
 
 /** how far a value goes, along or about any of x, y and z: from the least to the most */
 export type Range = Partial<Record<'x' | 'y' | 'z', [number, number]>>
@@ -15,8 +14,6 @@ const LOOKS = 8
 const TIMES = { shortest: 0.01, longer: 1.1, longest: 10 }
 const tried = new Vector3()
 const triedVelocity = new Vector3()
-
-export { between, cubic } from '@drawcall/plan'
 
 /** how hard a part is pushed at the most on that curve, at its start or at its end: in times its `strength` */
 export const hardest = (from: State, to: State, seconds: number, strength: number) => push(from, to, seconds) / strength

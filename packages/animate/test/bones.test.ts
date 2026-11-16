@@ -1,7 +1,8 @@
 import { Euler, Group, type Object3D, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { Body } from '../src'
-import { SIDES, tick } from '@drawcall/limbs'
+import { SIDES } from '@drawcall/gait'
+import { tick } from '../src/rig/size'
 import { person } from '../../../examples/person'
 
 const bone = (rig: Object3D, name: string) => {

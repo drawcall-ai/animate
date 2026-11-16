@@ -1,4 +1,7 @@
-import { EASY, RANGE, type Side, SIGN, type Size } from '@drawcall/limbs'
+import { type Side, SIGN } from '@drawcall/gait'
+import { EASY } from './rig/goal'
+import { RANGE } from './rig/joints'
+import { type Size } from './rig/size'
 import { Vector3 } from 'three'
 import type { End } from './ends'
 import { Watched } from './movers'

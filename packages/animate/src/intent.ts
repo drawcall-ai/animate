@@ -1,6 +1,6 @@
 import { Matrix4, type Vector3 } from 'three'
 import type { Channel } from '@drawcall/plan'
-import { SIDES } from '@drawcall/limbs'
+import { SIDES } from '@drawcall/gait'
 import type { Workings } from './clock'
 
 /** what a channel means to do: its frames to come, its way ahead, the frames cancelled lately, what it is bound to */

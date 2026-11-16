@@ -3,7 +3,7 @@ import { Euler, Line3, Mesh, Object3D, Quaternion, Scene, SphereGeometry, Vector
 import { expect, test } from 'vitest'
 import { other, person } from '../../../examples/person'
 import { Body, type Pose, type Story } from '../src'
-import { tick } from '@drawcall/limbs'
+import { tick } from '../src/rig/size'
 
 const bone = (rig: Object3D, name: string) => {
   const found = rig.getObjectByName(name)

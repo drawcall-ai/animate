@@ -1,5 +1,6 @@
-import { type Grip, type Story, type Xyz } from '@drawcall/limbs'
-import { Channel, type Frame, type Mover } from '@drawcall/plan'
+import { type Grip } from './rig/fingers'
+import { type Story } from './story'
+import { Channel, type Frame, type Mover, type Xyz } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { Arriving, End, Hand } from './ends'
 import { Watched } from './movers'

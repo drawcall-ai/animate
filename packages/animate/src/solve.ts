@@ -1,4 +1,7 @@
-import { bends, bent, DOWN, type Limb, RANGE, UP } from '@drawcall/limbs'
+import { UP } from '@drawcall/gait'
+import { bends, bent, DOWN } from './rig/fingers'
+import { RANGE } from './rig/joints'
+import { type Limb } from './rig/limb'
 import { Euler, Quaternion, Vector3 } from 'three'
 
 /** how far either way from the swing it had an elbow swung into the trunk is looked at to swing out, how far it swings a step at the most (rad); and what moving it costs against a wrist turned past its range */

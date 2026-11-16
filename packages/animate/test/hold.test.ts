@@ -4,7 +4,7 @@ import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import { ARM, fore, pistol, pocket, rifle } from '../../../examples/shooter/rifle'
 import { Body } from '../src'
-import { RANGE } from '@drawcall/limbs'
+import { RANGE } from '../src/rig/joints'
 
 /** how far a turn is past a range, summed over its axes (rad) */
 const beyond = (value: Vector3, range: Partial<Record<'x' | 'y' | 'z', readonly number[]>>) =>

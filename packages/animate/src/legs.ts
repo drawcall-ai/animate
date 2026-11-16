@@ -1,5 +1,9 @@
-import { Gait } from '@drawcall/gait'
-import { type Bones, clamp, HEEL, type Joints, type Limb, RANGE, raised, type Side, SIDES, SIGN, SOLE, type Story, UP, waits, type Xyz } from '@drawcall/limbs'
+import { clamp, Gait, HEEL, raised, type Side, SIDES, SIGN, SOLE, UP } from '@drawcall/gait'
+import { type Xyz } from '@drawcall/plan'
+import { type Bones } from './rig/bones'
+import { type Joints, RANGE } from './rig/joints'
+import { type Limb } from './rig/limb'
+import { type Story, waits } from './story'
 import { type Quaternion, Vector3 } from 'three'
 import type { Asks } from './posture'
 

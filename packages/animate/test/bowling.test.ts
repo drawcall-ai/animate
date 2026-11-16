@@ -5,7 +5,7 @@ import { bowl, carry, SIDE } from '../../../examples/bowling/bowl'
 import { GRIP, sphere } from '../../../examples/bowling/lane'
 import { inHand } from '../../../examples/character'
 import { Body } from '../src'
-import { tick } from '@drawcall/limbs'
+import { tick } from '../src/rig/size'
 import { person } from '../../../examples/person'
 
 test('the delivery: the ball sent leaves as written, the body does the rest, and he ends standing', () => {

@@ -34,7 +34,8 @@ import { FOREHAND, racket } from '../../../examples/tennis/racket'
 import * as vb from '../../../examples/volleyball/ball'
 import { spike } from '../../../examples/volleyball/spike'
 import { Body } from '../src'
-import { SIDES, tick } from '@drawcall/limbs'
+import { SIDES } from '@drawcall/gait'
+import { tick } from '../src/rig/size'
 
 /** each example as its page plays it: the body with its story begun, and what the world does after every update */
 const EXAMPLES: Record<string, (rig: Object3D) => { body: Body; world?: (dt: number) => void }> = {

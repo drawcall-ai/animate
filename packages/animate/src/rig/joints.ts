@@ -4,7 +4,8 @@ import type { Range } from './curve'
 import { Goal, REST } from './goal'
 import { FINGERS, Fingers } from './fingers'
 import { Limb } from './limb'
-import { HEEL, SIDES, SIGN, both } from './size'
+import { HEEL, SIDES, SIGN } from '@drawcall/gait'
+import { both } from './size'
 
 /**
  * How strong each part that turns is: the most it can accelerate (rad a beat, a beat), and how many times a beat it

@@ -1,2 +1,2 @@
 export { Gait } from './gait'
-export type { Side, Size } from './measure'
+export { clamp, GRAVITY, HEEL, other, raised, type Side, SIDES, SIGN, type Size, SOLE, UP, wrap } from './measure'

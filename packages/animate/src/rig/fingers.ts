@@ -1,7 +1,9 @@
 import { Euler, Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import { quickest } from './curve'
 import { Goal, REST } from './goal'
-import { EXACT, type Story, type Xyz, waits } from './world'
+import type { Xyz } from '@drawcall/plan'
+import { type Story, waits } from '../story'
+import { EXACT } from './size'
 
 export const FINGERS = ['thumb', 'index', 'middle', 'ring', 'little'] as const
 export type Finger = (typeof FINGERS)[number]

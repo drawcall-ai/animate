@@ -1,6 +1,6 @@
 import type { Mover } from '@drawcall/plan'
 import { type Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
-import { UP } from '@drawcall/limbs'
+import { UP } from '@drawcall/gait'
 
 const scale = new Vector3()
 const [spin, none, moved] = [new Quaternion(), new Quaternion(), new Vector3()]

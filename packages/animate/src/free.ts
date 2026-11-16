@@ -1,4 +1,8 @@
-import { ANKLE, clamp, GRAVITY, type Joints, RANGE, REST, SIDES, SIGN, type Size, wrap, type Xyz } from '@drawcall/limbs'
+import { clamp, GRAVITY, SIDES, SIGN, wrap } from '@drawcall/gait'
+import { type Xyz } from '@drawcall/plan'
+import { REST } from './rig/goal'
+import { ANKLE, type Joints, RANGE } from './rig/joints'
+import { type Size } from './rig/size'
 import { Vector3 } from 'three'
 import type { Legs } from './legs'
 

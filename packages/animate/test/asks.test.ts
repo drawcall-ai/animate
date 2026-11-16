@@ -2,7 +2,7 @@ import { Group, Object3D, Vector3 } from 'three'
 import { expect, test } from 'vitest'
 import { person } from '../../../examples/person'
 import { Body, type Story } from '../src'
-import { tick } from '@drawcall/limbs'
+import { tick } from '../src/rig/size'
 
 /** a body in a scene of its own */
 function setup() {

@@ -1,6 +1,8 @@
 import { Vector3 } from 'three'
-import { AXES, type Range, type State, bounds, cubic, hardest, quickest } from './curve'
-import { type Story, type Xyz, clamp, waits } from './world'
+import { clamp } from '@drawcall/gait'
+import { cubic, type Xyz } from '@drawcall/plan'
+import { type Story, waits } from '../story'
+import { AXES, type Range, type State, bounds, hardest, quickest } from './curve'
 
 export const REST = { x: 0, y: 0, z: 0 }
 /** how much of its strength a part is pushed with that is not sent anywhere: coming round after it has arrived moving, or reacting */

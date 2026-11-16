@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest'
 import { Body, type Story } from '../src'
-import { tick } from '@drawcall/limbs'
+import { tick } from '../src/rig/size'
 import { person } from '../../../examples/person'
 
 /** a walk, a stance on a foot put ahead, a reach for the ground and a jump: all of it counted in his own sizes */

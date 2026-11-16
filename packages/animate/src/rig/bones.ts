@@ -4,8 +4,8 @@ import { Bone, above } from './bone'
 import { DOWN, FINGERS, type Finger, each } from './fingers'
 import { type Joints, RANGE } from './joints'
 import { type Band, type Shape, deep, measure } from './shape'
-import { SIDES, SIGN, SOLE, type Side, type Size, both } from './size'
-import { GRAVITY, clamp, UP } from './world'
+import { clamp, GRAVITY, type Side, SIDES, SIGN, SOLE, UP } from '@drawcall/gait'
+import { both, type Size } from './size'
 
 /**
  * how much of its length a line across a rig at rest runs along what it is to run along, at the least: from right to

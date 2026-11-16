@@ -1,10 +1,10 @@
 import { Euler, Quaternion, Vector3 } from 'three'
 import type { Beside } from './bones'
-import { between } from './curve'
+import { between } from '@drawcall/plan'
 import type { Goal } from './goal'
 import type { Fingers } from './fingers'
 import { deep } from './shape'
-import { GRAVITY } from './world'
+import { GRAVITY } from '@drawcall/gait'
 
 /** how much of its length a limb stretches to at the most, and how much further than straight back on itself it folds to at the least: its middle joint is never quite straight nor shut */
 const STRETCH = { most: 0.999, least: 0.011 }
