@@ -399,13 +399,13 @@ export class Gait {
       this.stepping = true
       this.phase = (strays.left >= strays.right ? 0 : 0.5) - 1e-6
     }
-    // (the strides come out even onto the planted foot, on as many strides as come nearest his own)
+    // (the strides come out even onto the planted foot, on as many strides as come nearest his own; down, it is stood on until the hips come by it)
     const plant = this.plant
     if (plant && this.stepping) {
       const { natural } = this.landing(plant)
       const lands = plant.lands! - now
       if (lands > 0) this.rate = this.timed(lands, swingShare, natural)
-      else if (!this.steps[plant.side]) [this.plant, this.planted] = [undefined, this.course?.way.arrive === 0 ? plant.side : undefined]
+      else if (!this.steps[plant.side] && now >= plant.at) [this.plant, this.planted] = [undefined, this.course?.way.arrive === 0 ? plant.side : undefined]
     }
     const was = this.phase
     // (a foot down that its leg no longer reaches from where the hips are hurries the clock on to its share)
@@ -488,7 +488,7 @@ export class Gait {
       return
     }
     const [before, after] = [through(side, was), through(side, this.phase)]
-    if (this.stepping && after < before && !this.steps[side] && !this.planted && (moving || strays > (TOGETHER * size.leg) / 2)) {
+    if (this.stepping && after < before && !this.steps[side] && !this.planted && !(this.plant && now >= this.plant.lands!) && (moving || strays > (TOGETHER * size.leg) / 2)) {
       const pointed = yawOf(foot.turn)
       this.steps[side] = { side, from: foot.value.clone(), leaves: now, to: foot.value.clone(), lands: now, pointed, toes: pointed }
     }
