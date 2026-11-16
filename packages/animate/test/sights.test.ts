@@ -77,6 +77,7 @@ test.each(Object.keys(TIMES) as (keyof typeof TIMES)[])(
 
 test('he stands side-on to the rifle as he aims, both hands on it, and fires from the hip and down the sights', async () => {
   const [scene, world] = [new Scene(), level()]
+  scene.add(world.drawn)
   const physics = await buildWorld({ scene })
   const soldier = new Soldier(person(), physics)
   let hip = 0
@@ -94,4 +95,21 @@ test('he stands side-on to the rifle as he aims, both hands on it, and fires fro
   expect(soldier.gun.there).toBe(true)
   expect(hip).toBeGreaterThan(5)
   expect(soldier.shots - hip).toBeGreaterThan(5)
+}, 30000)
+
+test('raising and lowering the sights, reloading and turning sharply, he stays standing, never crouching unasked', async () => {
+  const [scene, world] = [new Scene(), level()]
+  scene.add(world.drawn)
+  const physics = await buildWorld({ scene })
+  const soldier = new Soldier(person(), physics)
+  let lowest = Infinity
+  for (let t = 0; t < 8; t += 1 / 60) {
+    if (Math.abs(t - 4) < 1e-3) soldier.reload()
+    const yaw = t > 6 ? 1.5 * Math.sin(8 * (t - 6)) : 0
+    soldier.update(1 / 60, { move: { x: 0, z: 0 }, yaw, pitch: 0, sights: (t > 1 && t < 2) || (t > 2.5 && t < 3) })
+    physics.update(1 / 60)
+    world.update()
+    if (t > 0.5) lowest = Math.min(lowest, soldier.body.hips.value.y)
+  }
+  expect(lowest / soldier.body.size.stand).toBeGreaterThan(0.9)
 }, 30000)

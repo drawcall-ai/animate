@@ -197,8 +197,9 @@ export class Channel implements Mover {
       turn.multiply(by)
       return
     }
+    // (moved from outside, where it will be is not its to know: it is where it was last told)
     if (this.outside) {
-      place.copy(this.value).addScaledVector(this.velocity, t - this.now)
+      place.copy(this.value)
       velocity.copy(this.velocity)
       turn.copy(this.turn)
       return
