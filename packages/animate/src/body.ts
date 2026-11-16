@@ -1,5 +1,5 @@
 import { Object3D, Vector3 } from 'three'
-import { type Band, Bones, both, due, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, type Xyz } from '@drawcall/limbs'
+import { type Band, Bones, both, due, joints, type Part, parts, type Side, SIDES, SIGN, type Size, type Story, UP, waits, wrap, type Xyz } from '@drawcall/limbs'
 import type { Mover } from '@drawcall/plan'
 import { Clock, type Workings } from './clock'
 import { End, type Foot, type Hand } from './ends'
@@ -10,6 +10,8 @@ import { flat, type Ground, type Run, Stride, type Walk } from './stride'
 import { Bound, type Thing } from './thing'
 
 /** the body made for each rig */
+/** how near the way he is to face counts as facing it (rad), and how far a knock carries him before he steps after it (in legs) */
+const [FACED, KNOCK] = [0.02, 0.114]
 const rigs = new WeakMap<Object3D, Body>()
 
 /**
@@ -56,13 +58,12 @@ export class Body {
     const size = (this.size = bones.size)
     const turning = joints(bones)
     const locomotion = (this.locomotion = new Stride(this, bones, turning))
-    const { carrier } = locomotion
     const facing = () => ({ at: locomotion.hips.value, velocity: locomotion.hips.velocity, facing: locomotion.facing, ground: locomotion.ground })
     const asks = new Asks([], size, both(() => new Vector3()), facing, turning.trunk)
-    const body = { size, carrier, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place) }
+    const body = { size, gait: locomotion.gait, him: this, time: () => this.time, mover: (thing: Object3D) => this.mover(thing), frame: bones.frame, changed: () => asks.forget(), lowering: (side: Side, place: Vector3) => asks.lowering(side, place) }
     const end = (kind: 'hand' | 'foot', side: Side) => {
       const limb = kind === 'hand' ? turning.arms[side] : turning.legs[side]
-      const root = new OnHim(carrier)
+      const root = new OnHim(locomotion.gait.hips)
       return new End(kind, side, limb, root, body, bones.lies(kind, side), bones.starts[kind][side])
     }
     const ends = { hand: both((side) => end('hand', side)), foot: both((side) => end('foot', side)) }
@@ -75,8 +76,8 @@ export class Body {
     })
     this.hand = both((side) => facade(ends.hand[side]) as Hand)
     this.foot = both((side) => facade(ends.foot[side]) as Foot)
-    const { going, hips: at } = locomotion
-    this.hips = { ...at, to: (target, way) => going.to(target, way), at: (place) => going.at(place) }
+    const { hips: at } = locomotion
+    this.hips = { ...at, to: (target, way) => locomotion.to(target, way), at: (place) => locomotion.at(place) }
     this.trunk = turning.trunk
     this.head = turning.head
     this.arm = both((side) => turning.arms[side].first)
@@ -220,14 +221,19 @@ export class Body {
     while (!due(this.time, when)) yield
   }
 
+  /** the story of coming to rest where he goes */
+  private arrives() {
+    return waits(() => true, () => this.gait.arrived)
+  }
+
   /** the moment the hips come by a place on the ground, going as they are, it on their way: or to rest, where they are to come to rest there; NaN if they never do */
   when(to: Ground) {
-    return this.locomotion.going.when(to)
+    return this.gait.when(flat(to))
   }
 
   /** the moment he is highest in the jump he is making, or in the air, is to make next, on the clock of `time`: with none, now */
   highest() {
-    return this.locomotion.going.highest()
+    return this.gait.highest()
   }
 
   /**
@@ -237,7 +243,8 @@ export class Body {
    * he is there.
    */
   walk(to: Ground, way: Walk = {}) {
-    return this.locomotion.going.walk(to, way)
+    this.gait.walk(flat(to), way)
+    return this.arrives()
   }
 
   /**
@@ -247,7 +254,11 @@ export class Body {
    * returns is over when the hips are over that foot: `when(at)` tells that moment.
    */
   run(run: Run): Story {
-    return this.locomotion.going.run(run)
+    const { gait } = this
+    const comes = gait.run({ ...run, at: flat(run.at) })
+    return (function* () {
+      while (gait.time < comes - 1e-9) yield
+    })()
   }
 
   /**
@@ -257,7 +268,7 @@ export class Body {
    * is making he still makes, and he is not brought to a stand for want of a story.
    */
   go(velocity: { x: number; z: number }) {
-    return this.locomotion.going.go(velocity)
+    this.locomotion.go(velocity)
   }
 
   /**
@@ -265,7 +276,9 @@ export class Body {
    * at a walk. With none he faces the way he goes again. The story it returns is over when he faces so.
    */
   face(way?: { x: number; z: number }): Story<boolean> {
-    return this.locomotion.going.face(way)
+    const { gait } = this
+    gait.face(way)
+    return waits(() => true, () => way === undefined || Math.abs(wrap(Math.atan2(way.x, way.z) - gait.lead.facing)) < FACED)
   }
 
   /**
@@ -275,7 +288,7 @@ export class Body {
    * and only the head turns from it; going, he goes his way.
    */
   look(place?: Xyz) {
-    return this.locomotion.going.look(place)
+    this.locomotion.look(place)
   }
 
   /**
@@ -285,7 +298,12 @@ export class Body {
    * two. A rifle's kick at the shoulder is about 0.5 m/s, a shove 1, a blow that has him step 2 and more.
    */
   knock(velocity: Xyz, at?: Xyz) {
-    return this.locomotion.going.knock(velocity, at)
+    void at
+    // (carried further than a step is worth, he is to rest there and steps after the hips; else he sways back over his feet)
+    const by = new Vector3(velocity.x, 0, velocity.z)
+    this.gait.hips.velocity.add(by)
+    const carries = by.lengthSq() / 6
+    if (carries > KNOCK * this.size.leg) this.gait.lead.place.addScaledVector(by, carries / by.length())
   }
 
   /**
@@ -296,7 +314,8 @@ export class Body {
    * over when he has landed.
    */
   jump(top: Xyz): Story<boolean> {
-    return this.locomotion.going.jump(top)
+    this.gait.jump(top)
+    return waits(() => true, () => !this.gait.jumps)
   }
 
   /**

@@ -45,19 +45,6 @@ export type Mark = { at: Vector3; time: number }
 export type Footfall = Mark & { side: Side; put: boolean; swings: boolean }
 /** where the hips and the feet will be, as the plan has them, for whoever looks */
 export type Foreseen = { hips: Mark[]; to?: Vector3; footfalls: Footfall[]; top?: { asked?: Vector3; comes?: Mark }; facing: number; face: number; heading: number; led?: Vector3 }
-/** the hips and the feet as the rest of the body asks about them: where he will be and face, whether a foot can be spared, and a foot the story has or puts down */
-export type Carrier = {
-  readonly now: number
-  hips(seconds: number, value: Vector3, velocity: Vector3): Vector3
-  facing(seconds: number): number
-  spare(side: Side, seconds: number, until: number): boolean
-  stale(from?: number): void
-  take(side: Side, span: { from: number; until: number } | undefined): void
-  readonly ground: number
-  put(side: Side, place?: Vector3, seconds?: number): Vector3 | undefined
-  foot(side: Side): { readonly put?: Vector3; readonly down: boolean; readonly at: Vector3 }
-  readonly landing: boolean
-}
 const yawOf = (turn: Quaternion) => {
   const way = new Vector3(0, 0, 1).applyQuaternion(turn)
   return Math.atan2(way.x, way.z)
@@ -99,8 +86,6 @@ export class Stride {
   readonly hips = { value: new Vector3(), velocity: new Vector3() }
   readonly posture: Posture = { low: () => 0, bend: () => 0, turn: () => 0, shift: () => 0 }
   readonly gait: Gait
-  readonly carrier: Carrier
-  readonly going
   private looked?: Vector3
   private readonly heel = { left: 0, right: 0 }
   private readonly pitch = { left: 0, right: 0 }
@@ -108,9 +93,6 @@ export class Stride {
   private readonly down = { left: true, right: true }
   private readonly ankle = { left: new Vector3(), right: new Vector3() }
   private readonly eased = { left: new Vector3(), right: new Vector3() }
-  /** where the story puts each foot to stand, and from when until when it has one */
-  private readonly puts: Partial<Record<Side, Vector3>> = {}
-  private readonly taken: Partial<Record<Side, { from: number; until: number }>> = {}
   private lift = 0
   /** for how long no foot of his own has been on the ground (s) */
   private unheld = 0
@@ -128,8 +110,6 @@ export class Stride {
   ) {
     const gait = (this.gait = new Gait(bones.size))
     this.hips.value.copy(gait.hips.value)
-    this.carrier = this.carried()
-    this.going = this.words()
   }
 
   get facing() {
@@ -352,121 +332,42 @@ export class Stride {
     return waits(() => true, () => this.gait.arrived)
   }
 
-  /** what the rest of the body asks of the hips and the feet, as the plan has them */
-  private carried(): Carrier {
-    const { gait, bones } = this
-    const self = this
-    const facing = (seconds: number) => yawOf(this.turnAt(seconds))
-    return {
-      get now() {
-        return gait.time
-      },
-      hips(seconds, value, velocity) {
-        gait.hips.state(gait.time + seconds, value, velocity)
-        return value
-      },
-      facing,
-      spare: (side, seconds, until) => gait.spares(side, seconds, until),
-      stale() {},
-      take(side, span) {
-        if (span) self.taken[side] = span
-        else delete self.taken[side]
-      },
-      get ground() {
-        return gait.lead.place.y
-      },
-      put(side, place, seconds) {
-        gait.put(side, place, seconds)
-        if (place) self.puts[side] = place.clone()
-        else delete self.puts[side]
-        return self.puts[side]
-      },
-      foot(side) {
-        const foot = gait.feet[side]
-        return {
-          get put() {
-            return self.puts[side]
-          },
-          get down() {
-            return !gait.steps[side] && !foot.frames.length
-          },
-          at: foot.value,
-        }
-      },
-      get landing() {
-        return gait.jumps && gait.hips.velocity.y <= 0
-      },
-    }
+  /** led between updates, he is led from the moment the update is for */
+  places(time: number) {
+    if (this.led) this.gait.go(this.led, time)
+    if (this.placed) this.gait.at(this.placed, time)
+    this.led = this.placed = undefined
   }
 
-  /** how he will be turned so long from now, as the plan has his hips */
-  private turnAt(seconds: number) {
-    const turn = new Quaternion()
-    this.gait.hips.state(this.gait.time + seconds, new Vector3(), new Vector3(), turn)
-    return turn
+  /** he is to be going so along the ground, from the next update */
+  go(velocity: { x: number; z: number }) {
+    this.led = { x: velocity.x, z: velocity.z }
   }
 
-  /** what is said of where he goes, which way he faces and where he looks, as the body's words of the same names */
-  private words() {
+  /** where the world has him by the end of the next update, and how high the ground under him is */
+  at(place: { x: number; y?: number; z: number }) {
+    if (place.y !== undefined) this.gait.lead.place.y = place.y
+    this.placed = place
+  }
+
+  /** he looks at a place until told otherwise */
+  look(place?: Xyz) {
+    this.looked = place && new Vector3().copy(place)
+  }
+
+  /** where he looks */
+  get looking() {
+    return this.looked
+  }
+
+  /** the hips go to a place on the ground, or keep so high as he goes */
+  to(target: Xyz | { y: number }, way?: { speed?: number; plant?: Side }): Story<boolean> {
     const { gait } = this
-    const self = this
-    const arrived = () => waits(() => true, () => gait.arrived)
-    return {
-      // (led between updates, he is led from the moment the update is for)
-      places(time: number) {
-        if (self.led) gait.go(self.led, time)
-        if (self.placed) gait.at(self.placed, time)
-        self.led = self.placed = undefined
-      },
-      looks: () => {},
-      looking: (_share: number) => self.looked,
-      to(target: Xyz | { y: number }, way?: { speed?: number; plant?: Side }): Story<boolean> {
-        if ('x' in target) {
-          gait.walk(target, way)
-          return arrived()
-        }
-        gait.height = Math.min(self.bones.size.stand, target.y)
-        return waits(() => true, () => Math.abs(gait.hips.value.y - gait.height) < HIGH * self.bones.size.leg)
-      },
-      at(place: { x: number; y?: number; z: number }) {
-        if (place.y !== undefined) gait.lead.place.y = place.y
-        self.placed = place
-      },
-      when: (to: Ground) => gait.when(flat(to)),
-      highest: () => gait.highest(),
-      walk(to: Ground, way: { speed?: number; plant?: Side } = {}) {
-        gait.walk(flat(to), way)
-        return arrived()
-      },
-      run(run: { speed: number; at: Ground; plant?: Side; push?: number; arrive?: number }): Story {
-        const comes = gait.run({ ...run, at: flat(run.at) })
-        return (function* () {
-          while (gait.time < comes - 1e-9) yield
-        })()
-      },
-      go(velocity: { x: number; z: number }) {
-        self.led = { x: velocity.x, z: velocity.z }
-      },
-      face(way?: { x: number; z: number }): Story<boolean> {
-        gait.face(way)
-        const faced = () => way === undefined || Math.abs(wrap(Math.atan2(way.x, way.z) - gait.lead.facing)) < FACED
-        return waits(() => true, faced)
-      },
-      look(place?: Xyz) {
-        self.looked = place && new Vector3().copy(place)
-      },
-      knock(velocity: Xyz, _at?: Xyz) {
-        // (carried further than a step catches, he steps after the hips)
-        const by = new Vector3(velocity.x, 0, velocity.z)
-        gait.hips.velocity.add(by)
-        // (carried further than a step is worth, he is to rest there and steps after the hips; else he sways back over his feet)
-        const carries = by.lengthSq() / 6
-        if (carries > 0.114 * self.bones.size.leg) gait.lead.place.addScaledVector(by, carries / by.length())
-      },
-      jump(top: Xyz): Story<boolean> {
-        gait.jump(top)
-        return waits(() => true, () => !gait.jumps)
-      },
+    if ('x' in target) {
+      gait.walk(target, way)
+      return waits(() => true, () => gait.arrived)
     }
+    gait.height = Math.min(this.bones.size.stand, target.y)
+    return waits(() => true, () => Math.abs(gait.hips.value.y - gait.height) < HIGH * this.bones.size.leg)
   }
 }

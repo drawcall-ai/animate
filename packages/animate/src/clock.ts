@@ -57,19 +57,17 @@ export class Clock {
     // (the steps go on from him as he is, not as he was drawn ahead of them)
     if (this.owed > 0) this.draw(0)
     this.span = { from: this.time + this.owed, to: this.time + this.owed + delta }
-    this.body.locomotion.going.places(this.span.to)
+    this.body.locomotion.places(this.span.to)
     for (this.owed += delta; this.owed >= dt; this.updated = false) {
       this.owed -= dt
       this.advance(dt, this.updated)
     }
-    this.body.locomotion.going.looks()
     // he is drawn as he is at the moment the update is for, between his steps
     if (this.owed > 0) this.draw(this.owed)
   }
 
   private advance(delta: number, frame: boolean) {
     const { locomotion, joints, things, watched, asks } = this.body
-    const { going } = locomotion
     const now = this.time + delta
     // a thing moves only between updates: what the story's frames are on is looked at anew once an update
     if (frame) for (const thing of watched.values()) thing.look(this.time)
@@ -98,14 +96,13 @@ export class Clock {
     asks.now = this.time
     asks.forget()
     // where he looks is told as it lies from his shoulders now
-    const { from, to } = this.span
-    const looked = going.looking(to > from ? Math.min(1, (now - from) / (to - from)) : 1)
+    const looked = locomotion.looking
     // the things go first, then the hips and the feet, then the ends, those on a thing with it
     for (const thing of things.values()) thing.channel.advance(now)
     locomotion.step(delta, this.body.ends.foot, looked)
     for (const end of this.all) end.channel.advance(now)
     // a hand or a foot swung on and come to rest is the body's again, and so is a foot held in the air as he lands
-    const lands = locomotion.carrier.landing
+    const lands = locomotion.gait.jumps && locomotion.gait.hips.velocity.y <= 0
     for (const end of this.all) {
       const { busy, owner, holding } = end.channel
       if ((!busy && owner === 'on') || (end.kind === 'foot' && lands && holding && !busy)) end.free()

@@ -1,5 +1,5 @@
 import { DOWN, EASY, EXACT, type Grip, type Limb, type Pose, type Side, type Size, SLACK, type Story, sway, tick, type Touch, waits, type Xyz } from '@drawcall/limbs'
-import type { Carrier } from './stride'
+import type { Gait } from '@drawcall/gait'
 import { between, Channel, type Frame, hardest, type Mover } from '@drawcall/plan'
 import { Matrix4, type Object3D, Quaternion, Vector3 } from 'three'
 import type { OnHim } from './movers'
@@ -47,10 +47,10 @@ export type Foot = Readonly<{
   free(): void
 }>
 
-/** what an end needs of the body: its size, clock and carrier, the body that a place `on` him names, and what a thing is as a frame moves on */
+/** what an end needs of the body: its size, clock and gait, the body that a place `on` him names, and what a thing is as a frame moves on */
 export type Body = {
   size: Size
-  carrier: Carrier
+  gait: Gait
   him: object
   time(): number
   mover(thing: Object3D): Mover
@@ -144,7 +144,7 @@ export class End {
     if (this.channel.bound) throw new Error(`the ${this.name} is on a thing and leads it with it: send the thing, or take the hand off it first`)
     // a foot sent to rest on the ground, or on a thing, stands there: the body steps there with it
     const moving = how.velocity && new Vector3().copy(how.velocity).lengthSq() > 0
-    const ground = !how.on && 'y' in place && place.y <= this.body.carrier.ground + this.body.size.ankle + EXACT
+    const ground = !how.on && 'y' in place && place.y <= this.body.gait.lead.place.y + this.body.size.ankle + EXACT
     if (this.kind === 'foot' && 'y' in place && !moving && (ground || (how.on && how.on !== this.body.him))) {
       return this.step(this.scene(place, how.on as Object3D | undefined), when?.seconds)
     }
@@ -222,9 +222,6 @@ export class End {
     // (what it was sent onto before matters no more once it is sent elsewhere)
     const ons = this.channel.frames.map(({ on }) => (on && 'object' in on ? (on as { object: Object3D }).object : undefined))
     for (const thing of this.on) if (!ons.includes(thing)) this.on.delete(thing)
-    const moving = frame.velocity && new Vector3().copy(frame.velocity).lengthSq() > 0
-    if (this.kind === 'foot') this.body.carrier.take(this.side, { from: frame.leaves ?? this.body.time(), until: moving ? (frame.at ?? Infinity) : Infinity })
-    this.body.carrier.stale()
     this.body.changed()
     return this.met(written)
   }
@@ -238,16 +235,19 @@ export class End {
     return new Vector3().copy(place).applyQuaternion(turn).add(at)
   }
 
+  /** where the story last put the foot down to stand, until it is sent elsewhere */
+  private put?: Vector3
+
   /** the body steps with the foot to a place it stands on, in so many `seconds` or as soon as it can, and stands over it there: over once it is down there */
   private step(place: Vector3, seconds?: number): Story<boolean> {
     this.cancel()
-    const { carrier } = this.body
-    const put = carrier.put(this.side, place, seconds)
-    carrier.stale()
-    const foot = carrier.foot(this.side)
+    const { gait } = this.body
+    gait.put(this.side, place, seconds)
+    const put = (this.put = place)
+    const foot = gait.feet[this.side]
     return waits(
-      () => foot.put === put,
-      () => foot.down && put !== undefined && foot.at.distanceTo(put) < EXACT,
+      () => this.put === put,
+      () => !gait.steps[this.side] && !foot.frames.length && foot.value.distanceTo(put) < EXACT,
     )
   }
 
@@ -321,7 +321,7 @@ export class End {
     const mover = on === this.body.him ? this.root : on ? this.onto(on as Object3D) : undefined
     const there = new Vector3().copy(place)
     // (a foot goes no lower than it stands on the ground)
-    if (this.kind === 'foot' && !mover) there.y = Math.max(there.y, this.body.carrier.ground + this.body.size.ankle)
+    if (this.kind === 'foot' && !mover) there.y = Math.max(there.y, this.body.gait.lead.place.y + this.body.size.ankle)
     const ways = [palm, pointing].map((way) => way && new Vector3().copy(way))
     if (ways.some((way) => way && way.lengthSq() < EXACT)) throw new Error(`the ${this.name} is turned a way that leads nowhere`)
     // (said in the frame of what the place is on: the hand as it is now, told the same way)
@@ -415,7 +415,7 @@ export class End {
       // (a hand's along the ground: how low it is he gets down for; a foot's from its hip)
       const off = place(t).clone().sub(root)
       const far = (this.kind === 'hand' ? Math.hypot(off.x, off.z) : off.length()) - EASE * limb.length
-      const spared = this.kind === 'hand' || body.carrier.spare(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
+      const spared = this.kind === 'hand' || body.gait.spares(this.side, Math.max(0, t - now - sway(limb) / 2), t - now)
       if (far <= 0 && spared) return t
       if (far < best.far) best = { t, far }
     }
@@ -428,8 +428,7 @@ export class End {
     // (one the story does not have yet is only told to set off for nothing)
     if (this.held) this.channel.cancel()
     else this.channel.set(this.channel.value, this.channel.turn)
-    if (this.kind === 'foot') this.body.carrier.take(this.side, undefined)
-    this.body.carrier.stale()
+    this.put = undefined
     this.body.changed()
   }
 

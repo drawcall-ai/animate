@@ -76,14 +76,14 @@ export class OnHim implements Mover {
   private readonly at = new Vector3()
 
   constructor(
-    /** where the hips will be so many seconds on, how fast they will go, and which way he will face then: the hips' plan */
-    private readonly hips: { now: number; hips(seconds: number, at: Vector3, velocity: Vector3): Vector3; facing(seconds: number): number },
+    /** the hips' plan: where they will be, how fast they will go, and how turned */
+    private readonly hips: Mover,
   ) {}
 
-  state(t: number, place: Vector3, velocity: Vector3, turn?: Quaternion) {
-    const seconds = Math.max(0, t - this.hips.now)
-    const facing = this.hips.facing(seconds)
-    this.hips.hips(seconds, place, velocity)
+  state(t: number, place: Vector3, velocity: Vector3, turn = new Quaternion()) {
+    this.hips.state(t, place, velocity, turn)
+    const way = this.at.set(0, 0, 1).applyQuaternion(turn)
+    const facing = Math.atan2(way.x, way.z)
     place.add(this.at.copy(this.rest).applyAxisAngle(UP, facing))
     turn?.setFromAxisAngle(UP, facing)
   }
