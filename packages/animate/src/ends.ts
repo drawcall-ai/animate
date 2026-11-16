@@ -181,6 +181,7 @@ export class End {
       // (and one on him, no sooner than he is up again: it is counted from him standing)
       if (frame.on === this.root) frame.at = Math.max(frame.at, this.moment(after + this.body.rising()))
     }
+    if (this.kind === 'hand') this.within(frame as Frame & { at: number }, channel)
     // (a foot steps off for half as long as it sways; a fast end is struck from where it is drawn back to)
     const swung = this.leaves(frame, channel.value)
     frame.leaves = this.kind === 'foot' ? Math.min(swung ?? Infinity, frame.at - sway(this.limb) / 2) : swung
@@ -227,6 +228,26 @@ export class End {
     this.root.state(this.body.time(), new Vector3(), new Vector3(), facing)
     const back = facing.invert()
     return room(this.limb, out.clone().applyQuaternion(back), axis.clone().applyQuaternion(back))
+  }
+
+  /** how far short of where it was sent the last frame written to it is planned, out of the arm's reach (m) */
+  short = 0
+
+  /**
+   * a frame for a place above the shoulder, which only the arm reaches (getting down or bending brings nothing higher),
+   * is planned no further from the shoulder than the arm reaches, as the hips will have the shoulder then: for a thing
+   * the hand leads, the thing goes as far short as the hand does
+   */
+  private within(frame: Frame & { at: number }, channel: Channel) {
+    const [shoulder, turn] = [new Vector3(), new Quaternion()]
+    this.root.state(frame.at, shoulder, new Vector3())
+    const wrist = this.placed(frame, frame.at).add(channel === this.channel ? new Vector3() : this.channel.value.clone().sub(channel.value))
+    const out = wrist.clone().sub(shoulder)
+    this.short = wrist.y > shoulder.y ? Math.max(0, out.length() - REACH * this.limb.length) : 0
+    if (!this.short || !frame.place) return
+    const by = out.setLength(-this.short)
+    if (frame.on) frame.on.state(frame.at, new Vector3(), new Vector3(), turn)
+    frame.place = new Vector3().copy(frame.place).add(by.applyQuaternion(turn.invert()))
   }
 
   /** where a frame has it in the scene at a moment */

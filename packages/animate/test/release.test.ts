@@ -110,3 +110,20 @@ test('a forehand swings on through the ball round his shoulder before it comes t
   expect(far).toBeGreaterThan(0.5)
   expect(moving).toBeGreaterThan(0.15)
 })
+
+test('a release above the shoulder further than the arm reaches is planned where the arm reaches: the posed hand is on its plan as the ball leaves', () => {
+  const rig = person()
+  const ball = new Mesh(new SphereGeometry(RADIUS))
+  new Scene().add(rig, ball)
+  const hand = new Hand(rig, 'right')
+  const body = new Body(rig)
+  let gap = Infinity
+  body.play(
+    jumpShot(body, inHand(body, hand, grip(hand, ball, SEAT)), () => {
+      gap = body.intent().gaps.find(({ name }) => name === 'right hand')!.planned.distanceTo(body.intent().gaps.find(({ name }) => name === 'right hand')!.posed)
+    }),
+  )
+  while (body.playing && gap === Infinity) body.update(tick(body.size))
+  // (asked a full arm's length above the shoulder, the hand came 9 cm short of its plan, and the ball left from there)
+  expect(gap).toBeLessThan(0.02)
+})
