@@ -48,13 +48,13 @@ const input = (script: Script, t: number): Input => ({
   held: new Set(),
 })
 
-/** every bone of his, as the game has him a frame at a time */
-async function played(name: string, script: Script, seconds: number) {
+/** every bone of his, or of his legs, as the game has him a frame at a time */
+async function played(name: string, script: Script, seconds: number, legs = false) {
   const scene = new Scene()
   const world = await buildWorld({ scene })
   const game = GAMES[name](scene, world)
   const bones: Object3D[] = []
-  game.character.rig.traverse((bone) => void ((bone as { isBone?: boolean }).isBone && bones.push(bone)))
+  game.character.rig.traverse((bone) => void ((bone as { isBone?: boolean }).isBone && (!legs || /Leg|Foot/.test(bone.name)) && bones.push(bone)))
   const seen: Vector3[][] = []
   for (let t = 0; t < seconds; t += FRAME) {
     game.update(FRAME, input(script, t))
@@ -66,8 +66,8 @@ async function played(name: string, script: Script, seconds: number) {
 }
 
 /** how long after a moment two runs, the same until then, first part by more than a centimetre at any bone (s) */
-async function delay(name: string, before: Script, after: Script, at: number) {
-  const [a, b] = [await played(name, before, at + 1), await played(name, after, at + 1)]
+async function delay(name: string, before: Script, after: Script, at: number, legs = false) {
+  const [a, b] = [await played(name, before, at + 1, legs), await played(name, after, at + 1, legs)]
   const k = a.findIndex((frame, k) => k * FRAME >= at && frame.some((bone, j) => bone.distanceTo(b[k][j]) > MOVED))
   return k < 0 ? Infinity : (k + 1) * FRAME - at
 }
@@ -79,11 +79,14 @@ test.each(Object.keys(GAMES))(
   'in %s a key pressed moves him within a tenth of a second: walking off, Space, and turning back out of an action',
   async (name) => {
     const walks = await delay(name, {}, { move: (t) => (t >= 1 ? ahead() : { x: 0, z: 0 }) }, 1)
+    // (and what a viewer sees first: a knee or a foot moving)
+    const steps = await delay(name, {}, { move: (t) => (t >= 1 ? ahead() : { x: 0, z: 0 }) }, 1, true)
     const acts = await delay(name, {}, { act: [1] }, 1)
     // (out of whatever Space began, the player turns him back)
     const turns = await delay(name, { act: [1] }, { act: [1], move: (t) => (t >= 1.3 ? back() : { x: 0, z: 0 }) }, 1.3)
-    console.log(`${name}: walk ${(walks * 1000).toFixed(0)} ms, Space ${(acts * 1000).toFixed(0)} ms, back out of it ${(turns * 1000).toFixed(0)} ms`)
+    console.log(`${name}: walk ${(walks * 1000).toFixed(0)} ms, legs ${(steps * 1000).toFixed(0)} ms, Space ${(acts * 1000).toFixed(0)} ms, back out of it ${(turns * 1000).toFixed(0)} ms`)
     expect(walks).toBeLessThan(0.1)
+    expect(steps).toBeLessThan(0.05)
   },
   60000,
 )

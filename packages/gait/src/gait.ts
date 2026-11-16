@@ -98,7 +98,7 @@ export class Gait {
 
   /** he is led: going so along the ground (m/s) from a moment, by default now, the lead telling where he will be by how it changes */
   go(velocity: { x: number; z: number }, at = this.time) {
-    if (this.course || this.planted || (Math.hypot(velocity.x, velocity.z) > SLOW * this.size.pace && SIDES.some((side) => this.feet[side].owner === 'story'))) this.sent()
+    if (this.course || this.planted || (Math.hypot(velocity.x, velocity.z) > STILL * this.size.pace && SIDES.some((side) => this.feet[side].owner === 'story'))) this.sent()
     const was = this.lead.velocity.clone()
     this.lead.go(velocity, at)
     // (led anew, the plan is where he will be from now)
