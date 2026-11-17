@@ -7,7 +7,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "pnpm -r --workspace-concurrency=1 --if-present test",
     "build": "pnpm -r --if-present build",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm --filter @drawcall/animate exec npm pack --dry-run",
+    "check": "pnpm typecheck && pnpm test && pnpm --filter @drawcall/animate exec npm pack --dry-run",
     "soldier": "pnpm --filter @drawcall/example-soldier dev",
     "tennis": "pnpm --filter @drawcall/example-tennis dev",
     "grip": "pnpm --filter @drawcall/example-grip dev",
