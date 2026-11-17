@@ -1,23 +1,42 @@
 // The grips the tests sweep: every thing, held at points all through it, from every side, in each kind of grip
 // the example offers, the fingers left out starting relaxed, spread wide or in a fist.
-import { type Element, fist, type Pose, relaxed } from '@drawcall/grab'
-import { Box3, Group, Vector3 } from 'three'
-import { THINGS } from '../src/things'
+import { type HandPart, HandPose } from "@drawcall/animate"
+import { Box3, Group, Vector3 } from "three"
+import { THINGS } from "../src/things"
 
-const KINDS: Record<string, readonly Element[] | undefined> = { whole: undefined, pinch: ['thumb', 'index', 'middle'], tip: ['index'] }
+const KINDS: Record<string, readonly HandPart[] | undefined> = { whole: undefined, pinch: ["thumb", "index", "middle"], tip: ["index"] }
 const wide = (spread: number) => ({ spread, bend: [0, 0, 0] as [number, number, number] })
-const STARTS: Record<string, Pose> = {
-  relaxed,
+const STARTS: Record<string, HandPose> = {
+  relaxed: HandPose.relaxed,
   wide: { thumb: wide(0.5), index: wide(0.35), middle: wide(0), ring: wide(-0.35), little: wide(-0.35) },
-  fist,
+  fist: HandPose.fist,
 }
 /** where on a thing, as shares of its half size from its middle: in it, off to each side, and out at two corners */
-const POINTS = [[0, 0, 0], [0.6, 0, 0], [-0.6, 0, 0], [0, 0.6, 0], [0, -0.6, 0], [0, 0, 0.6], [0, 0, -0.6], [0.9, 0.9, 0.9], [-0.9, 0.5, -0.9]]
+const POINTS = [
+  [0, 0, 0],
+  [0.6, 0, 0],
+  [-0.6, 0, 0],
+  [0, 0.6, 0],
+  [0, -0.6, 0],
+  [0, 0, 0.6],
+  [0, 0, -0.6],
+  [0.9, 0.9, 0.9],
+  [-0.9, 0.5, -0.9],
+]
 /** the 26 sides: along each axis, and between them */
 const SIDES: Vector3[] = []
 for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const z of [-1, 0, 1]) if (x || y || z) SIDES.push(new Vector3(x, y, z).normalize())
 
-export type Case = { name: string; thing: string; kind: string; at: Vector3; from: Vector3; thumb: Vector3; using?: readonly Element[]; start: Pose }
+export type Case = {
+  name: string
+  thing: string
+  kind: string
+  at: Vector3
+  approachFrom: Vector3
+  thumbToward: Vector3
+  using?: readonly HandPart[]
+  idlePose: HandPose
+}
 
 /** the thumb to the thing's +y side, or +z where the hand comes along y */
 export const thumbFor = (from: Vector3) => (Math.abs(from.y) < 0.9 ? new Vector3(0, 1, 0) : new Vector3(0, 0, 1))
@@ -32,9 +51,9 @@ export function cases(stride: number): Case[] {
       for (const [s, from] of SIDES.entries())
         for (const [kind, using] of Object.entries(KINDS))
           for (const [held, start] of Object.entries(STARTS)) {
-            if (kind === 'whole' && held !== 'relaxed') continue // nothing is left out
+            if (kind === "whole" && held !== "relaxed") continue // nothing is left out
             const at = new Vector3(...point).multiply(half).add(middle)
-            all.push({ name: `${thing} p${p} s${s} ${kind} ${held}`, thing, kind, at, from, thumb: thumbFor(from), using, start })
+            all.push({ name: `${thing} p${p} s${s} ${kind} ${held}`, thing, kind, at, approachFrom: from, thumbToward: thumbFor(from), using, idlePose: start })
           }
   }
   return all.filter((_, i) => i % stride === 0)

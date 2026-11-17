@@ -21,7 +21,7 @@ export async function createCourt() {
   const scene = new Group()
   const slick = { restitution: BOUNCE, staticFriction: 0, dynamicFriction: 0 } // no friction: a bounce only reverses the vertical speed
   const floor = new RigidBody({ bodyType: "static", colliders: false, material: slick })
-  floor.add(Object.assign(new BoxCollider({ size: [60, 1, 60] }), {}).translateY(-0.5))
+  floor.add(new BoxCollider({ size: [60, 1, 60] }).translateY(-0.5))
   const net = new RigidBody({ bodyType: "static", colliders: false, material: { restitution: 0.1, staticFriction: 0.5, dynamicFriction: 0.5 } })
   net.add(new BoxCollider({ size: [2 * WIDTH + 2, NET, 0.04] }).translateY(NET / 2))
   const ball = new RigidBody({ mass: 0.057, colliders: false, canSleep: false, material: slick })

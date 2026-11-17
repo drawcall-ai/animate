@@ -1,5 +1,7 @@
 // Headless numbers for the controller example: a scripted input drives the physics capsule through every kind of
 // movement, and the body is measured against it. `pnpm test` prints the table and writes filmstrips to test/film.
+import { CachedSoldierLoader } from "@drawcall/example-stage/soldier"
+import { describeGrip } from "@drawcall/animate"
 import { mkdirSync, writeFileSync } from "node:fs"
 import { Vector3 } from "three"
 import { afterAll, expect, test } from "vitest"
@@ -19,10 +21,12 @@ const HEADER = [
 
 /** A character on its capsule, an input to script, and `run`, which plays the input for a while and measures. */
 async function session() {
-  const { capsule, controller, body, planner, ground, frame } = await createCharacter()
+  const character = await createCharacter((await new CachedSoldierLoader().loadAsync()).object)
+  const { capsule, controller, body, locomotion, carry, ground, frame } = character
+  const sides = Object.values(locomotion.feet)
   const input: Input = { move: new Vector3(), pace: "walk", crouch: false, jump: false, rifle: false }
-  const feet = planner.feet.map((f) => ({ down: false, at: new Vector3(), on: f.on }))
-  let before = body.q.slice(),
+  const feet = sides.map((f) => ({ down: false, at: new Vector3(), on: f.groundPoint }))
+  let before = body.angles.slice(),
     t = 0
   const strips = new Map<string, ReturnType<typeof film>>()
   const total = { ms: 0, msMax: 0, frames: 0, slide: 0, unconverged: 0 }
@@ -30,7 +34,9 @@ async function session() {
   /** Run `seconds` of the current input and measure. `every` takes a film shot each so many frames, 14 of them, from frame `from`. */
   const run = (name: string, seconds: number, every = 0, each?: (k: number) => void, from = 0) => {
     const m = { track: 0, trackMax: 0, slide: 0, dq: 0, joint: "", ms: 0, frames: 0, steps: 0, flight: 0 }
-    const along = input.move.lengthSq() ? input.move.clone().normalize() : new Vector3(0, 0, 1).applyQuaternion(body.rotationOf(body.root)).setY(0).normalize() // seen from the side
+    const along = input.move.lengthSq()
+      ? input.move.clone().normalize()
+      : new Vector3(0, 0, 1).applyQuaternion(body.quaternionOf(body.root)).setY(0).normalize() // seen from the side
     for (let k = 0; k < Math.round(seconds / DT); k++, t += DT) {
       each?.(k)
       const { result, solveMs } = frame(DT, input)
@@ -39,25 +45,25 @@ async function session() {
       const error = Math.hypot(p.x - capsule.position.x, p.z - capsule.position.z)
       m.track += error
       m.trackMax = Math.max(m.trackMax, error)
-      planner.feet.forEach((f, i) => {
-        const down = !f.swing && !planner.airborne,
-          at = body.positionOf(f.on) // the point of the foot that is on the ground: the heel, then the ball
-        if (down && feet[i].down && feet[i].on === f.on) m.slide = Math.max(m.slide, at.distanceTo(feet[i].at))
-        if (down && !feet[i].down) m.steps++
-        feet[i] = { down, at, on: f.on }
+      sides.forEach((f, i) => {
+        const at = body.positionOf(f.groundPoint) // the point of the foot that is on the ground: the heel, then the ball
+        if (f.planted && feet[i].down && feet[i].on === f.groundPoint) m.slide = Math.max(m.slide, at.distanceTo(feet[i].at))
+        if (f.planted && !feet[i].down) m.steps++
+        feet[i] = { down: f.planted, at, on: f.groundPoint }
       })
-      if (planner.feet.every((f) => f.swing) || planner.airborne) m.flight++
-      body.q.forEach(
-        (q, j) => j > 5 && Math.abs(q - before[j]) > m.dq && ((m.dq = Math.abs(q - before[j])), (m.joint = `${body.name(j)} at ${t.toFixed(2)} s`)),
+      if (sides.every((f) => f.landing) || locomotion.airborne) m.flight++
+      body.angles.forEach(
+        (q, j) => j > 5 && Math.abs(q - before[j]) > m.dq && ((m.dq = Math.abs(q - before[j])), (m.joint = `${body.angleName(j)} at ${t.toFixed(2)} s`)),
       )
-      before = body.q.slice()
+      before = body.angles.slice()
       m.ms += solveMs
       total.msMax = Math.max(total.msMax, solveMs)
       if (!result.converged) total.unconverged++
       m.frames++
       if (every && k >= from && (k - from) % every === 0 && k < from + 14 * every) {
-        if (!strips.has(name)) strips.set(name, film(body))
-        strips.get(name)!.shot(
+        const strip = strips.get(name) ?? film(body)
+        strips.set(name, strip)
+        strip.shot(
           `${t.toFixed(2)} s`,
           capsule.position,
           along,
@@ -82,11 +88,11 @@ async function session() {
     for (const [name, strip] of strips) writeFileSync(new URL(`./film/${name.replace(/[^a-z0-9]+/gi, "-")}.svg`, import.meta.url), strip.svg())
     expect(total.slide).toBeLessThan(1e-6)
   }
-  return { capsule, controller, body, planner, ground, input, feet, run, finish, now: () => t }
+  return { capsule, controller, body, locomotion, sides, carry, ground, input, run, finish, now: () => t }
 }
 
 test("walk, run, sprint, turn around, crouch, jump and the rifle on one physics capsule", async () => {
-  const { capsule, controller, body, planner, input, feet, run, finish, now } = await session()
+  const { capsule, controller, body, locomotion, sides, carry, input, run, finish, now } = await session()
   HEADER.forEach(say)
   run("stand", 0.5)
   input.move.set(0, 0, 1)
@@ -102,19 +108,18 @@ test("walk, run, sprint, turn around, crouch, jump and the rifle on one physics 
     events: string[] = []
   let stopped = false,
     faced = false
-  const swinging = planner.feet.map((f) => !!f.swing)
-  void feet
+  const swinging = sides.map((f) => !!f.landing)
   run("turn around", 1.5, 4, () => {
     const since = (1000 * (now() - flip)).toFixed(0)
-    planner.feet.forEach((f, i) => {
-      if (!f.swing && swinging[i])
+    sides.forEach((f, i) => {
+      if (!f.landing && swinging[i])
         events.push(
-          `${since} ms: foot ${f.S} lands ${cm(f.at.z - capsule.position.z)} cm ${f.at.z > capsule.position.z ? "ahead (old direction)" : "behind"} of the capsule`,
+          `${since} ms: the ${f.side} foot lands ${cm(f.position.z - capsule.position.z)} cm ${f.position.z > capsule.position.z ? "ahead (old direction)" : "behind"} of the capsule`,
         )
-      swinging[i] = !!f.swing
+      swinging[i] = !!f.landing
     })
     if (!stopped && controller.velocity.z <= 0) (events.push(`${since} ms: the capsule has stopped and turns back`), (stopped = true))
-    const facing = new Vector3(0, 0, 1).applyQuaternion(body.rotationOf(body.root)).z
+    const facing = new Vector3(0, 0, 1).applyQuaternion(body.quaternionOf(body.root)).z
     if (!faced && facing < -0.9) (events.push(`${since} ms: the pelvis faces the new direction`), (faced = true))
   })
   events.slice(0, 8).forEach((e) => say("    " + e))
@@ -148,10 +153,10 @@ test("walk, run, sprint, turn around, crouch, jump and the rifle on one physics 
     input.jump = true
     const m = run(name, 1.5, 6, () => {
       apex = Math.max(apex, capsule.position.y)
-      if (planner.airborne && off < 0) off = now()
-      if (!planner.airborne && off >= 0 && landed < 0) {
+      if (locomotion.airborne && off < 0) off = now()
+      if (!locomotion.airborne && off >= 0 && landed < 0) {
         landed = now()
-        sole = Math.max(...planner.feet.map((f) => Math.abs(body.positionOf(f.sole).y - capsule.position.y)))
+        sole = Math.max(...sides.map((f) => Math.abs(body.positionOf(f.sole).y - capsule.position.y)))
       }
     })
     say(
@@ -161,8 +166,24 @@ test("walk, run, sprint, turn around, crouch, jump and the rifle on one physics 
     expect(m.slide).toBeLessThan(1e-6)
   }
 
-  // The rifle takes both arms: the planner emits nothing for them.
+  // The rifle: the hands reach for it on its sling and close on it, and once they hold it it takes both arms.
+  say(`the right hand round the rifle's pistol grip\n${describeGrip(carry.grips.pistol)}`.replace(/\n/g, "\n  "))
+  say(`and then its index on the trigger\n${describeGrip(carry.grips.right)}`.replace(/\n/g, "\n  "))
+  say(`the left hand on the rifle's handguard\n${describeGrip(carry.grips.left)}`.replace(/\n/g, "\n  "))
+  input.move.set(0, 0, 0)
+  run("settle", 1)
+  let taken = -1
+  const took = now()
   input.rifle = true
+  const take = run("rifle: take it", 0.8, 4, () => void (taken < 0 && carry.held && (taken = now() - took)))
+  say(`    the hands hold it ${(1000 * taken).toFixed(0)} ms after it is asked for`)
+  expect(taken).toBeGreaterThan(0.3)
+  input.rifle = false
+  const away = run("rifle: put it away", 0.8, 4)
+  expect(carry.held).toBe(false)
+  expect(Math.max(take.dq, away.dq)).toBeLessThan(0.3) // the arms move there and back, no joint jumps
+  input.rifle = true
+  input.move.set(1, 0, 0)
   input.pace = "walk"
   run("rifle: walk", 3, 5, undefined, 90)
   input.crouch = true
@@ -218,15 +239,16 @@ test("the hardest inputs: circles, left-right, 180s at a run, and a random hand 
 }, 120000)
 
 test("stairs: each foot stands on what a ray cast down finds under it", async () => {
-  const { capsule, body, planner, ground, input, run, finish } = await session()
+  const { capsule, body, sides, ground, input, run, finish } = await session()
   HEADER.forEach(say)
   let apart = 0,
     top = 0
   const watch = () => {
     top = Math.max(top, capsule.position.y)
-    for (const f of planner.feet) {
-      if (f.swing || planner.airborne) continue
-      const gaps = [f.heel, f.sole, f.ball].map((point) => body.positionOf(point).y - ground(body.positionOf(point)))
+    for (const f of sides) {
+      if (!f.planted) continue
+      const points = ["heel", "sole", "ball"].map((name) => body.get(name + (f.side === "left" ? "L" : "R")))
+      const gaps = points.map((point) => body.positionOf(point).y - ground(body.positionOf(point)))
       apart = Math.max(apart, Math.min(...gaps), -Math.min(...gaps)) // some of it stands on the ground, none of it is in it
     }
   }
@@ -244,12 +266,12 @@ test("stairs: each foot stands on what a ray cast down finds under it", async ()
 }, 120000)
 
 test("no foot is put on what the capsule cannot climb", async () => {
-  const { capsule, planner, input, run, finish } = await session()
+  const { capsule, sides, input, run, finish } = await session()
   HEADER.forEach(say)
   // The block is 0.4 m high, the capsule steps up 0.32 m: it runs into it, and has to jump to get on.
   let over = 0
   const watch = () => {
-    for (const f of planner.feet) if (!f.swing && !planner.airborne) over = Math.max(over, f.at.y - capsule.position.y)
+    for (const f of sides) if (f.planted) over = Math.max(over, f.position.y - capsule.position.y)
   }
   input.pace = "run"
   input.move.set(0, 0, 1)
@@ -267,9 +289,9 @@ test("no foot is put on what the capsule cannot climb", async () => {
   input.move.negate()
   run("run up and jump onto it", 2.2, 6, (k) => void (input.jump ||= k === 60), 40)
   say(
-    `    after a jump the capsule stands ${cm(capsule.position.y)} cm up, on the block, and so do the feet: ${planner.feet.map((f) => cm(f.at.y)).join(" and ")} cm`,
+    `    after a jump the capsule stands ${cm(capsule.position.y)} cm up, on the block, and so do the feet: ${sides.map((f) => cm(f.position.y)).join(" and ")} cm`,
   )
   expect(capsule.position.y).toBeGreaterThan(0.35)
-  for (const f of planner.feet) if (!f.swing) expect(f.at.y).toBeGreaterThan(0.35)
+  for (const f of sides) if (!f.landing) expect(f.position.y).toBeGreaterThan(0.35)
   finish()
 }, 120000)

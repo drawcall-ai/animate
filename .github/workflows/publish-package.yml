@@ -1,0 +1,47 @@
+name: Publish Package
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/check.yml
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Set release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Expected a stable release tag such as v0.7.0" >&2
+            exit 1
+          fi
+          pnpm --dir packages/animate exec npm pkg set version="$version"
+      # `source` is how this workspace runs the package from its sources, and the devDependencies link the private
+      # workspace packages it bundles: a tarball has neither, so an installer must not see them.
+      - name: Drop what only the workspace has
+        run: pnpm --dir packages/animate exec npm pkg delete 'exports[.].source' devDependencies
+      # npm's trusted publisher for @drawcall/animate is bound to drawcall-ai/animate and this file's name,
+      # publish-package.yml, with no environment: renaming the file breaks publishing.
+      - name: Publish @drawcall/animate
+        working-directory: packages/animate
+        run: pnpm exec npm publish --access public --provenance --tag latest

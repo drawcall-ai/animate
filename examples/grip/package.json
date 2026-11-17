@@ -1,5 +1,5 @@
 {
-  "name": "@drawcall/grab-example-grip",
+  "name": "@drawcall/example-grip",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,11 +7,11 @@
     "dev": "vite --host",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --silent=false"
   },
   "dependencies": {
+    "@drawcall/animate": "workspace:*",
     "@drawcall/example-stage": "workspace:*",
-    "@drawcall/grab": "workspace:*",
     "three": "^0.187.0"
   },
   "devDependencies": {

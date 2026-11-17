@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
@@ -19,4 +20,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The rigged examples' skin weights take minutes per character to compute: their caches are kept between runs,
+      # keyed by what the weights are computed from (the models, the loaders, the locked packages).
+      - uses: actions/cache@v4
+        with:
+          path: examples/*/public/_vitecache
+          key: skin-weights-${{ hashFiles('pnpm-lock.yaml', 'examples/stage/models/**', 'examples/stage/src/player.ts', 'examples/stage/src/soldier.ts', 'examples/stage/src/rig.ts') }}
+          restore-keys: skin-weights-
       - run: pnpm check

@@ -4,4 +4,3 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 examples/controller/test/film
-examples/match/test/film

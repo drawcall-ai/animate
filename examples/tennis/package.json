@@ -1,5 +1,5 @@
 {
-  "name": "@drawcall/ik-example-tennis",
+  "name": "@drawcall/example-tennis",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,16 +7,17 @@
     "dev": "vite --host",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --silent=false"
   },
   "dependencies": {
+    "@drawcall/animate": "workspace:*",
     "@drawcall/example-stage": "workspace:*",
-    "@drawcall/humanoid": "workspace:*",
-    "@drawcall/ik": "workspace:*",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "vitecache": "^0.8.0"
   },
   "devDependencies": {
     "@types/three": "^0.187.0",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.1.0"

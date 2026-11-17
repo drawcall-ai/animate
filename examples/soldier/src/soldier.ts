@@ -1,57 +1,87 @@
-// A soldier walking with a rifle. The rifle is gripped by both hands (a closed loop), so hands and rifle are one
-// rigid piece and the hands are never targeted. ONE hard goal owns the rifle's pose:
-//  - lowered: the rifle matches a marker on the chest (low ready): both points are on the body, so it is exact;
-//  - aiming: it matches a world point on the line from beside the planned pelvis path to the aim target.
-// In between, the planner places the world point a share of the way from where the chest marker is now to the aim.
-// The walk's arm swing is not emitted: the planner knows the arms are busy.
+// A soldier walking with a rifle: his planner runs a locomotion planner for his steps and the rifle carry. Each hand takes
+// hold of the rifle once, in the grip found for it, and keeps that grip: the rifle hangs from the right hand and the
+// left closes the loop, so hands and rifle are one rigid piece and the hands are never targeted. The locomotion
+// planner has the legs, pelvis and trunk and faces him toward the aim; the arms are the rifle's, so it swings neither.
+// ONE hard goal owns the rifle's pose, on the end of its stock:
+//  - lowered: it matches the low-ready mark on the pelvis: both are on the body, so it is exact;
+//  - aiming: it matches a world point at his right shoulder over where he walks, the barrel on the line to the aim
+//    target. It is placed from the path, not from the pelvis, so the rifle glides while the body bobs under it.
+// In between, it turns about the stock's end a share of the way from the one to the other.
 
-import { createHumanoid, upright } from '@drawcall/humanoid'
-import { type Body, type Goal, type Pose, ease, hard, mark, mixPose, Target } from '@drawcall/ik'
-import { Group, Matrix4, Quaternion, Vector3 } from 'three'
-import { createWalker, makeWalk } from './walk'
+import { SOLDIER } from "@drawcall/example-stage/bearing"
+import { createRifle, gripRifle, LOW_READY, lowReady } from "@drawcall/example-stage/rifle"
+import { type Goal, type Grip, hard, Humanoid, LocomotionPlanner, mix, type Pose, posture, type Side, Target } from "@drawcall/animate"
+import { type Group, MathUtils, Matrix4, type Object3D, Quaternion, Vector3 } from "three"
 
-const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 1)
-const turn = (axis: Vector3, angle: number) => new Quaternion().setFromAxisAngle(axis, angle)
+const Y = new Vector3(0, 1, 0)
+const SPEED = 0.7 // m/s
+const SHOULDER = 0.5 // m his shoulders are over his pelvis
 
-// The arm poses that go with the two rifle poses, made by solving each with the body held upright.
+// The arms that go with aiming, made by solving them for the rifle there with the trunk held upright and the elbows
+// drawn out from the body, the right one most.
 const AIM: Pose = {
-  shoulderL: [-0.24, -0.15], upperArmL: [-0.94, -0.3, 0.02], forearmL: [-0.67, 0.02], handL: [-0.08, 0.46],
-  shoulderR: [-0.3, -0.24], upperArmR: [-0.14, 0.21, 0.38], forearmR: [-1.84, -0.3], handR: [-0.18, 0.35],
-}
-const LOW: Pose = {
-  shoulderL: [0.1, -0.13], upperArmL: [-0.58, -0.16, 0.18], forearmL: [-0.51, 0.16], handL: [-0.02, 0.3],
-  shoulderR: [-0.04, -0.15], upperArmR: [0.04, 0.3, 0.58], forearmR: [-1.58, -0.13], handR: [0.05, 0.17],
-}
-
-/** The rifle: barrel along +Z, the pistol grip at its origin. `gripR` and `gripL` are where the hands hold it. */
-export function createRifle(): Group {
-  const rifle = new Group()
-  rifle.name = 'rifle'
-  rifle.userData.mass = 3.5
-  mark(rifle, 'gripR', new Vector3(), turn(Y, 0.5).multiply(turn(X, -0.6))) // the forearm comes in from the outside
-  mark(rifle, 'gripL', new Vector3(0, -0.03, 0.26), turn(Z, -0.4)) // on the side of the handguard, palm turned in
-  return rifle
+  shoulderL: [-0.3, 0.15],
+  upperArmL: [-1.83, -0.25, 0.79],
+  forearmL: [0, 0.9],
+  handL: [0.34, -0.21],
+  shoulderR: [-0.22, -0.27],
+  upperArmR: [-0.56, -0.12, 0.49],
+  forearmR: [-2.06, -0.59],
+  handR: [0.43, -0.72],
 }
 
-export interface Soldier { body: Body; rifle: Group; plan: (t: number) => Goal[] }
+/** The turn that points the muzzle (-Z) along `along`, the rifle upright. */
+const pointing = (along: Vector3) => new Quaternion().setFromRotationMatrix(new Matrix4().lookAt(new Vector3(), along, Y))
 
-/** `aim(t)` is where to aim; `aiming(t)` in [0, 1] says how far the rifle is up (0 lowered, 1 aimed). */
-export function createSoldier(aim: (t: number) => Vector3, aiming: (t: number) => number = () => 1, walk = makeWalk(t => 0.6 * Math.sin(0.8 * t))): Soldier {
-  const body = createHumanoid(), rifle = createRifle(), walker = createWalker(body, walk)
-  body.attach(rifle, body.get('palmR'), rifle.getObjectByName('gripR')) // carried by the right hand
-  body.attach(rifle, body.get('palmL'), rifle.getObjectByName('gripL')) // the left hand closes the loop
-  const lowered = mark(body.get('chest'), 'lowReady', new Vector3(0.06, -0.05, 0.26), turn(Y, 0.3).multiply(turn(X, 0.6)))
-  const target = new Target(), stand = upright(body)
-  const aimed = (t: number) => {
-    const eye = walk.pelvis(t).position.add(new Vector3(0, 0.38, 0)), to = aim(t).sub(eye)
-    const start = eye.add(new Vector3(-to.z, 0, to.x).setLength(0.1)) // the rifle sits to the right of the body
-    const quaternion = new Quaternion().setFromRotationMatrix(new Matrix4().lookAt(aim(t).sub(start), new Vector3(), Y)) // +Z along the aim line
-    return { position: start.add(new Vector3(0, 0, 0.28).applyQuaternion(quaternion)), quaternion }
+/** How he walks at time t, in the world: up the path for 8 s, snaking either side of +z, then back down it facing the
+ * same way, again and again, starting and stopping smoothly. */
+const walking = (t: number) => {
+  const pace = Math.max(-1, Math.min(1, 2 * Math.sin((Math.PI * t) / 8))),
+    heading = 0.6 * Math.sin((Math.PI * t) / 2)
+  return new Vector3(Math.sin(heading), 0, Math.cos(heading)).multiplyScalar(SPEED * pace)
+}
+
+/** The soldier's body and rifle, and his planner. */
+export interface SoldierPlanner {
+  body: Humanoid
+  rifle: Group
+  grips: { right: Grip; left: Grip; pistol: Grip }
+  /** where each hand bone is on the rifle */
+  seats: Record<Side, Object3D>
+  locomotion: LocomotionPlanner
+  /** This frame's goals, `dt` after the last. */
+  update: (dt: number) => Goal[]
+}
+
+/** The soldier, `rigged` (the rigged soldier, his fingers at rest), and his planner. `aim(t)` is where to aim at time t;
+ * `aiming(t)` in [0, 1] says how far the rifle is up (0 lowered, 1 aimed). */
+export function createSoldierPlanner(rigged: Object3D, aim: (t: number) => Vector3, aiming: (t: number) => number = () => 1): SoldierPlanner {
+  const body = new Humanoid({ rig: rigged, girth: SOLDIER.girth }),
+    { rifle, butt } = createRifle(),
+    { grips, seats } = gripRifle(body.hands, rifle)
+  for (const side of ["right", "left"] as const) body.hold(side, rifle, grips[side]) // the right hand carries the rifle, the left closes the loop
+  const locomotion = new LocomotionPlanner(body, SOLDIER.gait)
+  const lowered = lowReady(body),
+    target = new Target()
+  const standing = body.positionOf(body.get("pelvis")).y - body.positionOf(body.get("soleR")).y
+  const position = new Vector3() // where he is over the ground: the locomotion planner follows it
+  let t = 0
+  const update = (dt: number): Goal[] => {
+    t += dt
+    const velocity = walking(t)
+    position.addScaledVector(velocity, dt)
+    const to = aim(t).sub(position)
+    const goals = locomotion.update(dt, { position, velocity, facing: Math.atan2(to.x, to.z), taken: ["armL", "armR"] })
+    const u = MathUtils.smoothstep(aiming(t), 0, 1)
+    if (u > 0) {
+      const shoulder = position
+        .clone()
+        .add(new Vector3(0, standing + SHOULDER, 0))
+        .add(new Vector3(-to.z, 0, to.x).setLength(0.15))
+      const down = { position: body.positionOf(lowered).addScaledVector(body.velocityOf(lowered), dt), quaternion: body.quaternionOf(lowered) }
+      target.set({ position: down.position.lerp(shoulder, u), quaternion: down.quaternion.slerp(pointing(aim(t).sub(shoulder)), u) })
+    }
+    return [...goals, hard(butt, u > 0 ? target : lowered), posture(body, mix(LOW_READY, AIM, u))]
   }
-  const plan = (t: number): Goal[] => {
-    const u = ease(aiming(t)), up = aimed(t)
-    if (u > 0) target.set({ position: body.positionOf(lowered).lerp(up.position, u), quaternion: body.rotationOf(lowered).slerp(up.quaternion, u) })
-    return [...walker(t, { ...stand, ...mixPose(LOW, AIM, u) }, false), hard(rifle, u > 0 ? target : lowered)]
-  }
-  return { body, rifle, plan }
+  return { body, rifle, grips, seats, locomotion, update }
 }

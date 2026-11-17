@@ -1,5 +1,5 @@
 // SOLVER: one pose per frame from this frame's goals. No memory of targets, no smoothing, no interpolation: the
-// only state is the pose (body.q), used as the Newton seed.
+// only state is the pose (body.angles), used as the Newton seed.
 //
 // Method: prioritized whole-body IK as Newton's method on ONE objective,
 //     F(q) = HARD * f_hard(q) + f_soft(q),   f = 1/2 sum w |b - a(q)|^2,   HARD = 1e6,
@@ -14,34 +14,37 @@
 
 import { type Object3D, Quaternion, Vector3 } from "three"
 import { type Body } from "./body"
-import { type Given, type Goal, hard as hardGoal } from "./goals"
+import { type Given, type Goal, hard as hardGoal, Target } from "./goals"
 import { cholSolve, cholesky } from "./linalg"
 
 export interface SolveOptions {
   /** Newton iteration cap (default 40). 0 = do not move, only evaluate the goals at the current pose. */
   maxIterations?: number
-  /** Converged when no joint moves more than this in an iteration. */
+  /** Converged when no joint moves more than this in an iteration (rad, or m for the root's slides). */
   tolerance?: number
 }
 export interface GoalResult {
-  /** How far the goal is from met: its largest residual (m for position and velocity over the time step, rad for rotation and joints). */
+  /** How far the goal is from met: its largest residual (m for position and velocity over the time step, rad for rotation and angles; for a posture its largest joint deviation, which says little). */
   missedBy: number
-  /** Whether it is met (within a micrometre / microradian). A hard goal that is not was out of reach: the pose is the closest. */
-  reachable: boolean
+  /** Whether it is met (missed by no more than a micrometre or microradian). A hard goal that is not was out of reach: the pose is the closest. */
+  met: boolean
 }
 export interface SolveResult {
   iterations: number
   converged: boolean
   /** One per goal, in the order given. */
   goals: GoalResult[]
-  /** Largest residual of the loops closed by `body.attach` (grips). */
-  closureError: number
+  /** The most any hard goal given is missed by (m or rad): 0 when all are met exactly, more when one is out of reach. */
+  hardMissedBy: number
+  /** The most any loop closed by `body.attach` (an object held in two places) is missed by (m or rad). */
+  loopsMissedBy: number
   /** Joints sitting on a limit, e.g. 'upperArmR.1'. Many of them usually means the goals ask for something awkward. */
-  limits: string[]
+  jointsAtLimit: string[]
 }
 
 const HARD = 1e6 // weight of the hard level over the soft level
-const REACH = 1e-6 // (m/rad)^2: hard directions the joints move less than this count as unreachable; also what counts as met
+const REACH = 1e-6 // (m or rad)^2: hard directions the joints move less than this count as unreachable
+const MET = 1e-6 // m or rad: a goal missed by no more than this is met
 const MAX_STEP = 0.4 // per-iteration clamp on any joint change (rad or m)
 const SNAP = 1e-3 // a joint this close to a limit, and pushed beyond it, is put on the limit and locked
 
@@ -93,8 +96,19 @@ function rotationVector(q: Quaternion): Vector3 {
 
 const ZERO = new Vector3(),
   ONE = new Vector3(1, 1, 1),
-  FRAME: Given = { position: true, rotation: true }
+  FRAME: Given = { position: true, quaternion: true }
 type Curvature = (r: Vector3, S: Float64Array) => void
+
+/** A point as an error names it: by its name, or for an unnamed one, by what it hangs from and where it is. */
+function describe(point: Object3D): string {
+  if (point.name) return `'${point.name}'`
+  const at = point
+    .getWorldPosition(new Vector3())
+    .toArray()
+    .map((v) => v.toFixed(2))
+  const parent = point.parent?.name ? ` on '${point.parent.name}'` : ""
+  return `an unnamed ${point.type}${parent} at (${at.join(", ")}) in the world`
+}
 
 /**
  * Solves this frame: writes the pose that meets the hard goals exactly (or as closely as reachable) and the soft
@@ -102,17 +116,17 @@ type Curvature = (r: Vector3, S: Float64Array) => void
  * as differences against the pose the body had before this call.
  */
 export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}): SolveResult {
-  const n = body.q.length,
-    q = body.q
+  const n = body.angles.length,
+    q = body.angles
   const { hard, soft, J, H, A, g, dq } = workspace(n)
   const lock = new Uint8Array(n)
-  // Loop closures are hard goals like any other: the object's grip frame must coincide with the frame on the body.
-  const tasks = [...body.closures.map((c) => hardGoal(c.grip, c.hold)), ...goals]
+  // Loops are hard goals like any other: the object's seat frame must coincide with the point on the body.
+  const tasks = [...body.loops.map((c) => hardGoal(c.seat, c.point)), ...goals]
   const taken = new Set<Object3D>()
   for (const goal of tasks)
-    if ("a" in goal && goal.hard) {
-      if (taken.has(goal.a)) throw new Error(`two hard goals on the same point '${goal.a.name}' in one solve`)
-      taken.add(goal.a)
+    if ("point" in goal && goal.hard) {
+      if (taken.has(goal.point)) throw new Error(`two hard goals on the same point, ${describe(goal.point)}, in one solve`)
+      taken.add(goal.point)
     }
   if (opts.maxIterations !== 0) {
     body.before = q.slice()
@@ -120,7 +134,7 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
   }
   body.limits()
   body.update()
-  const seed = tasks.map((goal) => ("a" in goal ? body.positionOf(goal.a) : ZERO)) // where each point was before the solve, for velocities
+  const seed = tasks.map((goal) => ("point" in goal ? body.positionOf(goal.point) : ZERO)) // where each point was before the solve, for velocities
   // Hard 3-row blocks at the current iterate: Jacobian and error, and a function that adds the Hessian of (r . e) to S.
   let blocks: { J: Float64Array; e: Vector3; curvature: Curvature }[] = []
 
@@ -147,9 +161,9 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
       }
     }
   }
-  /** Position terms of any point: the centre of mass is the mass-weighted mean of everything on the body. */
+  /** Position terms of any point: the center of mass is the mass-weighted mean of everything on the body. */
   const placeTerms = (point: Object3D, x: Vector3, s: number, r: Vector3, S: Float64Array) => {
-    if (point === body.centre) for (const [o, mass, at] of body.masses()) pointTerms(o, at, (s * mass) / body.mass, r, S)
+    if (point === body.centerOfMass) for (const [o, mass, at] of body.masses()) pointTerms(o, at, (s * mass) / body.mass, r, S)
     else pointTerms(point, x, s, r, S)
   }
   /** L.G += J^T diag(w) J, L.g += J^T diag(w) e. */
@@ -184,21 +198,21 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
     blocks = []
     return tasks.map((goal, ti) => {
       let missed = 0
-      if ("joints" in goal) {
+      if ("angles" in goal) {
         // a posture (the floating base has none)
         for (let k = body.chain(body.root).length; k < n; k++) {
           const wk = goal.weight * goal.weights[k],
-            d = goal.joints[k] - q[k]
+            d = goal.angles[k] - q[k]
           soft.G[k * n + k] += wk
           soft.g[k] += wk * d
           if (goal.weights[k] === 1) missed = Math.max(missed, Math.abs(d))
         }
         return missed
       }
-      const { a, b } = goal,
+      const { point: a, target: b } = goal,
         L = goal.hard ? hard : soft
-      const given: Given = ti < body.closures.length ? FRAME : (b.userData.given ?? FRAME) // a grip is a whole frame
-      const w = (given.axes ?? ONE).clone().multiplyScalar(goal.hard ? 1 : goal.weight)
+      const given: Given = ti < body.loops.length || !(b instanceof Target) ? FRAME : b.given // a seat is a whole frame
+      const w = (given.axisWeights ?? ONE).clone().multiplyScalar(goal.hard ? 1 : goal.weight)
       const pa = body.positionOf(a),
         pb = body.positionOf(b)
       if (given.position)
@@ -221,8 +235,8 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
           }),
         )
       }
-      if (given.rotation) {
-        const E = body.rotationOf(b).multiply(body.rotationOf(a).invert()),
+      if (given.quaternion) {
+        const E = body.quaternionOf(b).multiply(body.quaternionOf(a).invert()),
           e = rotationVector(E)
         // Jacobian columns, ordered as one serial chain from a up to the joint the two points share and down to b:
         // what is above that joint moves both alike.
@@ -310,7 +324,7 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
       }
       // Projection: damped by the largest hard residual, so it does nothing when a goal is unreachable.
       let lambda = project ? REACH + blocks.reduce((a, b) => Math.max(a, b.e.lengthSq()), 0) : 0
-      while (!factor(H, lambda, lock, A, n)) lambda = Math.max(10 * lambda, 1e-9 * scaleH) // not positive definite: damp
+      while (!factor(H, lambda, lock, A, n)) lambda = Math.max(10 * lambda, 1e-9 * scaleH, 1e-12) // not positive definite: damp (by something even where no goal moves anything)
       cholSolve(A, n, dq)
       if (project) break
       let changed = false,
@@ -368,14 +382,15 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
 
   body.update()
   const missed = assemble(),
-    closures = body.closures.length
-  const limits: string[] = []
-  for (let k = 0; k < n; k++) if (body.min[k] < body.max[k] && (q[k] <= body.min[k] || q[k] >= body.max[k])) limits.push(body.name(k))
+    loops = body.loops.length
+  const jointsAtLimit: string[] = []
+  for (let k = 0; k < n; k++) if (body.min[k] < body.max[k] && (q[k] <= body.min[k] || q[k] >= body.max[k])) jointsAtLimit.push(body.angleName(k))
   return {
     iterations,
     converged,
-    limits,
-    goals: missed.slice(closures).map((missedBy) => ({ missedBy, reachable: missedBy <= REACH })),
-    closureError: Math.max(0, ...missed.slice(0, closures)),
+    jointsAtLimit,
+    goals: missed.slice(loops).map((missedBy) => ({ missedBy, met: missedBy <= MET })),
+    hardMissedBy: Math.max(0, ...goals.map((goal, i) => ("point" in goal && goal.hard ? missed[loops + i] : 0))),
+    loopsMissedBy: Math.max(0, ...missed.slice(0, loops)),
   }
 }

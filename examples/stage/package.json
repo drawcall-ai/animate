@@ -3,14 +3,24 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "What the examples share: a three.js stage and simple flesh on bones.",
-  "exports": "./src/index.ts",
+  "description": "What the examples share: a three.js stage, simple flesh on bones, the rigged tennis player and soldier, the racket and the rifle with how the hands hold them.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./player": "./src/player.ts",
+    "./soldier": "./src/soldier.ts",
+    "./bearing": "./src/bearing.ts",
+    "./racket": "./src/racket.ts",
+    "./rifle": "./src/rifle.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --silent=false"
   },
   "dependencies": {
-    "three": "^0.187.0"
+    "@drawcall/animate": "workspace:*",
+    "@drawcall/rig": "^0.8.0",
+    "three": "^0.187.0",
+    "vitecache": "^0.8.0"
   },
   "devDependencies": {
     "@types/three": "^0.187.0",

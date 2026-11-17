@@ -2,32 +2,32 @@
 // the ball, each player plans from where the ball really is, the solver poses each body, and where a sweet spot
 // meets the ball at its contact time the racket sets the ball's velocity towards where the player aimed.
 
-import { type Goal, type SolveResult, solve } from "@drawcall/ik"
+import { type Goal, solve, type SolveResult } from "@drawcall/animate"
 import { Matrix4, type Object3D, Vector3 } from "three"
 import { BALL, LENGTH, WIDTH, createCourt, launch } from "./court"
-import { type Incoming, createPlayer } from "./player"
+import { type Incoming, createPlayerPlanner } from "./player"
 
 const STRINGS = 0.12 // m: how far from the sweet spot the ball may be and still be on the strings
-export interface Contact {
+/** A racket meeting the ball, or missing it: whose, how far the ball was from the sweet spot (m), and why it missed. */
+export interface Hit {
   player: number
   distance: number
-  hit: boolean
-  why?: "unreachable" | "late" | "mistimed"
+  missed?: "unreachable" | "late" | "mistimed"
 }
 export interface Frame {
   goals: Goal[][]
   results: SolveResult[]
   solveMs: number[]
-  contact?: Contact
+  hit?: Hit
   ended?: string
 }
 
-/** `rigged` are the two players' characters (see rig.ts), if they are to have any. */
-export async function createMatch(seed = 1, rigged: Object3D[] = []) {
+/** `rigged` are the two players' characters, the rigged tennis player at rest, loaded once for each. */
+export async function createMatch(seed: number, rigged: [Object3D, Object3D]) {
   let rnd = seed
   const random = () => (rnd = (rnd * 1103515245 + 12345) % 2147483648) / 2147483648
   const court = await createCourt()
-  const players = [createPlayer(0, random, rigged[0]), createPlayer(Math.PI, random, rigged[1])] // A on the -z side, B on the +z side
+  const players = [createPlayerPlanner(0, random, rigged[0]), createPlayerPlanner(Math.PI, random, rigged[1])] // A on the -z side, B on the +z side
   let t = 0,
     id = 0,
     receiver = -1,
@@ -90,7 +90,7 @@ export async function createMatch(seed = 1, rigged: Object3D[] = []) {
         end("the ball stopped", frame)
       players.forEach((player, i) => {
         const incoming: Incoming = { state: ball, mine: i === receiver, bounced: i === receiver ? bounced : 0, id }
-        const goals = player.plan(t, dt, incoming),
+        const goals = player.update(dt, incoming),
           t0 = performance.now()
         frame.goals.push(goals)
         frame.results.push(solve(player.body, goals, dt))
@@ -103,22 +103,17 @@ export async function createMatch(seed = 1, rigged: Object3D[] = []) {
         shot.done = true
         const distance = player.body.positionOf(player.sweet).distanceTo(ball.position),
           r = frame.results[receiver]
-        const reached = r.goals[player.names.indexOf("sweet spot")].reachable
+        const reached = r.goals[0].met // the sweet spot's goal
         if (distance <= STRINGS) {
           court.ball.setVelocity({ linear: launch(ball.position, player.aim()).multiplyScalar(1 + 0.04 * (random() - 0.5)), angular: new Vector3() })
-          frame.contact = { player: receiver, distance, hit: true }
+          frame.hit = { player: receiver, distance }
           hits++
           id++
           receiver = 1 - receiver
           bounced = 0
         } else {
-          frame.contact = {
-            player: receiver,
-            distance,
-            hit: false,
-            why: !reached ? "unreachable" : shot.late || player.offStance() > 0.3 ? "late" : "mistimed",
-          }
-          end(`missed (${frame.contact.why})`, frame)
+          frame.hit = { player: receiver, distance, missed: !reached ? "unreachable" : shot.late || player.offStance() > 0.3 ? "late" : "mistimed" }
+          end(`missed (${frame.hit.missed})`, frame)
         }
       }
       return frame

@@ -3,17 +3,11 @@
 import { Vector3 } from "three"
 import type { Pose } from "./goals"
 
-/** Smooth step from 0 to 1 over x in [0, 1], at rest at both ends. */
-export const ease = (x: number) => {
-  const u = Math.min(1, Math.max(0, x))
-  return u * u * (3 - 2 * u)
-}
-
 /** A smooth bump: 1 at x = 0, falling to 0 at |x| = 1 and beyond. */
 export const bump = (x: number) => (Math.abs(x) < 1 ? Math.cos((Math.PI * x) / 2) ** 2 : 0)
 
-/** Smooth curve through timed values (cubic Hermite, Catmull-Rom tangents, at rest at both ends), repeating with the period. */
-export function keyed(times: number[], values: number[][]): (t: number) => number[] {
+/** A looping curve through timed values: smooth (cubic Hermite, Catmull-Rom tangents, at rest at both ends), repeating with the period from the first time to the last. */
+export function loopingCurve(times: number[], values: number[][]): (t: number) => number[] {
   const n = times.length,
     period = times[n - 1] - times[0]
   const slope = (i: number) => values[i].map((_, c) => (i === 0 || i === n - 1 ? 0 : (values[i + 1][c] - values[i - 1][c]) / (times[i + 1] - times[i - 1])))
@@ -32,11 +26,12 @@ export function keyed(times: number[], values: number[][]): (t: number) => numbe
 }
 
 /**
- * The curve from the CURRENT state to a future one: from position p0 moving at v0 now, to position p1 moving at
- * v1 after `time` seconds (cubic Hermite). `at(s)` gives position and velocity s seconds from now; replanning every
- * frame from the state then reached keeps the motion continuous in position and velocity.
+ * A curve from the CURRENT state to a future one: from position p0 moving at v0 now, to position p1 moving at v1
+ * after `time` seconds (cubic Hermite; m, m/s, s). The curve gives position and velocity s seconds from now, and goes
+ * on at v1 after `time`; replanning every frame from the state then reached keeps the motion continuous in position
+ * and velocity.
  */
-export function toward(p0: Vector3, v0: Vector3, p1: Vector3, v1: Vector3, time: number): (s: number) => { position: Vector3; velocity: Vector3 } {
+export function curveTo(p0: Vector3, v0: Vector3, p1: Vector3, v1: Vector3, time: number): (s: number) => { position: Vector3; velocity: Vector3 } {
   return (s) => {
     if (time <= 1e-6 || s >= time) return { position: p1.clone().addScaledVector(v1, Math.max(0, s - time)), velocity: v1.clone() }
     const u = Math.max(0, s) / time,
@@ -59,7 +54,7 @@ export function toward(p0: Vector3, v0: Vector3, p1: Vector3, v1: Vector3, time:
 }
 
 /** A pose a share u of the way from pose a to pose b (bones only one of them lists are kept as listed). */
-export function mixPose(a: Pose, b: Pose, u: number): Pose {
+export function mix(a: Pose, b: Pose, u: number): Pose {
   const out: Pose = { ...a, ...b }
   for (const name in a) if (b[name]) out[name] = a[name].map((v, i) => v + (b[name][i] - v) * u)
   return out

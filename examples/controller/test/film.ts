@@ -1,16 +1,16 @@
 // A filmstrip of a body as an SVG: stick figures seen from the side, one per shot, each centred on the capsule
 // (the faint box) so that what the body does around it is what one sees. Left limbs blue, right limbs orange.
 
-import { type Body } from "@drawcall/ik"
-import { type Object3D, Vector3 } from "three"
+import type { Body } from "@drawcall/animate"
+import { Bone, type Object3D, Vector3 } from "three"
 
 const SCALE = 150, // px per metre
   GAP = 1.5 // m between shots
 
 export function film(body: Body) {
   const shots: string[] = []
-  const bones: Object3D[] = []
-  body.root.traverse((o) => void ((o as { isBone?: boolean }).isBone && bones.push(o)))
+  const bones: Bone[] = []
+  body.root.traverse((o) => void (o instanceof Bone && bones.push(o)))
   return {
     /** Record the body now, seen along the horizontal axis `across` (the view's x is `along`). */
     shot(label: string, capsule: Vector3, along: Vector3, planted: boolean[]) {
@@ -23,7 +23,7 @@ export function film(body: Body) {
       const far = (name: string) => (/L$/.test(name) ? 1 : /R$/.test(name) ? -1 : 0) * along.clone().cross(new Vector3(0, 1, 0)).x // which side faces the viewer does not matter much
       const parts = bones
         .flatMap((b) => [
-          ...b.children.filter((c) => bones.includes(c)).map((c) => ({ z: far(c.name), s: line(world(b), world(c), color(c.name)) })),
+          ...b.children.filter((c) => c instanceof Bone).map((c) => ({ z: far(c.name), s: line(world(b), world(c), color(c.name)) })),
           ...(b.name.startsWith("foot")
             ? [{ z: far(b.name), s: line(world(b, new Vector3(0, -0.06, -0.05)), world(b, new Vector3(0, -0.06, 0.17)), color(b.name)) }]
             : []),

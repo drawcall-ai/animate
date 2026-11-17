@@ -1,18 +1,18 @@
 {
-  "name": "ik-monorepo",
+  "name": "animate",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.18.0",
   "scripts": {
     "typecheck": "pnpm -r --if-present typecheck",
-    "test": "pnpm -r --if-present test",
+    "test": "pnpm -r --workspace-concurrency=1 --if-present test",
     "build": "pnpm -r --if-present build",
-    "check": "pnpm typecheck && pnpm test && pnpm build",
-    "soldier": "pnpm --filter @drawcall/ik-example-soldier dev",
-    "tennis": "pnpm --filter @drawcall/ik-example-tennis dev",
-    "grip": "pnpm --filter @drawcall/grab-example-grip dev",
-    "match": "pnpm --filter @drawcall/ik-example-match dev",
-    "controller": "pnpm --filter @drawcall/locomotion-example-controller dev",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm --filter @drawcall/animate exec npm pack --dry-run",
+    "soldier": "pnpm --filter @drawcall/example-soldier dev",
+    "tennis": "pnpm --filter @drawcall/example-tennis dev",
+    "grip": "pnpm --filter @drawcall/example-grip dev",
+    "match": "pnpm --filter @drawcall/example-match dev",
+    "controller": "pnpm --filter @drawcall/example-controller dev",
     "format": "prettier --write ."
   },
   "devDependencies": {

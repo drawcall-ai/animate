@@ -1,5 +1,5 @@
 {
-  "name": "@drawcall/ik-example-match",
+  "name": "@drawcall/example-match",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -7,16 +7,13 @@
     "dev": "vite --host",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --silent=false"
   },
   "dependencies": {
+    "@drawcall/animate": "workspace:*",
     "@drawcall/example-stage": "workspace:*",
-    "@drawcall/humanoid": "workspace:*",
-    "@drawcall/ik": "workspace:*",
-    "@drawcall/locomotion": "workspace:*",
     "@drawcall/physics": "^0.20.0",
     "@drawcall/physics-rapier": "^0.20.0",
-    "@drawcall/rig": "^0.8.0",
     "three": "^0.187.0",
     "vitecache": "^0.8.0"
   },

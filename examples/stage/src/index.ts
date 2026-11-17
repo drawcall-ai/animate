@@ -1,12 +1,25 @@
-// What the examples share: a three.js stage (renderer, camera, orbit, light, ground), a draggable handle, and
-// simple flesh on bones. Nothing here knows about the solver.
+// The three.js stage the examples share (renderer, camera, orbit, light, ground), a draggable handle and simple flesh
+// on bones.
 
 import {
-  BoxGeometry, CapsuleGeometry, Color, DirectionalLight, GridHelper, HemisphereLight, Mesh, MeshStandardMaterial, type Object3D, PerspectiveCamera,
-  Scene, SphereGeometry, Vector3, WebGLRenderer,
-} from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js'
+  Bone,
+  BoxGeometry,
+  CapsuleGeometry,
+  Color,
+  DirectionalLight,
+  GridHelper,
+  HemisphereLight,
+  Mesh,
+  MeshStandardMaterial,
+  type Object3D,
+  PerspectiveCamera,
+  Scene,
+  SphereGeometry,
+  Vector3,
+  WebGLRenderer,
+} from "three"
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js"
 
 export const SKIN = new MeshStandardMaterial({ color: 0xc9d2de, roughness: 0.7 })
 export const PROP = new MeshStandardMaterial({ color: 0xe0a23c, roughness: 0.6 })
@@ -31,10 +44,10 @@ export function stage(frame: (dt: number) => void) {
     camera.aspect = innerWidth / innerHeight
     camera.updateProjectionMatrix()
   }
-  addEventListener('resize', resize)
+  addEventListener("resize", resize)
   resize()
   let last = performance.now()
-  renderer.setAnimationLoop(now => {
+  renderer.setAnimationLoop((now) => {
     frame(Math.min(0.05, Math.max(0, (now - last) / 1000)))
     last = now
     orbit.update()
@@ -49,11 +62,11 @@ export function stage(frame: (dt: number) => void) {
   }
   /** Put translate (and optionally rotate) gizmos on an object; orbiting pauses while one is dragged. */
   const drag = (object: Object3D, rotate = false) => {
-    for (const mode of rotate ? (['translate', 'rotate'] as const) : (['translate'] as const)) {
+    for (const mode of rotate ? (["translate", "rotate"] as const) : (["translate"] as const)) {
       const gizmo = new TransformControls(camera, renderer.domElement)
       gizmo.setMode(mode)
-      gizmo.setSize(mode === 'rotate' ? 0.45 : 0.7)
-      gizmo.addEventListener('dragging-changed', e => (orbit.enabled = !e.value))
+      gizmo.setSize(mode === "rotate" ? 0.45 : 0.7)
+      gizmo.addEventListener("dragging-changed", (e) => (orbit.enabled = !e.value))
       gizmo.attach(object)
       scene.add(gizmo.getHelper())
     }
@@ -62,11 +75,18 @@ export function stage(frame: (dt: number) => void) {
   const gizmo = () => {
     const control = new TransformControls(camera, renderer.domElement)
     control.setSize(0.6)
-    control.addEventListener('dragging-changed', e => (orbit.enabled = !e.value))
+    control.addEventListener("dragging-changed", (e) => (orbit.enabled = !e.value))
     scene.add(control.getHelper())
     return control
   }
   return { scene, camera, orbit, follow, drag, gizmo }
+}
+
+/** The page's element with this id. */
+export function el(id: string): HTMLElement {
+  const found = document.getElementById(id)
+  if (!found) throw new Error(`the page has no #${id}`)
+  return found
 }
 
 /** A small sphere to drag about. */
@@ -84,13 +104,13 @@ export function block(size: [number, number, number], at: [number, number, numbe
 /** Simple flesh on a skeleton: a capsule from every bone to each bone hanging from it, and a head. */
 export function flesh(root: Object3D, radius = 0.045) {
   const up = new Vector3(0, 1, 0)
-  root.traverse(bone => {
-    if (!(bone as { isBone?: boolean }).isBone) return
-    if (bone.name === 'head') bone.add(new Mesh(new SphereGeometry(0.1, 20, 14), SKIN).translateY(0.1), block([0.03, 0.03, 0.04], [0, 0.1, 0.1], SKIN))
-    if (bone.name.startsWith('foot')) bone.add(block([0.09, 0.06, 0.24], [0, -0.03, 0.06], SKIN))
-    if (bone.name.startsWith('hand')) bone.add(block([0.03, 0.16, 0.08], [0, -0.08, 0], SKIN))
+  root.traverse((bone) => {
+    if (!(bone instanceof Bone)) return
+    if (bone.name === "head") bone.add(new Mesh(new SphereGeometry(0.1, 20, 14), SKIN).translateY(0.1), block([0.03, 0.03, 0.04], [0, 0.1, 0.1], SKIN))
+    if (bone.name.startsWith("foot")) bone.add(block([0.09, 0.06, 0.24], [0, -0.03, 0.06], SKIN))
+    if (bone.name.startsWith("hand")) bone.add(block([0.03, 0.16, 0.08], [0, -0.08, 0], SKIN))
     for (const child of [...bone.children]) {
-      if (!(child as { isBone?: boolean }).isBone || child.position.lengthSq() < 1e-6) continue
+      if (!(child instanceof Bone) || child.position.lengthSq() < 1e-6) continue
       const r = /spine|chest|pelvis/.test(bone.name + child.name) ? 2 * radius : radius
       const limb = new Mesh(new CapsuleGeometry(r, child.position.length(), 4, 12), SKIN)
       limb.position.copy(child.position).multiplyScalar(0.5)

@@ -6,16 +6,11 @@
   "description": "Goal-driven whole-body inverse kinematics for three.js bones: one pose per frame from hard and soft goals.",
   "exports": "./src/index.ts",
   "sideEffects": false,
-  "files": ["src", "README.md"],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
-  },
-  "peerDependencies": {
-    "three": "^0.187.0"
+    "test": "vitest run --silent=false"
   },
   "devDependencies": {
-    "@drawcall/humanoid": "workspace:*",
     "@types/three": "^0.187.0",
     "three": "^0.187.0",
     "typescript": "^5.9.3",

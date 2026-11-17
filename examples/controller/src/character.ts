@@ -1,18 +1,18 @@
 // The hard case: a physics capsule moved by player input, and a body that has to look like it is what moves.
-// Each frame: the input sets the capsule controller's desired velocity, the physics moves the capsule, the
-// locomotion planner is given where the capsule is, how it moves and what the input asks for, and the solver poses
-// the body from the planner's goals. The pelvis is a soft goal on the capsule: it follows as closely as the planted
-// feet allow.
+// Each frame: the input sets the capsule controller's desired velocity, the physics moves the capsule, the carry
+// planner plans the arms, the locomotion planner is given where the capsule is, how it moves and what the input asks for, and
+// the solver poses the body from both planners' goals. The pelvis is a soft goal on the capsule: it follows as closely
+// as the planted feet allow. The body is the rigged soldier's, and he can carry the PAC-9 rifle in both hands.
 
-import { createHumanoid } from "@drawcall/humanoid"
-import { type Goal, type Pose, type SolveResult, hard, mark, posture, solve } from "@drawcall/ik"
-import { createLocomotion } from "@drawcall/locomotion"
+import { SOLDIER } from "@drawcall/example-stage/bearing"
+import { type Goal, Humanoid, LocomotionPlanner, solve, type SolveResult } from "@drawcall/animate"
 import { BoxCollider, RigidBody } from "@drawcall/physics"
 import { buildWorld } from "@drawcall/physics-rapier"
-import { Group, Object3D, Quaternion, Vector3 } from "three"
-import { CharacterController } from "./controller"
+import { Group, Object3D, Vector3 } from "three"
+import { createCarryPlanner } from "./carry"
+import { ACCELERATION, CharacterController } from "./controller"
 
-const CLIMB = 0.32 // m: the step the capsule motor of @drawcall/physics gets up without a jump
+const STEP_HEIGHT = 0.32 // m: the step the capsule motor of @drawcall/physics gets up without a jump
 export const PACE = { walk: 1.4, run: 3.5, sprint: 6 } // m/s
 const STEPS = 8,
   RISE = 0.17,
@@ -42,27 +42,12 @@ export interface Input {
   crouch: boolean
   /** Pressed this frame. */
   jump: boolean
-  /** Carry the rifle: both arms are taken from the planner. */
+  /** Hold the rifle: the hands take it off its sling, and from then on both arms are the rifle carry's. */
   rifle: boolean
 }
 
-const turn = (axis: Vector3, angle: number) => new Quaternion().setFromAxisAngle(axis, angle)
-const X = new Vector3(1, 0, 0),
-  Y = new Vector3(0, 1, 0),
-  Z = new Vector3(0, 0, 1)
-// The arms that go with the rifle at the chest (low ready).
-const LOW: Pose = {
-  shoulderL: [0.1, -0.13],
-  upperArmL: [-0.58, -0.16, 0.18],
-  forearmL: [-0.51, 0.16],
-  handL: [-0.02, 0.3],
-  shoulderR: [-0.04, -0.15],
-  upperArmR: [0.04, 0.3, 0.58],
-  forearmR: [-1.58, -0.13],
-  handR: [0.05, 0.17],
-}
-
-export async function createCharacter() {
+/** The character, `rigged` (the rigged soldier, his fingers at rest), on a physics capsule. */
+export async function createCharacter(rigged: Object3D) {
   const scene = new Group()
   const floor = new RigidBody({ bodyType: "static", colliders: false })
   // Off centre: the capsule motor of @drawcall/physics 0.20 does not move along the diagonal of a box's face (it
@@ -85,18 +70,13 @@ export async function createCharacter() {
   const world = await buildWorld({ scene, gravity: [0, -9.81, 0], fixedDelta: 1 / 120 })
   const controller = new CharacterController(world, capsule, { radius: 0.3, height: 1.75 })
 
-  const body = createHumanoid()
-  const planner = createLocomotion(body, { acceleration: 35, climb: CLIMB })
-  scene.add(body.root)
+  const body = new Humanoid({ rig: rigged, girth: SOLDIER.girth })
+  const locomotion = new LocomotionPlanner(body, { ...SOLDIER.gait, acceleration: ACCELERATION, stepHeight: STEP_HEIGHT })
+  scene.add(body.root, rigged)
 
-  // The rifle: gripped by both hands (a closed loop) and held to a marker on the chest by one hard goal.
-  const rifle = new Group()
-  rifle.userData.mass = 3.5
-  const gripR = mark(rifle, "gripR", new Vector3(), turn(Y, 0.5).multiply(turn(X, -0.6)))
-  const gripL = mark(rifle, "gripL", new Vector3(0, -0.03, 0.26), turn(Z, -0.4))
-  const ready = mark(body.get("chest"), "lowReady", new Vector3(0.06, -0.05, 0.26), turn(Y, 0.3).multiply(turn(X, 0.6)))
-  let armed = false,
-    crouch = 0
+  const carry = createCarryPlanner(body)
+  scene.add(carry.sling)
+  let crouch = 0
   /** The height of what is under a point: a ray cast down from knee height, so each foot finds its own stair. */
   const DOWN = new Vector3(0, -1, 0)
   const ground = (at: Vector3) =>
@@ -107,33 +87,37 @@ export async function createCharacter() {
     controller.input.direction.copy(input.move)
     controller.input.speed = PACE[input.pace]
     controller.input.crouching = input.crouch
-    if (input.jump) planner.jump(() => controller.jump())
+    if (input.jump) locomotion.jump(() => controller.jump())
     world.update(dt)
     crouch += Math.min(dt / 0.25, Math.max(-dt / 0.25, (controller.crouched ? 1 : 0) - crouch)) // getting down takes a moment
 
-    if (input.rifle !== armed) {
-      armed = input.rifle
-      if (armed) {
-        body.attach(rifle, body.get("palmR"), gripR)
-        body.attach(rifle, body.get("palmL"), gripL)
-      } else {
-        body.detach(rifle)
-        rifle.removeFromParent()
-      }
-    }
-    const goals = planner.step(dt, {
-      position: capsule.position,
-      velocity: controller.velocity,
-      desired: controller.desired,
-      grounded: controller.grounded,
-      crouch,
-      ground,
-      taken: armed ? ["armL", "armR"] : [],
-    })
-    if (armed) goals.push(hard(rifle, ready), posture(body, LOW))
+    // the carry first: it says whether the arms are its own this frame
+    const arms = carry.update(dt, input.rifle)
+    const goals = [
+      ...locomotion.update(dt, {
+        position: capsule.position,
+        velocity: controller.velocity,
+        desiredVelocity: controller.desired,
+        grounded: controller.grounded,
+        crouch,
+        groundHeight: ground,
+        taken: carry.taken ? ["armL", "armR"] : [],
+      }),
+      ...arms,
+    ]
     const start = performance.now(),
       result = solve(body, goals, dt)
+    carry.drawSling()
     return { goals, result, solveMs: performance.now() - start }
   }
-  return { scene, capsule, controller, body, planner, rifle, ground, frame }
+  return {
+    scene,
+    capsule,
+    controller,
+    body,
+    locomotion,
+    carry,
+    ground,
+    frame,
+  }
 }

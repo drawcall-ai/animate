@@ -1,0 +1,68 @@
+{
+  "name": "@drawcall/animate",
+  "version": "0.0.0",
+  "description": "Procedural human animation for three.js: a body posed every frame from goals, with planners that walk and run it and hands that grip what it holds.",
+  "keywords": [
+    "three",
+    "threejs",
+    "procedural-animation",
+    "inverse-kinematics",
+    "humanoid",
+    "locomotion",
+    "hand",
+    "grip"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --silent=false",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "three": ">=0.187.0"
+  },
+  "devDependencies": {
+    "@drawcall/hand": "workspace:*",
+    "@drawcall/humanoid": "workspace:*",
+    "@drawcall/ik": "workspace:*",
+    "@drawcall/locomotion": "workspace:*",
+    "@types/three": "^0.187.0",
+    "three": "^0.187.0",
+    "tsdown": "^0.23.7",
+    "typescript": "^5.9.3",
+    "unrun": "^0.3.1",
+    "vitest": "^5.1.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drawcall-ai/animate.git",
+    "directory": "packages/animate"
+  },
+  "homepage": "https://github.com/drawcall-ai/animate#readme",
+  "bugs": {
+    "url": "https://github.com/drawcall-ai/animate/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

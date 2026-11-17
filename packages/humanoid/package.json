@@ -3,25 +3,21 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "A procedural humanoid for @drawcall/ik: skeleton, joint limits, rest pose, balance goal and named markers.",
+  "description": "A humanoid for the solver, procedural or on a rigged skeleton: joint limits, neutral pose, balance goal, named points and hands.",
   "exports": "./src/index.ts",
   "sideEffects": false,
-  "files": [
-    "src",
-    "README.md"
-  ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --silent=false"
   },
   "dependencies": {
+    "@drawcall/hand": "workspace:*",
     "@drawcall/ik": "workspace:*"
-  },
-  "peerDependencies": {
-    "three": "^0.187.0"
   },
   "devDependencies": {
     "@types/three": "^0.187.0",
     "three": "^0.187.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
   }
 }

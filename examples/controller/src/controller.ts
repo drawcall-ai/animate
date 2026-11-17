@@ -11,6 +11,9 @@ interface Support {
 // as its skill says and adapted to a human: the speed is an input (m/s) instead of a run flag, and a jump is 0.6 m
 // high. `desired` is the velocity the input asks for, which the locomotion planner predicts with.
 
+/** How fast the velocity turns into the desired one on the ground (m/s²). */
+export const ACCELERATION = 35
+
 /** Shared locomotion policy. All collision and body access goes through @drawcall/physics. */
 export class CharacterController {
   readonly input = {
@@ -22,10 +25,8 @@ export class CharacterController {
   readonly velocity = new Vector3()
   grounded = false
   private readonly motor: CapsuleMotor
-  private readonly spawn: Vector3
   private readonly standingHeight: number
   private readonly crouchingHeight: number
-  private readonly unsubscribe: () => void
   private support: Support | undefined
   private readonly supportVelocity = new Vector3()
   private jumpBuffer = 0
@@ -41,9 +42,8 @@ export class CharacterController {
     if (world.gravity[0] !== 0 || world.gravity[2] !== 0 || world.gravity[1] >= 0) throw new Error("Character locomotion requires downward Y gravity")
     this.motor = new CapsuleMotor(world, object, radius, this.standingHeight)
     this.crouchingHeight = Math.min(this.standingHeight, Math.max(radius * 2 + 0.1, this.standingHeight * 0.62))
-    this.spawn = this.motor.position.clone()
     // Query completed body poses so translating and rotating supports work in either engine.
-    this.unsubscribe = world.onAfterStep((delta) => this.update(delta))
+    world.onAfterStep((delta) => this.update(delta))
   }
 
   get height(): number {
@@ -55,9 +55,6 @@ export class CharacterController {
   get speed(): number {
     return Math.hypot(this.velocity.x, this.velocity.z)
   }
-  get groundName(): string {
-    return this.support?.body.name || (this.grounded ? "Ground" : "Air")
-  }
 
   /** The horizontal velocity the input asks for. */
   get desired(): Vector3 {
@@ -65,29 +62,11 @@ export class CharacterController {
     return this.input.direction.clone().setY(0).clampLength(0, 1).multiplyScalar(speed)
   }
   get acceleration(): number {
-    return this.grounded ? 35 : 9
+    return this.grounded ? ACCELERATION : 9
   }
 
   jump(): void {
     this.jumpBuffer = 0.12
-  }
-
-  reset(position: Vector3 = this.spawn): void {
-    this.motor.position.copy(position)
-    this.motor.height = this.standingHeight
-    this.velocity.set(0, 0, 0)
-    this.input.direction.set(0, 0, 0)
-    this.input.crouching = false
-    this.support = undefined
-    this.supportVelocity.set(0, 0, 0)
-    this.grounded = false
-    this.jumpBuffer = 0
-    this.coyoteTime = 0
-    this.motor.commit()
-  }
-
-  dispose(): void {
-    this.unsubscribe()
   }
 
   private update(delta: number): void {

@@ -1,1 +1,4 @@
 pnpm-lock.yaml
+**/public/_vitecache
+examples/stage/models
+examples/stage/src/pac9-rifle
