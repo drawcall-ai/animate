@@ -195,7 +195,7 @@ test("walk, run, sprint, turn around, crouch, jump and the rifle on one physics 
   run("rifle: turn around", 1.5, 4)
 
   finish()
-}, 120000)
+})
 
 test("the hardest inputs: circles, left-right, 180s at a run, and a random hand on the stick", async () => {
   const { input, run, finish } = await session()
@@ -236,7 +236,7 @@ test("the hardest inputs: circles, left-right, 180s at a run, and a random hand 
     600,
   )
   finish()
-}, 120000)
+})
 
 test("stairs: each foot stands on what a ray cast down finds under it", async () => {
   const { capsule, body, sides, ground, input, run, finish } = await session()
@@ -263,7 +263,7 @@ test("stairs: each foot stands on what a ray cast down finds under it", async ()
   expect(top).toBeGreaterThan(1.3)
   expect(apart).toBeLessThan(0.03)
   finish()
-}, 120000)
+})
 
 test("no foot is put on what the capsule cannot climb", async () => {
   const { capsule, sides, input, run, finish } = await session()
@@ -294,4 +294,4 @@ test("no foot is put on what the capsule cannot climb", async () => {
   expect(capsule.position.y).toBeGreaterThan(0.35)
   for (const f of sides) if (!f.landing) expect(f.position.y).toBeGreaterThan(0.35)
   finish()
-}, 120000)
+})
