@@ -178,13 +178,11 @@ export class Body {
       j.bone.hinges.forEach((h, i) => j.bone.quaternion.multiply(turn.setFromAxisAngle(h.axis, this.angles[j.first + i])))
     }
     this.root.updateWorldMatrix(true, true)
-    const above = this.root.parent ? this.root.parent.getWorldQuaternion(new Quaternion()) : new Quaternion()
+    const above = this.root.parent ? this.matrixQuaternion(this.root.parent) : new Quaternion()
     for (let k = 0; k < 3; k++) this.axis[k].set(+(k === 0), +(k === 1), +(k === 2)).applyQuaternion(above)
     for (const j of this.#joints) {
-      if (j.bone.parent) j.bone.parent.getWorldQuaternion(frame)
-      else frame.identity()
-      frame.multiply(j.base)
-      const at = new Vector3().setFromMatrixPosition(j.bone.matrixWorld)
+      frame.copy(j.bone.parent ? this.matrixQuaternion(j.bone.parent) : new Quaternion()).multiply(j.base)
+      const at = this.matrixPosition(j.bone)
       j.bone.hinges.forEach((h, i) => {
         const k = j.first + i
         this.axis[k].copy(h.axis).applyQuaternion(frame)
@@ -210,6 +208,17 @@ export class Body {
   quaternionOf(point: Object3D): Quaternion {
     return point.getWorldQuaternion(new Quaternion())
   }
+  /** @internal `positionOf` for right after update(): a point on the body is read from the world matrix update() wrote. */
+  matrixPosition(point: Object3D): Vector3 {
+    return under(point, this.root) ? new Vector3().setFromMatrixPosition(point.matrixWorld) : this.positionOf(point)
+  }
+  /** @internal `quaternionOf` for right after update(), as `matrixPosition`. */
+  matrixQuaternion(point: Object3D): Quaternion {
+    if (!under(point, this.root)) return this.quaternionOf(point)
+    const turn = new Quaternion()
+    point.matrixWorld.decompose(new Vector3(), turn, new Vector3())
+    return turn
+  }
   /** World velocity of a point: how far the last solve moved it, over that solve's time step. A point off the body has the velocity it carries. */
   velocityOf(point: Object3D): Vector3 {
     if (point !== this.centerOfMass && !under(point, this.root))
@@ -226,14 +235,15 @@ export class Body {
   }
 
   /**
-   * @internal Everything with mass on the body: [object, mass, world center of mass]. A joint has its own mass; any
-   * other object under the root (an attached racket, say) weighs its `userData.mass` (kg), centred at its origin.
+   * @internal Everything with mass on the body, where the last update() put it: [object, mass, world center of mass].
+   * A joint has its own mass; any other object under the root (an attached racket, say) weighs its `userData.mass`
+   * (kg), centred at its origin.
    */
   masses(): [Object3D, number, Vector3][] {
     const out: [Object3D, number, Vector3][] = []
     this.root.traverse((o) => {
       const mass: unknown = o instanceof Joint ? o.mass : o.userData.mass
-      if (typeof mass === "number" && mass) out.push([o, mass, o.localToWorld(o instanceof Joint ? o.centerOfMass.clone() : new Vector3())])
+      if (typeof mass === "number" && mass) out.push([o, mass, (o instanceof Joint ? o.centerOfMass.clone() : new Vector3()).applyMatrix4(o.matrixWorld)])
     })
     return out
   }
