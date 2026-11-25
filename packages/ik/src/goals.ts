@@ -32,17 +32,29 @@ export class Target extends Object3D {
 }
 
 /**
- * A goal for one solve: `point` matches `target` (see `hard`, `soft`), or the angles are pulled softly towards
- * `angles`, each by `weight * weights[k]` (see `posture`, `stay`). A goal has no time, no window and no owner: one that
- * should fade is a soft goal whose weight the planner changes, one that should stop is left out of the next frame's list.
+ * A goal for one solve: `point` matches `target` (see `hard`, `soft`), `point` keeps out of a capsule (see `clear`),
+ * or the angles are pulled softly towards `angles`, each by `weight * weights[k]` (see `posture`, `stay`). A goal has
+ * no time, no window and no owner: one that should fade is a soft goal whose weight the planner changes, one that
+ * should stop is left out of the next frame's list.
  */
 export type Goal =
-  { point: Object3D; target: Object3D; hard: boolean; weight: number } | { angles: ArrayLike<number>; weights: ArrayLike<number>; weight: number }
+  | { point: Object3D; target: Object3D; hard: boolean; weight: number }
+  | { point: Object3D; from: Object3D; to: Object3D; radius: number; hard: false; weight: number }
+  | { angles: ArrayLike<number>; weights: ArrayLike<number>; weight: number }
 
 /** `point` must match `target`: exactly, or as close as can be reached. Two hard goals on one point in a solve throw. */
 export const hard = (point: Object3D, target: Object3D): Goal => ({ point, target, hard: true, weight: 1 })
 /** `point` should match `target` as well as the hard goals and the other soft goals allow, pulled by `weight`. */
 export const soft = (point: Object3D, target: Object3D, weight = 1): Goal => ({ point, target, hard: false, weight })
+
+/**
+ * `point` should stay at least `radius` (m) from the segment between `from` and `to`: out of a capsule, such as a trunk
+ * between a mark on the pelvis and one on the chest. While the point is inside, it is pushed straight out like a soft
+ * goal of `weight`, the push growing to that strength over the first centimetre in; while it is clear, the goal does
+ * nothing. Either end may be on the body or fixed in the world. Its result's `missedBy` is how deep the point still is
+ * inside.
+ */
+export const clear = (point: Object3D, from: Object3D, to: Object3D, radius: number, weight = 1): Goal => ({ point, from, to, radius, hard: false, weight })
 
 /** Joint angles per bone name, e.g. { spine: [0, 0, 0], forearmR: [-1.4, 0] }, each bone's in the order of its hinges. Bones may be left out. */
 export type Pose = Record<string, number[]>

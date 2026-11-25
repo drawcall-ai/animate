@@ -5,7 +5,7 @@ description: Animate three.js humanoids procedurally with `@drawcall/animate` â€
 
 # Procedural humanoids with @drawcall/animate
 
-Five concepts carry everything. A **body** is what is posed: a `Humanoid`, or a `Body` of your own. **Goals** are what a frame asks of it: `hard`, `soft`, `posture` and `stay`. **Planners** turn intent and time into this frame's goals: the `LocomotionPlanner`, and the planners you write for a stroke, a carry or an aim. **Solve** makes one pose per frame from all the goals. **Hands** read a rig's fingers, and **grips** find how a hand holds a mesh.
+Five concepts carry everything. A **body** is what is posed: a `Humanoid`, or a `Body` of your own. **Goals** are what a frame asks of it: `hard`, `soft`, `clear`, `posture` and `stay`. **Planners** turn intent and time into this frame's goals: the `LocomotionPlanner`, and the planners you write for a stroke, a carry or an aim. **Solve** makes one pose per frame from all the goals. **Hands** read a rig's fingers, and **grips** find how a hand holds a mesh.
 
 ## The frame loop
 
@@ -49,6 +49,14 @@ A hard goal is met exactly, or, out of reach, as closely as possible and reporte
 Hard goals that conflict share the conflict: a hand asked beyond reach pulls hard-planted feet off their marks, so keep a hard hand within reach or make it soft. Near the edge of reach the exact pose moves fast (the trunk commits and lets go abruptly): keep hard targets off that edge, or soften them before they get there. Several hard goals on one limb can lock it against its joint limits, where the solver stays: make hard only the point that matters (a racket's sweet spot), the rest soft, and add `stay(body)`, a soft goal to stay near the current pose.
 
 There is no built-in comfort: whatever no goal decides goes anywhere, so every frame needs a posture. A posture pulls the bones its pose lists, and the bones it leaves out are nearly free and do the work first: with `posture(body, body.uprightPose)` (trunk, head and legs listed, arms not) the arms reach before the trunk bends. A pose that never changes can be built into its goal once.
+
+A limb passes through the trunk wherever the goals take it; `clear` goals keep it out. A `clear` goal guards only its point, not the limb between points, so give one to each point that must stay out, usually the elbow and the wrist. Weight it well above the posture (100 keeps a point within a few millimetres), and make the capsule a little bigger than the mesh it stands for.
+
+```ts
+const low = mark(body.get("pelvis"), "trunkLow", new Vector3(0, 0.05, 0)) // once
+const high = mark(body.get("chest"), "trunkHigh", new Vector3(0, 0.2, 0))
+const keepOut = [body.get("forearmR"), body.get("handR")].map((point) => clear(point, low, high, 0.16, 100)) // elbow and wrist: in every frame's goals
+```
 
 `body.balance()` is a soft goal putting the center of mass over the middle of the soles, horizontally. It reads where the soles are when it is made, so make it every frame, after the feet have moved; weight it up where the body must not lean out over its feet. Mass the body carries counts.
 
@@ -154,6 +162,7 @@ For something other than a person, make each jointed bone a `Joint` (a three.js 
 - Velocity is linear and one frame long, a backward difference, and there are no dynamics: the lean, sway and rise and fall of the gait are rules, not balance.
 - The humanoid is an approximation: two spine joints, no scapula or toes, Euler hinges with box limits, and the knee stops just short of straight, so a stretched leg is a little bent.
 - No self-collision: the upper arm goes out sideways but not in while it hangs or swings back, and crosses in front of the chest only as it is raised forward (`girth` narrows that and the elbow's fold); a hand goal through the trunk is still reached through it.
+- A limb pressed against a `clear` goal's capsule while the hand drags it across can snap round the capsule within a frame: route the hand, or raise the elbow by the posture, so that the limb goes round in time.
 - The feet stand on level treads only, at the height the ray finds; slopes are not looked at, and a landing from the air is predicted for the height it left from.
 - Under the hardest input (turning around at a sprint, reversing every half second, running onto stairs) a knee can still turn sharply within a frame a few times a minute; steady gaits are smooth.
 - A leg cannot be taken (no kicks), and strafing and backpedalling have no look of their own beyond `facing`.
