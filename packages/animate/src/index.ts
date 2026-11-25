@@ -1,6 +1,7 @@
 export {
   Body,
   bump,
+  clear,
   curveTo,
   type Given,
   type Goal,

@@ -3,6 +3,7 @@
 //
 // Method: prioritized whole-body IK as Newton's method on ONE objective,
 //     F(q) = HARD * f_hard(q) + f_soft(q),   f = 1/2 sum w |b - a(q)|^2,   HARD = 1e6,
+// f_soft also holding each `clear` goal's one-sided penalty,
 // iterated to convergence inside the frame, then projected exactly onto the hard goals (two damped Gauss-Newton
 // steps on f_hard alone), which removes the O(1/HARD) residual of the weighting. The Hessian is J^T W J plus the
 // second-order ("geometric") terms: for soft goals weighted by their residual, for hard goals by the force they
@@ -12,7 +13,7 @@
 // Joint limits: an active set (a joint on a limit that the step pushes outward is locked, and released again when
 // the model wants it back inside).
 
-import { type Object3D, Quaternion, Vector3 } from "three"
+import { MathUtils, type Object3D, Quaternion, Vector3 } from "three"
 import { type Body } from "./body"
 import { type Given, type Goal, hard as hardGoal, Target } from "./goals"
 import { cholSolve, cholesky } from "./linalg"
@@ -47,6 +48,7 @@ const REACH = 1e-6 // (m or rad)^2: hard directions the joints move less than th
 const MET = 1e-6 // m or rad: a goal missed by no more than this is met
 const MAX_STEP = 0.4 // per-iteration clamp on any joint change (rad or m)
 const SNAP = 1e-3 // a joint this close to a limit, and pushed beyond it, is put on the limit and locked
+const EASE = 0.01 // m: how deep into a `clear` goal's capsule its push takes to grow to full strength (pushed at full strength from the surface, Newton cycles across it)
 
 interface Level {
   G: Float64Array
@@ -208,6 +210,36 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
           if (goal.weights[k] === 1) missed = Math.max(missed, Math.abs(d))
         }
         return missed
+      }
+      if ("radius" in goal) {
+        // a `clear` goal: one row, along the way out from the capsule's axis, while the point is inside
+        const p = body.matrixPosition(goal.point),
+          a = body.matrixPosition(goal.from),
+          b = body.matrixPosition(goal.to),
+          axis = b.clone().sub(a)
+        const t = axis.lengthSq() ? MathUtils.clamp(p.clone().sub(a).dot(axis) / axis.lengthSq(), 0, 1) : 0,
+          out = p.clone().sub(a).addScaledVector(axis, -t),
+          depth = goal.radius - out.length()
+        if (depth <= 0) return 0
+        out.normalize() // zero on the axis itself, where no way out is nearer than another: no push
+        // A penalty that grows from nothing at the surface (w depth^3 / 6 EASE) into the usual quadratic one, as a row
+        // scaled by `slope` with residual `push`, and a Gauss-Newton Hessian: the curvature of the distance to the axis
+        // would be negative, and unbounded near the axis.
+        const slope = Math.sqrt(Math.min(1, depth / EASE)),
+          push = depth < EASE ? (depth * slope) / 2 : depth - EASE / 2
+        block(soft, out.clone().multiplyScalar(push), new Vector3().setScalar(goal.weight), (_r, S) => {
+          J.fill(0)
+          placeTerms(goal.point, p, 1, ZERO, S)
+          placeTerms(goal.from, a, t - 1, ZERO, S)
+          placeTerms(goal.to, b, -t, ZERO, S)
+          for (let k = 0; k < n; k++) {
+            const along = slope * (out.x * J[k] + out.y * J[n + k] + out.z * J[2 * n + k]) // sliding along the surface is free
+            J[k] = out.x * along
+            J[n + k] = out.y * along
+            J[2 * n + k] = out.z * along
+          }
+        })
+        return depth
       }
       const { point: a, target: b } = goal,
         L = goal.hard ? hard : soft

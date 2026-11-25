@@ -1,7 +1,7 @@
 // Headless numeric proofs of the solver on a humanoid. `pnpm test` prints the numbers as a report.
 import { Object3D, Quaternion, Vector3 } from "three"
 import { afterAll, expect, test } from "vitest"
-import { curveTo, type Goal, hard, mark, posture, soft, solve, Target } from "@drawcall/ik"
+import { clear, curveTo, type Goal, hard, mark, posture, soft, solve, Target } from "@drawcall/ik"
 import { Humanoid } from "../src"
 
 const DT = 1 / 60
@@ -87,6 +87,35 @@ test("hard hand goal on a moving point: exact every frame, zero lag", () => {
   say(`    max |hand - target(t - dt)| = ${e(lagged)} m   (what one frame of lag would look like)`)
   say(`    ${perf(s)}`)
   expect(err).toBeLessThan(1e-9)
+  expect(s.unconverged).toBe(0)
+})
+
+test("clear: a hand sweeping across in front of the trunk keeps the elbow and wrist out of it, and is still met exactly", () => {
+  const sweep = (t: number) => V(-0.35 * Math.sin(Math.PI * t), 1.15 + 0.15 * Math.cos(Math.PI * t), 0.28)
+  /** The elbow and the wrist kept out of the trunk, a capsule of 16 cm, with `weight`: how deep they get, and the run. */
+  const keptOut = (weight: number) => {
+    const { body, plan } = reach((t, point) => point.set({ position: sweep(t) }))
+    const from = mark(body.get("pelvis"), "trunkLow", V(0, 0.05, 0)),
+      to = mark(body.get("chest"), "trunkHigh", V(0, 0.2, 0))
+    const keepOut = [body.get("forearmR"), body.get("handR")].map((point) => clear(point, from, to, 0.16, weight))
+    let deepest = 0
+    const s = run(
+      body,
+      (t) => [...plan(t), ...keepOut],
+      2,
+      (_t, r) => r.goals.slice(-2).forEach((g) => (deepest = Math.max(deepest, g.missedBy))),
+    )
+    return { deepest, s }
+  }
+  const inside = keptOut(0).deepest, // a weightless goal pushes nothing, but says how deep its point is
+    { deepest, s } = keptOut(100)
+  say(`clear: the right hand sweeps out to its side, then across in front of the trunk to the left, the trunk a capsule of 16 cm`)
+  say(`    elbow or wrist inside the trunk without a push by up to ${(100 * inside).toFixed(1)} cm, with one by ${(1000 * deepest).toFixed(1)} mm`)
+  say(`    hard hand error ${e(s.hard)} m; max frame-to-frame joint change ${s.dq.toFixed(3)} rad (the arm snapping round the trunk once)`)
+  say(`    ${perf(s)}`)
+  expect(inside).toBeGreaterThan(0.03)
+  expect(deepest).toBeLessThan(0.005)
+  expect(s.hard).toBeLessThan(1e-9)
   expect(s.unconverged).toBe(0)
 })
 
