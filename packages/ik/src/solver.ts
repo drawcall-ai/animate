@@ -134,7 +134,7 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
   }
   body.limits()
   body.update()
-  const seed = tasks.map((goal) => ("point" in goal ? body.positionOf(goal.point) : ZERO)) // where each point was before the solve, for velocities
+  const seed = tasks.map((goal) => ("point" in goal ? body.matrixPosition(goal.point) : ZERO)) // where each point was before the solve, for velocities
   // Hard 3-row blocks at the current iterate: Jacobian and error, and a function that adds the Hessian of (r . e) to S.
   let blocks: { J: Float64Array; e: Vector3; curvature: Curvature }[] = []
 
@@ -213,8 +213,8 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
         L = goal.hard ? hard : soft
       const given: Given = ti < body.loops.length || !(b instanceof Target) ? FRAME : b.given // a seat is a whole frame
       const w = (given.axisWeights ?? ONE).clone().multiplyScalar(goal.hard ? 1 : goal.weight)
-      const pa = body.positionOf(a),
-        pb = body.positionOf(b)
+      const pa = body.matrixPosition(a),
+        pb = body.matrixPosition(b)
       if (given.position)
         missed = Math.max(
           missed,
@@ -236,7 +236,7 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
         )
       }
       if (given.quaternion) {
-        const E = body.quaternionOf(b).multiply(body.quaternionOf(a).invert()),
+        const E = body.matrixQuaternion(b).multiply(body.matrixQuaternion(a).invert()),
           e = rotationVector(E)
         // Jacobian columns, ordered as one serial chain from a up to the joint the two points share and down to b:
         // what is above that joint moves both alike.
@@ -304,10 +304,10 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
 
   /**
    * One Newton step on F = HARD * f_hard + f_soft, or (project = true) one damped Gauss-Newton step on f_hard
-   * alone that keeps the current joint-limit locks. Returns the largest joint change.
+   * alone that keeps the current joint-limit locks, from the pose the body was last updated to. Updates it to the pose
+   * it steps to and returns the largest joint change.
    */
   const step = (project: boolean): number => {
-    body.update()
     assemble()
     for (let k = 0; k < n; k++) g[k] = project ? hard.g[k] : HARD * hard.g[k] + soft.g[k]
     // Joint limits as an active set kept from step to step: a joint on (or within SNAP of) a limit that the step
@@ -367,6 +367,7 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
       moved = Math.max(moved, Math.abs(next - q[i]))
       q[i] = next
     }
+    body.update()
     return moved
   }
 
@@ -380,7 +381,6 @@ export function solve(body: Body, goals: Goal[], dt = 0, opts: SolveOptions = {}
   }
   if (maxIter > 0) for (let i = 0; i < 2; i++) step(true) // exact projection onto the hard goals
 
-  body.update()
   const missed = assemble(),
     loops = body.loops.length
   const jointsAtLimit: string[] = []
