@@ -267,16 +267,9 @@ export class Body {
       this.#hang(object, point, seat)
     } else {
       this.#attached.delete(object)
-      this.root.updateWorldMatrix(true, true)
-      const world = object.matrixWorld.clone(),
-        to = this.root.parent
-      object.removeFromParent()
-      if (to) {
-        to.updateWorldMatrix(true, false)
-        world.premultiply(to.matrixWorld.clone().invert())
-        to.add(object)
-      }
-      world.decompose(object.position, object.quaternion, object.scale)
+      object.updateWorldMatrix(true, false)
+      if (this.root.parent) this.root.parent.attach(object)
+      else object.removeFromParent().matrixWorld.decompose(object.position, object.quaternion, object.scale)
     }
     this.update()
   }
@@ -288,10 +281,9 @@ export class Body {
     object.updateWorldMatrix(false, true)
     // The seat in the object's frame as the object's own scale sizes it: turning and moving the object by the inverse
     // of that puts the seat on the point, at whatever scale the object has.
-    const at = new Vector3()
-    seat.matrixWorld.decompose(at, object.quaternion, new Vector3())
+    seat.matrixWorld.decompose(object.position, object.quaternion, new Vector3())
     object.quaternion.invert()
-    object.position.copy(at).applyQuaternion(object.quaternion).negate()
+    object.position.applyQuaternion(object.quaternion).negate()
     point.add(object)
   }
 }
