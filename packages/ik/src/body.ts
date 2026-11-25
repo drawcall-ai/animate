@@ -2,7 +2,7 @@
 // body is any Object3D under a bone, an attached object is an Object3D parented to one. Attaching an object
 // a second time closes a loop, which the solver enforces as a hard goal.
 
-import { Bone, Matrix4, Object3D, Quaternion, Vector3 } from "three"
+import { Bone, Object3D, Quaternion, Vector3 } from "three"
 import { type Pose, Target } from "./goals"
 
 /** One joint degree of freedom: a rotation about `axis` (in the bone's rest frame) within [min, max] rad. */
@@ -267,16 +267,9 @@ export class Body {
       this.#hang(object, point, seat)
     } else {
       this.#attached.delete(object)
-      this.root.updateWorldMatrix(true, true)
-      const world = object.matrixWorld.clone(),
-        to = this.root.parent
-      object.removeFromParent()
-      if (to) {
-        to.updateWorldMatrix(true, false)
-        world.premultiply(to.matrixWorld.clone().invert())
-        to.add(object)
-      }
-      world.decompose(object.position, object.quaternion, object.scale)
+      object.updateWorldMatrix(true, false)
+      if (this.root.parent) this.root.parent.attach(object)
+      else object.removeFromParent().matrixWorld.decompose(object.position, object.quaternion, object.scale)
     }
     this.update()
   }
@@ -286,8 +279,11 @@ export class Body {
     object.position.set(0, 0, 0)
     object.quaternion.identity()
     object.updateWorldMatrix(false, true)
-    const local = seat === object ? new Matrix4() : object.matrixWorld.clone().invert().multiply(seat.matrixWorld)
-    local.invert().decompose(object.position, object.quaternion, new Vector3())
+    // The seat in the object's frame as the object's own scale sizes it: turning and moving the object by the inverse
+    // of that puts the seat on the point, at whatever scale the object has.
+    seat.matrixWorld.decompose(object.position, object.quaternion, new Vector3())
+    object.quaternion.invert()
+    object.position.applyQuaternion(object.quaternion).negate()
     point.add(object)
   }
 }

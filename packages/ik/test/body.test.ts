@@ -1,5 +1,5 @@
 // A body of its own: a two-bone arm on a sliding base, the smallest body the solver poses.
-import { Object3D, Vector3 } from "three"
+import { Object3D, Quaternion, Vector3 } from "three"
 import { expect, test } from "vitest"
 import { Body, hard, Joint, mark, solve, Target } from "../src"
 
@@ -39,6 +39,17 @@ test("an object hung on the body by a mark of its own goes into the hand that ta
   expect(solve(body, []).loopsMissedBy).toBeLessThan(1e-9)
   body.detach(box)
   expect(box.parent).toBe(scene)
+})
+
+test("a scaled object's seat lands on the point it is attached at, its turn included", () => {
+  const { body } = arm()
+  const box = new Object3D()
+  box.scale.setScalar(1.5)
+  const seat = mark(box, "seat", new Vector3(0.2, 0.1, 0), new Quaternion().setFromAxisAngle(Z, 0.7))
+  const hand = body.get("hand")
+  body.attach(box, hand, seat)
+  expect(body.positionOf(seat).distanceTo(body.positionOf(hand))).toBeLessThan(1e-12)
+  expect(body.quaternionOf(seat).angleTo(body.quaternionOf(hand))).toBeLessThan(1e-6)
 })
 
 test("two hard goals on one point throw, naming even an unnamed point by where it is", () => {
