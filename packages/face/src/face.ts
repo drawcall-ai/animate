@@ -22,8 +22,8 @@ type Eye = { bone: Object3D; rest: Quaternion }
  * A model's face as the ARKit standard has it: the 52 blendshapes as morph targets, on whichever meshes carry them (a face,
  * teeth, a tongue, each with the shapes that move it), and the eyes as the bones `LeftEye` and `RightEye`, each resting in the
  * face's frame (+Z forward, +Y up, +X the character's left) and turned from that rest about its own Y and X. Morph targets of
- * other names are left alone. The eye bones are found in the model or, once a `Humanoid` has taken the model's bones out from
- * under it, in its skinned meshes' skeletons; read it before its eyes are turned, as their turn then is their rest. A face
+ * other names are left alone. The eye bones are found in its skinned meshes' skeletons, wherever a `Humanoid` has moved them,
+ * else in the model; read it before its eyes are turned, as their turn then is their rest. A face
  * without eye bones looks ahead.
  */
 export class Face {
@@ -40,7 +40,7 @@ export class Face {
       if (shapes.length) this.#meshes.push({ mesh: node, shapes })
     })
     const eye = (name: string): Eye | undefined => {
-      const bone = model.getObjectByName(name) ?? bones.find((b) => b.name === name)
+      const bone = bones.find((b) => b.name === name) ?? model.getObjectByName(name)
       return bone && { bone, rest: bone.quaternion.clone() }
     }
     this.#eyes = { left: eye(EYE_BONES.left), right: eye(EYE_BONES.right) }

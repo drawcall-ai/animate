@@ -45,7 +45,9 @@ function misword(w: unknown, i: number, before: unknown): string | undefined {
   if (typeof text !== "string") return `word ${i} has a text of ${JSON.stringify(text)}`
   const span = misspan(w)
   if (span) return `${named} ${span}`
-  if (isObject(before) && Reflect.get(w, "start") < Reflect.get(before, "start")) return `${named} starts before the one before it`
+  const start: unknown = Reflect.get(w, "start"),
+    previous: unknown = isObject(before) && Reflect.get(before, "start")
+  if (finite(start) && finite(previous) && start < previous) return `${named} starts before the one before it`
   const phones: unknown = Reflect.get(w, "phones")
   if (phones === undefined) return
   if (!Array.isArray(phones)) return `${named} has phones ${JSON.stringify(phones)}, not a list`
