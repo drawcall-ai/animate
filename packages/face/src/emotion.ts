@@ -62,10 +62,10 @@ const neutral: Manner = {
   loudness: 0,
 }
 
-/** each emotion's manner, as tuned at full intensity */
 /** An emotion a face shows: one of `EMOTIONS`. */
 export type Emotion = "neutral" | "happy" | "angry" | "sad" | "scared" | "disgusted" | "surprised"
 
+/** each emotion's manner, as tuned at full intensity */
 export const MANNER: Record<Emotion, Manner> = {
   neutral,
   happy: {

@@ -23,7 +23,8 @@ const FOLLOW = { pitch: 1.3, down: 0.35, up: 0.2 }
 type Side = "left" | "right"
 /** where an eye looks from: a point and a frame (+Z forward, +Y up, +X the character's left) in `anchor`'s, which carries them */
 type Seat = { anchor: Object3D; origin: Vector3; frame: Quaternion }
-/** an eye: its bone, if any, and that bone's rest turn; whether shapes turn it; and, shapes turning it without a bone, its seat */
+/** an eye: its bone, if any, and that bone's rest turn; whether `eyeLook` shapes it does not carry move it (with a bone: the
+ * lids); and, shapes turning it without a bone, its seat */
 type Eye = { bone: Object3D | undefined; rest: Quaternion | undefined; shaped: boolean; seat: Seat | undefined }
 
 /**
@@ -32,21 +33,24 @@ type Eye = { bone: Object3D | undefined; rest: Quaternion | undefined; shaped: b
  * or sides (`eyeBlink_L`). It drives the shapes it finds and no others: a model with only some of the 52 moves only by those,
  * and morph targets of other names are left alone.
  *
- * An eye turns by its `eyeLook` shapes where the model has them, else by its bone, `LeftEye` or `RightEye` (VRM: `leftEye`,
- * `rightEye`), resting in the face's frame (+Z forward, +Y up, +X the character's left) and turned from that rest about its own Y
- * and X, the upper lid following it as the shapes would move it. Eye bones are found in the skinned meshes' skeletons,
- * wherever a `Humanoid` has moved them, else in the model. Where it looks from is its bone's or, without one, the middle of
- * what its `eyeLook` shapes move, in the model's frame (+Z forward) as it rests, carried by the bone that skins most of that or
- * else by the mesh. Read the face at rest, before its eyes are turned, as their turn then is their rest.
+ * An eye with a bone, `LeftEye` or `RightEye` (VRM: `leftEye`, `rightEye`), turns by it, exactly: the bone rests in the face's
+ * frame (+Z forward, +Y up, +X the character's left) and turns from that rest about its own Y and X. Its `eyeLook` shapes still
+ * move what the bone does not carry or skin, the lids; without such shapes the upper lid follows the eye as they would. An eye
+ * without a bone turns by its `eyeLook` shapes, ARKit's convention for how far being open: here a weight of 1 looks 0.6 rad
+ * sideways or 0.5 rad up or down. Eye bones are found in the skinned meshes' skeletons, wherever a `Humanoid` has moved them,
+ * else in the model. An eye looks from its bone or, without one, from the middle of what its `eyeLook` shapes move, in the
+ * model's frame (+Z forward) as it rests, carried by the bone that skins most of that or else by the mesh. Read the face at
+ * rest, before its eyes are turned, as their turn then is their rest.
  */
 export class Face {
-  readonly #meshes: { mesh: Mesh; shapes: [index: number, name: BlendShape][] }[] = []
+  /** each mesh with its blendshapes, and those of them an eye's bone moves instead */
+  readonly #meshes: { mesh: Mesh; shapes: [index: number, name: BlendShape][]; boned: Set<BlendShape> }[] = []
   readonly #eyes: Record<Side, Eye>
 
   /** Throws for a model with neither an ARKit blendshape nor an eye bone. */
   constructor(model: Object3D) {
+    model.updateWorldMatrix(true, true)
     const bones: Object3D[] = []
-    const carried = new Set<BlendShape>()
     model.traverse((node) => {
       if (node instanceof SkinnedMesh) bones.push(...node.skeleton.bones)
       if (!(node instanceof Mesh) || !node.morphTargetDictionary) return
@@ -54,62 +58,42 @@ export class Face {
         const shape = blendShapeOf(name)
         return shape ? [[index, shape]] : []
       })
-      for (const [, shape] of shapes) carried.add(shape)
-      if (shapes.length) this.#meshes.push({ mesh: node, shapes })
+      if (shapes.length) this.#meshes.push({ mesh: node, shapes, boned: new Set() })
     })
     const eye = (side: Side): Eye => {
       const named = (name: string) => bones.find((b) => b.name === name) ?? model.getObjectByName(name)
       const bone = EYE_BONES[side].map(named).find((b) => b !== undefined)
       const sided = side === "left" ? "Left" : "Right"
-      const looks = (["In", "Out", "Up", "Down"] as const).map((way) => `eyeLook${way}${sided}` as const)
-      const shaped = looks.some((name) => carried.has(name))
-      return { bone, rest: bone?.quaternion.clone(), shaped, seat: shaped && !bone ? this.#seat(model, looks) : undefined }
+      const looks: readonly BlendShape[] = (["In", "Out", "Up", "Down"] as const).map((way) => `eyeLook${way}${sided}` as const)
+      let shaped = false,
+        seat: Seat | undefined
+      for (const entry of this.#meshes) {
+        const { mesh, shapes } = entry
+        const own = shapes.filter(([, name]) => looks.includes(name))
+        if (!own.length) continue
+        const moved = movedBy(
+          mesh,
+          own.map(([index]) => index),
+        )
+        // what the eye's bone carries or skins turns with it, not by its shapes
+        if (bone && (carries(bone, mesh) || skinnedBy(mesh, moved, bone))) {
+          for (const [, name] of own) entry.boned.add(name)
+          continue
+        }
+        shaped = true
+        if (!bone && !seat && moved.length) seat = seatOf(model, mesh, moved)
+      }
+      return { bone, rest: bone?.quaternion.clone(), shaped, seat }
     }
     this.#eyes = { left: eye("left"), right: eye("right") }
     if (!this.#meshes.length && !this.#eyes.left.bone && !this.#eyes.right.bone)
       throw new Error("the model has no ARKit face: no morph target named as an ARKit blendshape, and no LeftEye or RightEye bone")
   }
 
-  /** where an eye looks from that `looks` turn: the middle of what they move, on the first mesh they move anything of */
-  #seat(model: Object3D, looks: readonly BlendShape[]): Seat | undefined {
-    model.updateWorldMatrix(true, true)
-    for (const { mesh, shapes } of this.#meshes) {
-      const targets = shapes.filter(([, name]) => looks.includes(name)).map(([index]) => mesh.geometry.morphAttributes.position?.[index])
-      const base = mesh.geometry.getAttribute("position")
-      const moved: number[] = []
-      for (let i = 0; i < base.count; i++)
-        if (
-          targets.some(
-            (t) =>
-              t &&
-              _d
-                .fromBufferAttribute(t, i)
-                .sub(mesh.geometry.morphTargetsRelative ? _p.set(0, 0, 0) : _p.fromBufferAttribute(base, i))
-                .lengthSq() > 1e-12,
-          )
-        )
-          moved.push(i)
-      if (!moved.length) continue
-      const middle = moved.reduce((sum, i) => sum.add(_d.fromBufferAttribute(base, i)), new Vector3()).divideScalar(moved.length)
-      // a skinned mesh's eye goes with the bone skinning the vertex nearest the middle most
-      let anchor: Object3D = mesh
-      if (mesh instanceof SkinnedMesh) {
-        const nearest = moved.reduce((a, i) =>
-          _d.fromBufferAttribute(base, i).distanceToSquared(middle) < _p.fromBufferAttribute(base, a).distanceToSquared(middle) ? i : a,
-        )
-        const weights = [0, 1, 2, 3].map((k) => mesh.geometry.getAttribute("skinWeight").getComponent(nearest, k))
-        anchor = mesh.skeleton.bones[mesh.geometry.getAttribute("skinIndex").getComponent(nearest, weights.indexOf(Math.max(...weights)))] ?? mesh
-      }
-      const origin = anchor.worldToLocal(mesh.localToWorld(middle))
-      const frame = anchor.getWorldQuaternion(new Quaternion()).invert().multiply(model.getWorldQuaternion(_q))
-      return { anchor, origin, frame }
-    }
-  }
-
   /**
    * Sets every blendshape the model carries to its weight in `expression` (0 where left out), and turns the eyes by `eyes` from
-   * their rest (default: at rest): by their `eyeLook` shapes, added to the expression's, a weight of 1 looking 0.6 rad sideways or 0.5 rad up or down; else by
-   * their bones, the upper lids following. Throws on a name that is no ARKit blendshape or a weight that is not finite.
+   * their rest (default: at rest), by their bones and `eyeLook` shapes as the class describes, those shapes' weights added to the
+   * expression's. Throws on a name that is no ARKit blendshape or a weight that is not finite.
    */
   set(expression: Readonly<Expression>, eyes?: Readonly<Eyes>): void {
     for (const [name, weight] of Object.entries(expression)) {
@@ -118,10 +102,10 @@ export class Face {
     }
     const w: Expression = { ...expression }
     for (const side of ["left", "right"] as const) this.#look(w, side, eyes?.[side] ?? { yaw: 0, pitch: 0 })
-    for (const { mesh, shapes } of this.#meshes) {
+    for (const { mesh, shapes, boned } of this.#meshes) {
       const influences = mesh.morphTargetInfluences
       if (!influences) throw new Error(`the mesh "${mesh.name}" has morph targets but no influences`)
-      for (const [index, name] of shapes) influences[index] = w[name] ?? 0
+      for (const [index, name] of shapes) influences[index] = (boned.has(name) ? expression[name] : w[name]) ?? 0
     }
   }
 
@@ -141,7 +125,8 @@ export class Face {
     return { left: look(this.#eyes.left), right: look(this.#eyes.right) }
   }
 
-  /** the eye on `side` looking `look`: by its shapes into `w`, else by its bone, the lid following into `w` */
+  /** the eye on `side` looking `look`: by its bone, and by the `eyeLook` shapes into `w` that move what the bone does not; with a
+   * bone and no such shapes, the lid following into `w` */
   #look(w: Expression, side: Side, { yaw, pitch }: Look) {
     const { bone, rest, shaped } = this.#eyes[side]
     const sided = side === "left" ? "Left" : "Right"
@@ -156,15 +141,58 @@ export class Face {
       look(toRight, -yaw, LOOK_RANGE.side)
       look("Down", pitch, LOOK_RANGE.vertical)
       look("Up", -pitch, LOOK_RANGE.vertical)
-      return
     }
     if (!bone || !rest) return
     bone.quaternion.copy(rest).multiply(_q.setFromAxisAngle(Y, yaw)).multiply(_q.setFromAxisAngle(X, pitch))
+    if (shaped) return
     // the lid follows less as it closes, so that a blink still shuts it
     const blink = `eyeBlink${sided}` as const,
       lid = clamp(w[blink] ?? 0, 0, 1)
     w[blink] = clamp(lid + clamp(pitch * FOLLOW.pitch, -FOLLOW.up, FOLLOW.down) * (1 - lid), 0, 1)
   }
+}
+
+/** the vertices of `mesh` that any of its morph targets `indices` moves */
+function movedBy(mesh: Mesh, indices: readonly number[]): number[] {
+  const { geometry } = mesh
+  const base = geometry.getAttribute("position"),
+    targets = indices.flatMap((index) => geometry.morphAttributes.position?.[index] ?? [])
+  const moved: number[] = []
+  for (let i = 0; i < base.count; i++) {
+    const at = geometry.morphTargetsRelative ? _p.set(0, 0, 0) : _p.fromBufferAttribute(base, i)
+    if (targets.some((t) => _d.fromBufferAttribute(t, i).sub(at).lengthSq() > 1e-12)) moved.push(i)
+  }
+  return moved
+}
+
+/** whether `object` hangs under `bone` */
+function carries(bone: Object3D, object: Object3D): boolean {
+  for (let o = object.parent; o; o = o.parent) if (o === bone) return true
+  return false
+}
+
+/** the bone skinning vertex `i` of `mesh` most */
+function skinOf(mesh: SkinnedMesh, i: number): Object3D | undefined {
+  const weights = [0, 1, 2, 3].map((k) => mesh.geometry.getAttribute("skinWeight").getComponent(i, k))
+  return mesh.skeleton.bones[mesh.geometry.getAttribute("skinIndex").getComponent(i, weights.indexOf(Math.max(...weights)))]
+}
+
+/** whether `bone` skins most of the `vertices` of `mesh` most */
+const skinnedBy = (mesh: Mesh, vertices: readonly number[], bone: Object3D) =>
+  mesh instanceof SkinnedMesh && vertices.filter((i) => skinOf(mesh, i) === bone).length > vertices.length / 2
+
+/** where an eye looks from whose shapes move the `moved` vertices of `mesh`: their middle, carried by the bone skinning the
+ * vertex nearest it most or else by the mesh, in the frame `model` rests in */
+function seatOf(model: Object3D, mesh: Mesh, moved: readonly number[]): Seat {
+  const base = mesh.geometry.getAttribute("position")
+  const middle = moved.reduce((sum, i) => sum.add(_d.fromBufferAttribute(base, i)), new Vector3()).divideScalar(moved.length)
+  const nearest = moved.reduce((a, i) =>
+    _d.fromBufferAttribute(base, i).distanceToSquared(middle) < _p.fromBufferAttribute(base, a).distanceToSquared(middle) ? i : a,
+  )
+  const anchor = (mesh instanceof SkinnedMesh && skinOf(mesh, nearest)) || mesh
+  const origin = anchor.worldToLocal(mesh.localToWorld(middle))
+  const frame = anchor.getWorldQuaternion(new Quaternion()).invert().multiply(model.getWorldQuaternion(_q))
+  return { anchor, origin, frame }
 }
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))

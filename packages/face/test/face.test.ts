@@ -45,14 +45,18 @@ test("finds eye bones its skinned meshes hold elsewhere, as a humanoid that took
   expect(eye.quaternion.angleTo(new Quaternion())).toBeCloseTo(0.3)
 })
 
-test("reads blendshapes named with other separators and sides, and turns an eye by its eyeLook shapes, not its bone, where it has them", () => {
+test("reads blendshapes named with other separators and sides; turns an eye by its bone, and by its eyeLook shapes what the bone does not carry", () => {
   const model = new Group()
-  const mesh = shaped(["eyeBlink_L", "eyeLookOut_L", "eyeLookIn_L", "eyeLookDown_L", "eyeLookUp_L"])
+  const looks = ["eyeBlink_L", "eyeLookOut_L", "eyeLookIn_L", "eyeLookDown_L", "eyeLookUp_L"]
+  const lids = shaped(looks),
+    ball = shaped(looks)
   const eye = Object.assign(new Bone(), { name: "leftEye" })
-  model.add(mesh, eye)
+  eye.add(ball)
+  model.add(lids, eye)
   new Face(model).set({ eyeBlinkLeft: 0.5 }, { left: { yaw: 0.3, pitch: -0.25 }, right: { yaw: 0, pitch: 0 } })
-  expect(mesh.morphTargetInfluences).toEqual([0.5, 0.5, 0, 0, 0.5])
-  expect(eye.quaternion.angleTo(new Quaternion())).toBe(0)
+  expect(lids.morphTargetInfluences).toEqual([0.5, 0.5, 0, 0, 0.5])
+  expect(ball.morphTargetInfluences).toEqual([0.5, 0, 0, 0, 0])
+  expect(eye.quaternion.angleTo(new Quaternion())).toBeGreaterThan(0.3)
 })
 
 test("turns a VRM eye bone where there are no eyeLook shapes, the lid following it down", () => {
