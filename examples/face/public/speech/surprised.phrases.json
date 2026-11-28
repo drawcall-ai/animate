@@ -1,0 +1,14 @@
+[
+  { "words": [0, 0], "emotion": "surprised", "intensity": 1, "head": { "pitch": -0.05 }, "react": [{ "word": 0, "reaction": "gasp" }] },
+  { "words": [1, 4], "emotion": "surprised", "intensity": 0.9, "head": { "yaw": 0.06 }, "smile": 0.3, "emphasis": [3] },
+  { "words": [5, 8], "emotion": "surprised", "intensity": 1, "question": true, "emphasis": [6, 8], "react": [{ "word": 8, "reaction": "browFlash" }] },
+  { "words": [9, 12], "emotion": "surprised", "intensity": 0.7, "head": { "roll": 0.06 }, "smile": 0.2, "emphasis": [10, 12], "glance": [12] },
+  {
+    "words": [13, 16],
+    "emotion": "happy",
+    "intensity": 1,
+    "brows": 0.3,
+    "emphasis": [14, 15],
+    "react": [{ "word": 15, "reaction": "browFlash", "intensity": 0.7 }]
+  }
+]

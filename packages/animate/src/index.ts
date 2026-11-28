@@ -24,3 +24,34 @@ export { Humanoid, type HumanoidOptions } from "@drawcall/humanoid"
 export { type Contact, describeGrip, FINGERS, type Finger, type Grip, grip, type GripOptions, Hand, type HandPart, HandPose, type Side } from "@drawcall/hand"
 export { type BodyPart, type Foot, type LocomotionOptions, LocomotionPlanner, type Motion } from "@drawcall/locomotion"
 export { mix } from "./mix"
+export {
+  BLEND_SHAPES,
+  type BlendShape,
+  type Demeanor,
+  type Emotion,
+  EMOTIONS,
+  type Expression,
+  type Eyes,
+  Face,
+  FacePlanner,
+  type HeadTurn,
+  isEmotion,
+  isPhrases,
+  type Look,
+  type Phrase,
+  type Reaction,
+  REACTIONS,
+  type SpeakOptions,
+} from "@drawcall/face"
+export {
+  CachedSpeechAlignmentLoader,
+  createSpeech,
+  type Phone,
+  type Samples,
+  type Speech,
+  type SpeechAlignmentCacheOptions,
+  type SpeechAlignmentRequest,
+  type TranscriptPhone,
+  type TranscriptWord,
+  type Word,
+} from "@drawcall/speech"

@@ -13,6 +13,7 @@
     "grip": "pnpm --filter @drawcall/example-grip dev",
     "match": "pnpm --filter @drawcall/example-match dev",
     "controller": "pnpm --filter @drawcall/example-controller dev",
+    "face": "pnpm --filter @drawcall/example-face dev",
     "format": "prettier --write ."
   },
   "devDependencies": {

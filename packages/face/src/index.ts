@@ -1,0 +1,5 @@
+export { BLEND_SHAPES, type BlendShape, type Expression } from "./blendshapes"
+export { isPhrases, type Phrase } from "./direction"
+export { type Emotion, EMOTIONS, type HeadTurn, isEmotion, type Reaction, REACTIONS } from "./emotion"
+export { type Eyes, Face, type Look } from "./face"
+export { type Demeanor, FacePlanner, type SpeakOptions } from "./planner"

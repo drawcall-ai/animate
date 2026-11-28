@@ -1,11 +1,11 @@
 ---
 name: animate
-description: Animate three.js humanoids procedurally with `@drawcall/animate` — a body posed every frame by one solve from that frame's goals, rigged or procedural humanoids, a locomotion planner that walks, runs and jumps them after a moving point such as a physics capsule, and hands that grip meshes. Use when a character in three.js should stand, walk, reach, aim, swing, carry or hold something; not for playing baked animation clips.
+description: Animate three.js humanoids procedurally with `@drawcall/animate` — a body posed every frame by one solve from that frame's goals, rigged or procedural humanoids, a locomotion planner that walks, runs and jumps them after a moving point such as a physics capsule, hands that grip meshes, and faces following the ARKit blendshape standard that show emotions, look at things and speak recorded lines in lip sync. Use when a character in three.js should stand, walk, reach, aim, swing, carry or hold something, or show emotion, make eye contact or say a line; not for playing baked animation clips or driving a face from live capture.
 ---
 
 # Procedural humanoids with @drawcall/animate
 
-Five concepts carry everything. A **body** is what is posed: a `Humanoid`, or a `Body` of your own. **Goals** are what a frame asks of it: `hard`, `soft`, `clear`, `posture` and `stay`. **Planners** turn intent and time into this frame's goals: the `LocomotionPlanner`, and the planners you write for a stroke, a carry or an aim. **Solve** makes one pose per frame from all the goals. **Hands** read a rig's fingers, and **grips** find how a hand holds a mesh.
+Six concepts carry everything. A **body** is what is posed: a `Humanoid`, or a `Body` of your own. **Goals** are what a frame asks of it: `hard`, `soft`, `clear`, `posture` and `stay`. **Planners** turn intent and time into this frame's goals: the `LocomotionPlanner`, the `FacePlanner`, and the planners you write for a stroke, a carry or an aim. **Solve** makes one pose per frame from all the goals. **Hands** read a rig's fingers, and **grips** find how a hand holds a mesh. A **face** reads a model's ARKit blendshapes and eye bones, which the face planner acts.
 
 ## The frame loop
 
@@ -140,6 +140,40 @@ goals.push(soft(body.hands.left.bone, seat, 40 * u))
 if (u === 1 && body.positionOf(body.hands.left.bone).distanceTo(body.positionOf(seat)) < 0.01) body.hold("left", rifle, found)
 ```
 
+## A face
+
+A `Face` is a model's face as the ARKit standard has it: the 52 blendshapes as morph targets on whatever meshes carry them (face, teeth, tongue each with their own), and the eyes turned by `LeftEye` and `RightEye` bones resting in the face's frame, the lids following by the `eyeLook` shapes, or, without bones, by those shapes alone. Any face following that standard works, a face rigged by `@drawcall/rig` or a Ready Player Me avatar among them; it drives only the shapes a model has, and an eye with neither looks ahead. Make one `Face` per model and keep it: a `Face` made after its eyes have turned takes that turn as their rest.
+
+The `FacePlanner` acts it. Every frame tell it the emotion to show, how strongly, and what to look at, and it sets the blendshapes and eyes itself: blinks, saccades, a little sway, and a change of emotion blended on springs, never jumping. So pass the emotion every frame as data and change it whenever the story does; do not fade it yourself. Given the humanoid, it also returns a goal for the neck and head, which turn part of the way to what the eyes look at and act on top (nods, tilts, the emotion's carriage): take the `"head"` from the locomotion planner and leave both lists to one solve. The face planner owns the face from its first update: drive the blendshapes yourself with `face.set` only where no planner runs.
+
+```ts
+const body = new Humanoid({ rig: character })
+const face = new Face(character)
+const locomotion = new LocomotionPlanner(body)
+const acting = new FacePlanner(face, body)
+
+function frame(dt: number) {
+  const goals = [
+    ...locomotion.update(dt, { position, velocity, taken: ["head"] }),
+    ...acting.update(dt, { emotion: "happy", intensity: 0.7, lookAt: camera.position }),
+  ]
+  solve(body, goals, dt)
+}
+```
+
+### Saying a line
+
+A line is a recording and what is said in it, timed word by word and phone by phone. `createSpeech` measures it from a transcript and the decoded sound (a Web Audio `AudioBuffer`), which can be left out for a line said without one; words that come without phones are looked up in the CMU pronouncing dictionary, numbers spelled out. Exact phone timing makes the lip sync: in a Vite app, time each line with `CachedSpeechAlignmentLoader`, whose forced alignment runs in Node through the `@drawcall/cache` Vite plugin (`cache()` from `@drawcall/cache/vite`, with the optional peers `@huggingface/transformers`, `@audio/decode` and `@audio/resample-sinc` installed for it) while browsers only read the cached result. Write each load literally, with the recording's public path and its text word for word, so the plugin finds it. Word timings from a speech service (ElevenLabs alignment, Amazon Polly speech marks, Azure word boundaries) fit `TranscriptWord` directly.
+
+```ts
+const transcript = await new CachedSpeechAlignmentLoader().loadAsync({ audio: "/speech/hello.mp3", text: "Hello there, it's good to see you." })
+const speech = await createSpeech(transcript, buffer)
+```
+
+`acting.speak(speech, { phrases, heard })` says it from then on, in the emotion each update gives, and `acting.speaking` stays true until it is over. Start the sound in the same moment, and pass `heard`, the time into the recording the listener hears as the frame shows, read from the audio clock, less its latency, plus the two refreshes before the frame being drawn reaches the screen: `() => context.currentTime - startedAt - (context.outputLatency || 0) - context.baseLatency + 2 * dt`, with `dt` the last frame's (`outputLatency` is undefined in some browsers). Without it the line runs on the frames' `dt`, which falls behind the sound whenever frames stall.
+
+`phrases` direct the line; a phrase's emotion overrides the one `update` gives. Their word indices count into `speech.words`, which drops what is not spoken (a lone dash), so count them after `createSpeech`. Check phrases loaded as JSON with `isPhrases`.
+
 ## Over time
 
 Plan from the current state: `body.positionOf`, `quaternionOf` and `velocityOf` read the pose the last solve left, for any point including `body.centerOfMass`, and `velocityOf` is that solve's motion over its `dt`. To arrive somewhere at a given time with a given velocity and stay smooth whatever happens on the way, build a `curveTo` from the current state every frame and give the target its value one frame ahead:
@@ -166,4 +200,6 @@ For something other than a person, make each jointed bone a `Joint` (a three.js 
 - The feet stand on level treads only, at the height the ray finds; slopes are not looked at, and a landing from the air is predicted for the height it left from.
 - Under the hardest input (turning around at a sprint, reversing every half second, running onto stairs) a knee can still turn sharply within a frame a few times a minute; steady gaits are smooth.
 - A leg cannot be taken (no kicks), and strafing and backpedalling have no look of their own beyond `facing`.
+- A face's eyes are aimed from where the last solve left the head, a frame behind a head that turns fast.
+- Speech is English: phones are ARPAbet, from the CMU dictionary or an English aligner.
 - A ball bigger than the hand spans is not held across: the palm and fingers lie on it and the thumb rests beside them. From above, a lever's stem can stand in the way of the fingers closing round its arm.

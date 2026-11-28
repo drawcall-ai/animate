@@ -1,0 +1,26 @@
+{
+  "name": "@drawcall/example-face",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "data": "node scripts/data.mjs",
+    "dev": "vite --host",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@drawcall/animate": "workspace:*",
+    "@drawcall/cache": "^0.9.1",
+    "@drawcall/rig": "^0.10.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@audio/decode": "^3.16.2",
+    "@audio/resample-sinc": "^1.4.0",
+    "@huggingface/transformers": "^3.8.1",
+    "@types/three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5"
+  }
+}
