@@ -91,11 +91,11 @@ const fetched = async (url: string) => {
   if (!response.ok) throw new Error(`${url}: ${response.status}`)
   return response
 }
-const audio = new AudioContext()
+const context = new AudioContext()
 /** a line ready to say: its sound, its speech and its direction */
 const lineOf = async (name: LineName) => {
   const [buffer, transcript, phrases] = await Promise.all([
-    fetched(`/speech/${name}.mp3`).then(async (response) => audio.decodeAudioData(await response.arrayBuffer())),
+    fetched(`/speech/${name}.mp3`).then(async (response) => context.decodeAudioData(await response.arrayBuffer())),
     ALIGNED[name](),
     fetched(`/speech/${name}.phrases.json`).then((response): Promise<unknown> => response.json()),
   ])
@@ -109,9 +109,8 @@ await wrinkles(rig.object)
 rig.object.traverse((o) => {
   if (o instanceof SkinnedMesh) o.frustumCulled = false
 })
-// the face is read while the rig rests, before the humanoid takes its bones
-const face = new Face(rig.object)
 const body = new Humanoid({ rig: rig.object })
+const face = new Face(rig.object)
 scene.add(body.root, rig.object)
 const locomotion = new LocomotionPlanner(body)
 const acting = new FacePlanner(face, body)
@@ -123,19 +122,25 @@ const lines = new Map(
   ),
 )
 
-let delta = 0
+let dt = 0
+/** the line's sound playing, if any, stopped as the next starts */
+let playing: AudioBufferSourceNode | undefined
 play.addEventListener("click", async () => {
-  await audio.resume()
+  await context.resume()
   const line = isLine(linePicker.value) && lines.get(linePicker.value)
   if (!line) throw new Error(`no line "${linePicker.value}" was loaded`)
-  const source = audio.createBufferSource()
+  playing?.stop()
+  const source = (playing = context.createBufferSource())
   source.buffer = line.buffer
-  source.connect(audio.destination)
-  const startedAt = audio.currentTime
+  source.connect(context.destination)
+  const startedAt = context.currentTime
   source.start(startedAt)
-  // what is heard: the time since the sound started less the output latency, as the frame being rendered reaches the screen, two
+  // what is heard as the frame being drawn reaches the screen: the time since the sound started, less the output latency, two
   // refreshes on
-  acting.speak(line.speech, { phrases: line.phrases, heard: () => audio.currentTime - startedAt - (audio.outputLatency || 0) - audio.baseLatency + 2 * delta })
+  acting.speak(line.speech, {
+    phrases: line.phrases,
+    heard: () => context.currentTime - startedAt - (context.outputLatency || 0) - context.baseLatency + 2 * dt,
+  })
 })
 play.textContent = "Play"
 play.disabled = false
@@ -145,14 +150,11 @@ const here = new Vector3(),
 const timer = new Timer()
 renderer.setAnimationLoop((ms) => {
   timer.update(ms)
-  delta = Math.min(0.05, timer.getDelta())
+  dt = Math.min(0.05, timer.getDelta())
   const emotion = isEmotion(emotionPicker.value) ? emotionPicker.value : "neutral"
   // he stands where he is: the locomotion planner keeps him on his feet, the face planner has his head
-  const goals = [
-    ...locomotion.update(delta, { position: here, velocity: still, taken: ["head"] }),
-    ...acting.update(delta, { emotion, lookAt: camera.position }),
-  ]
-  solve(body, goals, delta)
+  const goals = [...locomotion.update(dt, { position: here, velocity: still, taken: ["head"] }), ...acting.update(dt, { emotion, lookAt: camera.position })]
+  solve(body, goals, dt)
   orbit.update()
   renderer.render(scene, camera)
 })

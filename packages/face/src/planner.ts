@@ -20,23 +20,23 @@ import { Spring, springOf } from "./spring"
 /** How the face is to be this frame. */
 export interface Demeanor {
   /** The emotion it shows. Default: neutral. */
-  emotion?: Emotion
+  readonly emotion?: Emotion
   /** How strongly, 0…1. Default: 1. */
-  intensity?: number
+  readonly intensity?: number
   /** What it looks at (m, world). Default: ahead. */
-  lookAt?: Vector3
+  readonly lookAt?: Readonly<Vector3>
 }
 
 /** How a line is said. */
 export interface SpeakOptions {
   /** Its direction. Default: none, the face following the voice alone in the emotion it is updated with. */
-  phrases?: readonly Phrase[]
+  readonly phrases?: readonly Phrase[]
   /**
    * The time into the recording heard as the frame is shown (s), read once an update: an audio clock less its output latency,
    * say. Default: the time the planner has been updated since `speak`, which keeps to a sound started with it only while frames
    * keep coming. The line is over only once this reaches its end, so a clock that stands still keeps it going.
    */
-  heard?: () => number
+  readonly heard?: () => number
 }
 
 /** how far each shape that parts the lips gives way to their shutting on a p, b or m, whatever else asks for it; a frown keeps half,
@@ -48,7 +48,6 @@ const YIELDS: readonly (readonly [BlendShape, number])[] = [
   ...(["Left", "Right"] as const).flatMap(
     (side) =>
       [
-        [`mouthLowerDown${side}`, 1],
         [`mouthUpperUp${side}`, 1],
         [`mouthStretch${side}`, 1],
         [`mouthFrown${side}`, 0.5],

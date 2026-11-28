@@ -142,13 +142,13 @@ if (u === 1 && body.positionOf(body.hands.left.bone).distanceTo(body.positionOf(
 
 ## A face
 
-A `Face` is a model's face as the ARKit standard has it: the 52 blendshapes as morph targets on whatever meshes carry them (face, teeth, tongue each with their own), and the eyes as `LeftEye` and `RightEye` bones resting in the face's frame. Any face following that standard works, a face rigged by `@drawcall/rig` among them; morph targets of other names are left alone, and a face without eye bones looks ahead. Read it from the rigged object while it rests and before `new Humanoid({ rig })`, which takes the eye bones out from under it.
+A `Face` is a model's face as the ARKit standard has it: the 52 blendshapes as morph targets on whatever meshes carry them (face, teeth, tongue each with their own), and the eyes as `LeftEye` and `RightEye` bones resting in the face's frame. Any face following that standard works, a face rigged by `@drawcall/rig` among them; morph targets of other names are left alone, and a face without eye bones looks ahead. Make it before the first update turns the eyes: it takes their turn then as their rest.
 
 The `FacePlanner` acts it. Every frame tell it the emotion to show, how strongly, and what to look at, and it sets the blendshapes and eyes itself: blinks, saccades, a little sway, and a change of emotion blended on springs, never jumping. So pass the emotion every frame as data and change it whenever the story does; do not fade it yourself. Given the humanoid, it also returns a goal for the neck and head, which turn part of the way to what the eyes look at and act on top (nods, tilts, the emotion's carriage): take the `"head"` from the locomotion planner and leave both lists to one solve. The face planner owns the face from its first update: drive the blendshapes yourself with `face.set` only where no planner runs.
 
 ```ts
-const face = new Face(character) // while it rests, before the Humanoid takes its bones
 const body = new Humanoid({ rig: character })
+const face = new Face(character)
 const locomotion = new LocomotionPlanner(body)
 const acting = new FacePlanner(face, body)
 
@@ -163,18 +163,16 @@ function frame(dt: number) {
 
 ### Saying a line
 
-A line is a recording and what is said in it, timed word by word and phone by phone. `createSpeech` measures it from the decoded sound (a Web Audio `AudioBuffer`) and a transcript; words that come without phones are looked up in the CMU pronouncing dictionary, so English only, numbers spelled out. Exact phone timing makes the lip sync: in a Vite app, time each line with `CachedSpeechAlignmentLoader`, whose forced alignment runs in Node through the `@drawcall/cache` Vite plugin (`cache()` from `@drawcall/cache/vite`, with the optional peers `@huggingface/transformers`, `@audio/decode` and `@audio/resample-sinc` installed for it) while browsers only read the cached result. Write each load literally, with the recording's public path and its text word for word, so the plugin finds it.
+A line is a recording and what is said in it, timed word by word and phone by phone. `createSpeech` measures it from the decoded sound (a Web Audio `AudioBuffer`) and a transcript; words that come without phones are looked up in the CMU pronouncing dictionary, numbers spelled out. Exact phone timing makes the lip sync: in a Vite app, time each line with `CachedSpeechAlignmentLoader`, whose forced alignment runs in Node through the `@drawcall/cache` Vite plugin (`cache()` from `@drawcall/cache/vite`, with the optional peers `@huggingface/transformers`, `@audio/decode` and `@audio/resample-sinc` installed for it) while browsers only read the cached result. Write each load literally, with the recording's public path and its text word for word, so the plugin finds it.
 
 ```ts
 const transcript = await new CachedSpeechAlignmentLoader().loadAsync({ audio: "/speech/hello.mp3", text: "Hello there, it's good to see you." })
 const speech = await createSpeech(buffer, transcript)
 ```
 
-`acting.speak(speech, { phrases, heard })` says it from then on, in the emotion each update gives, and `acting.speaking` stays true until it is over. Start the sound in the same moment, and pass `heard`, the time into the recording the listener hears as the frame shows, read from the audio clock: `() => context.currentTime - startedAt - context.outputLatency - context.baseLatency`. Without it the line runs on the frames' `dt`, which falls behind the sound whenever frames stall.
+`acting.speak(speech, { phrases, heard })` says it from then on, in the emotion each update gives, and `acting.speaking` stays true until it is over. Start the sound in the same moment, and pass `heard`, the time into the recording the listener hears as the frame shows, read from the audio clock, less its latency, plus the two refreshes before the frame being drawn reaches the screen: `() => context.currentTime - startedAt - (context.outputLatency || 0) - context.baseLatency + 2 * dt`, with `dt` the last frame's (`outputLatency` is undefined in some browsers). Without it the line runs on the frames' `dt`, which falls behind the sound whenever frames stall.
 
-Phrases direct a line as an actor would be: each covers a run of words and may hold an emotion, turn the head, add a smile, brows or a squint, mark stressed words (`emphasis`: nods, brow flicks and the emotion's muscles fire on them), glance aside on words, react on a single word with a quick expression (`REACTIONS`) or an emotion's, and end as a question. Their word indices are into `speech.words`, which drops what is not spoken (a lone dash), so count them after `createSpeech`. Phrases loaded as JSON are checked with `isPhrases`. A line the planner cannot say (an unknown phone, a phrase naming a word outside it, a silent recording) throws at `speak`, naming what is wrong.
-
-The mouth follows the phones: the jaw carries the opening, the lips round, spread and close on top of it, and a p, b or m shuts the lips for its span whatever the emotion or a reaction asks.
+`phrases` direct the line; a phrase's emotion overrides the one `update` gives. Their word indices count into `speech.words`, which drops what is not spoken (a lone dash), so count them after `createSpeech`. Check phrases loaded as JSON with `isPhrases`.
 
 ## Over time
 

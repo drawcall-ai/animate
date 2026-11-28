@@ -20,14 +20,14 @@ function frame(dt: number) {
 ```
 
 ```ts
-const face = new FacePlanner(new Face(character), body) // the face read before the Humanoid takes the rig
+const acting = new FacePlanner(new Face(character), body)
 
 function frame(dt: number) {
-  const goals = [...locomotion.update(dt, { position, velocity, taken: ["head"] }), ...face.update(dt, { emotion: "happy", lookAt: camera.position })]
+  const goals = [...locomotion.update(dt, { position, velocity, taken: ["head"] }), ...acting.update(dt, { emotion: "happy", lookAt: camera.position })]
   solve(body, goals, dt)
 }
 
-face.speak(await createSpeech(audioBuffer, transcript)) // as the sound starts
+acting.speak(await createSpeech(audioBuffer, transcript)) // as the sound starts
 ```
 
 The package ships its skill in `skills/animate`: how the frame loop, goals, planners, grips and faces fit together, for people and agents.

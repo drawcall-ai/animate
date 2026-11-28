@@ -9,7 +9,7 @@
     "brows": 0.3,
     "emphasis": [6, 7],
     "glance": [8],
-    "react": [{ "word": 6, "expression": "browFlash", "intensity": 0.7 }]
+    "react": [{ "word": 6, "reaction": "browFlash", "intensity": 0.7 }]
   },
   { "words": [9, 12], "emotion": "happy", "intensity": 0.8, "head": { "yaw": -0.05, "roll": -0.07 }, "emphasis": [10] },
   { "words": [13, 17], "emotion": "happy", "intensity": 1, "head": { "pitch": -0.08 }, "smile": 0.2, "squint": 0.3, "emphasis": [14, 15, 16] }

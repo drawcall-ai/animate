@@ -12,7 +12,7 @@ import { Spring } from "./spring"
 /** where the lids rest, of a blink: a little over the iris (an open stare reads as alarm) */
 const LIDS = 0.1
 /** the upper lid following an eye down (+) or up, by its pitch (× rad), at most so far each way (of a blink) */
-const LID = { follow: 1.3, down: 0.35, up: 0.2 }
+const FOLLOW = { pitch: 1.3, down: 0.35, up: 0.2 }
 /** how far an eye turns (rad) */
 const EYE = { side: 0.6, up: 0.4, down: 0.5 }
 const AHEAD: Eyes = { left: { yaw: 0, pitch: 0 }, right: { yaw: 0, pitch: 0 } }
@@ -38,14 +38,14 @@ export class Gaze {
   }
 
   /** a frame of `dt` (s): sets the lids in `w` and returns the eyes, looking at `lookAt` from where the emotion rests them */
-  update(dt: number, w: Expression, manner: Manner, line: Line | undefined, lookAt: Vector3 | undefined): Eyes {
+  update(dt: number, w: Expression, manner: Manner, line: Line | undefined, lookAt: Readonly<Vector3> | undefined): Eyes {
     this.#t += dt
     this.#blink(dt, w, manner, line)
     const off = this.#off(dt, manner, line)
     const at = lookAt ? this.#face.lookAt(lookAt) : AHEAD
     const eye = (look: Look, side: "Left" | "Right"): Look => {
       const turned = { yaw: clamp(look.yaw + off.yaw, -EYE.side, EYE.side), pitch: clamp(look.pitch + off.pitch, -EYE.up, EYE.down) }
-      w[`eyeBlink${side}`] = clamp((w[`eyeBlink${side}`] ?? 0) + clamp(turned.pitch * LID.follow, -LID.up, LID.down), 0, 1)
+      w[`eyeBlink${side}`] = clamp((w[`eyeBlink${side}`] ?? 0) + clamp(turned.pitch * FOLLOW.pitch, -FOLLOW.up, FOLLOW.down), 0, 1)
       return turned
     }
     return { left: eye(at.left, "Left"), right: eye(at.right, "Right") }

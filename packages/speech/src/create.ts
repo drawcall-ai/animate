@@ -29,34 +29,44 @@ export interface TranscriptWord {
 }
 
 const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value)
-const spans = (value: object) => "start" in value && finite(value.start) && "end" in value && finite(value.end) && value.start <= value.end
+const isObject = (value: unknown): value is object => typeof value === "object" && value !== null
 
 /** Whether `value` (parsed JSON) is a list of `TranscriptWord`. */
 export function isTranscriptWords(value: unknown): value is TranscriptWord[] {
-  return (
-    Array.isArray(value) &&
-    value.every(
-      (w: unknown) =>
-        typeof w === "object" &&
-        w !== null &&
-        "text" in w &&
-        typeof w.text === "string" &&
-        spans(w) &&
-        (!("phones" in w) || w.phones === undefined || (Array.isArray(w.phones) && w.phones.every(isTranscriptPhone))),
-    )
-  )
+  return Array.isArray(value) && value.every((w, i) => misword(w, i, value[i - 1]) === undefined)
 }
 
-function isTranscriptPhone(value: unknown): value is TranscriptPhone {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "p" in value &&
-    typeof value.p === "string" &&
-    spans(value) &&
-    (!("time" in value) || value.time === undefined || finite(value.time)) &&
-    (!("stress" in value) || value.stress === undefined || (finite(value.stress) && value.stress >= 0 && value.stress <= 1))
-  )
+/** what is wrong with `w`, the transcript's word `i`, if anything: its text, its span (finite and in order, starting no earlier
+ * than `before`'s) and its phones' */
+function misword(w: unknown, i: number, before: unknown): string | undefined {
+  if (!isObject(w)) return `word ${i} is ${JSON.stringify(w)}, not { text, start, end }`
+  const text: unknown = Reflect.get(w, "text"),
+    named = `word ${i} ("${text}")`
+  if (typeof text !== "string") return `word ${i} has a text of ${JSON.stringify(text)}`
+  const span = misspan(w)
+  if (span) return `${named} ${span}`
+  if (isObject(before) && Reflect.get(w, "start") < Reflect.get(before, "start")) return `${named} starts before the one before it`
+  const phones: unknown = Reflect.get(w, "phones")
+  if (phones === undefined) return
+  if (!Array.isArray(phones)) return `${named} has phones ${JSON.stringify(phones)}, not a list`
+  for (const [j, ph] of phones.entries()) {
+    if (!isObject(ph)) return `${named} has phone ${j} ${JSON.stringify(ph)}, not { p, start, end }`
+    const p: unknown = Reflect.get(ph, "p"),
+      time: unknown = Reflect.get(ph, "time"),
+      stress: unknown = Reflect.get(ph, "stress")
+    if (typeof p !== "string") return `${named} has phone ${j} of ${JSON.stringify(p)}`
+    const span = misspan(ph)
+    if (span) return `${named} has phone ${j} (${p}) that ${span}`
+    if (time !== undefined && !finite(time)) return `${named} has phone ${j} (${p}) at ${time} s`
+    if (stress !== undefined && !(finite(stress) && stress >= 0 && stress <= 1)) return `${named} has phone ${j} (${p}) of stress ${stress}, not within 0…1`
+  }
+}
+
+/** what is wrong with `value`'s span, if anything: start and end are finite, start ≤ end */
+function misspan(value: object): string | undefined {
+  const start: unknown = Reflect.get(value, "start"),
+    end: unknown = Reflect.get(value, "end")
+  if (!(finite(start) && finite(end) && start <= end)) return `spans ${start}…${end} s`
 }
 
 /** A word as written without its punctuation, inner apostrophes, hyphens and single spaces kept, typographic ones (’ ʼ ‘ and — –) read as ' and -; '' when nothing of it is spoken. */
@@ -81,13 +91,13 @@ const FRAME = 0.01
  * dash) are dropped, so `Speech.words`, which phrases index, can be shorter than the transcript. A word's phones are used as given
  * (by `CachedSpeechAlignmentLoader` or another aligner); a word without is looked up in the CMU pronouncing dictionary, loaded only
  * then, and its phones laid out within the word. Throws on an unknown phone, a word with no pronunciation (digits: spell numbers
- * out), and a word whose span is not finite and in order (start ≤ end) or that starts before the one before it.
+ * out), and a transcript `isTranscriptWords` refuses: a word whose span is not finite and in order (start ≤ end), one that starts
+ * before the one before it, or a malformed phone.
  */
 export async function createSpeech(audio: Samples, transcript: readonly TranscriptWord[]): Promise<Speech> {
   for (const [i, w] of transcript.entries()) {
-    if (!(Number.isFinite(w.start) && Number.isFinite(w.end) && w.start <= w.end))
-      throw new Error(`createSpeech: word ${i} ("${w.text}") spans ${w.start}…${w.end} s`)
-    if (i > 0 && w.start < transcript[i - 1].start) throw new Error(`createSpeech: word ${i} ("${w.text}") starts before the one before it`)
+    const problem = misword(w, i, transcript[i - 1])
+    if (problem) throw new Error(`createSpeech: ${problem}`)
   }
   const samples = audio.getChannelData(0)
   const words = transcript.map((w) => ({ ...w, text: spoken(w.text) })).filter((w) => w.text)

@@ -9,7 +9,7 @@
     "question": true,
     "emphasis": [3],
     "glance": [3],
-    "react": [{ "word": 3, "expression": "gasp", "intensity": 0.7 }]
+    "react": [{ "word": 3, "reaction": "gasp", "intensity": 0.7 }]
   },
   { "words": [5, 8], "emotion": "scared", "intensity": 1, "head": { "pitch": -0.05 }, "emphasis": [5, 7, 8], "glance": [8] },
   { "words": [9, 16], "emotion": "scared", "intensity": 1, "head": { "yaw": -0.04 }, "brows": 0.4, "emphasis": [9, 10, 14, 16] }

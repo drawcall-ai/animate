@@ -52,7 +52,7 @@ export class Head {
 
   /** `body`'s head posture: turned part of the way to `lookAt`, from the chest, and `acting` on top; a posture listing only the
    * neck and the head, of weight 10, so that it outweighs a posture of the whole body */
-  goal(dt: number, body: Humanoid, acting: HeadTurn, lookAt: Vector3 | undefined): Goal {
+  goal(dt: number, body: Humanoid, acting: HeadTurn, lookAt: Readonly<Vector3> | undefined): Goal {
     const s = this.#springs
     let yaw = 0,
       pitch = 0

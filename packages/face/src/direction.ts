@@ -27,7 +27,7 @@ export interface Phrase {
   /** words on which the eyes glance aside */
   readonly glance?: readonly number[]
   /** quick expressions on single words: a reaction, or an emotion's held expression, at `intensity` (0…1, default 1) */
-  readonly react?: readonly { readonly word: number; readonly expression: Reaction | Emotion; readonly intensity?: number }[]
+  readonly react?: readonly { readonly word: number; readonly reaction: Reaction | Emotion; readonly intensity?: number }[]
 }
 
 /** a pulse at `t` rising smoothly to 1 at `peak` over `rise` and falling over `fall` (s) */
@@ -46,45 +46,56 @@ const smooth = (values: readonly number[], r: number) =>
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
 const unit = (v: unknown): v is number => typeof v === "number" && v >= 0 && v <= 1
-const indices = (v: unknown) => Array.isArray(v) && v.every((i) => Number.isInteger(i))
-const isReact = (r: unknown) =>
-  typeof r === "object" &&
-  r !== null &&
-  "word" in r &&
-  Number.isInteger(r.word) &&
-  "expression" in r &&
-  typeof r.expression === "string" &&
-  (isReaction(r.expression) || isEmotion(r.expression)) &&
-  (!("intensity" in r) || unit(r.intensity))
+const isObject = (v: unknown): v is object => typeof v === "object" && v !== null
 
 /** Whether `value` (parsed JSON) is a list of `Phrase`. */
 export function isPhrases(value: unknown): value is Phrase[] {
-  return (
-    Array.isArray(value) &&
-    value.every((p: unknown) => {
-      if (typeof p !== "object" || p === null) return false
-      const optional = (key: keyof Phrase, is: (v: unknown) => boolean) => !(key in p) || is(Reflect.get(p, key))
-      return (
-        "words" in p &&
-        Array.isArray(p.words) &&
-        p.words.length === 2 &&
-        indices(p.words) &&
-        optional("emotion", (v) => typeof v === "string" && isEmotion(v)) &&
-        optional("question", (v) => typeof v === "boolean") &&
-        optional("intensity", unit) &&
-        optional("smile", unit) &&
-        optional("squint", unit) &&
-        optional("brows", finite) &&
-        optional(
-          "head",
-          (v) => typeof v === "object" && v !== null && (["yaw", "pitch", "roll"] as const).every((key) => !(key in v) || finite(Reflect.get(v, key))),
-        ) &&
-        optional("emphasis", indices) &&
-        optional("glance", indices) &&
-        optional("react", (v) => Array.isArray(v) && v.every(isReact))
-      )
-    })
-  )
+  return Array.isArray(value) && value.every((p) => misdirection(p) === undefined)
+}
+
+/** what is wrong with `p` as a phrase of a line of `count` words, if anything */
+function misdirection(p: unknown, count = Infinity): string | undefined {
+  if (!isObject(p)) return `a phrase is ${JSON.stringify(p)}, not an object`
+  const get = (key: keyof Phrase): unknown => Reflect.get(p, key)
+  const words = get("words")
+  if (!(Array.isArray(words) && words.length === 2 && words.every(Number.isInteger)))
+    return `a phrase has words ${JSON.stringify(words)}; give its first and last word's indices`
+  const [a, b] = words
+  const name = `phrase [${a}, ${b}]`
+  for (const w of words) if (w < 0 || w >= count) return `a phrase names word ${w}, the speech has ${count}`
+  if (a > b) return `${name} runs backwards; give the first word, then the last`
+  const emotion = get("emotion")
+  if (emotion !== undefined && !(typeof emotion === "string" && isEmotion(emotion))) return `${name} has no emotion "${emotion}"`
+  const question = get("question")
+  if (question !== undefined && typeof question !== "boolean") return `${name} has a question of ${question}, not true or false`
+  for (const key of ["smile", "squint", "intensity"] as const) {
+    const v = get(key)
+    if (v !== undefined && !unit(v)) return `${name} has a ${key} of ${v}, not within 0…1`
+  }
+  const brows = get("brows")
+  if (brows !== undefined && !finite(brows)) return `${name} has a brows of ${brows}`
+  const head = get("head")
+  if (head !== undefined && !isObject(head)) return `${name} has a head of ${head}, not { yaw, pitch, roll }`
+  for (const key of ["yaw", "pitch", "roll"]) {
+    const v: unknown = head && Reflect.get(head, key)
+    if (v !== undefined && !finite(v)) return `${name} has a head ${key} of ${v}`
+  }
+  const lists: Partial<Record<"emphasis" | "glance" | "react", unknown[]>> = {}
+  for (const key of ["emphasis", "glance", "react"] as const) {
+    const v = get(key)
+    if (v !== undefined && !Array.isArray(v)) return `${name} has a ${key} of ${JSON.stringify(v)}, not a list`
+    lists[key] = v
+  }
+  const { emphasis = [], glance = [], react = [] } = lists
+  for (const r of react) {
+    if (!isObject(r)) return `${name} reacts with ${JSON.stringify(r)}, not { word, reaction, intensity }`
+    const reaction: unknown = Reflect.get(r, "reaction"),
+      intensity: unknown = Reflect.get(r, "intensity")
+    if (!(typeof reaction === "string" && (isReaction(reaction) || isEmotion(reaction)))) return `${name} reacts with "${reaction}", no reaction or emotion`
+    if (intensity !== undefined && !unit(intensity)) return `${name} has a reaction's intensity of ${intensity}, not within 0…1`
+  }
+  for (const w of [...emphasis, ...glance, ...react.map((r) => isObject(r) && Reflect.get(r, "word"))])
+    if (!Number.isInteger(w) || w < a || w > b) return `${name} names word ${w} outside it; indices are into speech.words`
 }
 
 /** what the phrases ask over the emotion: the head turned, and a smile, brows and squint */
@@ -167,7 +178,7 @@ export class Direction {
     this.#reactions = phrases.flatMap((p) =>
       (p.react ?? []).map((r) => ({
         t: words[r.word].start - 0.06,
-        expression: isReaction(r.expression) ? REACTION[r.expression] : MANNER[r.expression].expression,
+        expression: isReaction(r.reaction) ? REACTION[r.reaction] : MANNER[r.reaction].expression,
         k: r.intensity ?? 1,
       })),
     )
@@ -235,27 +246,6 @@ const at = (track: readonly number[], t: number) => track[Math.max(0, Math.min(t
 
 /** Throws on a phrase that misdirects `words`, naming it and what is wrong. */
 function check(p: Phrase, words: readonly Word[]) {
-  const [a, b] = p.words,
-    name = `speak: phrase [${a}, ${b}]`
-  for (const w of p.words) if (!Number.isInteger(w) || !words[w]) throw new Error(`speak: a phrase names word ${w}, the speech has ${words.length}`)
-  if (a > b) throw new Error(`${name} runs backwards; give the first word, then the last`)
-  if (p.emotion !== undefined && !isEmotion(p.emotion)) throw new Error(`${name} has no emotion "${p.emotion}"`)
-  for (const r of p.react ?? [])
-    if (!isReaction(r.expression) && !isEmotion(r.expression)) throw new Error(`${name} reacts with "${r.expression}", no reaction or emotion`)
-  for (const w of [...(p.emphasis ?? []), ...(p.glance ?? []), ...(p.react ?? []).map((r) => r.word)])
-    if (!Number.isInteger(w) || w < a || w > b) throw new Error(`${name} names word ${w} outside it; indices are into speech.words`)
-  for (const [key, v] of [
-    ["smile", p.smile],
-    ["squint", p.squint],
-    ["intensity", p.intensity],
-    ...(p.react ?? []).map((r) => ["intensity", r.intensity] as const),
-  ] as const)
-    if (v !== undefined && !unit(v)) throw new Error(`${name} has a ${key} of ${v}, not within 0…1`)
-  for (const [key, v] of [
-    ["brows", p.brows],
-    ["head yaw", p.head?.yaw],
-    ["head pitch", p.head?.pitch],
-    ["head roll", p.head?.roll],
-  ] as const)
-    if (v !== undefined && !Number.isFinite(v)) throw new Error(`${name} has a ${key} of ${v}`)
+  const problem = misdirection(p, words.length)
+  if (problem) throw new Error(`speak: ${problem}`)
 }

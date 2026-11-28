@@ -27,7 +27,7 @@ test("speaks a line: the jaw opens on its vowels and the lips shut on m, mouthCl
 
 test("shuts the lips on m whatever the emotion and the line's reactions ask", () => {
   const { planner, frame, weight } = faced()
-  planner.speak(AH_MA, { phrases: [{ words: [0, 1], emotion: "surprised", react: [{ word: 1, expression: "gasp" }] }] })
+  planner.speak(AH_MA, { phrases: [{ words: [0, 1], emotion: "surprised", react: [{ word: 1, reaction: "gasp" }] }] })
   let open = 0
   for (let t = DT; t < 0.6; t += DT) {
     frame(DT, { emotion: "scared" })
@@ -107,8 +107,8 @@ test("refuses a line it cannot say, naming what is wrong", () => {
   expect(() => planner.speak({ ...AH_MA, energy: Array(100).fill(0) })).toThrow("the speech has no sound")
   expect(planner.speaking).toBe(false)
   // phrases written `as const`, or loaded as JSON and checked
-  planner.speak(AH_MA, { phrases: [{ words: [0, 1], emphasis: [1], react: [{ word: 0, expression: "smirk" }] }] as const })
-  expect(isPhrases([{ words: [0, 1], emotion: "happy", react: [{ word: 1, expression: "smirk" }] }])).toBe(true)
+  planner.speak(AH_MA, { phrases: [{ words: [0, 1], emphasis: [1], react: [{ word: 0, reaction: "smirk" }] }] as const })
+  expect(isPhrases([{ words: [0, 1], emotion: "happy", react: [{ word: 1, reaction: "smirk" }] }])).toBe(true)
   expect(isPhrases([{ words: [0, 1], emotion: "glee" }])).toBe(false)
-  expect(isPhrases([{ words: [0, 1], react: [{ word: 1, expression: "smirk", intensity: -0.5 }] }])).toBe(false)
+  expect(isPhrases([{ words: [0, 1], react: [{ word: 1, reaction: "smirk", intensity: -0.5 }] }])).toBe(false)
 })
