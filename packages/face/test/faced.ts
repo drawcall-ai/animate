@@ -8,9 +8,7 @@ import { type BlendShape, type Demeanor, Face, FacePlanner } from "../src"
 /** A mesh whose morph targets each move its vertices, or with `placeholder`, move nothing, as exporters pad a face to the 52. */
 export function shaped(names: readonly string[], { placeholder = false } = {}): Mesh {
   const geometry = new BufferGeometry().setAttribute("position", new BufferAttribute(new Float32Array(9), 3))
-  geometry.morphAttributes.position = names.map((name) =>
-    Object.assign(new BufferAttribute(new Float32Array(9).fill(placeholder ? 0 : 0.01), 3), { name }),
-  )
+  geometry.morphAttributes.position = names.map((name) => Object.assign(new BufferAttribute(new Float32Array(9).fill(placeholder ? 0 : 0.01), 3), { name }))
   const mesh = new Mesh(geometry)
   mesh.updateMorphTargets()
   return mesh
