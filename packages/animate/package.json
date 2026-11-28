@@ -1,7 +1,7 @@
 {
   "name": "@drawcall/animate",
   "version": "0.0.0",
-  "description": "Procedural human animation for three.js: a body posed every frame from goals, with planners that walk and run it and hands that grip what it holds.",
+  "description": "Procedural human animation for three.js: a body posed every frame from goals, with planners that walk and run it, hands that grip what it holds, and faces that feel and speak.",
   "keywords": [
     "three",
     "threejs",
@@ -10,7 +10,11 @@
     "humanoid",
     "locomotion",
     "hand",
-    "grip"
+    "grip",
+    "face",
+    "arkit",
+    "blendshapes",
+    "lip-sync"
   ],
   "type": "module",
   "sideEffects": false,
@@ -24,6 +28,12 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "imports": {
+    "#align": {
+      "node": "./dist/align/node.js",
+      "default": "./dist/align/browser.js"
+    }
+  },
   "files": [
     "dist",
     "skills"
@@ -34,14 +44,37 @@
     "test": "vitest run --silent=false",
     "prepack": "pnpm build"
   },
+  "dependencies": {
+    "cmu-pronouncing-dictionary": "^3.0.0"
+  },
   "peerDependencies": {
+    "@audio/decode": "^3.16.2",
+    "@audio/resample-sinc": "^1.4.0",
+    "@drawcall/cache": "^0.8.2",
+    "@huggingface/transformers": "^3.8.1",
     "three": ">=0.187.0"
   },
+  "peerDependenciesMeta": {
+    "@audio/decode": {
+      "optional": true
+    },
+    "@audio/resample-sinc": {
+      "optional": true
+    },
+    "@drawcall/cache": {
+      "optional": true
+    },
+    "@huggingface/transformers": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@drawcall/face": "workspace:*",
     "@drawcall/hand": "workspace:*",
     "@drawcall/humanoid": "workspace:*",
     "@drawcall/ik": "workspace:*",
     "@drawcall/locomotion": "workspace:*",
+    "@drawcall/speech": "workspace:*",
     "@types/three": "^0.187.0",
     "three": "^0.187.0",
     "tsdown": "^0.23.7",

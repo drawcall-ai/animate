@@ -1,0 +1,24 @@
+{
+  "name": "@drawcall/face",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Faces that follow the ARKit blendshape standard, acted over time: emotions that blend, eyes that look, and lines spoken from their phones.",
+  "exports": "./src/index.ts",
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --silent=false"
+  },
+  "dependencies": {
+    "@drawcall/humanoid": "workspace:*",
+    "@drawcall/ik": "workspace:*",
+    "@drawcall/speech": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "three": "^0.187.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

@@ -1,0 +1,13 @@
+[
+  { "words": [0, 2], "emotion": "angry", "intensity": 0.85, "head": { "pitch": 0.02 }, "emphasis": [0, 1, 2] },
+  {
+    "words": [3, 11],
+    "emotion": "angry",
+    "intensity": 1,
+    "head": { "yaw": 0.05, "roll": 0.04 },
+    "emphasis": [3, 9, 11],
+    "question": false,
+    "react": [{ "word": 11, "expression": "sneer" }]
+  },
+  { "words": [12, 16], "emotion": "angry", "intensity": 1, "head": { "yaw": -0.08 }, "emphasis": [12, 13, 14, 16], "glance": [13] }
+]
