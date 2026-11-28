@@ -59,6 +59,14 @@ test("reads blendshapes named with other separators and sides; turns an eye by i
   expect(eye.quaternion.angleTo(new Quaternion())).toBeGreaterThan(0.3)
 })
 
+test("lets the upper lid follow a bone eye whose eyeLook shapes are placeholders that move nothing", () => {
+  const model = new Group()
+  const lids = shaped(["eyeBlinkLeft", "eyeLookDownLeft"], { placeholder: true })
+  model.add(lids, Object.assign(new Bone(), { name: "LeftEye" }))
+  new Face(model).set({}, { left: { yaw: 0, pitch: 0.3 }, right: { yaw: 0, pitch: 0 } })
+  expect(lids.morphTargetInfluences?.[0]).toBeGreaterThan(0.1)
+})
+
 test("turns a VRM eye bone where there are no eyeLook shapes, the lid following it down", () => {
   const model = new Group()
   const mesh = shaped(["eyeBlinkLeft"]),

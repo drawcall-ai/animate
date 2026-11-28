@@ -36,8 +36,8 @@ type Eye = { bone: Object3D | undefined; rest: Quaternion | undefined; shaped: b
  * An eye with a bone, `LeftEye` or `RightEye` (VRM: `leftEye`, `rightEye`), turns by it, exactly: the bone rests in the face's
  * frame (+Z forward, +Y up, +X the character's left) and turns from that rest about its own Y and X. Its `eyeLook` shapes still
  * move what the bone does not carry or skin, the lids; without such shapes the upper lid follows the eye as they would. An eye
- * without a bone turns by its `eyeLook` shapes, ARKit's convention for how far being open: here a weight of 1 looks 0.6 rad
- * sideways or 0.5 rad up or down. Eye bones are found in the skinned meshes' skeletons, wherever a `Humanoid` has moved them,
+ * without a bone turns by its `eyeLook` shapes. ARKit leaves open how far a weight turns an eye; here 1 is 0.6 rad sideways
+ * and 0.5 rad up or down, for an eye without a bone and for the lids of one with a bone. Eye bones are found in the skinned meshes' skeletons, wherever a `Humanoid` has moved them,
  * else in the model. An eye looks from its bone or, without one, from the middle of what its `eyeLook` shapes move, in the
  * model's frame (+Z forward) as it rests, carried by the bone that skins most of that or else by the mesh. Read the face at
  * rest, before its eyes are turned, as their turn then is their rest.
@@ -75,13 +75,15 @@ export class Face {
           mesh,
           own.map(([index]) => index),
         )
+        // placeholder shapes that move nothing neither turn the eye nor stand in for its lids
+        if (!moved.length) continue
         // what the eye's bone carries or skins turns with it, not by its shapes
         if (bone && (carries(bone, mesh) || skinnedBy(mesh, moved, bone))) {
           for (const [, name] of own) entry.boned.add(name)
           continue
         }
         shaped = true
-        if (!bone && !seat && moved.length) seat = seatOf(model, mesh, moved)
+        if (!bone && !seat) seat = seatOf(model, mesh, moved)
       }
       return { bone, rest: bone?.quaternion.clone(), shaped, seat }
     }
