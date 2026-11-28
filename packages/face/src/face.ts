@@ -21,9 +21,10 @@ const LOOK_RANGE = { side: 0.6, vertical: 0.5 } as const
 const FOLLOW = { pitch: 1.3, down: 0.35, up: 0.2 }
 
 type Side = "left" | "right"
-/** an eye: its bone, if any, and that bone's rest turn, in whose frame it looks along +Z, +Y up and +X to the character's left;
- * and whether shapes turn it */
-type Eye = { bone: Object3D | undefined; rest: Quaternion | undefined; shaped: boolean }
+/** where an eye looks from: a point and a frame (+Z forward, +Y up, +X the character's left) in `anchor`'s, which carries them */
+type Seat = { anchor: Object3D; origin: Vector3; frame: Quaternion }
+/** an eye: its bone, if any, and that bone's rest turn; whether shapes turn it; and, shapes turning it without a bone, its seat */
+type Eye = { bone: Object3D | undefined; rest: Quaternion | undefined; shaped: boolean; seat: Seat | undefined }
 
 /**
  * A model's face as the ARKit standard has it: the 52 blendshapes as morph targets, on whichever meshes carry them (a face,
@@ -34,8 +35,9 @@ type Eye = { bone: Object3D | undefined; rest: Quaternion | undefined; shaped: b
  * An eye turns by its `eyeLook` shapes where the model has them, else by its bone, `LeftEye` or `RightEye` (VRM: `leftEye`,
  * `rightEye`), resting in the face's frame (+Z forward, +Y up, +X the character's left) and turned from that rest about its own Y
  * and X, the upper lid following it as the shapes would move it. Eye bones are found in the skinned meshes' skeletons,
- * wherever a `Humanoid` has moved them, else in the model. Where it looks from is its bone's: an eye without one looks ahead.
- * Read the face before its eyes are turned, as their turn then is their rest.
+ * wherever a `Humanoid` has moved them, else in the model. Where it looks from is its bone's or, without one, the middle of
+ * what its `eyeLook` shapes move, in the model's frame (+Z forward) as it rests, carried by the bone that skins most of that or
+ * else by the mesh. Read the face at rest, before its eyes are turned, as their turn then is their rest.
  */
 export class Face {
   readonly #meshes: { mesh: Mesh; shapes: [index: number, name: BlendShape][] }[] = []
@@ -59,12 +61,49 @@ export class Face {
       const named = (name: string) => bones.find((b) => b.name === name) ?? model.getObjectByName(name)
       const bone = EYE_BONES[side].map(named).find((b) => b !== undefined)
       const sided = side === "left" ? "Left" : "Right"
-      const shaped = (["In", "Out", "Up", "Down"] as const).some((way) => carried.has(`eyeLook${way}${sided}`))
-      return { bone, rest: bone?.quaternion.clone(), shaped }
+      const looks = (["In", "Out", "Up", "Down"] as const).map((way) => `eyeLook${way}${sided}` as const)
+      const shaped = looks.some((name) => carried.has(name))
+      return { bone, rest: bone?.quaternion.clone(), shaped, seat: shaped && !bone ? this.#seat(model, looks) : undefined }
     }
     this.#eyes = { left: eye("left"), right: eye("right") }
     if (!this.#meshes.length && !this.#eyes.left.bone && !this.#eyes.right.bone)
       throw new Error("the model has no ARKit face: no morph target named as an ARKit blendshape, and no LeftEye or RightEye bone")
+  }
+
+  /** where an eye looks from that `looks` turn: the middle of what they move, on the first mesh they move anything of */
+  #seat(model: Object3D, looks: readonly BlendShape[]): Seat | undefined {
+    model.updateWorldMatrix(true, true)
+    for (const { mesh, shapes } of this.#meshes) {
+      const targets = shapes.filter(([, name]) => looks.includes(name)).map(([index]) => mesh.geometry.morphAttributes.position?.[index])
+      const base = mesh.geometry.getAttribute("position")
+      const moved: number[] = []
+      for (let i = 0; i < base.count; i++)
+        if (
+          targets.some(
+            (t) =>
+              t &&
+              _d
+                .fromBufferAttribute(t, i)
+                .sub(mesh.geometry.morphTargetsRelative ? _p.set(0, 0, 0) : _p.fromBufferAttribute(base, i))
+                .lengthSq() > 1e-12,
+          )
+        )
+          moved.push(i)
+      if (!moved.length) continue
+      const middle = moved.reduce((sum, i) => sum.add(_d.fromBufferAttribute(base, i)), new Vector3()).divideScalar(moved.length)
+      // a skinned mesh's eye goes with the bone skinning the vertex nearest the middle most
+      let anchor: Object3D = mesh
+      if (mesh instanceof SkinnedMesh) {
+        const nearest = moved.reduce((a, i) =>
+          _d.fromBufferAttribute(base, i).distanceToSquared(middle) < _p.fromBufferAttribute(base, a).distanceToSquared(middle) ? i : a,
+        )
+        const weights = [0, 1, 2, 3].map((k) => mesh.geometry.getAttribute("skinWeight").getComponent(nearest, k))
+        anchor = mesh.skeleton.bones[mesh.geometry.getAttribute("skinIndex").getComponent(nearest, weights.indexOf(Math.max(...weights)))] ?? mesh
+      }
+      const origin = anchor.worldToLocal(mesh.localToWorld(middle))
+      const frame = anchor.getWorldQuaternion(new Quaternion()).invert().multiply(model.getWorldQuaternion(_q))
+      return { anchor, origin, frame }
+    }
   }
 
   /**
@@ -86,12 +125,17 @@ export class Face {
     }
   }
 
-  /** How each eye would turn from its rest to look at `point` (world), from where it is now. An eye without its bone looks ahead. */
+  /** How each eye would turn from its rest to look at `point` (world), from where it is now. An eye with neither a bone nor `eyeLook` shapes looks ahead. */
   lookAt(point: Readonly<Vector3>): Eyes {
-    const look = ({ bone, rest }: Eye): Look => {
-      if (!bone?.parent || !rest) return { yaw: 0, pitch: 0 }
-      const frame = bone.parent.getWorldQuaternion(_q).multiply(rest)
-      const d = _d.subVectors(point, bone.getWorldPosition(_p)).applyQuaternion(frame.invert())
+    const look = ({ bone, rest, seat }: Eye): Look => {
+      if (bone?.parent && rest) {
+        bone.getWorldPosition(_p)
+        bone.parent.getWorldQuaternion(_q).multiply(rest)
+      } else if (seat) {
+        seat.anchor.localToWorld(_p.copy(seat.origin))
+        seat.anchor.getWorldQuaternion(_q).multiply(seat.frame)
+      } else return { yaw: 0, pitch: 0 }
+      const d = _d.subVectors(point, _p).applyQuaternion(_q.invert())
       return { yaw: Math.atan2(d.x, d.z), pitch: Math.atan2(-d.y, Math.hypot(d.x, d.z)) }
     }
     return { left: look(this.#eyes.left), right: look(this.#eyes.right) }

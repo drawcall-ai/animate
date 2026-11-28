@@ -1,4 +1,4 @@
-import { Bone, Group, Quaternion, Skeleton, SkinnedMesh, Vector3 } from "three"
+import { Bone, BufferAttribute, BufferGeometry, Group, Mesh, Quaternion, Skeleton, SkinnedMesh, Vector3 } from "three"
 import { expect, test } from "vitest"
 import { Face } from "../src"
 import { faced, shaped } from "./faced"
@@ -63,4 +63,19 @@ test("turns a VRM eye bone where there are no eyeLook shapes, the lid following 
   new Face(model).set({}, { left: { yaw: 0, pitch: 0.2 }, right: { yaw: 0, pitch: 0 } })
   expect(eye.quaternion.angleTo(new Quaternion())).toBeCloseTo(0.2)
   expect(mesh.morphTargetInfluences?.[0]).toBeGreaterThan(0.2)
+})
+
+test("looks at a point from the middle of what an eye's eyeLook shapes move, where the eye has no bone", () => {
+  // two vertices of a left eye at x 0.03, one elsewhere; the eyeLook shapes move the eye's alone
+  const geometry = new BufferGeometry().setAttribute("position", new BufferAttribute(new Float32Array([0.02, 1.6, 0.1, 0.04, 1.6, 0.1, 0, 1.3, 0]), 3))
+  const moves = new Float32Array([0.001, 0, 0, 0.001, 0, 0, 0, 0, 0])
+  geometry.morphAttributes.position = ["eyeLookOutLeft", "eyeLookInLeft", "eyeLookUpLeft", "eyeLookDownLeft"].map((name) =>
+    Object.assign(new BufferAttribute(moves.slice(), 3), { name }),
+  )
+  geometry.morphTargetsRelative = true
+  const mesh = new Mesh(geometry)
+  mesh.updateMorphTargets()
+  const eyes = new Face(mesh).lookAt(new Vector3(0.53, 1.6, 0.6))
+  expect(eyes.left.yaw).toBeCloseTo(Math.PI / 4)
+  expect(eyes.left.pitch).toBeCloseTo(0)
 })
