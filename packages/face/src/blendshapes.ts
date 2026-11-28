@@ -50,6 +50,18 @@ export const BLEND_SHAPES: readonly BlendShape[] = [...SIDED.flatMap((shape) => 
 const NAMES = new Set<string>(BLEND_SHAPES)
 export const isBlendShape = (name: string): name is BlendShape => NAMES.has(name)
 
+/** a name as conventions differ on it: lower case, letters only, a side as `l` or `r` at its end (`eyeBlinkLeft`, `eyeBlink_L`,
+ * `EyeBlink.L` and `eye_blink_left` all `eyeblinkl`) */
+const loose = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z]/g, "")
+    .replace(/(left|right)$/, (side) => side[0])
+const LOOSE = new Map(BLEND_SHAPES.map((name) => [loose(name), name]))
+
+/** The ARKit blendshape a morph target stands for, whatever its case, separators and way of naming its side; undefined for none. */
+export const blendShapeOf = (name: string): BlendShape | undefined => LOOSE.get(loose(name))
+
 /** Blendshape weights, ARKit's range being 0…1; a shape left out is at 0. */
 export type Expression = Partial<Record<BlendShape, number>>
 

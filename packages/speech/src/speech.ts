@@ -16,7 +16,7 @@ export interface Phone {
   readonly end: number
 }
 
-/** A recorded line as `createSpeech` measures it. */
+/** A line as `createSpeech` measures it; its loudness and pitch are empty for a line made without its recording. */
 export interface Speech {
   readonly words: readonly Word[]
   readonly phones: readonly Phone[]

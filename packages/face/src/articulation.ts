@@ -55,14 +55,18 @@ const TARGETS: Record<string, readonly Target[]> = {
   D: [jaw(0.05)],
   N: [jaw(0.05)],
   L: [jaw(0.1)],
-  TH: [jaw(0.08, { tongueOut: 1 })],
-  DH: [jaw(0.07, { tongueOut: 0.85 })],
+  TH: [jaw(0.08, { tongueOut: 0.2 })],
+  DH: [jaw(0.07, { tongueOut: 0.17 })],
   K: [jaw(0.06)],
   G: [jaw(0.06)],
   NG: [jaw(0.05)],
   HH: [jaw(0.12)],
   Y: [spread(0.06, 0.5)],
 }
+
+/** the consonants that leave the lips free, which round ahead for the vowel after them ("soon", "zoo"), by about this much of its rounding */
+const ROUNDS_AHEAD = new Set("S Z T D N L K G Y HH".split(" "))
+const AHEAD = 0.6
 
 /** where each gesture peaks against its phone's acoustic centre (s): stops and taps make contact before their release */
 const OFFSET: Record<string, number> = {
@@ -97,6 +101,27 @@ const LONG = 0.2,
 const anticipated = (ph: Phone) => (TARGETS[ph.p][0] === CLOSED ? ph.start : ph.time + (OFFSET[ph.p] ?? (VOWEL.test(ph.p) ? 0.01 : -0.02)))
 
 const scaled = ({ shape, shut }: Target, k: number): Target => target(Object.fromEntries(weightsOf(shape).map(([n, v]) => [n, v * k])), shut)
+
+/** the vowel the phones after the `i`th come to before any pause */
+function vowelAfter(phones: readonly Phone[], i: number): Phone | undefined {
+  for (let j = i + 1; j < phones.length; j++) {
+    if (phones[j].start - phones[j - 1].end > PAUSE) return
+    if (VOWEL.test(phones[j].p)) return phones[j]
+  }
+}
+
+/** a consonant's target rounded ahead for `vowel`'s: its funnel and pucker by `AHEAD`, the lips' spread giving way to them */
+function roundedFor({ shape, shut }: Target, vowel: Target): Target {
+  const funnel = AHEAD * (vowel.shape.mouthFunnel ?? 0),
+    pucker = AHEAD * (vowel.shape.mouthPucker ?? 0),
+    spread = 1 - Math.min(1, funnel + pucker)
+  const out: Expression = {}
+  for (const [n, v] of weightsOf(shape)) out[n] = /^mouth(Stretch|Smile)/.test(n) ? v * spread : v
+  add(out, "mouthFunnel", funnel)
+  add(out, "mouthPucker", pucker)
+  add(out, "mouthClose", 0.1 * (funnel + pucker))
+  return target(out, shut)
+}
 
 /** A line's mouth over time (s into its recording). */
 export class Articulation {
@@ -134,8 +159,10 @@ export class Articulation {
         k = VOWEL.test(ph.p) ? 0.55 + 0.45 * ph.stress : 1,
         t0 = first[i],
         next = phones[i + 1]
+      const vowel = ROUNDS_AHEAD.has(ph.p) ? vowelAfter(phones, i) : undefined
       const closed = targets[0] === CLOSED,
-        start = closed ? CLOSED : scaled(targets[0], k)
+        own = scaled(targets[0], k),
+        start = closed ? CLOSED : vowel ? roundedFor(own, TARGETS[vowel.p][0]) : own
       keys.push({ t: t0, target: start })
       // a later key, held or gliding to: before the next phone's first, else none
       const later = (t: number, to: Target) => {

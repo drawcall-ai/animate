@@ -1,0 +1,26 @@
+[
+  { "words": [0, 0], "emotion": "disgusted", "intensity": 1, "head": { "yaw": -0.1, "pitch": 0.04 }, "react": [{ "word": 0, "reaction": "sneer" }] },
+  {
+    "words": [1, 4],
+    "emotion": "disgusted",
+    "intensity": 0.8,
+    "question": true,
+    "emphasis": [4],
+    "react": [{ "word": 4, "reaction": "wince", "intensity": 0.8 }]
+  },
+  { "words": [5, 8], "emotion": "disgusted", "intensity": 1, "head": { "yaw": -0.12, "roll": -0.04 }, "emphasis": [6, 7, 8] },
+  {
+    "words": [9, 11],
+    "emotion": "disgusted",
+    "intensity": 0.85,
+    "question": true,
+    "emphasis": [11],
+    "react": [
+      { "word": 9, "reaction": "browFlash", "intensity": 0.5 },
+      { "word": 11, "reaction": "sneer" }
+    ],
+    "glance": [10]
+  },
+  { "words": [12, 14], "emotion": "disgusted", "intensity": 1, "head": { "yaw": -0.08 }, "emphasis": [12, 14], "glance": [14] },
+  { "words": [15, 17], "emotion": "disgusted", "intensity": 1, "head": { "pitch": 0.05 }, "emphasis": [17], "react": [{ "word": 17, "reaction": "wince" }] }
+]

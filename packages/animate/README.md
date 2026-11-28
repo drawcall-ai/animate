@@ -21,13 +21,15 @@ function frame(dt: number) {
 
 ```ts
 const acting = new FacePlanner(new Face(character), body)
+const speech = await createSpeech(transcript, audioBuffer) // ahead of time
 
 function frame(dt: number) {
   const goals = [...locomotion.update(dt, { position, velocity, taken: ["head"] }), ...acting.update(dt, { emotion: "happy", lookAt: camera.position })]
   solve(body, goals, dt)
 }
 
-acting.speak(await createSpeech(audioBuffer, transcript)) // as the sound starts
+// as the sound starts: what is heard of it, as the frame shows, keeps the mouth on it
+acting.speak(speech, { heard: () => context.currentTime - startedAt - (context.outputLatency || 0) - context.baseLatency + 2 * dt })
 ```
 
 The package ships its skill in `skills/animate`: how the frame loop, goals, planners, grips and faces fit together, for people and agents.

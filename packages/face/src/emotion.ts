@@ -63,7 +63,10 @@ const neutral: Manner = {
 }
 
 /** each emotion's manner, as tuned at full intensity */
-export const MANNER = {
+/** An emotion a face shows: one of `EMOTIONS`. */
+export type Emotion = "neutral" | "happy" | "angry" | "sad" | "scared" | "disgusted" | "surprised"
+
+export const MANNER: Record<Emotion, Manner> = {
   neutral,
   happy: {
     ...neutral,
@@ -168,7 +171,7 @@ export const MANNER = {
     browAccent: 1,
     loudness: 0.3,
   },
-  disgust: {
+  disgusted: {
     ...neutral,
     expression: {
       ...LR("noseSneer", 0.55, 0.65),
@@ -213,25 +216,25 @@ export const MANNER = {
     browAccent: 1,
     loudness: 0.5,
   },
-} satisfies Record<string, Manner>
+}
 
-/** An emotion a face shows: one of `EMOTIONS`. */
-export type Emotion = keyof typeof MANNER
+/** Whether `name` is an emotion a face shows. */
 export const isEmotion = (name: string): name is Emotion => Object.hasOwn(MANNER, name)
 /** The emotions a face shows. */
 export const EMOTIONS: readonly Emotion[] = Object.keys(MANNER).filter(isEmotion)
 
+/** A quick expression on a single word of a line: one of `REACTIONS`. */
+export type Reaction = "browFlash" | "smirk" | "wince" | "sneer" | "gasp"
+
 /** each quick expression for a single word */
-export const REACTION = {
+export const REACTION: Record<Reaction, Expression> = {
   browFlash: { browInnerUp: 0.8, ...LR("browOuterUp", 1), ...LR("eyeWide", 0.3) },
   smirk: { mouthSmileRight: 0.7, cheekSquintRight: 0.5, mouthDimpleRight: 0.3, eyeSquintRight: 0.2, browOuterUpRight: 0.3 },
   wince: { ...LR("eyeSquint", 0.8), ...LR("browDown", 0.7), ...LR("noseSneer", 0.5), ...LR("mouthStretch", 0.45), ...LR("cheekSquint", 0.6) },
   sneer: { noseSneerRight: 0.5, mouthUpperUpRight: 0.45, cheekSquintRight: 0.4, browDownRight: 0.3 },
   gasp: { browInnerUp: 0.9, ...LR("browOuterUp", 0.9), ...LR("eyeWide", 1), jawOpen: 0.12 },
-} satisfies Record<string, Expression>
+}
 
-/** A quick expression on a single word of a line: one of `REACTIONS`. */
-export type Reaction = keyof typeof REACTION
 export const isReaction = (name: string): name is Reaction => Object.hasOwn(REACTION, name)
 /** The quick expressions on single words of a line. */
 export const REACTIONS: readonly Reaction[] = Object.keys(REACTION).filter(isReaction)

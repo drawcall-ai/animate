@@ -1,11 +1,11 @@
 import {
   CachedSpeechAlignmentLoader,
   createSpeech,
-  type Emotion,
   EMOTIONS,
   Face,
   FacePlanner,
   Humanoid,
+  isEmotion,
   isPhrases,
   LocomotionPlanner,
   solve,
@@ -36,8 +36,11 @@ const ALIGNED = {
       audio: "/speech/scared.mp3",
       text: "Wait. Did you hear that? Something is moving upstairs. Please, please tell me you locked the door.",
     }),
-  disgust: () =>
-    alignments.loadAsync({ audio: "/speech/disgust.mp3", text: "Ugh. What is that smell? Oh no, no, no. Is that... cheese? Take it away. That is revolting." }),
+  disgusted: () =>
+    alignments.loadAsync({
+      audio: "/speech/disgusted.mp3",
+      text: "Ugh. What is that smell? Oh no, no, no. Is that... cheese? Take it away. That is revolting.",
+    }),
   surprised: () =>
     alignments.loadAsync({
       audio: "/speech/surprised.mp3",
@@ -46,7 +49,6 @@ const ALIGNED = {
 }
 type LineName = keyof typeof ALIGNED
 const isLine = (name: string): name is LineName => Object.hasOwn(ALIGNED, name)
-const isEmotion = (name: string): name is Emotion => EMOTIONS.some((emotion) => emotion === name)
 
 const element = <T extends HTMLElement>(id: string, type: new () => T): T => {
   const found = document.getElementById(id)
@@ -100,7 +102,7 @@ const lineOf = async (name: LineName) => {
     fetched(`/speech/${name}.phrases.json`).then((response): Promise<unknown> => response.json()),
   ])
   if (!isPhrases(phrases)) throw new Error(`/speech/${name}.phrases.json holds no phrases`)
-  return { buffer, phrases, speech: await createSpeech(buffer, transcript) }
+  return { buffer, phrases, speech: await createSpeech(transcript, buffer) }
 }
 
 const [rig] = await Promise.all([jeanPhil(), renderer.init()])

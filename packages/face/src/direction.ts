@@ -124,7 +124,7 @@ export class Direction {
   readonly #reactions: { t: number; expression: Expression; k: number }[]
 
   /** Throws on words not timed in order within themselves, phrases that name words the speech has not, run backwards or name words
-   * outside them, an unknown emotion or reaction, a value out of its range, and a silent recording. */
+   * outside them, an unknown emotion or reaction, a value out of its range, and a silent recording (but none at all). */
   constructor(speech: Speech, phrases: readonly Phrase[]) {
     const { words } = speech
     for (const [i, w] of words.entries())
@@ -135,7 +135,7 @@ export class Direction {
     this.#phrases = phrases
     const loud = smooth(speech.energy, 3),
       peak = loud.reduce((m, x) => Math.max(m, x), -Infinity)
-    if (!(peak > 0)) throw new Error("speak: the speech has no sound")
+    if (loud.length && !(peak > 0)) throw new Error("speak: the speech has no sound")
     this.#loud = loud.map((x) => x / peak)
     const voiced = speech.pitch.filter((p) => p > 0).sort((a, b) => a - b)
     const median = voiced[voiced.length >> 1] ?? 120
@@ -184,9 +184,9 @@ export class Direction {
     )
   }
 
-  /** loudness at `t`, 0…1 of the line's peak */
+  /** loudness at `t`, 0…1 of the line's peak; even, for a line without its recording */
   loudness(t: number): number {
-    return at(this.#loud, t)
+    return this.#loud.length ? at(this.#loud, t) : EVEN
   }
 
   /** pitch at `t`, in semitones from the voice's median, 0 where unvoiced */
@@ -241,6 +241,8 @@ export class Direction {
   }
 }
 
+/** how loud a line without its recording is taken to be, of its peak */
+const EVEN = 0.5
 /** a track's value at `t` (s), at 100 frames a second */
 const at = (track: readonly number[], t: number) => track[Math.max(0, Math.min(track.length - 1, Math.round(t * 100)))] ?? 0
 

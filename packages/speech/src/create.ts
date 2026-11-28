@@ -89,25 +89,27 @@ const SHIFT = -0.03
 const FRAME = 0.01
 
 /**
- * A `Speech` from a recording and its transcript, loudness and pitch measured from channel 0. Words with nothing spoken (a lone
+ * A `Speech` from a transcript and, given, its recording, loudness and pitch measured from channel 0; without one (a line timed by
+ * hand, or by a speech service's word timings) the speech has neither, and a face says it evenly. Words with nothing spoken (a lone
  * dash) are dropped, so `Speech.words`, which phrases index, can be shorter than the transcript. A word's phones are used as given
  * (by `CachedSpeechAlignmentLoader` or another aligner); a word without is looked up in the CMU pronouncing dictionary, loaded only
  * then, and its phones laid out within the word. Throws on an unknown phone, a word with no pronunciation (digits: spell numbers
  * out), and a transcript `isTranscriptWords` refuses: a word whose span is not finite and in order (start ≤ end), one that starts
  * before the one before it, or a malformed phone.
  */
-export async function createSpeech(audio: Samples, transcript: readonly TranscriptWord[]): Promise<Speech> {
+export async function createSpeech(transcript: readonly TranscriptWord[], audio?: Samples): Promise<Speech> {
   for (const [i, w] of transcript.entries()) {
     const problem = misword(w, i, transcript[i - 1])
     if (problem) throw new Error(`createSpeech: ${problem}`)
   }
-  const samples = audio.getChannelData(0)
+  const samples = audio?.getChannelData(0),
+    rate = audio?.sampleRate ?? 0
   const words = transcript.map((w) => ({ ...w, text: spoken(w.text) })).filter((w) => w.text)
   return {
     words: words.map(({ text, start, end }) => ({ text, start, end })),
     phones: await laidOut(words),
-    energy: energy(samples, audio.sampleRate),
-    pitch: pitch(samples, audio.sampleRate),
+    energy: samples ? energy(samples, rate) : [],
+    pitch: samples ? pitch(samples, rate) : [],
   }
 }
 

@@ -42,6 +42,13 @@ describe("a line's mouth", () => {
     for (let t = 0.25; t < 1.15; t += 0.01) expect(at(articulation, t).shape.jawOpen, `${t}`).toBeGreaterThan(0.8 * 0.42)
   })
 
+  test("rounds the lips on a consonant ahead of a rounded vowel, and spreads them ahead of a spread one", () => {
+    const pucker = (vowel: string) => at(new Articulation(phones(["S", 0, 0.15, 0.1, 0.2], [vowel, 1, 0.3, 0.2, 0.4])), 0.13).shape
+    expect(pucker("UW").mouthPucker ?? 0).toBeGreaterThan(0.3)
+    expect(pucker("UW").mouthStretchLeft ?? 0).toBeLessThan(0.1)
+    expect(pucker("IY").mouthPucker ?? 0).toBe(0)
+  })
+
   test("rests in a pause, not in a gap too short to hear", () => {
     const articulation = new Articulation(phones(["AA", 1, 0.2, 0.1, 0.3], ["AA", 1, 0.48, 0.38, 0.58], ["AA", 1, 0.98, 0.88, 1.08]))
     const jaw = (from: number, to: number) => {

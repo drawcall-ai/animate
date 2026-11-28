@@ -34,6 +34,8 @@ export {
   type Eyes,
   Face,
   FacePlanner,
+  type HeadTurn,
+  isEmotion,
   isPhrases,
   type Look,
   type Phrase,

@@ -142,7 +142,7 @@ if (u === 1 && body.positionOf(body.hands.left.bone).distanceTo(body.positionOf(
 
 ## A face
 
-A `Face` is a model's face as the ARKit standard has it: the 52 blendshapes as morph targets on whatever meshes carry them (face, teeth, tongue each with their own), and the eyes as `LeftEye` and `RightEye` bones resting in the face's frame. Any face following that standard works, a face rigged by `@drawcall/rig` among them; morph targets of other names are left alone, and a face without eye bones looks ahead. Make one `Face` per model and keep it: a `Face` made after its eyes have turned takes that turn as their rest.
+A `Face` is a model's face as the ARKit standard has it: the 52 blendshapes as morph targets on whatever meshes carry them (face, teeth, tongue each with their own), and the eyes turned by their `eyeLook` shapes or, without those, by `LeftEye` and `RightEye` bones resting in the face's frame. Any face following that standard works, a face rigged by `@drawcall/rig` or a Ready Player Me avatar among them; it drives only the shapes a model has, and a face without eye bones looks ahead. Make one `Face` per model and keep it: a `Face` made after its eyes have turned takes that turn as their rest.
 
 The `FacePlanner` acts it. Every frame tell it the emotion to show, how strongly, and what to look at, and it sets the blendshapes and eyes itself: blinks, saccades, a little sway, and a change of emotion blended on springs, never jumping. So pass the emotion every frame as data and change it whenever the story does; do not fade it yourself. Given the humanoid, it also returns a goal for the neck and head, which turn part of the way to what the eyes look at and act on top (nods, tilts, the emotion's carriage): take the `"head"` from the locomotion planner and leave both lists to one solve. The face planner owns the face from its first update: drive the blendshapes yourself with `face.set` only where no planner runs.
 
@@ -163,11 +163,11 @@ function frame(dt: number) {
 
 ### Saying a line
 
-A line is a recording and what is said in it, timed word by word and phone by phone. `createSpeech` measures it from the decoded sound (a Web Audio `AudioBuffer`) and a transcript; words that come without phones are looked up in the CMU pronouncing dictionary, numbers spelled out. Exact phone timing makes the lip sync: in a Vite app, time each line with `CachedSpeechAlignmentLoader`, whose forced alignment runs in Node through the `@drawcall/cache` Vite plugin (`cache()` from `@drawcall/cache/vite`, with the optional peers `@huggingface/transformers`, `@audio/decode` and `@audio/resample-sinc` installed for it) while browsers only read the cached result. Write each load literally, with the recording's public path and its text word for word, so the plugin finds it.
+A line is a recording and what is said in it, timed word by word and phone by phone. `createSpeech` measures it from a transcript and the decoded sound (a Web Audio `AudioBuffer`), which can be left out for a line said without one; words that come without phones are looked up in the CMU pronouncing dictionary, numbers spelled out. Exact phone timing makes the lip sync: in a Vite app, time each line with `CachedSpeechAlignmentLoader`, whose forced alignment runs in Node through the `@drawcall/cache` Vite plugin (`cache()` from `@drawcall/cache/vite`, with the optional peers `@huggingface/transformers`, `@audio/decode` and `@audio/resample-sinc` installed for it) while browsers only read the cached result. Write each load literally, with the recording's public path and its text word for word, so the plugin finds it. Word timings from a speech service (ElevenLabs alignment, Amazon Polly speech marks, Azure word boundaries) fit `TranscriptWord` directly.
 
 ```ts
 const transcript = await new CachedSpeechAlignmentLoader().loadAsync({ audio: "/speech/hello.mp3", text: "Hello there, it's good to see you." })
-const speech = await createSpeech(buffer, transcript)
+const speech = await createSpeech(transcript, buffer)
 ```
 
 `acting.speak(speech, { phrases, heard })` says it from then on, in the emotion each update gives, and `acting.speaking` stays true until it is over. Start the sound in the same moment, and pass `heard`, the time into the recording the listener hears as the frame shows, read from the audio clock, less its latency, plus the two refreshes before the frame being drawn reaches the screen: `() => context.currentTime - startedAt - (context.outputLatency || 0) - context.baseLatency + 2 * dt`, with `dt` the last frame's (`outputLatency` is undefined in some browsers). Without it the line runs on the frames' `dt`, which falls behind the sound whenever frames stall.
@@ -200,6 +200,6 @@ For something other than a person, make each jointed bone a `Joint` (a three.js 
 - The feet stand on level treads only, at the height the ray finds; slopes are not looked at, and a landing from the air is predicted for the height it left from.
 - Under the hardest input (turning around at a sprint, reversing every half second, running onto stairs) a knee can still turn sharply within a frame a few times a minute; steady gaits are smooth.
 - A leg cannot be taken (no kicks), and strafing and backpedalling have no look of their own beyond `facing`.
-- A face's eyes turn by their bones only, never by the `eyeLook` blendshapes, and are aimed from the head as the last solve left it, a frame behind a head that turns fast.
+- A face's eyes are aimed from their bones as the last solve left the head, a frame behind a head that turns fast; a face without eye bones looks ahead whatever its `eyeLook` shapes.
 - Speech is English: phones are ARPAbet, from the CMU dictionary or an English aligner.
 - A ball bigger than the hand spans is not held across: the palm and fingers lie on it and the thumb rests beside them. From above, a lever's stem can stand in the way of the fingers closing round its arm.

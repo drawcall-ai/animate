@@ -36,6 +36,17 @@ test("shuts the lips on m whatever the emotion and the line's reactions ask", ()
   expect(open).toBeLessThan(0.02)
 })
 
+test("speaks a line made without its recording, evenly", () => {
+  const { planner, frame, weight } = faced()
+  planner.speak({ ...AH_MA, energy: [], pitch: [] })
+  let jaw = 0
+  while (planner.speaking) {
+    frame(DT)
+    jaw = Math.max(jaw, weight("jawOpen"))
+  }
+  expect(jaw).toBeGreaterThan(0.2)
+})
+
 test("keeps to the clock it hears, and is over only once that clock reaches the line's end", () => {
   const { planner, frame, weight } = faced()
   let clock = 0
