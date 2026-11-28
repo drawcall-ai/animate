@@ -50,7 +50,7 @@
   "peerDependencies": {
     "@audio/decode": "^3.16.2",
     "@audio/resample-sinc": "^1.4.0",
-    "@drawcall/cache": "^0.8.2",
+    "@drawcall/cache": "^0.9.1",
     "@huggingface/transformers": "^3.8.1",
     "three": ">=0.187.0"
   },

@@ -36,8 +36,8 @@ export class CachedSpeechAlignmentLoader {
     // an optional peer: only an app that aligns needs it
     const { CacheEntry, publicFile } = await import("@drawcall/cache")
     const entry = new CacheEntry({
-      // bumped when the alignment or its JSON changes
-      version: "speech-alignment@2",
+      // named after the package, as global entries share keys across apps; bumped when the alignment or its JSON changes
+      version: "animate/speech-alignment@1",
       basePath: this.#cachePath,
       dependencies: { audio: { value: audio }, text: { value: text } },
     })
